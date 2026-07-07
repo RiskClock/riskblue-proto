@@ -6249,27 +6249,106 @@ function InstancesReportModal({
       const sourceDrawings = Array.from(
         new Set(fileGroups.map((g) => g.file.name)),
       );
-      const overviewClasses = classCols.map((c) => {
-        // Per-attribute breakdown. For Cold Water / Hot Water we split by the
-        // free-text Type value only (with a "(untyped)" bucket for blanks so
-        // the reader always sees the full picture). For every other class we
-        // fall back to the combined (pipe_diameter, pipe_type) attribute
-        // grouping so pipe-size-only classes (e.g. Fire Suppression) still
-        // get a useful breakdown.
-        const isTypedClass = /(^|\s)(cold|hot)\s*water(\s|$)/i.test(c.name);
-        const combos = new Map<string, { attributes: Record<string, string>; count: number }>();
-        const seenCons = new Set<string>();
+      // Cold Water and Hot Water are split into per-Type virtual classes so
+      // the Overview and Summary matrix show a separate row/column for each
+      // type value (e.g. "Cold Water — Potable", "Cold Water — (untyped)").
+      // Every other class stays as a single row with a size/type breakdown.
+      const isTypedClassName = (n: string) =>
+        /(^|\s)(cold|hot)\s*water(\s|$)/i.test(n);
+      const typeGroupOf = (r: (typeof expanded)[number]) =>
+        r.pipeType && r.pipeType.trim() ? r.pipeType.trim() : "(untyped)";
+
+      type ClassEntry = {
+        key: string;
+        canonicalName: string;
+        displayName: string;
+        typeGroup: string | null;
+        idPrefix: string;
+      };
+      const classEntries: ClassEntry[] = classCols.flatMap((c) => {
+        const base = displayClassName(c.name);
+        const basePrefix = optionByName.get(c.name)?.idPrefix || "";
+        if (!isTypedClassName(c.name)) {
+          return [{
+            key: c.name,
+            canonicalName: c.name,
+            displayName: base,
+            typeGroup: null,
+            idPrefix: basePrefix,
+          }];
+        }
+        const types = new Set<string>();
         for (const r of expanded) {
           if (r.awpClassName !== c.name) continue;
           if (r.category !== "Asset" && r.category !== "Water System") continue;
+          types.add(typeGroupOf(r));
+        }
+        if (types.size === 0) {
+          return [{
+            key: c.name,
+            canonicalName: c.name,
+            displayName: base,
+            typeGroup: null,
+            idPrefix: basePrefix,
+          }];
+        }
+        return Array.from(types)
+          .sort((a, b) => a.localeCompare(b))
+          .map((t) => ({
+            key: `${c.name}::${t}`,
+            canonicalName: c.name,
+            displayName: t === "(untyped)" ? `${base} — (untyped)` : `${base} — ${t}`,
+            typeGroup: t,
+            idPrefix: t === "(untyped)" ? basePrefix : `${basePrefix}-${t}`,
+          }));
+      });
+
+      const entryKeyForRow = (r: (typeof expanded)[number]) =>
+        isTypedClassName(r.awpClassName)
+          ? `${r.awpClassName}::${typeGroupOf(r)}`
+          : r.awpClassName;
+
+      // Counts per entry key (with consolidated dedupe) and per (space, entry).
+      const countsPerKey = new Map<string, number>();
+      const spaceCountsPerKey = new Map<string, Map<string, number>>();
+      const seenConsGlobal = new Set<string>();
+      for (const r of expanded) {
+        if (r.category !== "Asset" && r.category !== "Water System") continue;
+        const key = entryKeyForRow(r);
+        if (r.logicalKey.startsWith("cons::")) {
+          const dedup = `${key}::${r.annotationBaseId}`;
+          if (seenConsGlobal.has(dedup)) continue;
+          seenConsGlobal.add(dedup);
+        }
+        countsPerKey.set(key, (countsPerKey.get(key) || 0) + 1);
+        const space =
+          r.spaceName && levelNames.has(r.spaceName) ? r.spaceName : "__unassigned__";
+        const inner = spaceCountsPerKey.get(space) || new Map<string, number>();
+        inner.set(key, (inner.get(key) || 0) + 1);
+        spaceCountsPerKey.set(space, inner);
+      }
+
+      const overviewClasses = classEntries.map((e) => {
+        // Per-attribute breakdown. Typed entries already carry the Type value
+        // in the row itself, so their breakdown splits by pipe size only. All
+        // other classes keep the combined (pipe_size, type) breakdown.
+        const combos = new Map<
+          string,
+          { attributes: Record<string, string>; count: number }
+        >();
+        const seenCons = new Set<string>();
+        for (const r of expanded) {
+          if (entryKeyForRow(r) !== e.key) continue;
+          if (r.category !== "Asset" && r.category !== "Water System") continue;
           if (r.logicalKey.startsWith("cons::")) {
-            const dedup = `${r.awpClassName}::${r.annotationBaseId}`;
+            const dedup = `${e.key}::${r.annotationBaseId}`;
             if (seenCons.has(dedup)) continue;
             seenCons.add(dedup);
           }
           const attrs: Record<string, string> = {};
-          if (isTypedClass) {
-            attrs["Type"] = r.pipeType ? r.pipeType : "(untyped)";
+          if (e.typeGroup) {
+            if (r.pipeDiameter) attrs["Pipe size"] = r.pipeDiameter;
+            if (Object.keys(attrs).length === 0) continue;
           } else {
             if (r.pipeDiameter) attrs["Pipe size"] = r.pipeDiameter;
             if (r.pipeType) attrs["Type"] = r.pipeType;
@@ -6281,30 +6360,31 @@ function InstancesReportModal({
           else combos.set(key, { attributes: attrs, count: 1 });
         }
         return {
-          name: displayClassName(c.name),
-          idPrefix: optionByName.get(c.name)?.idPrefix || "",
-          count: overviewTotals.get(c.name) || 0,
+          name: e.displayName,
+          idPrefix: e.idPrefix,
+          count: countsPerKey.get(e.key) || 0,
           breakdown: Array.from(combos.values()).sort((a, b) => b.count - a.count),
         };
       });
       const summary = {
         spaces: spaceList,
-        classes: classCols.map((c) => ({
-          name: displayClassName(c.name),
-          idPrefix: optionByName.get(c.name)?.idPrefix || "",
+        classes: classEntries.map((e) => ({
+          name: e.displayName,
+          idPrefix: e.idPrefix,
         })),
         matrix: Object.fromEntries(
           spaceList.map((s) => [
             s,
             Object.fromEntries(
-              classCols.map((c) => [
-                displayClassName(c.name),
-                summaryMatrix.get(s)?.get(c.name) || 0,
+              classEntries.map((e) => [
+                e.displayName,
+                spaceCountsPerKey.get(s)?.get(e.key) || 0,
               ]),
             ),
           ]),
         ),
       };
+
       const spacesData = spaceList.map((s) => {
         const sp = computeSpaceExportData(s);
         return {
