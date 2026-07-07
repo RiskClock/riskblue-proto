@@ -1,5 +1,5 @@
 // Response schema for the Scout / survey-pages Gemini call.
-// Gemini's `responseSchema` only accepts an inlined OpenAPI-3-subset schema —
+// Gemini's `responseSchema` only accepts an inlined OpenAPI-3-subset schema -
 // no `$ref`, no `$defs`, no `oneOf`/`anyOf` discriminators, no `format` keywords
 // outside its allow-list. Zod's `toJSONSchema` (which `@google/genai` calls
 // under the hood when given a Zod object) emits `$defs` for every nested

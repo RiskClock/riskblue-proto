@@ -52,7 +52,7 @@ serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceKey);
 
     // Fetch the analysis request + project (include summary_data so the email
-    // reflects the deduplicated instance counts produced by Phase 4 — Summarize).
+    // reflects the deduplicated instance counts produced by Phase 4 - Summarize).
     const { data: request, error: reqError } = await admin
       .from("analysis_requests")
       .select("id, user_id, project_id, file_count, summary_data")
@@ -99,7 +99,7 @@ serve(async (req) => {
       .eq("user_id", request.user_id)
       .maybeSingle();
     if (roleRow && (roleRow as any).email_notifications_enabled === false) {
-      console.log("[send-analysis-complete-email] notifications disabled — skipping", {
+      console.log("[send-analysis-complete-email] notifications disabled - skipping", {
         user_id: request.user_id,
         project_id: request.project_id,
       });

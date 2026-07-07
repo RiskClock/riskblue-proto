@@ -24,7 +24,7 @@ const resolveDrawingUrls = async (items: AnalysisItem[]): Promise<AnalysisItem[]
       if (!item.drawingUrl) return;
       const url = item.drawingUrl;
 
-      // Already a data URL — skip
+      // Already a data URL - skip
       if (url.startsWith('data:')) return;
 
       let storagePath: string | null = null;
@@ -480,21 +480,21 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
               <dl className="grid md:grid-cols-2 gap-3 text-sm">
                 <div>
                   <dt className="text-muted-foreground">Project Name</dt>
-                  <dd>{data.name || "—"}</dd>
+                  <dd>{data.name || "-"}</dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Location</dt>
                   <dd>
-                    {data.city && data.state ? `${data.city}, ${data.state}` : "—"}
+                    {data.city && data.state ? `${data.city}, ${data.state}` : "-"}
                   </dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Building Type</dt>
-                  <dd className="capitalize">{data.building_type?.replace("-", " ") || "—"}</dd>
+                  <dd className="capitalize">{data.building_type?.replace("-", " ") || "-"}</dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Construction Type</dt>
-                  <dd className="capitalize">{data.project_type?.replace("-", " ") || "—"}</dd>
+                  <dd className="capitalize">{data.project_type?.replace("-", " ") || "-"}</dd>
                 </div>
               </dl>
             </div>

@@ -645,7 +645,7 @@ export const ProjectFilesUpload = ({
   };
 
   const formatFileSize = (bytes?: string) => {
-    if (!bytes) return "—";
+    if (!bytes) return "-";
     const size = parseInt(bytes);
     if (size < 1024) return `${size} B`;
     if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;

@@ -75,7 +75,7 @@ interface LabelCandidate {
   y: number;
   w: number;
   h: number;
-  ax: number; // anchor x on target edge (for leader — circles only)
+  ax: number; // anchor x on target edge (for leader - circles only)
   ay: number; // anchor y on target edge
   leader: number; // base leader length (0 for rects → no leader)
 }
@@ -121,11 +121,11 @@ function generateCircleCandidates(
   gap: number,
   bounds: { width: number; height: number },
 ): LabelCandidate[] {
-  const directions = 32;
-  const rings = 6;
+  const directions = 48;
+  const rings = 10;
   const out: LabelCandidate[] = [];
   for (let ring = 0; ring < rings; ring++) {
-    const dist = c.r + gap + ring * Math.max(6, labelH * 0.5);
+    const dist = c.r + gap + ring * Math.max(6, labelH * 0.6);
     for (let i = 0; i < directions; i++) {
       const angle = -Math.PI / 2 + (i * 2 * Math.PI) / directions;
       const cos = Math.cos(angle);
@@ -146,6 +146,7 @@ function generateCircleCandidates(
   }
   return out;
 }
+
 
 /**
  * Generate candidate positions around a rectangle (floor-plan bbox).
@@ -356,29 +357,57 @@ function optimizePlacements(
   anchors: Anchor[],
   ownerIds: (string | null)[],
 ): LabelCandidate[] {
-  const positions: LabelCandidate[] = candidatesPerLabel.map(
-    (cands) => cands.reduce((best, c) => (c.leader < best.leader ? c : best), cands[0]),
-  );
-  const maxIters = 8;
-  for (let iter = 0; iter < maxIters; iter++) {
-    let improved = false;
-    for (let i = 0; i < positions.length; i++) {
-      let bestCand = positions[i];
-      let bestCost = candidateCost(bestCand, i, positions, circles, rects, anchors, ownerIds);
-      for (const cand of candidatesPerLabel[i]) {
-        const cost = candidateCost(cand, i, positions, circles, rects, anchors, ownerIds);
-        if (cost < bestCost - 0.01) {
-          bestCost = cost;
-          bestCand = cand;
+  const runOnce = (seed: LabelCandidate[]): { positions: LabelCandidate[]; totalCost: number } => {
+    const positions = seed.slice();
+    const maxIters = 20;
+    for (let iter = 0; iter < maxIters; iter++) {
+      let improved = false;
+      // Shuffle traversal order each iteration so we don't get stuck in a
+      // greedy local minimum where the first-placed labels lock everyone else.
+      const order = positions.map((_, i) => i);
+      for (let i = order.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [order[i], order[j]] = [order[j], order[i]];
+      }
+      for (const i of order) {
+        let bestCand = positions[i];
+        let bestCost = candidateCost(bestCand, i, positions, circles, rects, anchors, ownerIds);
+        for (const cand of candidatesPerLabel[i]) {
+          const cost = candidateCost(cand, i, positions, circles, rects, anchors, ownerIds);
+          if (cost < bestCost - 0.01) {
+            bestCost = cost;
+            bestCand = cand;
+          }
+        }
+        if (bestCand !== positions[i]) {
+          positions[i] = bestCand;
+          improved = true;
         }
       }
-      if (bestCand !== positions[i]) {
-        positions[i] = bestCand;
-        improved = true;
-      }
+      if (!improved) break;
     }
-    if (!improved) break;
+    let total = 0;
+    for (let i = 0; i < positions.length; i++) {
+      total += candidateCost(positions[i], i, positions, circles, rects, anchors, ownerIds);
+    }
+    return { positions, totalCost: total };
+  };
+
+  // Restart 1: shortest-leader initial seed (existing behavior).
+  const seedShort = candidatesPerLabel.map(
+    (cands) => cands.reduce((best, c) => (c.leader < best.leader ? c : best), cands[0]),
+  );
+  let best = runOnce(seedShort);
+
+  // Restart 2 & 3: random seeds so we can escape crowded local minima.
+  for (let r = 0; r < 3; r++) {
+    const seed = candidatesPerLabel.map(
+      (cands) => cands[Math.floor(Math.random() * cands.length)],
+    );
+    const attempt = runOnce(seed);
+    if (attempt.totalCost < best.totalCost) best = attempt;
   }
+  const positions = best.positions;
 
   // Hard-filter pass: any label still intersecting a non-owner circle is
   // swapped for the smallest-leader candidate that touches zero non-owner
@@ -394,15 +423,16 @@ function optimizePlacements(
       return false;
     };
     if (!hits(positions[i])) continue;
-    let best: LabelCandidate | null = null;
+    let bestC: LabelCandidate | null = null;
     for (const cand of candidatesPerLabel[i]) {
       if (hits(cand)) continue;
-      if (!best || cand.leader < best.leader) best = cand;
+      if (!bestC || cand.leader < bestC.leader) bestC = cand;
     }
-    if (best) positions[i] = best;
+    if (bestC) positions[i] = bestC;
   }
   return positions;
 }
+
 
 export const OverlayLayer = ({
   overlays,
@@ -603,7 +633,7 @@ export const OverlayLayer = ({
 
       {circles.map((c) => {
         const clickable = !!onOverlayClick;
-        // Any circle overlay is draggable when a drag handler is wired up —
+        // Any circle overlay is draggable when a drag handler is wired up -
         // annotation circles as well as dots. Click still fires when the
         // pointer barely moves (< DRAG_THRESHOLD).
         const draggable = !!onOverlayDrag;
@@ -733,7 +763,7 @@ export const OverlayLayer = ({
       })}
 
 
-      {/* Rectangle overlays — outline only. Labels are placed by the optimizer below. */}
+      {/* Rectangle overlays - outline only. Labels are placed by the optimizer below. */}
       {rects.map((r) => (
         <div key={r.id} style={{ position: "absolute", left: r.x, top: r.y }}>
           <div

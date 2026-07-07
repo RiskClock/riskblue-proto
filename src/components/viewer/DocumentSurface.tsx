@@ -131,7 +131,7 @@ export const DocumentSurface = ({
     e.preventDefault();
     const targetEl = e.currentTarget;
     targetEl.setPointerCapture(e.pointerId);
-    // Use the page surface's rect — already reflects current zoom because the
+    // Use the page surface's rect - already reflects current zoom because the
     // whole surface is inside the TransformWrapper.
     const surface = targetEl.closest("[data-doc-surface]") as HTMLElement | null;
     const surfRect = surface?.getBoundingClientRect();

@@ -104,12 +104,12 @@ export const ControlDetailsModal = ({
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground mt-1">—</p>
+                <p className="text-sm text-muted-foreground mt-1">-</p>
               )}
             </div>
             <div>
               <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Responsible</label>
-              <p className="text-sm font-medium mt-1">{control.responsible || "—"}</p>
+              <p className="text-sm font-medium mt-1">{control.responsible || "-"}</p>
             </div>
           </div>
         </div>

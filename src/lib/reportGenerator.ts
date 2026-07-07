@@ -23,24 +23,24 @@ const parseLocalDate = (date: string | Date): Date => {
 };
 
 export const formatDate = (date: string | Date | null | undefined): string => {
-  if (!date) return "—";
+  if (!date) return "-";
   try {
     const dateObj = parseLocalDate(date);
-    if (!isValid(dateObj)) return "—";
+    if (!isValid(dateObj)) return "-";
     return format(dateObj, "MMM d, yyyy");
   } catch {
-    return "—";
+    return "-";
   }
 };
 
 export const formatDateShort = (date: string | Date | null | undefined): string => {
-  if (!date) return "—";
+  if (!date) return "-";
   try {
     const dateObj = parseLocalDate(date);
-    if (!isValid(dateObj)) return "—";
+    if (!isValid(dateObj)) return "-";
     return format(dateObj, "M/d/yy");
   } catch {
-    return "—";
+    return "-";
   }
 };
 

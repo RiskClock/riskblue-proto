@@ -2,7 +2,7 @@
 // returns a hex string with fixed saturation/lightness so markers stay
 // distinct, vivid, and accessible.
 
-// cyrb53 — strong 53-bit string hash with good avalanche so visually
+// cyrb53 - strong 53-bit string hash with good avalanche so visually
 // similar names ("Kitchens" / "Washrooms") land on distinct hues.
 function hashStr(s: string): number {
   let h1 = 0xdeadbeef;
@@ -116,7 +116,7 @@ export function readableTextOn(hex: string): string {
 }
 
 /**
- * Soft, translucent version of a hex color — for badge backgrounds that should
+ * Soft, translucent version of a hex color - for badge backgrounds that should
  * remain readable when paired with the original color as the text color.
  */
 export function softBgFrom(hex: string, alpha = 0.18): string {

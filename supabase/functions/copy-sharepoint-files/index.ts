@@ -235,7 +235,7 @@ async function copyFiles(analysisRequestId: string, supabaseUrl: string, supabas
 
     console.log(`Completed copying ${copiedCount}/${files.length} SharePoint files`);
 
-    // Auto-trigger split phase (bounded — no downstream agents).
+    // Auto-trigger split phase (bounded - no downstream agents).
     if (copiedCount > 0) {
       try {
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

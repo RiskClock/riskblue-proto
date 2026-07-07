@@ -85,7 +85,7 @@ serve(async (req) => {
     }
 
     const { packageId, environment, returnUrl, tosVersion, privacyVersion } = await req.json();
-    // Note: any "tier" sent by the client is ignored — the server determines
+    // Note: any "tier" sent by the client is ignored - the server determines
     // pricing tier authoritatively from the user's profile.account_type.
     const pkg = PACKAGES[packageId];
     if (!pkg) {
@@ -104,7 +104,7 @@ serve(async (req) => {
       });
     }
 
-    // Pricing is uniform — no tier distinction.
+    // Pricing is uniform - no tier distinction.
     const priceId = pkg.priceId;
     const amountCents = pkg.amountCents;
 
@@ -158,7 +158,7 @@ serve(async (req) => {
       line_items: [{ price: stripePrice.id, quantity: 1 }],
       mode: "payment",
       ui_mode: "embedded_page",
-      // Never redirect after completion — the modal stays mounted and our
+      // Never redirect after completion - the modal stays mounted and our
       // onComplete handler closes it inline, preserving the user's
       // in-progress work on the underlying page (e.g. new project wizard).
       redirect_on_completion: "never",

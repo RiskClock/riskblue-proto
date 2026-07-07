@@ -232,7 +232,7 @@ serve(async (req) => {
 
       const { access_token, refresh_token, expires_in } = tokenData;
 
-      console.log(`[callback] Token exchange response — has refresh_token: ${!!refresh_token}`);
+      console.log(`[callback] Token exchange response - has refresh_token: ${!!refresh_token}`);
       if (!refresh_token) {
         console.warn(`[callback] WARNING: Provider did not return refresh_token for user: ${stateData.userId}`);
       }
@@ -256,9 +256,9 @@ serve(async (req) => {
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
       const tokenExpiry = new Date(Date.now() + (expires_in || 7200) * 1000).toISOString();
 
-      // Encryption is REQUIRED — refuse to store plaintext tokens
+      // Encryption is REQUIRED - refuse to store plaintext tokens
       if (!ENCRYPTION_KEY) {
-        console.error("DRIVE_TOKEN_ENCRYPTION_KEY not configured — refusing to store Procore tokens");
+        console.error("DRIVE_TOKEN_ENCRYPTION_KEY not configured - refusing to store Procore tokens");
         return new Response(
           "Server misconfigured: token encryption key missing. Please contact support.",
           { status: 500 }
@@ -282,7 +282,7 @@ serve(async (req) => {
         upsertData.access_token = "ENCRYPTED";
         upsertData.refresh_token = null;
       } catch (err) {
-        console.error("Encryption failed — refusing to store Procore tokens in plaintext:", err);
+        console.error("Encryption failed - refusing to store Procore tokens in plaintext:", err);
         return new Response(
           "Failed to encrypt tokens. Please try again or contact support.",
           { status: 500 }
@@ -390,7 +390,7 @@ serve(async (req) => {
         await clearLock();
 
         if (refreshData?.error === "invalid_grant") {
-          console.log(`[refresh] invalid_grant — deleting dead token record for user: ${user.id}`);
+          console.log(`[refresh] invalid_grant - deleting dead token record for user: ${user.id}`);
           await supabase
             .from("user_procore_tokens")
             .delete()
@@ -411,9 +411,9 @@ serve(async (req) => {
       // === Atomically persist BOTH tokens + clear lock ===
       const newExpiry = new Date(Date.now() + (refreshData.expires_in || 7200) * 1000).toISOString();
 
-      // Encryption is REQUIRED — refuse to persist plaintext tokens
+      // Encryption is REQUIRED - refuse to persist plaintext tokens
       if (!ENCRYPTION_KEY) {
-        console.error("DRIVE_TOKEN_ENCRYPTION_KEY not configured — refusing to persist refreshed Procore token");
+        console.error("DRIVE_TOKEN_ENCRYPTION_KEY not configured - refusing to persist refreshed Procore token");
         await clearLock();
         return new Response(
           JSON.stringify({ error: "Server misconfigured: token encryption key missing" }),
@@ -432,7 +432,7 @@ serve(async (req) => {
         updateData.is_encrypted = true;
         updateData.access_token = "ENCRYPTED";
       } catch (err) {
-        console.error("Failed to encrypt refreshed Procore token — refusing plaintext fallback:", err);
+        console.error("Failed to encrypt refreshed Procore token - refusing plaintext fallback:", err);
         await clearLock();
         return new Response(
           JSON.stringify({ error: "Failed to encrypt refreshed token" }),
@@ -447,7 +447,7 @@ serve(async (req) => {
           updateData.encrypted_refresh_token = await encryptToken(refreshData.refresh_token, ENCRYPTION_KEY);
           updateData.refresh_token = null;
         } catch (err) {
-          console.error("Failed to encrypt rotated refresh token — refusing plaintext fallback:", err);
+          console.error("Failed to encrypt rotated refresh token - refusing plaintext fallback:", err);
           await clearLock();
           return new Response(
             JSON.stringify({ error: "Failed to encrypt rotated refresh token" }),
@@ -465,7 +465,7 @@ serve(async (req) => {
 
       if (updateError) {
         console.error(`[refresh] CRITICAL: Failed to persist refreshed tokens for user: ${user.id}`, updateError);
-        // Token was already consumed by Procore but we failed to save — user will need to re-auth
+        // Token was already consumed by Procore but we failed to save - user will need to re-auth
         return new Response(
           JSON.stringify({ error: "Failed to save refreshed tokens", needs_reauth: true }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

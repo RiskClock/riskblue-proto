@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://esm.sh/zod@3.23.8";
 
-// CROSS-PURPOSE TOKEN ACCEPTANCE — TEMPORARY
+// CROSS-PURPOSE TOKEN ACCEPTANCE - TEMPORARY
 // During the 7-day transition window after deploy, this endpoint also accepts
 // legacy `password_reset` tokens at /setup-account so already-sent welcome
 // emails continue to work. After the transition window, set this to false and

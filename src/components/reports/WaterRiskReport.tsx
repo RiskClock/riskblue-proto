@@ -848,13 +848,13 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
           <div className="space-y-1.5">
             <div>
               <p className="text-[11px] font-semibold text-gray-600">Project Name</p>
-              <p className="text-[12px] text-gray-900">{data.name || "—"}</p>
+              <p className="text-[12px] text-gray-900">{data.name || "-"}</p>
             </div>
             <div>
               <p className="text-[11px] font-semibold text-gray-600">Address</p>
-              <p className="text-[12px] text-gray-900">{data.address_1 || data.address || "—"}</p>
+              <p className="text-[12px] text-gray-900">{data.address_1 || data.address || "-"}</p>
               <p className="text-[12px] text-gray-900">
-                {[data.city, data.state, data.zip_code].filter(Boolean).join(', ') || "—"}
+                {[data.city, data.state, data.zip_code].filter(Boolean).join(', ') || "-"}
               </p>
               {data.country && <p className="text-[12px] text-gray-900">{data.country}</p>}
             </div>
@@ -958,7 +958,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
               <div>
                 <span className="text-gray-600">Typical Floor Range:</span>
                 <span className="ml-1 text-gray-900 font-medium">
-                  {data.typical_floors_start || "—"} to {data.typical_floors_end || "—"}
+                  {data.typical_floors_start || "-"} to {data.typical_floors_end || "-"}
                 </span>
               </div>
             )}

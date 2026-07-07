@@ -717,7 +717,7 @@ const UserManagement = () => {
                             return (
                               <TableCell key={colId} className={cn("font-medium", dim)}>
                                 <span>
-                                  {u.display_name || "—"}
+                                  {u.display_name || "-"}
                                   <span className="text-muted-foreground font-normal"> ({u.email})</span>
                                 </span>
                               </TableCell>
@@ -725,7 +725,7 @@ const UserManagement = () => {
                           case "company":
                             return (
                               <TableCell key={colId} className={dim}>
-                                {u.company || <span className="text-muted-foreground">—</span>}
+                                {u.company || <span className="text-muted-foreground">-</span>}
                               </TableCell>
                             );
                           case "projects":
@@ -734,7 +734,7 @@ const UserManagement = () => {
                                 {u.projects.length > 0 ? (
                                   u.projects.length
                                 ) : (
-                                  <span className="text-muted-foreground">—</span>
+                                  <span className="text-muted-foreground">-</span>
                                 )}
                               </TableCell>
                             );
@@ -742,7 +742,7 @@ const UserManagement = () => {
                             return (
                               <TableCell key={colId} className={dim}>
                                 {u.tags.length === 0 ? (
-                                  <span className="text-muted-foreground text-xs">—</span>
+                                  <span className="text-muted-foreground text-xs">-</span>
                                 ) : (
                                   <div className="flex flex-wrap gap-1">
                                     {u.tags.map((t) => (

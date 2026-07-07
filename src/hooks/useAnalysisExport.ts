@@ -22,7 +22,7 @@ interface StartArgs {
  *  - Combined with in-memory state from ExportProvider, decides whether to
  *    open the "already in progress" confirmation modal or start immediately.
  *  - All actual generation, progress, and download happen client-side via
- *    ExportProvider — no edge function is called.
+ *    ExportProvider - no edge function is called.
  *
  * Toasts:
  *  - We do NOT toast "Export started" here. The global progress panel is the
@@ -44,7 +44,7 @@ export function useAnalysisExport(analysisRequestId: string | undefined) {
 
   // Server-side check: is there an active job for this request right now?
   // Useful when the export was started in a different tab/session.
-  // CRITICAL: only pending/processing rows count — never cancelled/failed/complete.
+  // CRITICAL: only pending/processing rows count - never cancelled/failed/complete.
   const activeJobQuery = useQuery({
     queryKey: ["analysis-export-active-job", analysisRequestId],
     queryFn: async () => {
@@ -110,7 +110,7 @@ export function useAnalysisExport(analysisRequestId: string | undefined) {
     [analysisRequestId, hasActiveJob, launch, requestSuppressed],
   );
 
-  /** "Cancel and Export Again" — kill in-flight client export, mark any
+  /** "Cancel and Export Again" - kill in-flight client export, mark any
    * stale DB rows as cancelled, then start a fresh one. */
   const confirmCancelAndRestart = useCallback(async () => {
     if (!analysisRequestId || !pendingArgs) return;
@@ -130,7 +130,7 @@ export function useAnalysisExport(analysisRequestId: string | undefined) {
         .eq("analysis_request_id", analysisRequestId)
         .in("status", ["pending", "processing"]);
     } catch {
-      // Non-fatal — RLS may block updating other users' rows; the new
+      // Non-fatal - RLS may block updating other users' rows; the new
       // export still proceeds.
     }
 

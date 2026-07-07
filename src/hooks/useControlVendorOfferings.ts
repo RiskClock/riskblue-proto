@@ -44,7 +44,7 @@ export function useControlVendorOfferings() {
  * (from mitigation_controls.vendor_name) as a baseline vendor when no other
  * company with the same name is already counted.
  *
- * Note: `author` is intentionally NOT used as a vendor seed — RiskClock authors
+ * Note: `author` is intentionally NOT used as a vendor seed - RiskClock authors
  * all controls; vendors are independent companies that offer them.
  */
 export function buildVendorMapByControlId(

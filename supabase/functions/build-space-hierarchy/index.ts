@@ -206,7 +206,7 @@ Deno.serve(async (req) => {
         .from("analysis_requests")
         .update({
           space_hierarchy_status: "failed",
-          space_hierarchy_error: "No extracted text available — run Extract Context first.",
+          space_hierarchy_error: "No extracted text available - run Extract Context first.",
           space_hierarchy_updated_at: new Date().toISOString(),
         } as any)
         .eq("id", analysisRequestId);

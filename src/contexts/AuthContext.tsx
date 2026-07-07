@@ -76,7 +76,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (event === "SIGNED_OUT") {
           setTabUser(null);
         }
-        // Fire and forget — never block the auth event loop with await.
+        // Fire and forget - never block the auth event loop with await.
         void handleSession(session, `event:${event}`);
       }
     );

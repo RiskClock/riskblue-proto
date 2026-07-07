@@ -346,7 +346,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
                     <span className="text-muted-foreground">credits</span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Enterprise projects are free to create — our team will reach out to coordinate scope.
+                    Enterprise projects are free to create - our team will reach out to coordinate scope.
                   </p>
                 </div>
               ) : (
@@ -357,7 +357,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     Your balance: {balance} credit{balance === 1 ? "" : "s"}.
-                    {balance < (cost ?? 0) && " You don't have enough — you'll be prompted to purchase more."}
+                    {balance < (cost ?? 0) && " You don't have enough - you'll be prompted to purchase more."}
                   </p>
                 </div>
               )}

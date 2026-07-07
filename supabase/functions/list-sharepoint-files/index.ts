@@ -89,7 +89,7 @@ serve(async (req) => {
 
     // ============= List Sites =============
     if (action === "list-sites") {
-      // Try multiple strategies — Graph's /sites?search=* is unreliable across tenants.
+      // Try multiple strategies - Graph's /sites?search=* is unreliable across tenants.
       const sitesMap = new Map<string, { id: string; name: string; webUrl: string }>();
       const addSite = (s: any) => {
         if (!s?.id) return;

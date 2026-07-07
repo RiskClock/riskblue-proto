@@ -182,7 +182,7 @@ export default function Controls() {
   }, [allControls]);
 
   // Sync selections from DB ONCE per company load. Subsequent local edits are
-  // authoritative — a stale refetch (e.g. after logo invalidation, window focus)
+  // authoritative - a stale refetch (e.g. after logo invalidation, window focus)
   // must NOT overwrite in-flight user edits.
   const syncedCompanyRef = useRef<string | null>(null);
   useEffect(() => {
@@ -213,7 +213,7 @@ export default function Controls() {
 
   const flushWrite = async (category: CategoryKey, controlId: string, key: string) => {
     if (!company || !user) return;
-    // Loop until the desired state is stable across a write — this collapses
+    // Loop until the desired state is stable across a write - this collapses
     // multiple rapid toggles into the final state.
     while (true) {
       const desired = desiredStateRef.current.get(key);

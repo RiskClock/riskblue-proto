@@ -6,7 +6,7 @@
 //   - body present + db missing → ok (use body)
 //   - body missing + db present → ok (backfilled from DB)
 //   - body present + db present + mismatch → superseded
-//   - body missing + db missing → none (refuse to write — would orphan row)
+//   - body missing + db missing → none (refuse to write - would orphan row)
 
 export type RunIdResolution =
   | { kind: "ok"; runId: string; backfilled: boolean }

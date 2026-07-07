@@ -319,7 +319,7 @@ export function ExportProvider({ children }: { children: ReactNode }) {
             .then(() => undefined);
         }
         toast.success("Export complete", {
-          description: `${args.projectName} — your download has started.`,
+          description: `${args.projectName} - your download has started.`,
         });
         queryClient.invalidateQueries({
           queryKey: ["analysis-export-active-job", args.analysisRequestId],

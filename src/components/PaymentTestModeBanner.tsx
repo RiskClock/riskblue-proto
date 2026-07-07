@@ -16,7 +16,7 @@ export const PaymentTestModeBanner = () => {
       className="w-full border-b border-warning/40 bg-warning/15 px-4 py-2 text-center text-xs text-warning-foreground no-print"
     >
       <span className="font-semibold">Test mode</span>
-      <span className="mx-1.5">—</span>
+      <span className="mx-1.5">-</span>
       All payments in this preview are simulated. Use card{" "}
       <code className="font-mono px-1 py-0.5 rounded bg-background/60 border border-border">
         4242 4242 4242 4242

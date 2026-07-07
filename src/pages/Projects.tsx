@@ -43,7 +43,7 @@ const capitalizeFirst = (str: string) => {
 
 const formatLocation = (city?: string, country?: string) => {
   const parts = [city, country].filter(Boolean);
-  return parts.length > 0 ? parts.join(", ") : "—";
+  return parts.length > 0 ? parts.join(", ") : "-";
 };
 
 const analysisStatusLabels: Record<string, string> = {
@@ -196,7 +196,7 @@ const Projects = () => {
         emailsResult.data?.emails ? Object.entries(emailsResult.data.emails) : []
       );
 
-      // Build analysis status map (latest per project) — reuse extracted helper
+      // Build analysis status map (latest per project) - reuse extracted helper
       if (analysisResult.data) {
         const seq = ++fetchSeqRef.current;
         const statusMap = new Map<string, string>();
@@ -359,7 +359,7 @@ const Projects = () => {
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">{formatLocation(project.city, project.country)}</td>
                     <td className="px-6 py-4 text-muted-foreground tabular-nums">
-                      {typeof project.credits_consumed === "number" ? project.credits_consumed : "—"}
+                      {typeof project.credits_consumed === "number" ? project.credits_consumed : "-"}
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">
                       {project.creator_email ? (

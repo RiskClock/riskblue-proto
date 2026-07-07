@@ -22,7 +22,7 @@ export const useHeapIdentify = () => {
         return;
       }
 
-      // Identify user — wrapped because Heap's loader snippet can throw
+      // Identify user - wrapped because Heap's loader snippet can throw
       // "heap.push is not a function" before the real SDK has loaded.
       try {
         heap.identify(user.email);

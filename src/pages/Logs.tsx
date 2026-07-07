@@ -205,9 +205,9 @@ export default function Logs() {
       const c = m.changes || {};
       const bits: string[] = [];
       if ("name" in c) bits.push(`Name: ${c.name}`);
-      if ("company" in c) bits.push(`Company: ${c.company || "—"}`);
+      if ("company" in c) bits.push(`Company: ${c.company || "-"}`);
       if ("account_type" in c) bits.push(`Type: ${c.account_type === "wmsv" ? "WMSV" : "Standard"}`);
-      if ("tags" in c) bits.push(`Tags: ${(c.tags || []).join(", ") || "—"}`);
+      if ("tags" in c) bits.push(`Tags: ${(c.tags || []).join(", ") || "-"}`);
       if (bits.length) lines.push({ value: bits.join(" • ") });
     } else if (log.action === "admin_user_deactivated") {
       lines.push({ value: `Deactivated ${m.target_email || "user"}` });
@@ -241,12 +241,12 @@ export default function Logs() {
       lines.push({ value: `Project: ${m.project_name}`, label: "project" });
     }
 
-    // Actor (for admin events) — surface here only if it differs from the User column
+    // Actor (for admin events) - surface here only if it differs from the User column
     if (m.actor_email && m.actor_email !== (userEmails.get(log.user_id) || "")) {
       // Actor will be shown in the User column; nothing additional here.
     }
 
-    if (lines.length === 0) return <span className="text-muted-foreground">—</span>;
+    if (lines.length === 0) return <span className="text-muted-foreground">-</span>;
     return (
       <div className="text-sm space-y-0.5">
         {lines.map((l, i) => (

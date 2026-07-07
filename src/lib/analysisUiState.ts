@@ -149,7 +149,7 @@ export function presentAnalysisUiState(state: AnalysisUiState): UiStatePresentat
   };
 }
 
-/** Tailwind class hint by state — kept here so badge styling is consistent across the app. */
+/** Tailwind class hint by state - kept here so badge styling is consistent across the app. */
 export function uiStateBadgeClass(state: AnalysisUiState): string {
   switch (state) {
     case "complete":

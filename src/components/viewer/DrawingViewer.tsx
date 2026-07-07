@@ -248,7 +248,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       return byPage;
     }, [overlays, allPages]);
 
-    // Adaptive reraster on settle (panning/zooming stop) — and track scale via onTransform.
+    // Adaptive reraster on settle (panning/zooming stop) - and track scale via onTransform.
     const handleTransform = (
       _ref: ReactZoomPanPinchRef,
       state: { scale: number; positionX: number; positionY: number }
@@ -268,7 +268,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
     /**
      * Positioning model:
      *
-     * The page surface is anchored at (0, 0) inside TransformComponent — we do
+     * The page surface is anchored at (0, 0) inside TransformComponent - we do
      * NOT use flex centering on the transformed content. All positioning is
      * owned by the transform (positionX, positionY, scale). This keeps a single
      * coordinate model so computeFitToRect is deterministic for BOTH fit-page
@@ -304,7 +304,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       });
     };
 
-    // initialFit handling — fires once after layout is ready
+    // initialFit handling - fires once after layout is ready
     useEffect(() => {
       if (fitOnceRef.current) return;
       if (!activePage || pageCssSize.width === 0 || viewportSize.width === 0) return;
@@ -458,7 +458,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
               onPinchStop={handleSettle}
             >
               {/*
-                Positioning model: page surface is anchored at (0, 0) — NO flex
+                Positioning model: page surface is anchored at (0, 0) - NO flex
                 centering. The transform (positionX, positionY, scale) owns all
                 positioning so computeFitToRect math is consistent for both
                 fit-page and fit-to-selection.

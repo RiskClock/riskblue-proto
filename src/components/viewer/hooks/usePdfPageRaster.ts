@@ -40,7 +40,7 @@ export interface PdfRasterOptions {
 const DEFAULTS: Required<Omit<PdfRasterOptions, "activePage">> = {
   baseScale: 1.5,
   maxDpr: 3,
-  maxPixelsPerPage: 24_000_000, // 24 Mpx — room for sharper rerasters
+  maxPixelsPerPage: 24_000_000, // 24 Mpx - room for sharper rerasters
   settleMs: 200,
   rerasterAboveScale: 1.1, // any meaningful zoom triggers a sharp rerender
   bufferPages: 1,
@@ -49,7 +49,7 @@ const DEFAULTS: Required<Omit<PdfRasterOptions, "activePage">> = {
 };
 
 // Module-level cache for the parsed PDFDocumentProxy, keyed by Blob identity.
-// Rasterized pages are NOT cached at module level anymore — they hold object
+// Rasterized pages are NOT cached at module level anymore - they hold object
 // URLs whose lifetime is tied to the hook instance.
 const pdfDocCache = new WeakMap<Blob, Promise<pdfjsLib.PDFDocumentProxy>>();
 
@@ -238,7 +238,7 @@ export function usePdfPageRaster(
           return [...prev, rasterPage].sort((a, b) => a.pageNum - b.pageNum);
         });
       } catch (e: any) {
-        // pdf.js throws a RenderingCancelledException — silently ignore.
+        // pdf.js throws a RenderingCancelledException - silently ignore.
         if (e?.name !== "RenderingCancelledException") {
           // eslint-disable-next-line no-console
           console.warn("PDF page render failed", pageNum, e);
@@ -265,7 +265,7 @@ export function usePdfPageRaster(
     };
     // We intentionally depend on totalPages (signals doc loaded), activePage,
     // and the window settings. `pages` is read inside but used only as a skip
-    // guard — re-running on every page push would cause render churn.
+    // guard - re-running on every page push would cause render churn.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalPages, activePage, opts.eager, opts.bufferPages, opts.baseScale, opts.jpegQuality]);
 

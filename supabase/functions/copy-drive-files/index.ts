@@ -266,7 +266,7 @@ async function copyFilesInBackground(
 
     console.log(`Completed copying ${copiedCount}/${files.length} files`);
 
-    // Auto-trigger split phase (bounded — no downstream agents).
+    // Auto-trigger split phase (bounded - no downstream agents).
     if (copiedCount > 0) {
       try {
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
