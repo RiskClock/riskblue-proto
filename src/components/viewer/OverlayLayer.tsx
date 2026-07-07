@@ -121,11 +121,11 @@ function generateCircleCandidates(
   gap: number,
   bounds: { width: number; height: number },
 ): LabelCandidate[] {
-  const directions = 32;
-  const rings = 6;
+  const directions = 48;
+  const rings = 10;
   const out: LabelCandidate[] = [];
   for (let ring = 0; ring < rings; ring++) {
-    const dist = c.r + gap + ring * Math.max(6, labelH * 0.5);
+    const dist = c.r + gap + ring * Math.max(6, labelH * 0.6);
     for (let i = 0; i < directions; i++) {
       const angle = -Math.PI / 2 + (i * 2 * Math.PI) / directions;
       const cos = Math.cos(angle);
@@ -146,6 +146,7 @@ function generateCircleCandidates(
   }
   return out;
 }
+
 
 /**
  * Generate candidate positions around a rectangle (floor-plan bbox).
