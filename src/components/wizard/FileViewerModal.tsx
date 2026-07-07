@@ -82,8 +82,10 @@ interface DrawingInstanceRow {
 
 // Classes that support the pipe-diameter metadata popover.
 // Matched as a case-insensitive substring against the class name.
+// Pipe size is optional for Cold Water, Hot Water, and Fire Suppression System.
 const DIAMETER_ENABLED_MATCHERS = [
   "cold water",
+  "hot water",
   "fire suppression",
 ];
 const isDiameterEnabledClass = (name: string): boolean => {
@@ -91,13 +93,15 @@ const isDiameterEnabledClass = (name: string): boolean => {
   return DIAMETER_ENABLED_MATCHERS.some((m) => n.includes(m));
 };
 
-// Cold Water carries an extra free-text "Type" attribute alongside pipe size.
+// Type is optional for Cold Water and Hot Water only.
 const isTypeEnabledClass = (name: string): boolean => {
-  return (name || "").toLowerCase().includes("cold water");
+  const n = (name || "").toLowerCase();
+  return n.includes("cold water") || n.includes("hot water");
 };
 
 // Metadata field descriptors surfaced in the annotation popover, keyed by
 // class. Each entry lists the metadata keys to render as separate inputs.
+// Type is intentionally listed before Pipe size so it shows as the first tab.
 interface MetaFieldDef {
   key: string;
   label: string;
@@ -105,18 +109,18 @@ interface MetaFieldDef {
 }
 const metaFieldsForClass = (name: string): MetaFieldDef[] => {
   const out: MetaFieldDef[] = [];
-  if (isDiameterEnabledClass(name)) {
-    out.push({
-      key: "pipe_diameter",
-      label: "Pipe size",
-      placeholder: 'Diameter (e.g. 50mm, 3/4")',
-    });
-  }
   if (isTypeEnabledClass(name)) {
     out.push({
       key: "pipe_type",
       label: "Type",
       placeholder: "Type (e.g. PEX, Copper)",
+    });
+  }
+  if (isDiameterEnabledClass(name)) {
+    out.push({
+      key: "pipe_diameter",
+      label: "Pipe size",
+      placeholder: 'Diameter (e.g. 50mm, 3/4")',
     });
   }
   return out;
