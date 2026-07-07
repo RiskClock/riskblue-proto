@@ -455,11 +455,13 @@ export const OverlayLayer = ({
     });
 
     const anchors = items.map((it) => it.anchor);
+    const ownerIds = items.map((it) => (it.kind === "circle" ? it.id : null));
     const positions = optimizePlacements(
       candidatesPerLabel,
       circles,
       rectFootprints,
       anchors,
+      ownerIds,
     );
     return positions.map((p, i) => ({
       ...p,
