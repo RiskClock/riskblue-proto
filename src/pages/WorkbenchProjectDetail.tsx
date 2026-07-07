@@ -4350,6 +4350,50 @@ export default function WorkbenchProjectDetail() {
             onSaveLevelUnits={async (plan, units, createdRefs, removedRefs) => {
               const fileId = activePageView.file.id;
               const page = activePageView.page;
+              const sheetId = activeSheetIdForPage;
+              // Optimistic update off the current in-memory overrides so the
+              // badge / count reflect the click immediately.
+              const baseOverrides = activeFloorPlanOverrides ?? {};
+              const optimistic: Record<string, any> = {
+                ...baseOverrides,
+                [plan.plan_id]: {
+                  ...(baseOverrides[plan.plan_id] ?? {}),
+                  units,
+                },
+              };
+              const existingAddedOpt = Array.isArray(baseOverrides[ADDED_UNIT_PLANS_KEY])
+                ? (baseOverrides[ADDED_UNIT_PLANS_KEY] as any[])
+                : [];
+              let nextAddedOpt = existingAddedOpt;
+              if (createdRefs && createdRefs.length > 0) {
+                const existingRefs = new Set(
+                  existingAddedOpt
+                    .filter((e) => e?.page_number === page)
+                    .map((e) => e?.reference_id),
+                );
+                const toAdd = createdRefs
+                  .filter((r) => !existingRefs.has(r))
+                  .map((r) => ({
+                    plan_id: makeAddedUnitPlanId(r, page),
+                    reference_id: r,
+                    page_number: page,
+                  }));
+                if (toAdd.length > 0) nextAddedOpt = [...nextAddedOpt, ...toAdd];
+              }
+              if (removedRefs && removedRefs.length > 0) {
+                const removeSet = new Set(removedRefs);
+                nextAddedOpt = nextAddedOpt.filter(
+                  (e) =>
+                    !(e?.page_number === page && removeSet.has(e?.reference_id)),
+                );
+              }
+              if (nextAddedOpt !== existingAddedOpt) {
+                optimistic[ADDED_UNIT_PLANS_KEY] = nextAddedOpt;
+              }
+              if (sheetId) setActiveFloorPlanOverrides(optimistic);
+
+              // Re-fetch the authoritative row to avoid clobbering concurrent
+              // edits, then merge our delta onto it.
               const { data: sheet, error: sheetErr } = await supabase
                 .from("analysis_request_sheets")
                 .select("id, floor_plan_overrides")
@@ -4357,6 +4401,7 @@ export default function WorkbenchProjectDetail() {
                 .eq("page_index", page)
                 .maybeSingle();
               if (sheetErr || !sheet) {
+                if (sheetId) setActiveFloorPlanOverrides(baseOverrides);
                 toast({
                   variant: "destructive",
                   title: "Cannot save units",
@@ -4370,7 +4415,6 @@ export default function WorkbenchProjectDetail() {
                 ...existing,
                 [plan.plan_id]: { ...(existing[plan.plan_id] ?? {}), units },
               };
-              // Persist any newly-created refs as user-added unit floor plans.
               const existingAdded = Array.isArray(existing[ADDED_UNIT_PLANS_KEY])
                 ? (existing[ADDED_UNIT_PLANS_KEY] as any[])
                 : [];
@@ -4405,6 +4449,7 @@ export default function WorkbenchProjectDetail() {
                 .update({ floor_plan_overrides: merged } as any)
                 .eq("id", (sheet as any).id);
               if (error) {
+                if (sheetId) setActiveFloorPlanOverrides(baseOverrides);
                 toast({
                   variant: "destructive",
                   title: "Could not save units",
