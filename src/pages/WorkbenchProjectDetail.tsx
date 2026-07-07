@@ -5665,7 +5665,7 @@ function InstancesReportModal({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <span className="cursor-help inline-block">
-                        {optionByName.get(c.name)?.idPrefix || c.name}
+                        {displayPrefix(c.name)}
                       </span>
                     </TooltipTrigger>
                     <TooltipContent>{c.name}</TooltipContent>
