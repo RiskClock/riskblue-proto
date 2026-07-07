@@ -776,6 +776,7 @@ export default function WorkbenchProjectDetail() {
   // Per-project AWP class display aliases. Alias replaces the canonical
   // class name in headers, tooltips, and the Threat Report.
   const [aliasMap, setAliasMap] = useState<Record<string, string>>({});
+  const [aliasPrefixMap, setAliasPrefixMap] = useState<Record<string, string>>({});
   const [aliasEditingClass, setAliasEditingClass] = useState<string | null>(null);
   useEffect(() => {
     if (!projectId) return;
@@ -783,14 +784,17 @@ export default function WorkbenchProjectDetail() {
     (async () => {
       const { data, error } = await supabase
         .from("project_class_aliases" as any)
-        .select("awp_class_name, alias")
+        .select("awp_class_name, alias, alias_prefix")
         .eq("project_id", projectId);
       if (cancelled || error || !data) return;
-      const map: Record<string, string> = {};
+      const nameMap: Record<string, string> = {};
+      const prefixMap: Record<string, string> = {};
       for (const r of data as any[]) {
-        if (r?.alias) map[r.awp_class_name] = r.alias as string;
+        if (r?.alias) nameMap[r.awp_class_name] = r.alias as string;
+        if (r?.alias_prefix) prefixMap[r.awp_class_name] = r.alias_prefix as string;
       }
-      setAliasMap(map);
+      setAliasMap(nameMap);
+      setAliasPrefixMap(prefixMap);
     })();
     return () => {
       cancelled = true;
@@ -803,9 +807,10 @@ export default function WorkbenchProjectDetail() {
   );
 
   const saveClassAlias = useCallback(
-    async (awpClassName: string, alias: string) => {
+    async (awpClassName: string, alias: string, aliasPrefix: string) => {
       if (!projectId) return;
-      if (!alias) {
+      // If both fields are empty, remove the row entirely.
+      if (!alias && !aliasPrefix) {
         const { error } = await supabase
           .from("project_class_aliases" as any)
           .delete()
@@ -824,12 +829,22 @@ export default function WorkbenchProjectDetail() {
           delete next[awpClassName];
           return next;
         });
+        setAliasPrefixMap((prev) => {
+          const next = { ...prev };
+          delete next[awpClassName];
+          return next;
+        });
         return;
       }
       const { error } = await supabase
         .from("project_class_aliases" as any)
         .upsert(
-          { project_id: projectId, awp_class_name: awpClassName, alias },
+          {
+            project_id: projectId,
+            awp_class_name: awpClassName,
+            alias: alias || null,
+            alias_prefix: aliasPrefix || null,
+          },
           { onConflict: "project_id,awp_class_name" },
         );
       if (error) {
@@ -840,7 +855,18 @@ export default function WorkbenchProjectDetail() {
         });
         return;
       }
-      setAliasMap((prev) => ({ ...prev, [awpClassName]: alias }));
+      setAliasMap((prev) => {
+        const next = { ...prev };
+        if (alias) next[awpClassName] = alias;
+        else delete next[awpClassName];
+        return next;
+      });
+      setAliasPrefixMap((prev) => {
+        const next = { ...prev };
+        if (aliasPrefix) next[awpClassName] = aliasPrefix;
+        else delete next[awpClassName];
+        return next;
+      });
     },
     [projectId, toast],
   );
