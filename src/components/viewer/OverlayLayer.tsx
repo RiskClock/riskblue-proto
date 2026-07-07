@@ -497,10 +497,20 @@ export const OverlayLayer = ({
           const startInset = c ? 1 : 0;
           const x1 = p.ax - ux * startInset;
           const y1 = p.ay - uy * startInset;
-          const ex = Math.max(p.x, Math.min(labelCx, p.x + p.w));
-          const ey = Math.max(p.y, Math.min(labelCy, p.y + p.h));
-          const x2 = ex + ux * 1;
-          const y2 = ey + uy * 1;
+          // Terminate the leader at the label rectangle's edge (not its
+          // center), so a label sitting close to its circle still shows a
+          // visible connector rather than a stub buried under the label.
+          const halfW = p.w / 2;
+          const halfH = p.h / 2;
+          const tX = Math.abs(ux) > 1e-6 ? halfW / Math.abs(ux) : Infinity;
+          const tY = Math.abs(uy) > 1e-6 ? halfH / Math.abs(uy) : Infinity;
+          const tEdge = Math.min(tX, tY);
+          const x2 = labelCx - ux * tEdge;
+          const y2 = labelCy - uy * tEdge;
+          // If the circle+label are so close the edge point lies past the
+          // circle anchor, skip drawing the tiny/negative leader.
+          const leaderLen = Math.hypot(x2 - x1, y2 - y1);
+          if (leaderLen < 0.5) return null;
           return (
             <line
               key={`leader-${p.id}-${idx}`}
