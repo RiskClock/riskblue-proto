@@ -122,7 +122,7 @@ export function AnnotationMetadataPopover({
         </button>
       </div>
       {fields.length > 1 && (
-        <div className="flex border-b">
+        <div className="flex border-b bg-muted/40">
           {fields.map((f) => {
             const isActive = f.key === activeField.key;
             const hasValue = !!(f.currentValue && f.currentValue.trim());
@@ -134,8 +134,8 @@ export function AnnotationMetadataPopover({
                 className={
                   "flex-1 px-2 py-1.5 text-[11px] font-medium border-r last:border-r-0 transition-colors " +
                   (isActive
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:bg-muted/50")
+                    ? "bg-background text-foreground"
+                    : "bg-muted/60 text-muted-foreground hover:bg-muted")
                 }
               >
                 <span className="truncate">{f.label}</span>
@@ -152,7 +152,7 @@ export function AnnotationMetadataPopover({
         field={activeField}
         onCommit={(next) => onCommit(activeField.key, next)}
       />
-      <div className="border-t p-1.5 flex justify-end">
+      <div className="border-t p-1.5 flex justify-start">
         <Button
           type="button"
           size="sm"
