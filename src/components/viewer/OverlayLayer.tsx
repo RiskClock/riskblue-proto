@@ -230,6 +230,8 @@ function clampCand(
 const OVERLAP_PENALTY = 100_000;
 const CIRCLE_PENALTY = 100_000;
 const RECT_PENALTY = 50_000;
+const LEADER_CROSS_PENALTY = 80_000;
+const LABEL_ON_LEADER_PENALTY = 90_000;
 
 interface RectInfo {
   x: number;
@@ -242,6 +244,52 @@ interface Anchor {
   cx: number;
   cy: number;
 }
+
+// --- geometry helpers for leader-line collision -----------------------------
+
+function segmentsIntersect(
+  a1: { x: number; y: number },
+  a2: { x: number; y: number },
+  b1: { x: number; y: number },
+  b2: { x: number; y: number },
+): boolean {
+  const d = (a2.x - a1.x) * (b2.y - b1.y) - (a2.y - a1.y) * (b2.x - b1.x);
+  if (Math.abs(d) < 1e-9) return false;
+  const t = ((b1.x - a1.x) * (b2.y - b1.y) - (b1.y - a1.y) * (b2.x - b1.x)) / d;
+  const u = ((b1.x - a1.x) * (a2.y - a1.y) - (b1.y - a1.y) * (a2.x - a1.x)) / d;
+  return t > 0.02 && t < 0.98 && u > 0.02 && u < 0.98;
+}
+
+function rectIntersectsSegment(
+  rect: { x: number; y: number; w: number; h: number },
+  p1: { x: number; y: number },
+  p2: { x: number; y: number },
+): boolean {
+  const inside = (p: { x: number; y: number }) =>
+    p.x >= rect.x && p.x <= rect.x + rect.w && p.y >= rect.y && p.y <= rect.y + rect.h;
+  if (inside(p1) || inside(p2)) return true;
+  const tl = { x: rect.x, y: rect.y };
+  const tr = { x: rect.x + rect.w, y: rect.y };
+  const bl = { x: rect.x, y: rect.y + rect.h };
+  const br = { x: rect.x + rect.w, y: rect.y + rect.h };
+  return (
+    segmentsIntersect(p1, p2, tl, tr) ||
+    segmentsIntersect(p1, p2, tr, br) ||
+    segmentsIntersect(p1, p2, br, bl) ||
+    segmentsIntersect(p1, p2, bl, tl)
+  );
+}
+
+function leaderEndpoints(
+  rect: LabelCandidate,
+  anchor: Anchor,
+): { a: { x: number; y: number }; b: { x: number; y: number } } {
+  return {
+    a: { x: anchor.cx, y: anchor.cy },
+    b: { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 },
+  };
+}
+
 
 function candidateCost(
   cand: LabelCandidate,
