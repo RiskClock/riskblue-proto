@@ -6089,20 +6089,35 @@ function InstancesReportModal({
         const unitMarkerOverlays: any[] = [];
         if (space !== "__unassigned__" && tier === 0) {
           const uColor = awpClassColor("Unit Floor Plan");
-          for (const inst of instances) {
-            if (inst.awp_class_name !== "__unit_marker__") continue;
-            if (inst.file_id !== fileId || inst.page_index !== pageIdx) continue;
-            const inx = Number(inst.nx);
-            const iny = Number(inst.ny);
-            if (!Number.isFinite(inx) || !Number.isFinite(iny)) continue;
-            unitMarkerOverlays.push({
-              id: `um-${inst.id}`,
-              bbox: [inx, iny, 0, 0] as [number, number, number, number],
-              coordSpace: "normalized" as const,
-              page: pageIdx,
-              color: uColor,
-              shape: "circle" as const,
+          // Only show markers that fall inside a level bbox on this page for
+          // the current space - otherwise we'd render every marker anywhere
+          // on the sheet.
+          const levelBoxes = levelPlans
+            .filter((lp) => lp.levels.includes(space) && lp.bbox)
+            .map((lp) => {
+              const [bx, by, bw, bh] = lp.bbox as [number, number, number, number];
+              return { x0: bx / 100, y0: by / 100, x1: (bx + bw) / 100, y1: (by + bh) / 100 };
             });
+          if (levelBoxes.length > 0) {
+            for (const inst of instances) {
+              if (inst.awp_class_name !== "__unit_marker__") continue;
+              if (inst.file_id !== fileId || inst.page_index !== pageIdx) continue;
+              const inx = Number(inst.nx);
+              const iny = Number(inst.ny);
+              if (!Number.isFinite(inx) || !Number.isFinite(iny)) continue;
+              const inside = levelBoxes.some(
+                (b) => inx >= b.x0 && inx <= b.x1 && iny >= b.y0 && iny <= b.y1,
+              );
+              if (!inside) continue;
+              unitMarkerOverlays.push({
+                id: `um-${inst.id}`,
+                bbox: [inx, iny, 0, 0] as [number, number, number, number],
+                coordSpace: "normalized" as const,
+                page: pageIdx,
+                color: uColor,
+                shape: "circle" as const,
+              });
+            }
           }
         }
         const overlaysAll = [...bboxOverlays, ...unitMarkerOverlays, ...overlays];
@@ -6376,7 +6391,9 @@ function InstancesReportModal({
         }
         // Unit-marker dots for this file/page - only render on level-plan pages
         // (i.e. when we matched a level bbox for this space).
-        if (matchedLevel) {
+        if (matchedLevel?.bbox) {
+          const [bx, by, bw, bh] = matchedLevel.bbox;
+          const x0 = bx / 100, y0 = by / 100, x1 = (bx + bw) / 100, y1 = (by + bh) / 100;
           const uColor = awpClassColor("Unit Floor Plan");
           for (const inst of instances) {
             if (inst.awp_class_name !== "__unit_marker__") continue;
@@ -6384,6 +6401,7 @@ function InstancesReportModal({
             const inx = Number(inst.nx);
             const iny = Number(inst.ny);
             if (!Number.isFinite(inx) || !Number.isFinite(iny)) continue;
+            if (inx < x0 || inx > x1 || iny < y0 || iny > y1) continue;
             unitMarkerOverlays.push({
               id: `um-${inst.id}`,
               nx: inx,
