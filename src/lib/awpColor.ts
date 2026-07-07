@@ -77,6 +77,24 @@ export function awpClassColor(name: string): string {
 }
 
 /**
+ * Variant of {@link awpClassColor} that derives a distinct color per (class,
+ * type) pair. When a type value is present (e.g. CW-Potable vs CW-Nonpotable),
+ * the color is drawn from a hue hash of `class::type` so each type reads as a
+ * visually distinct badge while sharing the class family. Empty type falls
+ * back to the base class color.
+ */
+export function awpClassColorForType(
+  name: string,
+  typeValue?: string | null,
+): string {
+  const t = (typeValue ?? "").trim();
+  if (!t) return awpClassColor(name);
+  const key = `${name.trim().toLowerCase()}::${t.toLowerCase()}`;
+  const hue = hashStr(key) % 360;
+  return hslToHex(hue, 65, 42);
+}
+
+/**
  * Pick a readable text color (white or dark charcoal) for a given hex
  * background using WCAG relative-luminance contrast.
  */

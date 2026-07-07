@@ -5337,7 +5337,7 @@ function InstancesReportModal({
       const prefix = opt?.idPrefix || inst.awp_class_name.slice(0, 3).toUpperCase();
       const category = opt?.category || "Other";
       const num = inst.instance_number ?? 0;
-      const base = `${prefix}${String(num).padStart(3, "0")}`;
+      const padded = String(num).padStart(3, "0");
       const fileName = fileNameById.get(inst.file_id) || "";
       const pairs = pairsForPage(fileName, inst.page_index, Number(inst.nx) || 0, Number(inst.ny) || 0);
       const md =
@@ -5352,6 +5352,9 @@ function InstancesReportModal({
         typeof md.pipe_type === "string"
           ? (md.pipe_type as string).trim() || null
           : null;
+      // When a Type value is present (CW/HW), fold it into the acronym:
+      // "CW-Potable-001". Otherwise fall back to the compact "CW001" form.
+      const base = pipeType ? `${prefix}-${pipeType}-${padded}` : `${prefix}${padded}`;
       const common = {
         annotationBaseId: base,
         awpClassName: inst.awp_class_name,
@@ -6247,9 +6250,13 @@ function InstancesReportModal({
         new Set(fileGroups.map((g) => g.file.name)),
       );
       const overviewClasses = classCols.map((c) => {
-        // Per-attribute breakdown: unique (pipe_diameter, pipe_type) combos
-        // with detection counts. Zero-attribute classes produce an empty list
-        // and render as a plain single-row entry.
+        // Per-attribute breakdown. For Cold Water / Hot Water we split by the
+        // free-text Type value only (with a "(untyped)" bucket for blanks so
+        // the reader always sees the full picture). For every other class we
+        // fall back to the combined (pipe_diameter, pipe_type) attribute
+        // grouping so pipe-size-only classes (e.g. Fire Suppression) still
+        // get a useful breakdown.
+        const isTypedClass = /(^|\s)(cold|hot)\s*water(\s|$)/i.test(c.name);
         const combos = new Map<string, { attributes: Record<string, string>; count: number }>();
         const seenCons = new Set<string>();
         for (const r of expanded) {
@@ -6261,9 +6268,13 @@ function InstancesReportModal({
             seenCons.add(dedup);
           }
           const attrs: Record<string, string> = {};
-          if (r.pipeDiameter) attrs["Pipe size"] = r.pipeDiameter;
-          if (r.pipeType) attrs["Type"] = r.pipeType;
-          if (Object.keys(attrs).length === 0) continue;
+          if (isTypedClass) {
+            attrs["Type"] = r.pipeType ? r.pipeType : "(untyped)";
+          } else {
+            if (r.pipeDiameter) attrs["Pipe size"] = r.pipeDiameter;
+            if (r.pipeType) attrs["Type"] = r.pipeType;
+            if (Object.keys(attrs).length === 0) continue;
+          }
           const key = JSON.stringify(attrs);
           const cur = combos.get(key);
           if (cur) cur.count += 1;

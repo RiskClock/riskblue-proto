@@ -28,7 +28,7 @@ import { X as XIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
-import { awpClassColor, readableTextOn, softBgFrom } from "@/lib/awpColor";
+import { awpClassColor, awpClassColorForType, readableTextOn, softBgFrom } from "@/lib/awpColor";
 
 
 import {
@@ -1096,21 +1096,25 @@ export const FileViewerModal = ({
     return m;
   }, [instances]);
 
-  const instanceLabel = (inst: DrawingInstanceRow) => {
-    const n = numberByInstanceId.get(inst.id) ?? 0;
-    const prefix = prefixByClass.get(inst.awp_class_name) || "AWP";
-    const base = `${prefix}-${String(n).padStart(3, "0")}`;
+  const instanceMeta = (inst: DrawingInstanceRow) => {
     const meta = (inst.metadata && typeof inst.metadata === "object"
       ? (inst.metadata as any)
       : {}) as Record<string, any>;
-    const parts: string[] = [];
     const diameter =
       typeof meta.pipe_diameter === "string" ? meta.pipe_diameter.trim() : "";
-    if (diameter) parts.push(diameter);
     const pipeType =
       typeof meta.pipe_type === "string" ? meta.pipe_type.trim() : "";
-    if (pipeType) parts.push(pipeType);
-    return parts.length > 0 ? `${base} (${parts.join(", ")})` : base;
+    return { diameter, pipeType };
+  };
+
+  const instanceLabel = (inst: DrawingInstanceRow) => {
+    const n = numberByInstanceId.get(inst.id) ?? 0;
+    const prefix = prefixByClass.get(inst.awp_class_name) || "AWP";
+    const padded = String(n).padStart(3, "0");
+    const { diameter, pipeType } = instanceMeta(inst);
+    // Type value (CW/HW) is folded into the acronym: CW-Potable-001.
+    const base = pipeType ? `${prefix}-${pipeType}-${padded}` : `${prefix}-${padded}`;
+    return diameter ? `${base} (${diameter})` : base;
   };
 
   // ---- Overlays ----------------------------------------------------------
@@ -1144,15 +1148,18 @@ export const FileViewerModal = ({
           i.page_index === effectivePage &&
           (!allowed || allowed.has(i.awp_class_name)),
       )
-      .map((i) => ({
-        id: `inst-${i.id}`,
-        // bbox width/height = 0 so the centroid is exactly the click point
-        bbox: [i.nx, i.ny, 0, 0] as [number, number, number, number],
-        coordSpace: "normalized" as const,
-        page: singlePageOnly ? currentPage : sheetId ? 1 : i.page_index,
-        color: awpClassColor(i.awp_class_name),
-        label: instanceLabel(i),
-      }));
+      .map((i) => {
+        const { pipeType } = instanceMeta(i);
+        return {
+          id: `inst-${i.id}`,
+          // bbox width/height = 0 so the centroid is exactly the click point
+          bbox: [i.nx, i.ny, 0, 0] as [number, number, number, number],
+          coordSpace: "normalized" as const,
+          page: singlePageOnly ? currentPage : sheetId ? 1 : i.page_index,
+          color: awpClassColorForType(i.awp_class_name, pipeType),
+          label: instanceLabel(i),
+        };
+      });
   }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses]);
 
   // Floor-plan bbox overlays. Survey agent returns `xy_width_height_pct` as
