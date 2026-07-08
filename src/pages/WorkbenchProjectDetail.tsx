@@ -89,6 +89,7 @@ import {
 import { DrawingViewer } from "@/components/viewer";
 import {
   prewarmDocumentSource,
+  resolveDocumentSource,
   type DocumentSourceDescriptor,
 } from "@/components/viewer/hooks/useDocumentSource";
 import { useAWPOptions, groupAWPOptionsByCategory } from "@/hooks/useAWPOptions";
