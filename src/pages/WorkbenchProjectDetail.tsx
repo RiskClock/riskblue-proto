@@ -944,7 +944,7 @@ export default function WorkbenchProjectDetail() {
       try {
         const { data, error } = await supabase
           .from("analysis_request_files")
-          .select("id, name, storage_path, mime_type, expected_page_count")
+          .select("id, name, storage_path, mime_type, size_bytes, expected_page_count")
           .eq("analysis_request_id", requestId)
           .order("name");
         if (error) throw error;
@@ -954,6 +954,7 @@ export default function WorkbenchProjectDetail() {
           source_type: requestSourceType,
           storage_path: r.storage_path,
           mime_type: r.mime_type,
+          size_bytes: r.size_bytes ?? null,
           page_count: r.expected_page_count ?? cachedPageCounts.get(r.id) ?? null,
         }));
         if (cancelled) return;
