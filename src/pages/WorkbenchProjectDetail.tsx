@@ -6888,6 +6888,7 @@ function TabbedPagesBlock({
     pageIdx: number;
     bucket: string;
     parentPath: string | null;
+    sizeBytes?: number | null;
     overlays: any[];
     tabLabel?: string;
   }>;
