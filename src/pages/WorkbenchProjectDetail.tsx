@@ -6039,6 +6039,7 @@ function InstancesReportModal({
         if (!lookup) return null;
         const bucket = bucketForSource(lookup.sheet.file_source_type);
         const parentPath = lookup.file.storage_path;
+        const sizeBytes = (lookup.file as any).size_bytes ?? null;
         const rawOverlays = rows
           .filter((r) => r.fileId === fileId && r.pageIndex === pageIdx);
         // Collapse markers that share the exact same (nx, ny) into a single
