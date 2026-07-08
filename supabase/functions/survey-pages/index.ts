@@ -38,19 +38,40 @@ function stripCodeFence(text: string): string {
     .replace(/\s*```$/, "");
 }
 
+function normalizeScoutJson(value: any): any[] | null {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === "object") {
+    if (Array.isArray(value.surveyed_pages)) return [value];
+    if (pageValue(value) != null) return [value];
+  }
+  return null;
+}
+
 function extractJsonArray(text: string): any[] | null {
   const stripped = stripCodeFence(text);
   try {
     const direct = JSON.parse(stripped);
-    if (Array.isArray(direct)) return direct;
+    const normalized = normalizeScoutJson(direct);
+    if (normalized) return normalized;
   } catch (_) { /* fall through */ }
+  const objectStart = stripped.indexOf("{");
+  const objectEnd = stripped.lastIndexOf("}");
+  if (objectStart >= 0 && objectEnd > objectStart) {
+    try {
+      const slice = stripped.slice(objectStart, objectEnd + 1);
+      const parsed = JSON.parse(slice);
+      const normalized = normalizeScoutJson(parsed);
+      if (normalized) return normalized;
+    } catch (_) { /* ignore */ }
+  }
   const start = stripped.indexOf("[");
   const end = stripped.lastIndexOf("]");
   if (start >= 0 && end > start) {
     try {
       const slice = stripped.slice(start, end + 1);
       const parsed = JSON.parse(slice);
-      if (Array.isArray(parsed)) return parsed;
+      const normalized = normalizeScoutJson(parsed);
+      if (normalized) return normalized;
     } catch (_) { /* ignore */ }
   }
   return null;
@@ -262,6 +283,12 @@ Deno.serve(async (req) => {
             responseSchema: ScoutPipelinePayloadSchema,
             maxOutputTokens: MAX_OUTPUT_TOKENS,
           };
+          if (/gemini-2\.5/i.test(GEMINI_MODEL)) {
+            // Gemini 2.5 Flash can spend most of maxOutputTokens on hidden
+            // thinking tokens, then truncate a tiny visible JSON body with
+            // MAX_TOKENS. Scout is extraction-only, so disable thinking.
+            genConfig.thinkingConfig = { thinkingBudget: 0 };
+          }
           if (cacheName) genConfig.cachedContent = cacheName;
           else genConfig.systemInstruction = systemPrompt;
 
@@ -270,7 +297,8 @@ Deno.serve(async (req) => {
             `The source PDF has EXACTLY ${totalPagesHint} page(s) total. ` +
             `Process ONLY pages ${startPage} through ${endPage} of the source PDF (inclusive). ` +
             `Ignore all other pages. ` +
-            `Return ONLY the strict JSON array requested above. ` +
+            `Return ONLY one strict JSON object matching the response schema. ` +
+            `The surveyed_pages array MUST contain ONLY page(s) ${startPage} through ${endPage}. ` +
             `Every surveyed_pages item MUST include a page_number matching the source PDF page number, ` +
             `and every page_number MUST fall within ${startPage}..${endPage}. ` +
             `Do NOT invent pages beyond ${totalPagesHint}.`;
@@ -300,10 +328,14 @@ Deno.serve(async (req) => {
           const finishReason: string | null = candidate?.finishReason ?? null;
           const safetyRatings = candidate?.safetyRatings ?? null;
           const parsed = extractJsonArray(text);
+          const usageSummary = usage
+            ? ` usage(prompt=${usage.promptTokenCount ?? "?"}, candidates=${usage.candidatesTokenCount ?? "?"}, thoughts=${usage.thoughtsTokenCount ?? usage.thinkingTokenCount ?? "?"}, total=${usage.totalTokenCount ?? "?"})`
+            : " usage=unavailable";
 
           console.log(
             `[survey-pages] chunk ${startPage}-${endPage} finishReason=${finishReason ?? "n/a"} ` +
-              `rawLen=${text.length} parsedItems=${parsed ? parsed.length : "unparsed"}`,
+              `rawLen=${text.length} parsedItems=${parsed ? parsed.length : "unparsed"} ` +
+              `maxOutputTokens=${MAX_OUTPUT_TOKENS}${usageSummary}`,
           );
           if (!parsed || parsed.length === 0) {
             const preview = text.length > 500 ? `${text.slice(0, 500)}...` : text;
