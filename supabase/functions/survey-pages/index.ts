@@ -245,13 +245,22 @@ Deno.serve(async (req) => {
         // when the cache is in use we fold the system prompt into the user
         // message instead. Each chunk asks for a specific page range so the
         // model never gets fatigued on long documents and schema stays clean.
-        const CHUNK_SIZE = 10;
+        // Page-by-page chunking: architectural schematics can have 30-40
+        // detail blocks per page, so a multi-page chunk easily blows past
+        // maxOutputTokens and truncates the JSON array. One page per call
+        // keeps each response bounded and parseable, and we already run the
+        // rest of the chunks in parallel.
+        const CHUNK_SIZE = 1;
+        // Gemini Flash tops out at 8192 output tokens; use the ceiling so
+        // dense pages can complete valid JSON.
+        const MAX_OUTPUT_TOKENS = 8192;
 
         const runChunk = async (startPage: number, endPage: number, totalPagesHint: number) => {
           const genConfig: any = {
             temperature: 0,
             responseMimeType: "application/json",
             responseSchema: ScoutPipelinePayloadSchema,
+            maxOutputTokens: MAX_OUTPUT_TOKENS,
           };
           if (cacheName) genConfig.cachedContent = cacheName;
           else genConfig.systemInstruction = systemPrompt;
