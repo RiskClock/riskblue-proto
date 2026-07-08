@@ -422,13 +422,14 @@ async function renderDrawingImage(
   sourceType: string | undefined,
   pdfCache: PdfCache,
   signal?: AbortSignal,
+  sizeBytes?: number | null,
 ): Promise<{ png: Uint8Array; width: number; height: number; hasHighlight: boolean } | null> {
   if (!storagePath) return null;
 
   const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
 
   try {
-    const pdf = await loadPdf(storagePath, bucket, pdfCache, signal);
+    const pdf = await loadPdf(storagePath, bucket, pdfCache, signal, sizeBytes ?? undefined);
     if (!pdf) return null;
     checkAbort(signal);
 
