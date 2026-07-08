@@ -141,8 +141,9 @@ async function loadPdf(
   bucket: string,
   storagePath: string,
   cache: PdfCache,
+  version?: number | null,
 ): Promise<pdfjsLib.PDFDocumentProxy | null> {
-  const key = `${bucket}:${storagePath}`;
+  const key = `${bucket}:${storagePath}:${version ?? ""}`;
   if (cache.has(key)) return cache.get(key)!;
   try {
     // Route through the shared document cache (memory + IndexedDB) so we
@@ -152,6 +153,7 @@ async function loadPdf(
       bucket,
       path: storagePath,
       mimeType: "application/pdf",
+      version: version ?? undefined,
     });
     const buf = await blob.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
