@@ -440,17 +440,40 @@ Deno.serve(async (req) => {
           ),
         );
 
-        // Aggregate token usage across all chunks
+        // Aggregate token usage across all chunks + per-chunk telemetry
+        // (finishReason, safetyRatings, raw text) for post-hoc debugging of
+        // empty/malformed responses without re-running the pipeline.
         let promptSum = 0, cachedSum = 0, candidatesSum = 0, totalSum = 0;
         let hasUsage = false;
+        const chunkTelemetry: any[] = [];
         for (const c of allChunks) {
           const u = (c as any).usage;
-          if (!u) continue;
-          hasUsage = true;
-          promptSum += Number(u.promptTokenCount ?? 0);
-          cachedSum += Number(u.cachedContentTokenCount ?? 0);
-          candidatesSum += Number(u.candidatesTokenCount ?? 0);
-          totalSum += Number(u.totalTokenCount ?? 0);
+          if (u) {
+            hasUsage = true;
+            promptSum += Number(u.promptTokenCount ?? 0);
+            cachedSum += Number(u.cachedContentTokenCount ?? 0);
+            candidatesSum += Number(u.candidatesTokenCount ?? 0);
+            totalSum += Number(u.totalTokenCount ?? 0);
+          }
+          chunkTelemetry.push({
+            startPage: c.startPage,
+            endPage: c.endPage,
+            finishReason: (c as any).finishReason ?? null,
+            safetyRatings: (c as any).safetyRatings ?? null,
+            rawTextLength: c.text?.length ?? 0,
+            parsedItemCount: c.parsed ? c.parsed.length : null,
+            // Raw text preserved verbatim for debugging. Truncate very long
+            // outputs so the JSONB column stays reasonable in size.
+            rawText: c.text && c.text.length > 20000 ? c.text.slice(0, 20000) + "…[truncated]" : c.text ?? "",
+            tokens: u
+              ? {
+                  prompt: Number(u.promptTokenCount ?? 0),
+                  cached: Number(u.cachedContentTokenCount ?? 0),
+                  candidates: Number(u.candidatesTokenCount ?? 0),
+                  total: Number(u.totalTokenCount ?? 0),
+                }
+              : null,
+          });
         }
         const tokensAgg = hasUsage
           ? {
@@ -461,8 +484,13 @@ Deno.serve(async (req) => {
               cacheHitPct: promptSum > 0 ? Math.round((cachedSum / promptSum) * 100) : 0,
               chunks: allChunks.length,
               durationMs: Date.now() - runStartedAt,
+              perChunk: chunkTelemetry,
             }
-          : { durationMs: Date.now() - runStartedAt, chunks: allChunks.length };
+          : {
+              durationMs: Date.now() - runStartedAt,
+              chunks: allChunks.length,
+              perChunk: chunkTelemetry,
+            };
 
         await admin
           .from("analysis_request_files")
