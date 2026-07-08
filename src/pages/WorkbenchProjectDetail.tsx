@@ -1051,12 +1051,16 @@ export default function WorkbenchProjectDetail() {
           if (cancelled) return;
           if (!existsByRow.get(row.id)) continue;
           try {
-            const { data: signed, error: signErr } = await supabase.storage
-              .from(bucketForSource(row.source_type))
-              .createSignedUrl(row.storage_path!, 600);
-            if (signErr || !signed?.signedUrl) continue;
-            const resp = await fetch(signed.signedUrl);
-            const buf = await resp.arrayBuffer();
+            // Route through the shared cache so this one-time page-count
+            // download populates the same store the viewer/exporters read.
+            const { blob } = await resolveDocumentSource({
+              kind: "supabase-storage",
+              bucket: bucketForSource(row.source_type),
+              path: row.storage_path!,
+              mimeType: row.mime_type || "application/pdf",
+              version: row.size_bytes ?? undefined,
+            });
+            const buf = await blob.arrayBuffer();
             const doc = await pdfjsLib.getDocument({ data: buf }).promise;
             const count = doc.numPages;
             try { doc.destroy(); } catch { /* ignore */ }
