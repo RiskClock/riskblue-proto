@@ -361,6 +361,8 @@ export default function WorkbenchProjectDetail() {
     storage_path: string | null;
     mime_type: string | null;
     page_count: number | null;
+    /** Bytes — cache-busting version token for the shared document cache. */
+    size_bytes?: number | null;
   };
   const [pageInfoRows, setPageInfoRows] = useState<PageInfoRow[]>([]);
   const [pageInfoLoading, setPageInfoLoading] = useState(false);
@@ -382,6 +384,7 @@ export default function WorkbenchProjectDetail() {
       bucket: bucketForSource(activePageView.file.source_type),
       path: activePageView.file.storage_path,
       mimeType: activePageView.file.mime_type || "application/pdf",
+      version: activePageView.file.size_bytes ?? undefined,
     };
   }, [activePageView]);
 
@@ -2349,6 +2352,7 @@ export default function WorkbenchProjectDetail() {
       bucket: bucketForSource(activeSheet.file_source_type),
       path: activeSheet.storage_path,
       mimeType: "application/pdf",
+      version: activeSheet.updated_at ?? undefined,
     };
   }, [activeSheet]);
 
@@ -2359,6 +2363,7 @@ export default function WorkbenchProjectDetail() {
       bucket: bucketForSource(activeFile.source_type),
       path: activeFile.storage_path,
       mimeType: activeFile.mime_type || "application/pdf",
+      version: activeFile.size_bytes ?? undefined,
     };
   }, [activeFile]);
 
