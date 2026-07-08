@@ -628,7 +628,7 @@ export async function runThreatReportExport(
       current: done,
       total: pageRefs.length,
     });
-    const pdf = await loadPdf(pr.bucket, pr.parentPath!, pdfCache);
+    const pdf = await loadPdf(pr.bucket, pr.parentPath!, pdfCache, pr.sizeBytes ?? undefined);
     const key = renderKeyFor(pr);
     if (!pdf) {
       renderedByKey.set(key, null);
