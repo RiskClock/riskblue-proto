@@ -644,7 +644,7 @@ export async function generateAnalysisDocx(
   report({ stage: "loading", percent: 6, detail: "Loading export data…" });
   const { data: filesData } = await supabase
     .from("analysis_request_files")
-    .select("id, name, storage_path")
+    .select("id, name, storage_path, size_bytes")
     .eq("analysis_request_id", requestId);
   const files = filesData || [];
   checkAbort(signal);
