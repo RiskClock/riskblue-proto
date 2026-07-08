@@ -1054,14 +1054,14 @@ export default function WorkbenchProjectDetail() {
       const [filesRes, sheetsRes] = await Promise.all([
         supabase
           .from("analysis_request_files")
-          .select("id, name, extracted_text, storage_path, mime_type, survey_raw_response, survey_raw_updated_at, risk_element_results")
+          .select("id, name, extracted_text, storage_path, mime_type, size_bytes, survey_raw_response, survey_raw_updated_at, risk_element_results")
           .eq("analysis_request_id", requestId!)
           .order("name"),
 
         supabase
           .from("analysis_request_sheets")
           .select(
-            "id, parent_file_id, page_index, sheet_number, sheet_title, storage_path, extract_status, extracted_text, survey_result, survey_updated_at, floor_plan_overrides",
+            "id, parent_file_id, page_index, sheet_number, sheet_title, storage_path, extract_status, extracted_text, updated_at, survey_result, survey_updated_at, floor_plan_overrides",
           )
           .eq("analysis_request_id", requestId!)
           .order("page_index", { ascending: true }),
@@ -1075,6 +1075,7 @@ export default function WorkbenchProjectDetail() {
         extracted_text: f.extracted_text ?? null,
         storage_path: f.storage_path ?? null,
         mime_type: f.mime_type ?? null,
+        size_bytes: f.size_bytes ?? null,
         survey_raw_response: f.survey_raw_response ?? null,
         survey_raw_updated_at: f.survey_raw_updated_at ?? null,
         risk_element_results: f.risk_element_results ?? null,
@@ -1096,6 +1097,7 @@ export default function WorkbenchProjectDetail() {
             extracted_text: s.extracted_text ?? null,
             file_name: f.name,
             file_source_type: f.source_type,
+            updated_at: s.updated_at ?? null,
             survey_result: s.survey_result ?? null,
             survey_updated_at: s.survey_updated_at ?? null,
             floor_plan_overrides: (s.floor_plan_overrides as Record<string, any> | null) ?? null,
