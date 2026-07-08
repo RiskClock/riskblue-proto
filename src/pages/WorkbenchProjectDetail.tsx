@@ -6018,6 +6018,7 @@ function InstancesReportModal({
       shortName: string;
       bucket: string;
       parentPath: string | null;
+      sizeBytes: number | null;
       overlays: any[];
       // 0 = level plan for this space, 1 = unit plan rolling up to this space,
       // 2 = other (annotations attributed here without a matching plan).
@@ -6038,6 +6039,7 @@ function InstancesReportModal({
         if (!lookup) return null;
         const bucket = bucketForSource(lookup.sheet.file_source_type);
         const parentPath = lookup.file.storage_path;
+        const sizeBytes = (lookup.file as any).size_bytes ?? null;
         const rawOverlays = rows
           .filter((r) => r.fileId === fileId && r.pageIndex === pageIdx);
         // Collapse markers that share the exact same (nx, ny) into a single
@@ -6168,6 +6170,7 @@ function InstancesReportModal({
           shortName,
           bucket,
           parentPath,
+          sizeBytes,
           overlays: overlaysAll,
           tier,
           tabLabel,
@@ -6353,6 +6356,7 @@ function InstancesReportModal({
       if (!lookup) continue;
       const bucket = bucketForSource(lookup.sheet.file_source_type);
       const parentPath = lookup.file.storage_path;
+      const sizeBytes = (lookup.file as any).size_bytes ?? null;
 
       const rawOverlays = rowsForSpace.filter(
         (r) => r.fileId === fileId && r.pageIndex === pageIdx,
@@ -6467,6 +6471,7 @@ function InstancesReportModal({
           pageIdx,
           bucket,
           parentPath,
+          sizeBytes,
           overlays: [...bboxOverlays, ...unitMarkerOverlays, ...annOverlays],
           tabLabel,
         },
@@ -6885,6 +6890,7 @@ function TabbedPagesBlock({
     pageIdx: number;
     bucket: string;
     parentPath: string | null;
+    sizeBytes?: number | null;
     overlays: any[];
     tabLabel?: string;
   }>;
@@ -6911,6 +6917,7 @@ function TabbedPagesBlock({
               bucket: active.bucket,
               path: active.parentPath,
               mimeType: "application/pdf",
+              version: active.sizeBytes ?? undefined,
             }}
             overlays={active.overlays}
             page={active.pageIdx}

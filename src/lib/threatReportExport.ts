@@ -33,6 +33,8 @@ export interface ThreatReportPageRef {
   pageIdx: number;
   bucket: string;
   parentPath: string | null;
+  /** File size in bytes; used as a cache-invalidation version token. */
+  sizeBytes?: number | null;
   overlays: Array<{
     id: string;
     nx: number;
@@ -139,8 +141,9 @@ async function loadPdf(
   bucket: string,
   storagePath: string,
   cache: PdfCache,
+  version?: number | null,
 ): Promise<pdfjsLib.PDFDocumentProxy | null> {
-  const key = `${bucket}:${storagePath}`;
+  const key = `${bucket}:${storagePath}:${version ?? ""}`;
   if (cache.has(key)) return cache.get(key)!;
   try {
     // Route through the shared document cache (memory + IndexedDB) so we
@@ -150,6 +153,7 @@ async function loadPdf(
       bucket,
       path: storagePath,
       mimeType: "application/pdf",
+      version: version ?? undefined,
     });
     const buf = await blob.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
@@ -624,7 +628,7 @@ export async function runThreatReportExport(
       current: done,
       total: pageRefs.length,
     });
-    const pdf = await loadPdf(pr.bucket, pr.parentPath!, pdfCache);
+    const pdf = await loadPdf(pr.bucket, pr.parentPath!, pdfCache, pr.sizeBytes ?? undefined);
     const key = renderKeyFor(pr);
     if (!pdf) {
       renderedByKey.set(key, null);

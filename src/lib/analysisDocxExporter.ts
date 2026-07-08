@@ -261,8 +261,8 @@ async function findSourceFile(
   requestId: string,
   awpClassName: string,
   instanceId: string,
-  files: Array<{ id: string; name: string; storage_path: string | null }>
-): Promise<{ fileName: string; storagePath: string | null }> {
+  files: Array<{ id: string; name: string; storage_path: string | null; size_bytes?: number | null }>
+): Promise<{ fileName: string; storagePath: string | null; sizeBytes: number | null }> {
   const { data: results } = await supabase
     .from("analysis_results")
     .select("file_id, result_text")
@@ -274,14 +274,14 @@ async function findSourceFile(
     for (const r of results) {
       if (r.result_text && r.result_text.includes(instanceId)) {
         const file = files.find((f) => f.id === r.file_id);
-        if (file) return { fileName: file.name, storagePath: file.storage_path };
+        if (file) return { fileName: file.name, storagePath: file.storage_path, sizeBytes: file.size_bytes ?? null };
       }
     }
   }
   if (files.length > 0) {
-    return { fileName: files[0].name, storagePath: files[0].storage_path };
+    return { fileName: files[0].name, storagePath: files[0].storage_path, sizeBytes: files[0].size_bytes ?? null };
   }
-  return { fileName: "Unknown", storagePath: null };
+  return { fileName: "Unknown", storagePath: null, sizeBytes: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -349,9 +349,11 @@ async function loadPdf(
   bucket: string,
   cache: PdfCache,
   signal?: AbortSignal,
+  version?: number | null,
 ): Promise<pdfjsLib.PDFDocumentProxy | null> {
   checkAbort(signal);
-  if (cache.has(storagePath)) return cache.get(storagePath)!;
+  const key = `${storagePath}:${version ?? ""}`;
+  if (cache.has(key)) return cache.get(key)!;
   try {
     // Route through the shared document cache (memory + IndexedDB) so we
     // never re-egress a PDF that the viewer or a prior export already loaded.
@@ -360,16 +362,17 @@ async function loadPdf(
       bucket,
       path: storagePath,
       mimeType: "application/pdf",
+      version: version ?? undefined,
     });
     checkAbort(signal);
     const arrayBuffer = await blob.arrayBuffer();
     checkAbort(signal);
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    cache.set(storagePath, pdf);
+    cache.set(key, pdf);
     return pdf;
   } catch (e) {
     console.warn("Failed to load PDF for export:", storagePath, e);
-    cache.set(storagePath, null);
+    cache.set(key, null);
     return null;
   }
 }
@@ -419,13 +422,14 @@ async function renderDrawingImage(
   sourceType: string | undefined,
   pdfCache: PdfCache,
   signal?: AbortSignal,
+  sizeBytes?: number | null,
 ): Promise<{ png: Uint8Array; width: number; height: number; hasHighlight: boolean } | null> {
   if (!storagePath) return null;
 
   const bucket = sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
 
   try {
-    const pdf = await loadPdf(storagePath, bucket, pdfCache, signal);
+    const pdf = await loadPdf(storagePath, bucket, pdfCache, signal, sizeBytes ?? undefined);
     if (!pdf) return null;
     checkAbort(signal);
 
@@ -640,7 +644,7 @@ export async function generateAnalysisDocx(
   report({ stage: "loading", percent: 6, detail: "Loading export data…" });
   const { data: filesData } = await supabase
     .from("analysis_request_files")
-    .select("id, name, storage_path")
+    .select("id, name, storage_path, size_bytes")
     .eq("analysis_request_id", requestId);
   const files = filesData || [];
   checkAbort(signal);
@@ -726,6 +730,7 @@ export async function generateAnalysisDocx(
       sourceType,
       pdfCache,
       signal,
+      sourceFile.sizeBytes,
     );
 
     rows.push({
