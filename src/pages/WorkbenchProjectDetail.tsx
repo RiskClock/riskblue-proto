@@ -104,6 +104,9 @@ interface FileRow {
   extracted_text: string | null;
   storage_path: string | null;
   mime_type: string | null;
+  /** Size in bytes — used as a cache-busting version token for the shared
+   * document cache. Changes when the underlying object is replaced. */
+  size_bytes?: number | null;
   survey_raw_response?: string | null;
   survey_raw_updated_at?: string | null;
   risk_element_results?: Record<string, any> | null;
