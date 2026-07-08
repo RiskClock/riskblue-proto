@@ -6471,6 +6471,7 @@ function InstancesReportModal({
           pageIdx,
           bucket,
           parentPath,
+          sizeBytes,
           overlays: [...bboxOverlays, ...unitMarkerOverlays, ...annOverlays],
           tabLabel,
         },
