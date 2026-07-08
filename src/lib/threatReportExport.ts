@@ -18,6 +18,7 @@
 import * as pdfjsLib from "pdfjs-dist";
 import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveDocumentSource } from "@/components/viewer";
 import { readableTextOn } from "@/lib/awpColor";
 import riskblueLogoUrl from "@/assets/logo-riskblue.png";
 
@@ -142,12 +143,15 @@ async function loadPdf(
   const key = `${bucket}:${storagePath}`;
   if (cache.has(key)) return cache.get(key)!;
   try {
-    const { data: file, error } = await supabase.storage.from(bucket).download(storagePath);
-    if (error || !file) {
-      cache.set(key, null);
-      return null;
-    }
-    const buf = await file.arrayBuffer();
+    // Route through the shared document cache (memory + IndexedDB) so we
+    // never re-egress a PDF that the viewer or a prior export already loaded.
+    const { blob } = await resolveDocumentSource({
+      kind: "supabase-storage",
+      bucket,
+      path: storagePath,
+      mimeType: "application/pdf",
+    });
+    const buf = await blob.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
     cache.set(key, pdf);
     return pdf;
