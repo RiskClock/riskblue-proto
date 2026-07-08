@@ -247,7 +247,7 @@ Deno.serve(async (req) => {
         // model never gets fatigued on long documents and schema stays clean.
         const CHUNK_SIZE = 10;
 
-        const runChunk = async (startPage: number, endPage: number) => {
+        const runChunk = async (startPage: number, endPage: number, totalPagesHint: number) => {
           const genConfig: any = {
             temperature: 0,
             responseMimeType: "application/json",
@@ -258,11 +258,13 @@ Deno.serve(async (req) => {
 
           const tailText =
             `File: ${fileName}\n` +
+            `The source PDF has EXACTLY ${totalPagesHint} page(s) total. ` +
             `Process ONLY pages ${startPage} through ${endPage} of the source PDF (inclusive). ` +
             `Ignore all other pages. ` +
             `Return ONLY the strict JSON array requested above. ` +
             `Every surveyed_pages item MUST include a page_number matching the source PDF page number, ` +
-            `and every page_number MUST fall within ${startPage}..${endPage}.`;
+            `and every page_number MUST fall within ${startPage}..${endPage}. ` +
+            `Do NOT invent pages beyond ${totalPagesHint}.`;
 
           const userParts: any[] = cacheName
             ? [
@@ -280,23 +282,46 @@ Deno.serve(async (req) => {
             config: genConfig,
           });
 
+          const candidate = (resp as any)?.candidates?.[0] ?? null;
           const text: string =
             (resp as any)?.text ??
-            (resp as any)?.candidates?.[0]?.content?.parts
-              ?.map((p: any) => p?.text ?? "")
-              .join("") ??
+            candidate?.content?.parts?.map((p: any) => p?.text ?? "").join("") ??
             "";
           const usage = (resp as any)?.usageMetadata ?? (resp as any)?.response?.usageMetadata ?? null;
-          return { startPage, endPage, text, parsed: extractJsonArray(text), usage };
+          const finishReason: string | null = candidate?.finishReason ?? null;
+          const safetyRatings = candidate?.safetyRatings ?? null;
+          const parsed = extractJsonArray(text);
+
+          console.log(
+            `[survey-pages] chunk ${startPage}-${endPage} finishReason=${finishReason ?? "n/a"} ` +
+              `rawLen=${text.length} parsedItems=${parsed ? parsed.length : "unparsed"}`,
+          );
+          if (!parsed || parsed.length === 0) {
+            const preview = text.length > 500 ? `${text.slice(0, 500)}...` : text;
+            console.warn(
+              `[survey-pages] chunk ${startPage}-${endPage} returned empty/unparsed. raw="${preview}"`,
+            );
+          }
+
+          return { startPage, endPage, text, parsed, usage, finishReason, safetyRatings };
         };
 
-        // First chunk runs alone so we can learn total_pages from its response
-        // before fanning out the rest of the document in parallel.
+        // Authoritative page ceiling: use the real PDF page count when we
+        // could read it. This prevents the model from spinning trying to
+        // satisfy a page range that exceeds the document (empty [] responses).
         const knownMaxSheetPage = sheetRows.reduce(
           (m, s) => (s.page_index > m ? s.page_index : m),
           0,
         );
-        const firstChunk = await runChunk(1, CHUNK_SIZE);
+        // If pdf-lib failed, fall back to the max known sheet page; only if
+        // we truly know nothing do we let the model discover it from chunk 1.
+        const ceilingKnown = pdfPageCount > 0 || knownMaxSheetPage > 0;
+        const initialCeiling = pdfPageCount > 0
+          ? pdfPageCount
+          : (knownMaxSheetPage > 0 ? knownMaxSheetPage : CHUNK_SIZE);
+
+        const firstEnd = Math.min(CHUNK_SIZE, initialCeiling);
+        const firstChunk = await runChunk(1, firstEnd, initialCeiling);
 
         let discoveredTotal = 0;
         if (firstChunk.parsed) {
@@ -305,20 +330,25 @@ Deno.serve(async (req) => {
             if (Number.isFinite(tp) && tp > discoveredTotal) discoveredTotal = tp;
           }
         }
-        const totalForChunking = Math.max(discoveredTotal, knownMaxSheetPage, pdfPageCount, CHUNK_SIZE);
+        // When the real pdf page count is known, it is authoritative and clamps
+        // any model-reported total. Otherwise trust what we can learn.
+        const totalForChunking = ceilingKnown
+          ? initialCeiling
+          : Math.max(discoveredTotal, knownMaxSheetPage, CHUNK_SIZE);
 
         const chunkRanges: Array<[number, number]> = [];
-        for (let start = CHUNK_SIZE + 1; start <= totalForChunking; start += CHUNK_SIZE) {
+        for (let start = firstEnd + 1; start <= totalForChunking; start += CHUNK_SIZE) {
           chunkRanges.push([start, Math.min(start + CHUNK_SIZE - 1, totalForChunking)]);
         }
 
         console.log(
           `[survey-pages] chunking file=${fileName} total=${totalForChunking} ` +
-            `firstChunk=1-${CHUNK_SIZE} parallelChunks=${chunkRanges.length}`,
+            `firstChunk=1-${firstEnd} parallelChunks=${chunkRanges.length} ` +
+            `(pdfPages=${pdfPageCount}, knownMaxSheet=${knownMaxSheetPage}, modelReported=${discoveredTotal})`,
         );
 
         const restResults = await Promise.all(
-          chunkRanges.map(([s, e]) => runChunk(s, e)),
+          chunkRanges.map(([s, e]) => runChunk(s, e, totalForChunking)),
         );
         const allChunks = [firstChunk, ...restResults];
 
