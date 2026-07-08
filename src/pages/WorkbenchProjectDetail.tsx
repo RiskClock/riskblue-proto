@@ -6170,6 +6170,7 @@ function InstancesReportModal({
           shortName,
           bucket,
           parentPath,
+          sizeBytes,
           overlays: overlaysAll,
           tier,
           tabLabel,
