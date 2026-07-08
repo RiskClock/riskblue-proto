@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { getCached, putCached, touchCached } from "./documentCache";
 
 /**
  * Unified document source loader.
@@ -9,20 +10,31 @@ import { supabase } from "@/integrations/supabase/client";
  *  - { kind: 'blob', blob }                          - already in memory
  *  - { kind: 'url', url }                            - direct URL (http(s) or data:)
  *  - { kind: 'drive', fileId, accessToken, mimeType? } - Google Drive
- *  - { kind: 'supabase-storage', bucket, path }      - Supabase storage signed URL
+ *  - { kind: 'supabase-storage', bucket, path, version? } - Supabase storage signed URL
+ *
+ * `version` is a source-of-truth freshness token (e.g. row.updated_at). When
+ * present, the cache key includes it so replacing the underlying object
+ * forces a fresh download exactly once. Old entries are then LRU-evicted.
  */
 
 export type DocumentSourceDescriptor =
   | { kind: "blob"; blob: Blob; mimeType?: string }
-  | { kind: "url"; url: string; mimeType?: string }
+  | { kind: "url"; url: string; mimeType?: string; version?: string | number }
   | {
       kind: "drive";
       fileId: string;
       accessToken: string;
       mimeType?: string;
       fileName?: string;
+      version?: string | number;
     }
-  | { kind: "supabase-storage"; bucket: string; path: string; mimeType?: string };
+  | {
+      kind: "supabase-storage";
+      bucket: string;
+      path: string;
+      mimeType?: string;
+      version?: string | number;
+    };
 
 /** Marker prepended to error messages when the source blob is missing from storage. */
 export const MISSING_SOURCE_ERROR = "__SOURCE_MISSING__";
@@ -59,13 +71,29 @@ function isPdfMime(mime: string | undefined, hintName?: string) {
   return false;
 }
 
-// Module-level LRU cache for resolved blobs. Keyed by descriptor signature.
-// Avoids re-downloading + re-signing storage URLs when reopening the same
-// preview modal repeatedly.
-const BLOB_CACHE_TTL_MS = 5 * 60 * 1000;
-const BLOB_CACHE_MAX = 10;
-type BlobCacheEntry = { blob: Blob; mime: string; ts: number };
-const blobCache = new Map<string, BlobCacheEntry>();
+// Tier-1 in-memory cache: synchronous hits for rapid reopens of the same PDF.
+// Tier-2 (IndexedDB, via ./documentCache) survives page reloads and shares
+// across all consumers (viewer + exporters).
+const MEM_CACHE_MAX = 5;
+type MemEntry = { blob: Blob; mime: string };
+const memCache = new Map<string, MemEntry>();
+
+function memGet(key: string): MemEntry | null {
+  const hit = memCache.get(key);
+  if (!hit) return null;
+  // Promote LRU order.
+  memCache.delete(key);
+  memCache.set(key, hit);
+  return hit;
+}
+
+function memPut(key: string, entry: MemEntry) {
+  memCache.set(key, entry);
+  if (memCache.size > MEM_CACHE_MAX) {
+    const oldest = memCache.keys().next().value;
+    if (oldest) memCache.delete(oldest);
+  }
+}
 
 /**
  * Fetch with retry + exponential backoff. Retries on network-level failures
@@ -99,75 +127,101 @@ async function fetchWithRetry(
 }
 
 function descriptorKey(d: DocumentSourceDescriptor): string | null {
-  if (d.kind === "supabase-storage") return `ss:${d.bucket}:${d.path}`;
-  if (d.kind === "url") return `url:${d.url}`;
-  if (d.kind === "drive") return `drive:${d.fileId}`;
+  const version = (d as any).version;
+  const versionSuffix = version != null ? `@v=${version}` : "";
+  if (d.kind === "supabase-storage") return `ss:${d.bucket}:${d.path}${versionSuffix}`;
+  if (d.kind === "url") return `url:${d.url}${versionSuffix}`;
+  if (d.kind === "drive") return `drive:${d.fileId}${versionSuffix}`;
   return null; // blob - not cacheable
 }
 
-function readCache(key: string): BlobCacheEntry | null {
-  const hit = blobCache.get(key);
-  if (!hit) return null;
-  if (Date.now() - hit.ts > BLOB_CACHE_TTL_MS) {
-    blobCache.delete(key);
-    return null;
-  }
-  // refresh LRU order
-  blobCache.delete(key);
-  blobCache.set(key, hit);
-  return hit;
-}
+/**
+ * Resolve a descriptor to a { blob, mime } pair. Shared cache path used by
+ * both the React hook and non-React callers (exporters). Throws on failure.
+ */
+export async function resolveDocumentSource(
+  descriptor: DocumentSourceDescriptor
+): Promise<{ blob: Blob; mime: string }> {
+  const cacheKey = descriptorKey(descriptor);
+  const declaredMime = (descriptor as any).mimeType as string | undefined;
+  const defaultMime = declaredMime ?? "application/octet-stream";
 
-function writeCache(key: string, entry: BlobCacheEntry) {
-  blobCache.set(key, entry);
-  if (blobCache.size > BLOB_CACHE_MAX) {
-    const oldest = blobCache.keys().next().value;
-    if (oldest) blobCache.delete(oldest);
+  if (cacheKey) {
+    const memHit = memGet(cacheKey);
+    if (memHit) return { blob: memHit.blob, mime: declaredMime ?? memHit.mime };
+    const idbHit = await getCached(cacheKey);
+    if (idbHit) {
+      memPut(cacheKey, { blob: idbHit.blob, mime: idbHit.mime });
+      touchCached(cacheKey);
+      return { blob: idbHit.blob, mime: declaredMime ?? idbHit.mime };
+    }
   }
+
+  let blob: Blob;
+  let mime = defaultMime;
+
+  if (descriptor.kind === "blob") {
+    blob = descriptor.blob;
+    mime = declaredMime ?? blob.type ?? mime;
+  } else if (descriptor.kind === "url") {
+    const r = await fetchWithRetry(descriptor.url);
+    if (!r.ok) throw new Error(`Failed to load: ${r.status}`);
+    blob = await r.blob();
+    mime = declaredMime ?? blob.type ?? mime;
+  } else if (descriptor.kind === "drive") {
+    const isGoogleDoc = (descriptor.mimeType ?? "").includes("google-apps");
+    const url = isGoogleDoc
+      ? `https://www.googleapis.com/drive/v3/files/${descriptor.fileId}/export?mimeType=application/pdf`
+      : `https://www.googleapis.com/drive/v3/files/${descriptor.fileId}?alt=media`;
+    const r = await fetchWithRetry(url, {
+      headers: { Authorization: `Bearer ${descriptor.accessToken}` },
+    });
+    if (!r.ok) throw new Error(`Drive load failed: ${r.status}`);
+    blob = await r.blob();
+    mime = isGoogleDoc ? "application/pdf" : declaredMime ?? blob.type ?? mime;
+  } else {
+    // supabase-storage
+    const { data, error: e } = await supabase.storage
+      .from(descriptor.bucket)
+      .createSignedUrl(descriptor.path, 3600);
+    if (e || !data?.signedUrl) {
+      throw new Error(e?.message ?? "Failed to sign storage URL");
+    }
+    const r = await fetchWithRetry(data.signedUrl);
+    if (!r.ok) throw new Error(`Storage fetch failed: ${r.status}`);
+    blob = await r.blob();
+    mime = declaredMime ?? blob.type ?? mime;
+  }
+
+  if (cacheKey) {
+    memPut(cacheKey, { blob, mime });
+    // Fire-and-forget IDB write.
+    void putCached({ key: cacheKey, blob, mime });
+  }
+
+  return { blob, mime };
 }
 
 /**
- * Idle-time prefetch: download a descriptor's blob into the module-level LRU
- * cache so a subsequent useDocumentSource(descriptor) call hits cache and
- * resolves immediately. Safe to call repeatedly - no-op when already cached.
- * Errors are swallowed (best-effort warming).
+ * Idle-time prefetch: warm the cache so a subsequent modal open resolves
+ * immediately. Safe to call repeatedly - no-op when already cached. Errors
+ * are swallowed (best-effort warming).
  */
 export async function prewarmDocumentSource(
   descriptor: DocumentSourceDescriptor
 ): Promise<void> {
   const cacheKey = descriptorKey(descriptor);
   if (!cacheKey) return;
-  if (readCache(cacheKey)) return;
+  if (memGet(cacheKey)) return;
+  // Cheap async check against IDB before we hit the network.
+  const idbHit = await getCached(cacheKey);
+  if (idbHit) {
+    memPut(cacheKey, { blob: idbHit.blob, mime: idbHit.mime });
+    touchCached(cacheKey);
+    return;
+  }
   try {
-    let blob: Blob | null = null;
-    let mimeType = (descriptor as any).mimeType ?? "application/octet-stream";
-    if (descriptor.kind === "url") {
-      const r = await fetchWithRetry(descriptor.url);
-      if (!r.ok) return;
-      blob = await r.blob();
-      mimeType = descriptor.mimeType ?? blob.type ?? mimeType;
-    } else if (descriptor.kind === "drive") {
-      const isGoogleDoc = (descriptor.mimeType ?? "").includes("google-apps");
-      const url = isGoogleDoc
-        ? `https://www.googleapis.com/drive/v3/files/${descriptor.fileId}/export?mimeType=application/pdf`
-        : `https://www.googleapis.com/drive/v3/files/${descriptor.fileId}?alt=media`;
-      const r = await fetchWithRetry(url, {
-        headers: { Authorization: `Bearer ${descriptor.accessToken}` },
-      });
-      if (!r.ok) return;
-      blob = await r.blob();
-      mimeType = isGoogleDoc ? "application/pdf" : descriptor.mimeType ?? blob.type ?? mimeType;
-    } else if (descriptor.kind === "supabase-storage") {
-      const { data, error: e } = await supabase.storage
-        .from(descriptor.bucket)
-        .createSignedUrl(descriptor.path, 3600);
-      if (e || !data?.signedUrl) return;
-      const r = await fetchWithRetry(data.signedUrl);
-      if (!r.ok) return;
-      blob = await r.blob();
-      mimeType = descriptor.mimeType ?? blob.type ?? mimeType;
-    }
-    if (blob) writeCache(cacheKey, { blob, mime: mimeType, ts: Date.now() });
+    await resolveDocumentSource(descriptor);
   } catch {
     // best-effort - ignore
   }
@@ -194,80 +248,17 @@ export function useDocumentSource(
       setLoading(true);
       setError(null);
       try {
-        let blob: Blob | null = null;
-        let directUrl: string | null = null;
-        let mimeType =
-          (descriptor as any).mimeType ?? "application/octet-stream";
-
-        // Cache lookup
-        const cacheKey = descriptorKey(descriptor);
-        if (cacheKey) {
-          const hit = readCache(cacheKey);
-          if (hit) {
-            blob = hit.blob;
-            mimeType = (descriptor as any).mimeType ?? hit.mime ?? mimeType;
-          }
-        }
-
-        if (!blob) {
-          if (descriptor.kind === "blob") {
-            blob = descriptor.blob;
-            mimeType = descriptor.mimeType ?? blob.type ?? mimeType;
-          } else if (descriptor.kind === "url") {
-            const r = await fetchWithRetry(descriptor.url);
-            if (!r.ok) throw new Error(`Failed to load: ${r.status}`);
-            blob = await r.blob();
-            mimeType = descriptor.mimeType ?? blob.type ?? mimeType;
-          } else if (descriptor.kind === "drive") {
-            const isGoogleDoc = (descriptor.mimeType ?? "").includes(
-              "google-apps"
-            );
-            const url = isGoogleDoc
-              ? `https://www.googleapis.com/drive/v3/files/${descriptor.fileId}/export?mimeType=application/pdf`
-              : `https://www.googleapis.com/drive/v3/files/${descriptor.fileId}?alt=media`;
-            const r = await fetchWithRetry(url, {
-              headers: { Authorization: `Bearer ${descriptor.accessToken}` },
-            });
-            if (!r.ok) throw new Error(`Drive load failed: ${r.status}`);
-            blob = await r.blob();
-            mimeType = isGoogleDoc
-              ? "application/pdf"
-              : descriptor.mimeType ?? blob.type ?? mimeType;
-          } else if (descriptor.kind === "supabase-storage") {
-            const { data, error: e } = await supabase.storage
-              .from(descriptor.bucket)
-              .createSignedUrl(descriptor.path, 3600);
-            if (e || !data?.signedUrl) {
-              throw new Error(e?.message ?? "Failed to sign storage URL");
-            }
-            const r = await fetchWithRetry(data.signedUrl);
-            if (!r.ok) throw new Error(`Storage fetch failed: ${r.status}`);
-            blob = await r.blob();
-            mimeType =
-              descriptor.mimeType ?? blob.type ?? mimeType;
-          }
-          if (cacheKey && blob) {
-            writeCache(cacheKey, { blob, mime: mimeType, ts: Date.now() });
-          }
-        }
-
+        const { blob, mime } = await resolveDocumentSource(descriptor);
         if (cancelled) return;
-
         const hintName =
           descriptor.kind === "drive" ? descriptor.fileName : undefined;
-        const pdf = isPdfMime(mimeType, hintName);
-        if (pdf && blob) {
-          setResolved({
-            kind: "pdf",
-            pdfBlob: blob,
-            mimeType: "application/pdf",
-          });
-        } else if (blob) {
+        const pdf = isPdfMime(mime, hintName);
+        if (pdf) {
+          setResolved({ kind: "pdf", pdfBlob: blob, mimeType: "application/pdf" });
+        } else {
           const objectUrl = URL.createObjectURL(blob);
           revokeUrl = objectUrl;
-          setResolved({ kind: "image", imageUrl: objectUrl, mimeType });
-        } else if (directUrl) {
-          setResolved({ kind: "image", imageUrl: directUrl, mimeType });
+          setResolved({ kind: "image", imageUrl: objectUrl, mimeType: mime });
         }
       } catch (e) {
         if (!cancelled) {
