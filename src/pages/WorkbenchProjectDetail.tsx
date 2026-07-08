@@ -124,6 +124,8 @@ interface SheetRow {
   extracted_text: string | null;
   file_name: string;
   file_source_type: string;
+  /** Sheet updated_at — used as the shared cache version token. */
+  updated_at?: string | null;
   survey_result?: unknown;
   survey_updated_at?: string | null;
   floor_plan_overrides?: Record<string, any> | null;
