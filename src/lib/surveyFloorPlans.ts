@@ -4,6 +4,8 @@
 export type FloorPlanType =
   | "level_floor_plan"
   | "unit_floor_plan"
+  | "schematic_level_row"
+  | "typical_detail_block"
   | "master_plan"
   | string;
 
