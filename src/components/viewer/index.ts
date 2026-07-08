@@ -17,6 +17,11 @@ export {
   computeFitToRect,
 } from "./viewerGeometry";
 export type { DocumentSourceDescriptor, ResolvedSource } from "./hooks/useDocumentSource";
-export { useDocumentSource, prewarmDocumentSource, MISSING_SOURCE_ERROR } from "./hooks/useDocumentSource";
+export {
+  useDocumentSource,
+  prewarmDocumentSource,
+  resolveDocumentSource,
+  MISSING_SOURCE_ERROR,
+} from "./hooks/useDocumentSource";
 export { usePdfPageRaster } from "./hooks/usePdfPageRaster";
 export { useFitToSelection } from "./hooks/useFitToSelection";

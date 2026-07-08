@@ -16,6 +16,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import * as pdfjsLib from "pdfjs-dist";
 import { findBBoxInTextLayer, normalizeText } from "@/lib/pdfTextLayerSearch";
+import { resolveDocumentSource } from "@/components/viewer";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -352,13 +353,16 @@ async function loadPdf(
   checkAbort(signal);
   if (cache.has(storagePath)) return cache.get(storagePath)!;
   try {
-    const { data: fileData, error } = await supabase.storage.from(bucket).download(storagePath);
-    if (error || !fileData) {
-      cache.set(storagePath, null);
-      return null;
-    }
+    // Route through the shared document cache (memory + IndexedDB) so we
+    // never re-egress a PDF that the viewer or a prior export already loaded.
+    const { blob } = await resolveDocumentSource({
+      kind: "supabase-storage",
+      bucket,
+      path: storagePath,
+      mimeType: "application/pdf",
+    });
     checkAbort(signal);
-    const arrayBuffer = await fileData.arrayBuffer();
+    const arrayBuffer = await blob.arrayBuffer();
     checkAbort(signal);
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     cache.set(storagePath, pdf);

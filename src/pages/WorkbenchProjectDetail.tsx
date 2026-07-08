@@ -89,6 +89,7 @@ import {
 import { DrawingViewer } from "@/components/viewer";
 import {
   prewarmDocumentSource,
+  resolveDocumentSource,
   type DocumentSourceDescriptor,
 } from "@/components/viewer/hooks/useDocumentSource";
 import { useAWPOptions, groupAWPOptionsByCategory } from "@/hooks/useAWPOptions";
@@ -104,6 +105,9 @@ interface FileRow {
   extracted_text: string | null;
   storage_path: string | null;
   mime_type: string | null;
+  /** Size in bytes — used as a cache-busting version token for the shared
+   * document cache. Changes when the underlying object is replaced. */
+  size_bytes?: number | null;
   survey_raw_response?: string | null;
   survey_raw_updated_at?: string | null;
   risk_element_results?: Record<string, any> | null;
@@ -121,6 +125,8 @@ interface SheetRow {
   extracted_text: string | null;
   file_name: string;
   file_source_type: string;
+  /** Sheet updated_at — used as the shared cache version token. */
+  updated_at?: string | null;
   survey_result?: unknown;
   survey_updated_at?: string | null;
   floor_plan_overrides?: Record<string, any> | null;
@@ -356,6 +362,8 @@ export default function WorkbenchProjectDetail() {
     storage_path: string | null;
     mime_type: string | null;
     page_count: number | null;
+    /** Bytes — cache-busting version token for the shared document cache. */
+    size_bytes?: number | null;
   };
   const [pageInfoRows, setPageInfoRows] = useState<PageInfoRow[]>([]);
   const [pageInfoLoading, setPageInfoLoading] = useState(false);
@@ -377,8 +385,51 @@ export default function WorkbenchProjectDetail() {
       bucket: bucketForSource(activePageView.file.source_type),
       path: activePageView.file.storage_path,
       mimeType: activePageView.file.mime_type || "application/pdf",
+      version: activePageView.file.size_bytes ?? undefined,
     };
   }, [activePageView]);
+
+  // Debounced hover-triggered prefetch for drawing rows. Fires after ~150ms
+  // of dwell so quick mouse-sweeps don't kick off dozens of PDF downloads.
+  // Cancelled on mouseleave. The actual fetch is a no-op when the target
+  // blob is already in the shared cache (memory or IndexedDB).
+  const hoverPrefetchTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map(),
+  );
+  useEffect(() => {
+    const timers = hoverPrefetchTimers.current;
+    return () => {
+      timers.forEach((t) => clearTimeout(t));
+      timers.clear();
+    };
+  }, []);
+  const handleRowHoverStart = useCallback(
+    (row: { id: string; storage_path: string | null; source_type: string; mime_type: string | null; size_bytes?: number | null }) => {
+      if (!row.storage_path) return;
+      const timers = hoverPrefetchTimers.current;
+      if (timers.has(row.id)) return;
+      const timer = setTimeout(() => {
+        timers.delete(row.id);
+        void prewarmDocumentSource({
+          kind: "supabase-storage",
+          bucket: bucketForSource(row.source_type),
+          path: row.storage_path!,
+          mimeType: row.mime_type || "application/pdf",
+          version: row.size_bytes ?? undefined,
+        });
+      }, 150);
+      timers.set(row.id, timer);
+    },
+    [],
+  );
+  const handleRowHoverEnd = useCallback((rowId: string) => {
+    const timers = hoverPrefetchTimers.current;
+    const t = timers.get(rowId);
+    if (t) {
+      clearTimeout(t);
+      timers.delete(rowId);
+    }
+  }, []);
 
   // ---------------------------------------------------------------
   // Floor-plan data for the activePageView modal (single-page modal)
@@ -936,7 +987,7 @@ export default function WorkbenchProjectDetail() {
       try {
         const { data, error } = await supabase
           .from("analysis_request_files")
-          .select("id, name, storage_path, mime_type, expected_page_count")
+          .select("id, name, storage_path, mime_type, size_bytes, expected_page_count")
           .eq("analysis_request_id", requestId)
           .order("name");
         if (error) throw error;
@@ -946,6 +997,7 @@ export default function WorkbenchProjectDetail() {
           source_type: requestSourceType,
           storage_path: r.storage_path,
           mime_type: r.mime_type,
+          size_bytes: r.size_bytes ?? null,
           page_count: r.expected_page_count ?? cachedPageCounts.get(r.id) ?? null,
         }));
         if (cancelled) return;
@@ -1000,12 +1052,16 @@ export default function WorkbenchProjectDetail() {
           if (cancelled) return;
           if (!existsByRow.get(row.id)) continue;
           try {
-            const { data: signed, error: signErr } = await supabase.storage
-              .from(bucketForSource(row.source_type))
-              .createSignedUrl(row.storage_path!, 600);
-            if (signErr || !signed?.signedUrl) continue;
-            const resp = await fetch(signed.signedUrl);
-            const buf = await resp.arrayBuffer();
+            // Route through the shared cache so this one-time page-count
+            // download populates the same store the viewer/exporters read.
+            const { blob } = await resolveDocumentSource({
+              kind: "supabase-storage",
+              bucket: bucketForSource(row.source_type),
+              path: row.storage_path!,
+              mimeType: row.mime_type || "application/pdf",
+              version: row.size_bytes ?? undefined,
+            });
+            const buf = await blob.arrayBuffer();
             const doc = await pdfjsLib.getDocument({ data: buf }).promise;
             const count = doc.numPages;
             try { doc.destroy(); } catch { /* ignore */ }
@@ -1049,14 +1105,14 @@ export default function WorkbenchProjectDetail() {
       const [filesRes, sheetsRes] = await Promise.all([
         supabase
           .from("analysis_request_files")
-          .select("id, name, extracted_text, storage_path, mime_type, survey_raw_response, survey_raw_updated_at, risk_element_results")
+          .select("id, name, extracted_text, storage_path, mime_type, size_bytes, survey_raw_response, survey_raw_updated_at, risk_element_results")
           .eq("analysis_request_id", requestId!)
           .order("name"),
 
         supabase
           .from("analysis_request_sheets")
           .select(
-            "id, parent_file_id, page_index, sheet_number, sheet_title, storage_path, extract_status, extracted_text, survey_result, survey_updated_at, floor_plan_overrides",
+            "id, parent_file_id, page_index, sheet_number, sheet_title, storage_path, extract_status, extracted_text, updated_at, survey_result, survey_updated_at, floor_plan_overrides",
           )
           .eq("analysis_request_id", requestId!)
           .order("page_index", { ascending: true }),
@@ -1070,6 +1126,7 @@ export default function WorkbenchProjectDetail() {
         extracted_text: f.extracted_text ?? null,
         storage_path: f.storage_path ?? null,
         mime_type: f.mime_type ?? null,
+        size_bytes: f.size_bytes ?? null,
         survey_raw_response: f.survey_raw_response ?? null,
         survey_raw_updated_at: f.survey_raw_updated_at ?? null,
         risk_element_results: f.risk_element_results ?? null,
@@ -1091,6 +1148,7 @@ export default function WorkbenchProjectDetail() {
             extracted_text: s.extracted_text ?? null,
             file_name: f.name,
             file_source_type: f.source_type,
+            updated_at: s.updated_at ?? null,
             survey_result: s.survey_result ?? null,
             survey_updated_at: s.survey_updated_at ?? null,
             floor_plan_overrides: (s.floor_plan_overrides as Record<string, any> | null) ?? null,
@@ -1383,72 +1441,9 @@ export default function WorkbenchProjectDetail() {
   // downstream phases) must be triggered explicitly by the user.
 
 
-  // Prewarm PDFs into the shared cache so opening the viewer is instant.
-  // First verify each object exists (via a per-directory storage.list) so we
-  // avoid hammering Supabase with createSignedUrl 400s for orphaned rows.
-  useEffect(() => {
-    if (!rows?.sheets?.length) return;
-    let cancelled = false;
-    (async () => {
-      const candidates = rows.sheets.filter((s) => s.storage_path);
-      if (candidates.length === 0) return;
-
-      // Group by (bucket, directory) so we list each folder only once.
-      const dirGroups = new Map<string, { bucket: string; dir: string; sheets: typeof candidates }>();
-      for (const s of candidates) {
-        const bucket = bucketForSource(s.file_source_type);
-        const path = s.storage_path!;
-        const lastSlash = path.lastIndexOf("/");
-        const dir = lastSlash >= 0 ? path.slice(0, lastSlash) : "";
-        const key = `${bucket}::${dir}`;
-        let g = dirGroups.get(key);
-        if (!g) {
-          g = { bucket, dir, sheets: [] };
-          dirGroups.set(key, g);
-        }
-        g.sheets.push(s);
-      }
-
-      const existingPaths = new Set<string>();
-      await Promise.all(
-        Array.from(dirGroups.values()).map(async ({ bucket, dir }) => {
-          try {
-            const { data, error } = await supabase.storage
-              .from(bucket)
-              .list(dir, { limit: 1000 });
-            if (error || !data) return;
-            for (const item of data) {
-              existingPaths.add(dir ? `${dir}/${item.name}` : item.name);
-            }
-          } catch {
-            // ignore - fall back to skipping prewarm for this directory
-          }
-        }),
-      );
-      if (cancelled) return;
-
-      const queue = candidates
-        .filter((s) => existingPaths.has(s.storage_path!))
-        .map<DocumentSourceDescriptor>((s) => ({
-          kind: "supabase-storage",
-          bucket: bucketForSource(s.file_source_type),
-          path: s.storage_path!,
-          mimeType: "application/pdf",
-        }));
-      const CONCURRENCY = 8;
-      let idx = 0;
-      const worker = async () => {
-        while (!cancelled && idx < queue.length) {
-          const d = queue[idx++];
-          await prewarmDocumentSource(d);
-        }
-      };
-      await Promise.all(Array.from({ length: CONCURRENCY }, worker));
-    })().catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [rows]);
+  // Egress control: no eager prewarm. PDFs are downloaded only when the user
+  // explicitly opens a drawing, or hovers a drawing row (see `prewarmRow`
+  // below in the file-row render) which fires a debounced background fetch.
 
   // Triage counts per (sheet, awp_class) and per (file, awp_class)
   const { data: triage } = useQuery({
@@ -2405,6 +2400,7 @@ export default function WorkbenchProjectDetail() {
       bucket: bucketForSource(activeSheet.file_source_type),
       path: activeSheet.storage_path,
       mimeType: "application/pdf",
+      version: activeSheet.updated_at ?? undefined,
     };
   }, [activeSheet]);
 
@@ -2415,6 +2411,7 @@ export default function WorkbenchProjectDetail() {
       bucket: bucketForSource(activeFile.source_type),
       path: activeFile.storage_path,
       mimeType: activeFile.mime_type || "application/pdf",
+      version: activeFile.size_bytes ?? undefined,
     };
   }, [activeFile]);
 
@@ -3978,6 +3975,9 @@ export default function WorkbenchProjectDetail() {
                             {/* File-level row - matches first table */}
                             <TableRow
                               className="group h-8 cursor-pointer"
+                              onMouseEnter={() => handleRowHoverStart(row)}
+                              onMouseLeave={() => handleRowHoverEnd(row.id)}
+                              onFocus={() => handleRowHoverStart(row)}
                               onClick={() => {
                                 if (singlePage) setActivePageView({ file: row, page: 1 });
                                 else if (count > 0) togglePageInfoExpand(row.id);
@@ -4050,6 +4050,9 @@ export default function WorkbenchProjectDetail() {
                                   <TableRow
                                     key={`${row.id}:${p}`}
                                     className="group h-8 cursor-pointer bg-muted/10"
+                                    onMouseEnter={() => handleRowHoverStart(row)}
+                                    onMouseLeave={() => handleRowHoverEnd(row.id)}
+                                    onFocus={() => handleRowHoverStart(row)}
                                     onClick={() => setActivePageView({ file: row, page: p })}
                                   >
                                     <TableCell
