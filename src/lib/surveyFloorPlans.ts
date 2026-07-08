@@ -195,7 +195,7 @@ export function findContainingUnitPlan(
 // Stored in analysis_request_sheets.floor_plan_overrides under the reserved
 // key "__added_unit_plans". Schema (backwards-compatible):
 //   { plan_id, reference_id, page_number,
-//     type?: "unit_floor_plan" | "level_floor_plan",
+//     type?: "unit_floor_plan" | "level_floor_plan" | "schematic_level_row" | "typical_detail_block",
 //     bbox_pct?: [x, y, w, h],
 //     name?: string }
 
