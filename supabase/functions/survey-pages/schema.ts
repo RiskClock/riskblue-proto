@@ -78,9 +78,14 @@ export const ScoutPipelinePayloadSchema = {
                 },
                 type: {
                   type: "string",
-                  enum: ["level_floor_plan", "unit_floor_plan"],
+                  enum: [
+                    "level_floor_plan",
+                    "unit_floor_plan",
+                    "schematic_level_row",
+                    "typical_detail_block",
+                  ],
                   description:
-                    "Classification of the visual macro space vs a modular individual suite layout.",
+                    "Classification of the visual asset. One of: 'level_floor_plan' (a full-floor architectural plan), 'unit_floor_plan' (an individual suite/unit layout), 'schematic_level_row' (a schematic/riser row representing a level), or 'typical_detail_block' (a typical detail/assembly block reused across levels).",
                 },
                 xy_width_height_pct: {
                   type: "array",
