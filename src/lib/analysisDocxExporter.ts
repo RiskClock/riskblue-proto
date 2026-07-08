@@ -730,6 +730,7 @@ export async function generateAnalysisDocx(
       sourceType,
       pdfCache,
       signal,
+      sourceFile.sizeBytes,
     );
 
     rows.push({
