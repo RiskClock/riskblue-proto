@@ -388,6 +388,48 @@ export default function WorkbenchProjectDetail() {
     };
   }, [activePageView]);
 
+  // Debounced hover-triggered prefetch for drawing rows. Fires after ~150ms
+  // of dwell so quick mouse-sweeps don't kick off dozens of PDF downloads.
+  // Cancelled on mouseleave. The actual fetch is a no-op when the target
+  // blob is already in the shared cache (memory or IndexedDB).
+  const hoverPrefetchTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map(),
+  );
+  useEffect(() => {
+    const timers = hoverPrefetchTimers.current;
+    return () => {
+      timers.forEach((t) => clearTimeout(t));
+      timers.clear();
+    };
+  }, []);
+  const handleRowHoverStart = useCallback(
+    (row: { id: string; storage_path: string | null; source_type: string; mime_type: string | null; size_bytes?: number | null }) => {
+      if (!row.storage_path) return;
+      const timers = hoverPrefetchTimers.current;
+      if (timers.has(row.id)) return;
+      const timer = setTimeout(() => {
+        timers.delete(row.id);
+        void prewarmDocumentSource({
+          kind: "supabase-storage",
+          bucket: bucketForSource(row.source_type),
+          path: row.storage_path!,
+          mimeType: row.mime_type || "application/pdf",
+          version: row.size_bytes ?? undefined,
+        });
+      }, 150);
+      timers.set(row.id, timer);
+    },
+    [],
+  );
+  const handleRowHoverEnd = useCallback((rowId: string) => {
+    const timers = hoverPrefetchTimers.current;
+    const t = timers.get(rowId);
+    if (t) {
+      clearTimeout(t);
+      timers.delete(rowId);
+    }
+  }, []);
+
   // ---------------------------------------------------------------
   // Floor-plan data for the activePageView modal (single-page modal)
   // ---------------------------------------------------------------
