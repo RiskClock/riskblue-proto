@@ -6018,6 +6018,7 @@ function InstancesReportModal({
       shortName: string;
       bucket: string;
       parentPath: string | null;
+      sizeBytes: number | null;
       overlays: any[];
       // 0 = level plan for this space, 1 = unit plan rolling up to this space,
       // 2 = other (annotations attributed here without a matching plan).
