@@ -6915,6 +6915,7 @@ function TabbedPagesBlock({
               bucket: active.bucket,
               path: active.parentPath,
               mimeType: "application/pdf",
+              version: active.sizeBytes ?? undefined,
             }}
             overlays={active.overlays}
             page={active.pageIdx}
