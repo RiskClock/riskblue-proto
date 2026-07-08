@@ -3970,6 +3970,9 @@ export default function WorkbenchProjectDetail() {
                             {/* File-level row - matches first table */}
                             <TableRow
                               className="group h-8 cursor-pointer"
+                              onMouseEnter={() => handleRowHoverStart(row)}
+                              onMouseLeave={() => handleRowHoverEnd(row.id)}
+                              onFocus={() => handleRowHoverStart(row)}
                               onClick={() => {
                                 if (singlePage) setActivePageView({ file: row, page: 1 });
                                 else if (count > 0) togglePageInfoExpand(row.id);
@@ -4042,6 +4045,9 @@ export default function WorkbenchProjectDetail() {
                                   <TableRow
                                     key={`${row.id}:${p}`}
                                     className="group h-8 cursor-pointer bg-muted/10"
+                                    onMouseEnter={() => handleRowHoverStart(row)}
+                                    onMouseLeave={() => handleRowHoverEnd(row.id)}
+                                    onFocus={() => handleRowHoverStart(row)}
                                     onClick={() => setActivePageView({ file: row, page: p })}
                                   >
                                     <TableCell
