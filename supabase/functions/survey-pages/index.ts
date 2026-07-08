@@ -272,9 +272,9 @@ Deno.serve(async (req) => {
         // keeps each response bounded and parseable, and we already run the
         // rest of the chunks in parallel.
         const CHUNK_SIZE = 1;
-        // Gemini Flash tops out at 8192 output tokens; use the ceiling so
-        // dense pages can complete valid JSON.
-        const MAX_OUTPUT_TOKENS = 8192;
+        // Dense schematic pages can emit large JSON payloads; give them
+        // ample headroom (well under the 65k output cap on 2.5/3.x Flash).
+        const MAX_OUTPUT_TOKENS = 32768;
 
         const runChunk = async (startPage: number, endPage: number, totalPagesHint: number) => {
           const genConfig: any = {
@@ -283,12 +283,13 @@ Deno.serve(async (req) => {
             responseSchema: ScoutPipelinePayloadSchema,
             maxOutputTokens: MAX_OUTPUT_TOKENS,
           };
-          if (/gemini-2\.5/i.test(GEMINI_MODEL)) {
-            // Gemini 2.5 Flash can spend most of maxOutputTokens on hidden
-            // thinking tokens, then truncate a tiny visible JSON body with
-            // MAX_TOKENS. Scout is extraction-only, so disable thinking.
+          if (/gemini-(2\.[5-9]|[3-9]\.)/i.test(GEMINI_MODEL)) {
+            // Gemini 2.5+/3.x Flash can spend most of maxOutputTokens on
+            // hidden thinking tokens, then truncate a tiny visible JSON body
+            // with MAX_TOKENS. Scout is extraction-only, so disable thinking.
             genConfig.thinkingConfig = { thinkingBudget: 0 };
           }
+
           if (cacheName) genConfig.cachedContent = cacheName;
           else genConfig.systemInstruction = systemPrompt;
 
