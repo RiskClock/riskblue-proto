@@ -6356,6 +6356,7 @@ function InstancesReportModal({
       if (!lookup) continue;
       const bucket = bucketForSource(lookup.sheet.file_source_type);
       const parentPath = lookup.file.storage_path;
+      const sizeBytes = (lookup.file as any).size_bytes ?? null;
 
       const rawOverlays = rowsForSpace.filter(
         (r) => r.fileId === fileId && r.pageIndex === pageIdx,
