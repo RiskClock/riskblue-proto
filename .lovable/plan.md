@@ -1,30 +1,22 @@
-## Problem
+# Fix page-3 truncation in survey-pages
 
-The Scout agent ignores the new `typical_detail_block` and `schematic_level_row` vocabulary because the Gemini `responseSchema` strictly enforces an enum that only lists the two original values. Gemini's structured-output enforcement drops/coerces any value not in the enum, so the prompt guidance is silently overridden. The frontend TypeScript union has the same gap and would strip new values even if they got through.
+## Diagnosis (from latest logs)
 
-## Fix
+Page 3 was NOT a function/gateway timeout. The chunk finished in ~15s and returned `finishReason=MAX_TOKENS` with `candidates=2165, thoughts=6012, total=11674`. Combined visible + thinking output hit the `maxOutputTokens=8192` ceiling, so the JSON was truncated and the parser dropped it (leaving pages 1–2 persisted).
 
-### 1. `supabase/functions/survey-pages/schema.ts` (line 81)
-Expand the `type` enum on the floor-plan item schema from:
-```
-enum: ["level_floor_plan", "unit_floor_plan"]
-```
-to:
-```
-enum: ["level_floor_plan", "unit_floor_plan", "schematic_level_row", "typical_detail_block"]
-```
-Update the accompanying `description` to briefly note the four categories so the model has schema-level context matching the prompt.
+Pages 1 and 2 barely fit (candidates 3,870 and 2,837). Page 3 is denser and needs more room, and the current `thinkingConfig` gate only fires for the literal model name `gemini-2.5` — the active model is `gemini-3.5-flash`, so thinking was never disabled.
 
-### 2. `src/lib/surveyFloorPlans.ts`
-- Extend the `FloorPlanType` union (lines 5–6) to include `"schematic_level_row"` and `"typical_detail_block"`.
-- Review the two call sites that reference the union:
-  - Line 163 (`plan.type !== "unit_floor_plan"` guard) — confirm intended behavior for the new types; leave logic unchanged unless it clearly needs to treat schematic rows / detail blocks the same as units. Flag but don't repurpose.
-  - Line 232 default fallback — keep `"unit_floor_plan"` as the fallback when `entry.type` is missing.
-- Update the comment on line 196 to list all four types.
+## Changes in `supabase/functions/survey-pages/index.ts`
 
-### 3. No other changes
-No DB migration, no prompt changes (prompt already teaches the vocabulary), no UI changes. Downstream consumers that switch on `type` will continue to treat unknown-to-them values as pass-through strings.
+1. Raise `maxOutputTokens` from `8192` to `32768` (safe headroom for dense schematic pages; well under Gemini 2.5/3.5 Flash's 65k output cap).
+2. Always set `thinkingConfig: { thinkingBudget: 0 }` for any Gemini 2.5+ / 3.x Flash model (broaden the current `=== 'gemini-2.5'` check to a `startsWith('gemini-2.') || startsWith('gemini-3.')` match, or apply unconditionally for Flash models). This reclaims the ~6k thinking tokens page 3 was burning.
+3. Keep the per-page `CHUNK_SIZE=1` parallel fan-out already in place.
+
+## Not doing
+
+- No Edge Function timeout change — logs show no timeout, and Supabase edge functions already run well beyond the ~15s this call took. Raising it wouldn't fix a `MAX_TOKENS` finish.
+- No prompt/schema changes — schema fix from the prior turn is working (page 3 raw shows `"type": "schematic_level_row"`).
 
 ## Verification
 
-After deploy, re-run Scout on the same file and confirm the persisted `surveyed_pages[].floor_plans[].type` includes `schematic_level_row` / `typical_detail_block` where appropriate, and that Gemini no longer coerces them to `unit_floor_plan`.
+After deploy, re-run Scout on `Project 2.pdf` and confirm logs show `chunk 3-3 finishReason=STOP` with `parsedItems=1` and `parsed_pages=3`.
