@@ -349,9 +349,11 @@ async function loadPdf(
   bucket: string,
   cache: PdfCache,
   signal?: AbortSignal,
+  version?: number | null,
 ): Promise<pdfjsLib.PDFDocumentProxy | null> {
   checkAbort(signal);
-  if (cache.has(storagePath)) return cache.get(storagePath)!;
+  const key = `${storagePath}:${version ?? ""}`;
+  if (cache.has(key)) return cache.get(key)!;
   try {
     // Route through the shared document cache (memory + IndexedDB) so we
     // never re-egress a PDF that the viewer or a prior export already loaded.
@@ -360,16 +362,17 @@ async function loadPdf(
       bucket,
       path: storagePath,
       mimeType: "application/pdf",
+      version: version ?? undefined,
     });
     checkAbort(signal);
     const arrayBuffer = await blob.arrayBuffer();
     checkAbort(signal);
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    cache.set(storagePath, pdf);
+    cache.set(key, pdf);
     return pdf;
   } catch (e) {
     console.warn("Failed to load PDF for export:", storagePath, e);
-    cache.set(storagePath, null);
+    cache.set(key, null);
     return null;
   }
 }
