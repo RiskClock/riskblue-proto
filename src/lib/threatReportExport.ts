@@ -33,6 +33,8 @@ export interface ThreatReportPageRef {
   pageIdx: number;
   bucket: string;
   parentPath: string | null;
+  /** File size in bytes; used as a cache-invalidation version token. */
+  sizeBytes?: number | null;
   overlays: Array<{
     id: string;
     nx: number;
