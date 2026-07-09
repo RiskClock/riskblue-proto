@@ -3849,20 +3849,9 @@ export default function WorkbenchProjectDetail() {
                                   <DropdownMenuContent align="end">
                                     <DropdownMenuItem
                                       disabled={!anyFileProcessed || phaseRunning}
-                                      onClick={() => runPipeline("triage", [name])}
-                                    >
-                                      {classHasTriage ? "Re-Triage" : "Triage"}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      disabled={!anyFileProcessed || !classHasTriage || phaseRunning}
                                       onClick={() => runPipeline("analyze", [name])}
                                     >
-                                      Analyze
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={() => setAliasEditingClass(name)}
-                                    >
-                                      Alias…
+                                      Scan
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                       disabled={phaseRunning}
