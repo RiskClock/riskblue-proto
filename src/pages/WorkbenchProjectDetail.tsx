@@ -4526,12 +4526,13 @@ export default function WorkbenchProjectDetail() {
 
         {/* Manage columns modal */}
         <Dialog open={manageOpen} onOpenChange={setManageOpen}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Manage columns</DialogTitle>
               <DialogDescription>
-                Pick which assets and water systems appear as columns. Shared across
-                all internal users.
+                Pick which assets and water systems appear as columns, and
+                customize their acronym and name for this project. Shared
+                across all internal users.
               </DialogDescription>
               {projectSelectedClassNames.length > 0 && (
                 <div className="text-xs text-muted-foreground pt-2">
@@ -4542,40 +4543,64 @@ export default function WorkbenchProjectDetail() {
                 </div>
               )}
             </DialogHeader>
-            <div className="max-h-[60vh] overflow-auto space-y-5 py-2">
+            <div className="max-h-[60vh] overflow-auto py-2">
               {Object.entries(grouped).map(([category, opts]) => (
-                <div key={category}>
+                <div key={category} className="mb-5">
                   <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
                     {category}
                   </div>
-                  <div className="space-y-2">
-                    {opts.map((opt) => {
-                      const checked = draftCols.includes(opt.name);
-                      return (
-                        <label
-                          key={opt.id}
-                          className="flex items-center gap-2 text-sm cursor-pointer"
-                        >
-                          <Checkbox
-                            checked={checked}
-                            onCheckedChange={() => toggleDraft(opt.name)}
-                          />
-                          <span>
-                            {opt.idPrefix ? (
-                              <>
-                                <span className="font-mono text-xs text-muted-foreground mr-2">
-                                  {opt.idPrefix}
-                                </span>
-                                {opt.name}
-                              </>
-                            ) : (
-                              opt.name
-                            )}
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-8"></TableHead>
+                        <TableHead className="w-24">Acronym</TableHead>
+                        <TableHead>Name</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {opts.map((opt) => {
+                        const checked = draftCols.includes(opt.name);
+                        const aliasVal = draftAliases[opt.name] ?? "";
+                        const prefixVal = draftAliasPrefixes[opt.name] ?? "";
+                        return (
+                          <TableRow key={opt.id}>
+                            <TableCell className="py-1.5">
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={() => toggleDraft(opt.name)}
+                              />
+                            </TableCell>
+                            <TableCell className="py-1.5">
+                              <Input
+                                value={prefixVal}
+                                placeholder={opt.idPrefix ?? ""}
+                                onChange={(e) =>
+                                  setDraftAliasPrefixes((prev) => ({
+                                    ...prev,
+                                    [opt.name]: e.target.value,
+                                  }))
+                                }
+                                className="h-8 font-mono text-xs"
+                              />
+                            </TableCell>
+                            <TableCell className="py-1.5">
+                              <Input
+                                value={aliasVal}
+                                placeholder={opt.name}
+                                onChange={(e) =>
+                                  setDraftAliases((prev) => ({
+                                    ...prev,
+                                    [opt.name]: e.target.value,
+                                  }))
+                                }
+                                className="h-8 text-sm"
+                              />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
                 </div>
               ))}
             </div>
