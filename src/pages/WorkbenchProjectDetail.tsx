@@ -2362,6 +2362,8 @@ export default function WorkbenchProjectDetail() {
 
   const openManage = () => {
     setDraftCols(enabledCols);
+    setDraftAliases({ ...aliasMap });
+    setDraftAliasPrefixes({ ...aliasPrefixMap });
     setManageOpen(true);
   };
 
@@ -2381,6 +2383,23 @@ export default function WorkbenchProjectDetail() {
         updated_by: user?.id ?? null,
       });
       if (error) throw error;
+
+      // Persist alias changes: diff draft vs current maps.
+      const allClassKeys = new Set<string>([
+        ...Object.keys(aliasMap),
+        ...Object.keys(aliasPrefixMap),
+        ...Object.keys(draftAliases),
+        ...Object.keys(draftAliasPrefixes),
+      ]);
+      for (const name of allClassKeys) {
+        const prevAlias = aliasMap[name] ?? "";
+        const prevPrefix = aliasPrefixMap[name] ?? "";
+        const nextAlias = (draftAliases[name] ?? "").trim();
+        const nextPrefix = (draftAliasPrefixes[name] ?? "").trim();
+        if (prevAlias === nextAlias && prevPrefix === nextPrefix) continue;
+        await saveClassAlias(name, nextAlias, nextPrefix);
+      }
+
       queryClient.invalidateQueries({ queryKey: ["workbench-column-prefs", prefId] });
       setManageOpen(false);
 
