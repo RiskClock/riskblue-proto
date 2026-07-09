@@ -4200,37 +4200,6 @@ export default function WorkbenchProjectDetail() {
           </div>
         </main>
 
-        <ClassAliasModal
-          open={!!aliasEditingClass}
-          awpClassName={aliasEditingClass ?? ""}
-          currentAlias={aliasEditingClass ? aliasMap[aliasEditingClass] ?? null : null}
-          currentAliasPrefix={
-            aliasEditingClass ? aliasPrefixMap[aliasEditingClass] ?? null : null
-          }
-          allClasses={(awpOptions || []).map((o) => ({
-            name: o.name,
-            idPrefix: o.idPrefix,
-          }))}
-          existingAliases={Object.fromEntries(
-            Array.from(
-              new Set([
-                ...Object.keys(aliasMap),
-                ...Object.keys(aliasPrefixMap),
-              ]),
-            ).map((k) => [
-              k,
-              {
-                alias: aliasMap[k] ?? null,
-                aliasPrefix: aliasPrefixMap[k] ?? null,
-              },
-            ]),
-          )}
-          onClose={() => setAliasEditingClass(null)}
-          onSave={async (alias, aliasPrefix) => {
-            if (!aliasEditingClass) return;
-            await saveClassAlias(aliasEditingClass, alias, aliasPrefix);
-          }}
-        />
 
 
 
