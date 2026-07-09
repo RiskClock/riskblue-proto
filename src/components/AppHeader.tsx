@@ -71,8 +71,25 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
               </Avatar>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
+              {user?.email && (
+                <>
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground truncate" title={user.email}>
+                    {user.email}
+                  </div>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              <DropdownMenuItem onClick={() => setEditProfileOpen(true)} className="cursor-pointer">
+                <UserCog className="h-4 w-4 mr-2" />
+                Edit Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setChangePasswordOpen(true)} className="cursor-pointer">
+                <KeyRound className="h-4 w-4 mr-2" />
+                Change Password
+              </DropdownMenuItem>
               {isInternalUser && (
                 <>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => navigate("/internal/users")} className="cursor-pointer">
                     <Users className="h-4 w-4 mr-2" />
                     User Management
@@ -85,22 +102,13 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
                     <LayoutGrid className="h-4 w-4 mr-2" />
                     Workbench
                   </DropdownMenuItem>
-
                   <DropdownMenuItem onClick={() => navigate("/logs")} className="cursor-pointer">
                     <BarChart3 className="h-4 w-4 mr-2" />
                     Logs
                   </DropdownMenuItem>
-                  <DropdownMenuSeparator />
                 </>
               )}
-              <DropdownMenuItem onClick={() => setEditProfileOpen(true)} className="cursor-pointer">
-                <UserCog className="h-4 w-4 mr-2" />
-                Edit Profile
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setChangePasswordOpen(true)} className="cursor-pointer">
-                <KeyRound className="h-4 w-4 mr-2" />
-                Change Password
-              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={signOut} className="cursor-pointer">
                 <LogOut className="h-4 w-4 mr-2" />
                 Logout
