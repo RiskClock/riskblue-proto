@@ -819,7 +819,7 @@ export default function WorkbenchProjectDetail() {
   // class name in headers, tooltips, and the Threat Report.
   const [aliasMap, setAliasMap] = useState<Record<string, string>>({});
   const [aliasPrefixMap, setAliasPrefixMap] = useState<Record<string, string>>({});
-  const [aliasEditingClass, setAliasEditingClass] = useState<string | null>(null);
+  
   useEffect(() => {
     if (!projectId) return;
     let cancelled = false;
