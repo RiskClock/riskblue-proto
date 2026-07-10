@@ -280,6 +280,7 @@ Deno.serve(async (req) => {
               className,
               ok: true as const,
               text,
+              promptText: `Instructions:\n${prompt}\n\n---\n${analyzePrefix}`,
               tokens: {
                 prompt: promptTokens,
                 cached: cachedTokens,
