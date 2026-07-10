@@ -3837,7 +3837,7 @@ export default function WorkbenchProjectDetail() {
                                 variant="outline"
                                 disabled={!hasResp}
                                 onClick={() => {
-                                  setScoutDebugOpen(false);
+                                  
                                   setSurveyResponseModal({
                                     fileName: "Space Hierarchy",
                                     raw: displayText,
