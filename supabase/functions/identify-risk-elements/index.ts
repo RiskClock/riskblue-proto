@@ -307,6 +307,7 @@ Deno.serve(async (req) => {
           if (r.ok) {
             merged[r.className] = {
               result_text: r.text,
+              prompt_text: r.promptText,
               updated_at: nowIso,
               error: null,
               tokens: r.tokens,
