@@ -3412,43 +3412,12 @@ export default function WorkbenchProjectDetail() {
                   type="button"
                   variant="outline"
                   disabled={!requestId || surveyRunning || identifyRunning || enabledCols.length === 0}
-                  onClick={async () => {
-                    if (!requestId || !rows?.files?.length) return;
-                    setIdentifyRunning(true);
-                    try {
-                      const results = await Promise.allSettled(
-                        rows.files.map((f) =>
-                          supabase.functions.invoke("identify-risk-elements", {
-                            body: {
-                              analysisRequestId: requestId,
-                              fileId: f.id,
-                              awpClassNames: enabledCols,
-                            },
-                          }),
-                        ),
-                      );
-                      const ok = results.filter((r) => r.status === "fulfilled" && !(r.value as any)?.error).length;
-                      const failed = results.length - ok;
-                      toast({
-                        title: "Identify Risk Elements dispatched",
-                        description: `${ok} file${ok === 1 ? "" : "s"} started${failed ? `, ${failed} failed` : ""}.`,
-                        variant: failed ? "destructive" : "default",
-                      });
-                    } catch (err: any) {
-                      toast({
-                        variant: "destructive",
-                        title: "Identify Risk Elements failed",
-                        description: err?.message ?? "Unknown error",
-                      });
-                    } finally {
-                      setIdentifyRunning(false);
-                    }
-                  }}
+                  onClick={() => openRiskRadarModal()}
                 >
                   {identifyRunning ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Scanning Threats…
+                      Scanning…
                     </>
                   ) : (
                     "Risk Radar"
