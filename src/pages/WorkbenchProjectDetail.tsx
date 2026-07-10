@@ -3662,7 +3662,6 @@ export default function WorkbenchProjectDetail() {
                                     variant="outline"
                                     disabled={!hasResponse}
                                     onClick={() => {
-                                      setScoutDebugOpen(false);
                                       setSurveyResponseModal({
                                         fileName: f.name,
                                         raw: normalizeScoutResponse(f.survey_raw_response),
