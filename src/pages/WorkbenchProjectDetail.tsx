@@ -4579,6 +4579,7 @@ export default function WorkbenchProjectDetail() {
                         <TableHead className="w-8"></TableHead>
                         <TableHead className="w-24">Acronym</TableHead>
                         <TableHead>Name</TableHead>
+                        <TableHead className="w-10"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
