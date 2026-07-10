@@ -9,7 +9,6 @@ import {
   Copy,
   Download,
   Loader2,
-  MoreVertical,
   Trash2,
   Settings2,
   ShieldAlert,
