@@ -3905,31 +3905,6 @@ export default function WorkbenchProjectDetail() {
                                   </TooltipTrigger>
                                   <TooltipContent side="bottom">{tooltipName} - click to view prompt</TooltipContent>
                                 </Tooltip>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <button
-                                      type="button"
-                                      className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50"
-                                      aria-label={`Actions for ${name}`}
-                                    >
-                                      <MoreVertical className="h-3.5 w-3.5" />
-                                    </button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem
-                                      disabled={!anyFileProcessed || phaseRunning}
-                                      onClick={() => runPipeline("analyze", [name])}
-                                    >
-                                      Scan
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      disabled={phaseRunning}
-                                      onClick={() => clearClassResults(name)}
-                                    >
-                                      Clear
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
                               </div>
                             </TableHead>
                           );
