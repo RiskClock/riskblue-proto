@@ -4621,6 +4621,24 @@ export default function WorkbenchProjectDetail() {
                                 className="h-8 text-sm"
                               />
                             </TableCell>
+                            <TableCell className="py-1.5 text-right">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                    disabled={phaseRunning || !checked}
+                                    onClick={() => clearClassResults(opt.name)}
+                                    aria-label={`Clear results for ${opt.name}`}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left">Clear results for this class</TooltipContent>
+                              </Tooltip>
+                            </TableCell>
                           </TableRow>
                         );
                       })}
