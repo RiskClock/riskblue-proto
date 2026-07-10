@@ -26,7 +26,7 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { getInitial, avatarUrl } = useUserDisplayName();
+  const { getInitial, avatarUrl, displayName } = useUserDisplayName();
   
   const { balance: credits } = useCredits();
   const [buyOpen, setBuyOpen] = useState(false);
