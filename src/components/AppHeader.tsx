@@ -26,7 +26,7 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { getInitial, avatarUrl } = useUserDisplayName();
+  const { getInitial, avatarUrl, displayName } = useUserDisplayName();
   
   const { balance: credits } = useCredits();
   const [buyOpen, setBuyOpen] = useState(false);
@@ -71,11 +71,18 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
               </Avatar>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              {user?.email && (
+              {(displayName || user?.email) && (
                 <>
-                  <div className="px-2 py-1.5 text-xs text-muted-foreground truncate" title={user.email}>
-                    {user.email}
-                  </div>
+                  {displayName && (
+                    <div className="px-2 py-1.5 text-sm truncate" title={displayName}>
+                      {displayName}
+                    </div>
+                  )}
+                  {user?.email && (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground truncate" title={user.email}>
+                      {user.email}
+                    </div>
+                  )}
                   <DropdownMenuSeparator />
                 </>
               )}

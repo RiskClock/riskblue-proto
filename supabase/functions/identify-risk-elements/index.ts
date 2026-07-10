@@ -280,6 +280,7 @@ Deno.serve(async (req) => {
               className,
               ok: true as const,
               text,
+              promptText: `Instructions:\n${prompt}\n\n---\n${analyzePrefix}`,
               tokens: {
                 prompt: promptTokens,
                 cached: cachedTokens,
@@ -306,6 +307,7 @@ Deno.serve(async (req) => {
           if (r.ok) {
             merged[r.className] = {
               result_text: r.text,
+              prompt_text: r.promptText,
               updated_at: nowIso,
               error: null,
               tokens: r.tokens,

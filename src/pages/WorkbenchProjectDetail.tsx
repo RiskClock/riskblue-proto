@@ -9,7 +9,7 @@ import {
   Copy,
   Download,
   Loader2,
-  MoreVertical,
+  Trash2,
   Settings2,
   ShieldAlert,
   Square,
@@ -352,6 +352,8 @@ export default function WorkbenchProjectDetail() {
     } | null
   >(null);
   const [identifyRunning, setIdentifyRunning] = useState(false);
+  const [riskRadarModalOpen, setRiskRadarModalOpen] = useState(false);
+  const [riskRadarSelection, setRiskRadarSelection] = useState<Set<string>>(new Set());
   const [uploadingReport, setUploadingReport] = useState(false);
   const reportInputRef = useRef<HTMLInputElement>(null);
   const [downloadingAll, setDownloadingAll] = useState(false);
@@ -2795,6 +2797,83 @@ export default function WorkbenchProjectDetail() {
     }
   };
 
+  // -------- Risk Radar (identify-risk-elements) modal + dispatcher --------
+  const riskRadarStorageKey = requestId ? `riskradar-selection-${requestId}` : null;
+
+  const openRiskRadarModal = useCallback(() => {
+    if (!requestId || enabledCols.length === 0) return;
+    let initial: string[] = enabledCols;
+    if (riskRadarStorageKey) {
+      try {
+        const raw = window.sessionStorage.getItem(riskRadarStorageKey);
+        if (raw) {
+          const parsed = JSON.parse(raw) as unknown;
+          if (Array.isArray(parsed)) {
+            const filtered = parsed.filter(
+              (n): n is string => typeof n === "string" && enabledCols.includes(n),
+            );
+            if (filtered.length > 0) initial = filtered;
+          }
+        }
+      } catch {
+        /* ignore malformed storage */
+      }
+    }
+    setRiskRadarSelection(new Set(initial));
+    setRiskRadarModalOpen(true);
+  }, [requestId, enabledCols, riskRadarStorageKey]);
+
+  const runRiskRadar = useCallback(async () => {
+    if (!requestId || !rows?.files?.length) return;
+    const selected = Array.from(riskRadarSelection).filter((n) =>
+      enabledCols.includes(n),
+    );
+    if (selected.length === 0) return;
+    if (riskRadarStorageKey) {
+      try {
+        window.sessionStorage.setItem(
+          riskRadarStorageKey,
+          JSON.stringify(selected),
+        );
+      } catch {
+        /* ignore */
+      }
+    }
+    setRiskRadarModalOpen(false);
+    setIdentifyRunning(true);
+    try {
+      const results = await Promise.allSettled(
+        rows.files.map((f) =>
+          supabase.functions.invoke("identify-risk-elements", {
+            body: {
+              analysisRequestId: requestId,
+              fileId: f.id,
+              awpClassNames: selected,
+            },
+          }),
+        ),
+      );
+      const ok = results.filter(
+        (r) => r.status === "fulfilled" && !(r.value as any)?.error,
+      ).length;
+      const failed = results.length - ok;
+      toast({
+        title: "Risk Radar dispatched",
+        description: `${ok} file${ok === 1 ? "" : "s"} started${failed ? `, ${failed} failed` : ""} · ${selected.length} class${selected.length === 1 ? "" : "es"}.`,
+        variant: failed ? "destructive" : "default",
+      });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Risk Radar failed",
+        description: err?.message ?? "Unknown error",
+      });
+    } finally {
+      setIdentifyRunning(false);
+    }
+  }, [requestId, rows?.files, riskRadarSelection, enabledCols, riskRadarStorageKey, toast]);
+
+
 
   // Clear triage + analyze results (and related overrides) for a single class
   // across the current request. Leaves user-placed drawing instances intact.
@@ -3412,43 +3491,12 @@ export default function WorkbenchProjectDetail() {
                   type="button"
                   variant="outline"
                   disabled={!requestId || surveyRunning || identifyRunning || enabledCols.length === 0}
-                  onClick={async () => {
-                    if (!requestId || !rows?.files?.length) return;
-                    setIdentifyRunning(true);
-                    try {
-                      const results = await Promise.allSettled(
-                        rows.files.map((f) =>
-                          supabase.functions.invoke("identify-risk-elements", {
-                            body: {
-                              analysisRequestId: requestId,
-                              fileId: f.id,
-                              awpClassNames: enabledCols,
-                            },
-                          }),
-                        ),
-                      );
-                      const ok = results.filter((r) => r.status === "fulfilled" && !(r.value as any)?.error).length;
-                      const failed = results.length - ok;
-                      toast({
-                        title: "Identify Risk Elements dispatched",
-                        description: `${ok} file${ok === 1 ? "" : "s"} started${failed ? `, ${failed} failed` : ""}.`,
-                        variant: failed ? "destructive" : "default",
-                      });
-                    } catch (err: any) {
-                      toast({
-                        variant: "destructive",
-                        title: "Identify Risk Elements failed",
-                        description: err?.message ?? "Unknown error",
-                      });
-                    } finally {
-                      setIdentifyRunning(false);
-                    }
-                  }}
+                  onClick={() => openRiskRadarModal()}
                 >
                   {identifyRunning ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Scanning Threats…
+                      Scanning…
                     </>
                   ) : (
                     "Risk Radar"
@@ -3613,7 +3661,6 @@ export default function WorkbenchProjectDetail() {
                                     variant="outline"
                                     disabled={!hasResponse}
                                     onClick={() => {
-                                      setScoutDebugOpen(false);
                                       setSurveyResponseModal({
                                         fileName: f.name,
                                         raw: normalizeScoutResponse(f.survey_raw_response),
@@ -3662,7 +3709,9 @@ export default function WorkbenchProjectDetail() {
                                       {classNames.map((cn) => {
                                         const entry = rer[cn] ?? {};
                                         const text = (entry.result_text ?? "").toString();
+                                        const promptText = (entry.prompt_text ?? "").toString();
                                         const hasResp = text.trim().length > 0;
+                                        const hasPrompt = promptText.trim().length > 0;
                                         const err = entry.error as string | null | undefined;
                                         const tokens = entry.tokens ?? null;
                                         const model = entry.model ?? null;
@@ -3686,21 +3735,36 @@ export default function WorkbenchProjectDetail() {
                                                       : hasResp ? `${text.length.toLocaleString()} chars` : "No response"}
                                               </div>
                                             </div>
-                                            <Button
-                                              size="sm"
-                                              variant="outline"
-                                              disabled={!hasResp}
-                                              onClick={() => {
-                                                setScoutDebugOpen(false);
-                                                 setSurveyResponseModal({
-                                                   fileName: `${f.name} · ${cn}`,
-                                                   raw: text,
-                                                   label: "Risk Radar response",
-                                                 });
-                                              }}
-                                            >
-                                              View Response
-                                            </Button>
+                                            <div className="flex items-center gap-1">
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                disabled={!hasPrompt}
+                                                onClick={() => {
+                                                  setSurveyResponseModal({
+                                                    fileName: `${f.name} · ${cn}`,
+                                                    raw: promptText,
+                                                    label: "Risk Radar prompt",
+                                                  });
+                                                }}
+                                              >
+                                                View Prompt
+                                              </Button>
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                disabled={!hasResp}
+                                                onClick={() => {
+                                                  setSurveyResponseModal({
+                                                    fileName: `${f.name} · ${cn}`,
+                                                    raw: text,
+                                                    label: "Risk Radar response",
+                                                  });
+                                                }}
+                                              >
+                                                View Response
+                                              </Button>
+                                            </div>
                                           </li>
                                         );
                                       })}
@@ -3772,7 +3836,7 @@ export default function WorkbenchProjectDetail() {
                                 variant="outline"
                                 disabled={!hasResp}
                                 onClick={() => {
-                                  setScoutDebugOpen(false);
+                                  
                                   setSurveyResponseModal({
                                     fileName: "Space Hierarchy",
                                     raw: displayText,
@@ -3857,31 +3921,6 @@ export default function WorkbenchProjectDetail() {
                                   </TooltipTrigger>
                                   <TooltipContent side="bottom">{tooltipName} - click to view prompt</TooltipContent>
                                 </Tooltip>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <button
-                                      type="button"
-                                      className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50"
-                                      aria-label={`Actions for ${name}`}
-                                    >
-                                      <MoreVertical className="h-3.5 w-3.5" />
-                                    </button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem
-                                      disabled={!anyFileProcessed || phaseRunning}
-                                      onClick={() => runPipeline("analyze", [name])}
-                                    >
-                                      Scan
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      disabled={phaseRunning}
-                                      onClick={() => clearClassResults(name)}
-                                    >
-                                      Clear
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
                               </div>
                             </TableHead>
                           );
@@ -4555,6 +4594,7 @@ export default function WorkbenchProjectDetail() {
                         <TableHead className="w-8"></TableHead>
                         <TableHead className="w-24">Acronym</TableHead>
                         <TableHead>Name</TableHead>
+                        <TableHead className="w-10"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -4596,6 +4636,24 @@ export default function WorkbenchProjectDetail() {
                                 className="h-8 text-sm"
                               />
                             </TableCell>
+                            <TableCell className="py-1.5 text-right">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                    disabled={phaseRunning || !checked}
+                                    onClick={() => clearClassResults(opt.name)}
+                                    aria-label={`Clear results for ${opt.name}`}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left">Clear results for this class</TooltipContent>
+                              </Tooltip>
+                            </TableCell>
                           </TableRow>
                         );
                       })}
@@ -4614,6 +4672,94 @@ export default function WorkbenchProjectDetail() {
               </Button>
               <Button onClick={saveColumns} disabled={savingPrefs}>
                 {savingPrefs ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Risk Radar class-selection modal */}
+        <Dialog open={riskRadarModalOpen} onOpenChange={setRiskRadarModalOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Run Risk Radar</DialogTitle>
+              <DialogDescription>
+                Choose which classes to scan. Uncheck any you want to skip in
+                this run. Your selection is remembered per project.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[50vh] overflow-auto space-y-2 py-2">
+              {enabledCols.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No classes enabled.</div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground pb-1">
+                    <span>{riskRadarSelection.size} of {enabledCols.length} selected</span>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        className="hover:text-foreground underline underline-offset-2"
+                        onClick={() => setRiskRadarSelection(new Set(enabledCols))}
+                      >
+                        Select all
+                      </button>
+                      <button
+                        type="button"
+                        className="hover:text-foreground underline underline-offset-2"
+                        onClick={() => setRiskRadarSelection(new Set())}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                  {enabledCols.map((name) => {
+                    const opt = optionByName.get(name);
+                    const checked = riskRadarSelection.has(name);
+                    return (
+                      <label
+                        key={name}
+                        className="flex items-center gap-2 text-sm cursor-pointer py-1"
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={() => {
+                            setRiskRadarSelection((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(name)) next.delete(name);
+                              else next.add(name);
+                              return next;
+                            });
+                          }}
+                        />
+                        <span>
+                          {opt?.idPrefix && (
+                            <span className="font-mono text-xs text-muted-foreground mr-2">
+                              {opt.idPrefix}
+                            </span>
+                          )}
+                          {name}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setRiskRadarModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={runRiskRadar}
+                disabled={riskRadarSelection.size === 0 || identifyRunning}
+              >
+                {identifyRunning ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  `Scan ${riskRadarSelection.size} class${riskRadarSelection.size === 1 ? "" : "es"}`
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>
