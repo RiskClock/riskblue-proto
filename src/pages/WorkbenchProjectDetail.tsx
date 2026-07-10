@@ -3711,7 +3711,9 @@ export default function WorkbenchProjectDetail() {
                                       {classNames.map((cn) => {
                                         const entry = rer[cn] ?? {};
                                         const text = (entry.result_text ?? "").toString();
+                                        const promptText = (entry.prompt_text ?? "").toString();
                                         const hasResp = text.trim().length > 0;
+                                        const hasPrompt = promptText.trim().length > 0;
                                         const err = entry.error as string | null | undefined;
                                         const tokens = entry.tokens ?? null;
                                         const model = entry.model ?? null;
@@ -3735,21 +3737,36 @@ export default function WorkbenchProjectDetail() {
                                                       : hasResp ? `${text.length.toLocaleString()} chars` : "No response"}
                                               </div>
                                             </div>
-                                            <Button
-                                              size="sm"
-                                              variant="outline"
-                                              disabled={!hasResp}
-                                              onClick={() => {
-                                                setScoutDebugOpen(false);
-                                                 setSurveyResponseModal({
-                                                   fileName: `${f.name} · ${cn}`,
-                                                   raw: text,
-                                                   label: "Risk Radar response",
-                                                 });
-                                              }}
-                                            >
-                                              View Response
-                                            </Button>
+                                            <div className="flex items-center gap-1">
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                disabled={!hasPrompt}
+                                                onClick={() => {
+                                                  setSurveyResponseModal({
+                                                    fileName: `${f.name} · ${cn}`,
+                                                    raw: promptText,
+                                                    label: "Risk Radar prompt",
+                                                  });
+                                                }}
+                                              >
+                                                View Prompt
+                                              </Button>
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                disabled={!hasResp}
+                                                onClick={() => {
+                                                  setSurveyResponseModal({
+                                                    fileName: `${f.name} · ${cn}`,
+                                                    raw: text,
+                                                    label: "Risk Radar response",
+                                                  });
+                                                }}
+                                              >
+                                                View Response
+                                              </Button>
+                                            </div>
                                           </li>
                                         );
                                       })}
