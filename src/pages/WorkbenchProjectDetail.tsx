@@ -4678,6 +4678,94 @@ export default function WorkbenchProjectDetail() {
           </DialogContent>
         </Dialog>
 
+        {/* Risk Radar class-selection modal */}
+        <Dialog open={riskRadarModalOpen} onOpenChange={setRiskRadarModalOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Run Risk Radar</DialogTitle>
+              <DialogDescription>
+                Choose which classes to scan. Uncheck any you want to skip in
+                this run. Your selection is remembered per project.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[50vh] overflow-auto space-y-2 py-2">
+              {enabledCols.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No classes enabled.</div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground pb-1">
+                    <span>{riskRadarSelection.size} of {enabledCols.length} selected</span>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        className="hover:text-foreground underline underline-offset-2"
+                        onClick={() => setRiskRadarSelection(new Set(enabledCols))}
+                      >
+                        Select all
+                      </button>
+                      <button
+                        type="button"
+                        className="hover:text-foreground underline underline-offset-2"
+                        onClick={() => setRiskRadarSelection(new Set())}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                  {enabledCols.map((name) => {
+                    const opt = optionByName.get(name);
+                    const checked = riskRadarSelection.has(name);
+                    return (
+                      <label
+                        key={name}
+                        className="flex items-center gap-2 text-sm cursor-pointer py-1"
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={() => {
+                            setRiskRadarSelection((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(name)) next.delete(name);
+                              else next.add(name);
+                              return next;
+                            });
+                          }}
+                        />
+                        <span>
+                          {opt?.idPrefix && (
+                            <span className="font-mono text-xs text-muted-foreground mr-2">
+                              {opt.idPrefix}
+                            </span>
+                          )}
+                          {name}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setRiskRadarModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={runRiskRadar}
+                disabled={riskRadarSelection.size === 0 || identifyRunning}
+              >
+                {identifyRunning ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  `Scan ${riskRadarSelection.size} class${riskRadarSelection.size === 1 ? "" : "es"}`
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Clean Up ID Assignment modal */}
         <Dialog open={cleanupOpen} onOpenChange={(o) => !cleanupRunning && setCleanupOpen(o)}>
           <DialogContent className="max-w-md">
