@@ -2797,6 +2797,83 @@ export default function WorkbenchProjectDetail() {
     }
   };
 
+  // -------- Risk Radar (identify-risk-elements) modal + dispatcher --------
+  const riskRadarStorageKey = requestId ? `riskradar-selection-${requestId}` : null;
+
+  const openRiskRadarModal = useCallback(() => {
+    if (!requestId || enabledCols.length === 0) return;
+    let initial: string[] = enabledCols;
+    if (riskRadarStorageKey) {
+      try {
+        const raw = window.sessionStorage.getItem(riskRadarStorageKey);
+        if (raw) {
+          const parsed = JSON.parse(raw) as unknown;
+          if (Array.isArray(parsed)) {
+            const filtered = parsed.filter(
+              (n): n is string => typeof n === "string" && enabledCols.includes(n),
+            );
+            if (filtered.length > 0) initial = filtered;
+          }
+        }
+      } catch {
+        /* ignore malformed storage */
+      }
+    }
+    setRiskRadarSelection(new Set(initial));
+    setRiskRadarModalOpen(true);
+  }, [requestId, enabledCols, riskRadarStorageKey]);
+
+  const runRiskRadar = useCallback(async () => {
+    if (!requestId || !rows?.files?.length) return;
+    const selected = Array.from(riskRadarSelection).filter((n) =>
+      enabledCols.includes(n),
+    );
+    if (selected.length === 0) return;
+    if (riskRadarStorageKey) {
+      try {
+        window.sessionStorage.setItem(
+          riskRadarStorageKey,
+          JSON.stringify(selected),
+        );
+      } catch {
+        /* ignore */
+      }
+    }
+    setRiskRadarModalOpen(false);
+    setIdentifyRunning(true);
+    try {
+      const results = await Promise.allSettled(
+        rows.files.map((f) =>
+          supabase.functions.invoke("identify-risk-elements", {
+            body: {
+              analysisRequestId: requestId,
+              fileId: f.id,
+              awpClassNames: selected,
+            },
+          }),
+        ),
+      );
+      const ok = results.filter(
+        (r) => r.status === "fulfilled" && !(r.value as any)?.error,
+      ).length;
+      const failed = results.length - ok;
+      toast({
+        title: "Risk Radar dispatched",
+        description: `${ok} file${ok === 1 ? "" : "s"} started${failed ? `, ${failed} failed` : ""} · ${selected.length} class${selected.length === 1 ? "" : "es"}.`,
+        variant: failed ? "destructive" : "default",
+      });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Risk Radar failed",
+        description: err?.message ?? "Unknown error",
+      });
+    } finally {
+      setIdentifyRunning(false);
+    }
+  }, [requestId, rows?.files, riskRadarSelection, enabledCols, riskRadarStorageKey, toast]);
+
+
 
   // Clear triage + analyze results (and related overrides) for a single class
   // across the current request. Leaves user-placed drawing instances intact.
