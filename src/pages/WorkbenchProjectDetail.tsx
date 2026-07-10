@@ -352,6 +352,8 @@ export default function WorkbenchProjectDetail() {
     } | null
   >(null);
   const [identifyRunning, setIdentifyRunning] = useState(false);
+  const [riskRadarModalOpen, setRiskRadarModalOpen] = useState(false);
+  const [riskRadarSelection, setRiskRadarSelection] = useState<Set<string>>(new Set());
   const [uploadingReport, setUploadingReport] = useState(false);
   const reportInputRef = useRef<HTMLInputElement>(null);
   const [downloadingAll, setDownloadingAll] = useState(false);
