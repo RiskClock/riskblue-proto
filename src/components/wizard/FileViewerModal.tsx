@@ -1289,6 +1289,7 @@ export const FileViewerModal = ({
               source={source}
               layout="single-page"
               page={currentPage}
+              onDownload={() => setDownloadDialogOpen(true)}
               onPageChange={singlePageOnly ? () => {} : setCurrentPage}
               hidePageNav
               overlays={overlays}
