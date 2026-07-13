@@ -192,9 +192,12 @@ export function BulkDrawingDownloadModal({
         }
         const pages: PageOverlaySpec[] = [];
         for (let p = 1; p <= count; p++) {
-          const overlays =
-            overlaysByFilePage.get(`${f.fileId}::${p - 1}`) ?? [];
-          pages.push({ page: p, overlays });
+          const key = `${f.fileId}::${p - 1}`;
+          const circleOverlays = overlaysByFilePage.get(key) ?? [];
+          const extraOverlays = includeOverlays
+            ? (extraOverlaysByFilePage?.get(key) ?? [])
+            : [];
+          pages.push({ page: p, overlays: [...circleOverlays, ...extraOverlays] });
         }
         entries.push({
           fileName: f.fileName,
