@@ -397,6 +397,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                   ? () => doFitOverlay(initialFitOverlayId)
                   : undefined
               }
+              onDownload={onDownload}
               pageNav={
                 !hidePageNav && layout === "single-page" && totalPages > 1
                   ? {
