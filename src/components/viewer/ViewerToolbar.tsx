@@ -19,6 +19,12 @@ export interface ViewerToolbarProps {
   onReset: () => void;
   onFitPage?: () => void;
   onFitSelection?: () => void;
+  /**
+   * When set, a Download icon button is rendered in the same slot as
+   * `onFitPage`, replacing the fit-page button. Used by the drawing modal
+   * to expose per-page vector-PDF download.
+   */
+  onDownload?: () => void;
   pageNav?: {
     current: number;
     total: number;
@@ -34,6 +40,7 @@ export const ViewerToolbar = ({
   onZoomOut,
   onFitPage,
   onFitSelection,
+  onDownload,
   pageNav,
 }: ViewerToolbarProps) => {
   const [jumpValue, setJumpValue] = useState<string>(
