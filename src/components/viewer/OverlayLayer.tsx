@@ -494,9 +494,11 @@ export const OverlayLayer = ({
         // Detection annotation circles are intentionally small (30% of the
         // previous size, then bumped 30% larger on request) so they don't
         // obscure the drawing. Unit-marker dots keep their original size.
-        const diameter = isDot
+        // `exportScale` bumps everything larger for downloaded PDFs.
+        const baseDiameter = isDot
           ? Math.max(10, MIN_CIRCLE_DIAMETER_CSS * 0.55)
           : Math.max(MIN_CIRCLE_DIAMETER_CSS, bboxSidePx * 1.5) * 0.39;
+        const diameter = baseDiameter * exportScale;
 
         return {
           id: o.id,
