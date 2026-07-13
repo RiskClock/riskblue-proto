@@ -466,6 +466,7 @@ export const OverlayLayer = ({
   defaultColor = "hsl(var(--destructive))",
   onOverlayClick,
   onOverlayDrag,
+  exportScale = 1,
 }: OverlayLayerProps) => {
   const [drag, setDrag] = useState<null | {
     id: string;
