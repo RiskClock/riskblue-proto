@@ -49,6 +49,12 @@ export interface BulkDrawingDownloadModalProps {
   files: BulkFileEntry[];
   analysisRequestId: string | null;
   projectName: string;
+  /**
+   * Optional pre-computed bounding-box overlays keyed by `${fileId}::${pageIndex0}`.
+   * These are stamped alongside circle annotations when the overlays checkbox
+   * is enabled (e.g. Detail-N unit floor-plan bboxes).
+   */
+  extraOverlaysByFilePage?: Map<string, any[]>;
 }
 
 function isPdfFile(f: BulkFileEntry): boolean {
