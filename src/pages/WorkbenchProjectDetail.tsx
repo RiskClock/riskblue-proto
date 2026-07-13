@@ -420,13 +420,38 @@ export default function WorkbenchProjectDetail() {
   };
   const [pageInfoRows, setPageInfoRows] = useState<PageInfoRow[]>([]);
   const [pageInfoLoading, setPageInfoLoading] = useState(false);
-  const [pageInfoExpanded, setPageInfoExpanded] = useState<Set<string>>(new Set());
+  const pageInfoExpandStorageKey = projectId
+    ? `workbench:pageInfoExpanded:${projectId}`
+    : null;
+  const [pageInfoExpanded, setPageInfoExpanded] = useState<Set<string>>(() => {
+    if (typeof window === "undefined" || !projectId) return new Set();
+    try {
+      const raw = window.localStorage.getItem(
+        `workbench:pageInfoExpanded:${projectId}`,
+      );
+      if (!raw) return new Set();
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? new Set(arr.map(String)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
   const [activePageView, setActivePageView] = useState<{ file: PageInfoRow; page: number } | null>(null);
 
   const togglePageInfoExpand = (fileId: string) => {
     setPageInfoExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(fileId)) next.delete(fileId); else next.add(fileId);
+      if (pageInfoExpandStorageKey && typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem(
+            pageInfoExpandStorageKey,
+            JSON.stringify(Array.from(next)),
+          );
+        } catch {
+          /* ignore quota errors */
+        }
+      }
       return next;
     });
   };
