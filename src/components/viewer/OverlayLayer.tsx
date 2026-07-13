@@ -18,6 +18,13 @@ interface OverlayLayerProps {
    * movement still routes through onOverlayClick.
    */
   onOverlayDrag?: (id: string, nx: number, ny: number) => void;
+  /**
+   * Multiplier applied to circle diameters, label font/padding, leader
+   * stroke width, and rect border widths. Used by the export capture path
+   * to render chunkier overlays that read well in downloaded PDFs. Defaults
+   * to 1 so the on-screen viewer is unaffected.
+   */
+  exportScale?: number;
 }
 
 const MIN_CIRCLE_DIAMETER_CSS = 24;
