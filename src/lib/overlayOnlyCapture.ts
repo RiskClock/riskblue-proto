@@ -26,12 +26,17 @@ import {
 } from "@/components/viewer/viewerGeometry";
 import { rasterizeViewerSurface, type RasterizedPage } from "./threatReportPageCapture";
 
+/** Multiplier applied to overlay geometry when rendering for export. */
+export const EXPORT_OVERLAY_SCALE = 1.5;
+
 export interface OverlayOnlyCaptureInput {
   /** CSS pixel size to lay out overlays in. Match the target composite dims. */
   pageSize: { width: number; height: number };
   overlays: OverlayInput[] | any[];
   /** Output canvas scale factor. Default: 2. */
   outScale?: number;
+  /** Multiplier for overlay geometry (borders, fonts, dot size). Default: EXPORT_OVERLAY_SCALE. */
+  exportScale?: number;
 }
 
 function normalizeOverlays(overlays: any[]): NormalizedOverlay[] {
@@ -57,6 +62,7 @@ export async function captureOverlayOnly(
 ): Promise<RasterizedPage | null> {
   const { pageSize } = input;
   const outScale = input.outScale ?? 2;
+  const exportScale = input.exportScale ?? EXPORT_OVERLAY_SCALE;
   const normalized = normalizeOverlays(input.overlays);
 
   const container = document.createElement("div");
@@ -92,6 +98,7 @@ export async function captureOverlayOnly(
       createElement(OverlayLayer, {
         overlays: normalized,
         pageSize,
+        exportScale,
       } as any),
     );
 

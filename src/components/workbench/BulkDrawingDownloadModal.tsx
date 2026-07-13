@@ -166,21 +166,41 @@ export function BulkDrawingDownloadModal({
         }
       }
 
-      // Download source PDFs and determine page counts.
+      // Download source PDFs and determine page counts. Uses the same
+      // shared source resolver as the single-page download in the drawing
+      // modal, so private buckets / drive-hosted files behave identically.
+      const { resolveDocumentSource } = await import(
+        "@/components/viewer/hooks/useDocumentSource"
+      );
       const entries: PdfExportEntry[] = [];
       for (const f of chosen) {
-        const { data: blob, error: dlErr } = await supabase.storage
-          .from(f.bucket)
-          .download(f.storagePath!);
-        if (dlErr || !blob) {
+        const descriptor = {
+          kind: "supabase-storage" as const,
+          bucket: f.bucket,
+          path: f.storagePath!,
+          mimeType: f.mimeType || "application/pdf",
+          version: f.sizeBytes ?? undefined,
+        };
+        let bytes: Uint8Array;
+        try {
+          const { blob, mime } = await resolveDocumentSource(descriptor);
+          if (!mime.toLowerCase().includes("pdf")) {
+            toast({
+              title: "Skipped",
+              description: `${f.fileName} is not a PDF.`,
+              variant: "destructive",
+            });
+            continue;
+          }
+          bytes = new Uint8Array(await blob.arrayBuffer());
+        } catch (err: any) {
           toast({
             title: "Download failed",
-            description: `Could not fetch ${f.fileName}.`,
+            description: `Could not fetch ${f.fileName}: ${err?.message || "unknown error"}`,
             variant: "destructive",
           });
           continue;
         }
-        const bytes = new Uint8Array(await blob.arrayBuffer());
         let count = pageCounts.get(f.fileId);
         if (!count) {
           try {
@@ -202,16 +222,11 @@ export function BulkDrawingDownloadModal({
         entries.push({
           fileName: f.fileName,
           sourceBytes: bytes,
-          source: {
-            kind: "supabase-storage",
-            bucket: f.bucket,
-            path: f.storagePath!,
-            mimeType: f.mimeType || "application/pdf",
-            version: f.sizeBytes ?? undefined,
-          },
+          source: descriptor,
           pages,
         });
       }
+
 
       if (entries.length === 0) {
         toast({ title: "Nothing to export", variant: "destructive" });

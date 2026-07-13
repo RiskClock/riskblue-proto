@@ -18,6 +18,13 @@ interface OverlayLayerProps {
    * movement still routes through onOverlayClick.
    */
   onOverlayDrag?: (id: string, nx: number, ny: number) => void;
+  /**
+   * Multiplier applied to circle diameters, label font/padding, leader
+   * stroke width, and rect border widths. Used by the export capture path
+   * to render chunkier overlays that read well in downloaded PDFs. Defaults
+   * to 1 so the on-screen viewer is unaffected.
+   */
+  exportScale?: number;
 }
 
 const MIN_CIRCLE_DIAMETER_CSS = 24;
@@ -459,6 +466,7 @@ export const OverlayLayer = ({
   defaultColor = "hsl(var(--destructive))",
   onOverlayClick,
   onOverlayDrag,
+  exportScale = 1,
 }: OverlayLayerProps) => {
   const [drag, setDrag] = useState<null | {
     id: string;
@@ -486,9 +494,11 @@ export const OverlayLayer = ({
         // Detection annotation circles are intentionally small (30% of the
         // previous size, then bumped 30% larger on request) so they don't
         // obscure the drawing. Unit-marker dots keep their original size.
-        const diameter = isDot
+        // `exportScale` bumps everything larger for downloaded PDFs.
+        const baseDiameter = isDot
           ? Math.max(10, MIN_CIRCLE_DIAMETER_CSS * 0.55)
           : Math.max(MIN_CIRCLE_DIAMETER_CSS, bboxSidePx * 1.5) * 0.39;
+        const diameter = baseDiameter * exportScale;
 
         return {
           id: o.id,
@@ -501,7 +511,7 @@ export const OverlayLayer = ({
           isDot,
         };
       });
-  }, [overlays, pageSize.width, pageSize.height, defaultColor, hoveredId]);
+  }, [overlays, pageSize.width, pageSize.height, defaultColor, hoveredId, exportScale]);
 
   const rects = useMemo(() => {
     return overlays
@@ -523,10 +533,10 @@ export const OverlayLayer = ({
     [rects],
   );
 
-  const fontPx = LABEL_FONT_PX;
-  const padX = LABEL_PAD_X;
-  const labelH = LABEL_H;
-  const gap = LABEL_GAP;
+  const fontPx = LABEL_FONT_PX * exportScale;
+  const padX = LABEL_PAD_X * exportScale;
+  const labelH = LABEL_H * exportScale;
+  const gap = LABEL_GAP * exportScale;
   // Slightly generous per-character width so clamped labels near the page
   // edge don't visually spill past their computed rect.
   const charPx = fontPx * 0.72;
@@ -719,7 +729,7 @@ export const OverlayLayer = ({
               x2={x2}
               y2={y2}
               stroke={p.color}
-              strokeWidth={1.5}
+              strokeWidth={1.5 * exportScale}
               opacity={LABEL_OPACITY}
             />
           );
@@ -762,7 +772,7 @@ export const OverlayLayer = ({
               height: c.r * 2,
               borderRadius: "9999px",
               borderColor: withAlpha(c.color, 0.5),
-              borderWidth: c.hovered ? 3.5 : 2.5,
+              borderWidth: (c.hovered ? 3.5 : 2.5) * exportScale,
               borderStyle: "solid",
               backgroundColor: withAlpha(c.color, c.hovered ? 0.35 : 0.2),
               boxSizing: "border-box",
@@ -869,7 +879,7 @@ export const OverlayLayer = ({
               width: r.w,
               height: r.h,
               borderColor: withAlpha(r.color, 0.5),
-              borderWidth: r.hovered ? 3 : 2,
+              borderWidth: (r.hovered ? 3 : 2) * exportScale,
               borderStyle: "solid",
               backgroundColor: "transparent",
               boxSizing: "border-box",
