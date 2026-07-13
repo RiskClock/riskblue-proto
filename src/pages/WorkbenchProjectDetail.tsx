@@ -358,6 +358,7 @@ export default function WorkbenchProjectDetail() {
   const [uploadingReport, setUploadingReport] = useState(false);
   const reportInputRef = useRef<HTMLInputElement>(null);
   const [downloadingAll, setDownloadingAll] = useState(false);
+  const [bulkDownloadOpen, setBulkDownloadOpen] = useState(false);
 
   // Page Info table (lightweight: just enumerate pages per file, no splitting)
   type PageInfoRow = {
