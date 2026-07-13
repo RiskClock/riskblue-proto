@@ -26,6 +26,12 @@ import { DrawingViewer, type DocumentSourceDescriptor } from "@/components/viewe
 export interface RasterizeOptions {
   /** Output canvas scale factor over the CSS layout size. Default: 2. */
   outScale?: number;
+  /**
+   * When true, skip drawing the underlying PDF raster and produce a
+   * transparent PNG containing only the overlays. Used by the vector-PDF
+   * export path (overlays are stamped onto the original PDF page).
+   */
+  overlaysOnly?: boolean;
 }
 
 export interface RasterizedPage {
@@ -39,6 +45,7 @@ export async function rasterizeViewerSurface(
   opts: RasterizeOptions = {},
 ): Promise<RasterizedPage> {
   const outScale = opts.outScale ?? 2;
+  const overlaysOnly = !!opts.overlaysOnly;
 
   const pageImg = surfaceEl.querySelector("img") as HTMLImageElement | null;
   if (!pageImg) throw new Error("Drawing not yet loaded.");
@@ -51,25 +58,30 @@ export async function rasterizeViewerSurface(
   canvas.width = Math.round(cssW * outScale);
   canvas.height = Math.round(cssH * outScale);
   const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (!overlaysOnly) {
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
 
-  // Reload the image to bypass any tainted decode state.
-  const sourceImg: HTMLImageElement = await new Promise((resolve, reject) => {
-    const im = new Image();
-    im.crossOrigin = "anonymous";
-    im.onload = () => resolve(im);
-    im.onerror = () => reject(new Error("Could not load page image."));
-    im.src = pageImg.src;
-  });
-  ctx.drawImage(sourceImg, 0, 0, canvas.width, canvas.height);
+  if (!overlaysOnly) {
+    // Reload the image to bypass any tainted decode state.
+    const sourceImg: HTMLImageElement = await new Promise((resolve, reject) => {
+      const im = new Image();
+      im.crossOrigin = "anonymous";
+      im.onload = () => resolve(im);
+      im.onerror = () => reject(new Error("Could not load page image."));
+      im.src = pageImg.src;
+    });
+    ctx.drawImage(sourceImg, 0, 0, canvas.width, canvas.height);
+  }
 
   const toLocal = (clientX: number, clientY: number) => ({
     x: (clientX - imgRect.left) * outScale,
     y: (clientY - imgRect.top) * outScale,
   });
+
 
   // Leader lines (SVG) — map SVG coords → client via getScreenCTM.
   const leaderLines = surfaceEl.querySelectorAll<SVGLineElement>(
