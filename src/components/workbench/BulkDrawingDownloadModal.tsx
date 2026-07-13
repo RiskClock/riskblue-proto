@@ -52,9 +52,15 @@ export interface BulkDrawingDownloadModalProps {
   /**
    * Optional pre-computed bounding-box overlays keyed by `${fileId}::${pageIndex0}`.
    * These are stamped alongside circle annotations when the overlays checkbox
-   * is enabled (e.g. Detail-N unit floor-plan bboxes).
+   * is enabled (e.g. Detail-N unit floor-plan bboxes, level floor plans).
    */
   extraOverlaysByFilePage?: Map<string, any[]>;
+  /**
+   * Map from AWP class name → configured id prefix (e.g. "Cold Water" → "CW").
+   * Used to format annotation labels as `PREFIX-TYPE-###`, matching the
+   * on-screen viewer. Missing entries fall back to first 3 letters of class.
+   */
+  classPrefixByName?: Map<string, string | null>;
 }
 
 function isPdfFile(f: BulkFileEntry): boolean {
@@ -70,6 +76,7 @@ export function BulkDrawingDownloadModal({
   analysisRequestId,
   projectName,
   extraOverlaysByFilePage,
+  classPrefixByName,
 }: BulkDrawingDownloadModalProps) {
   const { toast } = useToast();
   const [selected, setSelected] = useState<Set<string>>(new Set());
