@@ -18,11 +18,77 @@
 import { supabase } from "@/integrations/supabase/client";
 import { readableTextOn } from "@/lib/awpColor";
 import riskblueLogoUrl from "@/assets/logo-riskblue.png";
-import { capturePageToPng } from "@/lib/threatReportPageCapture";
+import { resolveDocumentSource } from "@/components/viewer/hooks/useDocumentSource";
+import { captureOverlayOnly } from "@/lib/overlayOnlyCapture";
+import * as pdfjsLib from "pdfjs-dist";
+import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 // `readableTextOn` is re-exported so incidental callers keep resolving; it
 // is not used directly in this module anymore.
 void readableTextOn;
+
+// Render a single PDF page to a PNG blob and composite the given overlays
+// on top. Uses pdf.js directly (respects page /Rotate) and a lightweight
+// offscreen OverlayLayer render for the overlay stamp. Never mounts the
+// full DrawingViewer — that path is fragile across many sequential captures.
+async function renderPageWithOverlays(
+  pdfBlob: Blob,
+  pageIdx: number,
+  overlays: ThreatReportPageRef["overlays"],
+  targetLongEdgePx: number,
+): Promise<{ blob: Blob; width: number; height: number } | null> {
+  try {
+    const data = await pdfBlob.arrayBuffer();
+    const doc = await pdfjsLib.getDocument({ data }).promise;
+    if (pageIdx < 1 || pageIdx > doc.numPages) return null;
+    const page = await doc.getPage(pageIdx);
+    const base = page.getViewport({ scale: 1 });
+    const scale = targetLongEdgePx / Math.max(base.width, base.height);
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(viewport.width);
+    canvas.height = Math.round(viewport.height);
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
+
+    if (overlays && overlays.length > 0) {
+      const overlayInputs = overlays.map((o) => ({
+        id: o.id,
+        bbox: [o.nx, o.ny, o.nw ?? 0, o.nh ?? 0] as [number, number, number, number],
+        coordSpace: "normalized" as const,
+        color: o.color,
+        label: o.label,
+        shape: o.shape ?? ("circle" as const),
+      }));
+      const overlayCap = await captureOverlayOnly({
+        pageSize: { width: canvas.width, height: canvas.height },
+        overlays: overlayInputs,
+        outScale: 1,
+      });
+      if (overlayCap) {
+        const overlayImg = await createImageBitmap(overlayCap.blob);
+        ctx.drawImage(overlayImg, 0, 0, canvas.width, canvas.height);
+        overlayImg.close?.();
+      }
+    }
+
+    const blob: Blob = await new Promise((res, rej) =>
+      canvas.toBlob(
+        (b) => (b ? res(b) : rej(new Error("Canvas encoding failed."))),
+        "image/png",
+        0.95,
+      ),
+    );
+    return { blob, width: canvas.width, height: canvas.height };
+  } catch (e) {
+    console.warn("[threatReportExport] page render failed", e);
+    return null;
+  }
+}
 
 
 
