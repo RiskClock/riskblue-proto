@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import {
   ChevronLeft,
   ChevronRight,
+  Download,
   Maximize2,
   ZoomIn,
   ZoomOut,
