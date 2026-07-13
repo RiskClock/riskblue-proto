@@ -511,7 +511,7 @@ export const OverlayLayer = ({
           isDot,
         };
       });
-  }, [overlays, pageSize.width, pageSize.height, defaultColor, hoveredId]);
+  }, [overlays, pageSize.width, pageSize.height, defaultColor, hoveredId, exportScale]);
 
   const rects = useMemo(() => {
     return overlays
