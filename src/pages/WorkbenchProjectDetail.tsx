@@ -30,6 +30,7 @@ import { useActivityLogger } from "@/hooks/useActivityLogger";
 import { SpaceEditModal } from "@/components/workbench/SpaceEditModal";
 import { ConsolidateRisersModal } from "@/components/workbench/ConsolidateRisersModal";
 import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectModal";
+import { BulkDrawingDownloadModal } from "@/components/workbench/BulkDrawingDownloadModal";
 import { normalizeScoutResponse } from "@/lib/scoutResponseNormalizer";
 import {
   runThreatReportExport,
@@ -357,6 +358,7 @@ export default function WorkbenchProjectDetail() {
   const [uploadingReport, setUploadingReport] = useState(false);
   const reportInputRef = useRef<HTMLInputElement>(null);
   const [downloadingAll, setDownloadingAll] = useState(false);
+  const [bulkDownloadOpen, setBulkDownloadOpen] = useState(false);
 
   // Page Info table (lightweight: just enumerate pages per file, no splitting)
   type PageInfoRow = {
@@ -3875,16 +3877,16 @@ export default function WorkbenchProjectDetail() {
                               <TooltipTrigger asChild>
                                 <button
                                   type="button"
-                                  onClick={handleDownloadAllFiles}
-                                  disabled={downloadingAll || pageInfoRows.length === 0}
+                                  onClick={() => setBulkDownloadOpen(true)}
+                                  disabled={pageInfoRows.length === 0}
                                   className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                  aria-label="Download all files"
+                                  aria-label="Download drawings"
                                 >
-                                  <Download className={`h-3.5 w-3.5 ${downloadingAll ? "animate-pulse" : ""}`} />
+                                  <Download className="h-3.5 w-3.5" />
                                 </button>
                               </TooltipTrigger>
                               <TooltipContent side="bottom">
-                                {downloadingAll ? "Preparing ZIP…" : "Download all files (ZIP)"}
+                                Download drawings (PDF)
                               </TooltipContent>
                             </Tooltip>
                           </div>
@@ -5028,6 +5030,22 @@ export default function WorkbenchProjectDetail() {
           onSaved={() => {
             queryClient.invalidateQueries({ queryKey: ["workbench-consolidations", requestId] });
           }}
+        />
+
+        <BulkDrawingDownloadModal
+          open={bulkDownloadOpen}
+          onOpenChange={setBulkDownloadOpen}
+          analysisRequestId={requestId ?? null}
+          projectName={project?.name || "Project"}
+          files={fileGroups.map((g) => ({
+            fileId: g.file.id,
+            fileName: g.file.name,
+            storagePath: g.file.storage_path,
+            bucket: bucketForSource(g.file.source_type),
+            mimeType: g.file.mime_type,
+            sizeBytes: g.file.size_bytes ?? null,
+            knownPageCount: g.sheets.length || undefined,
+          }))}
         />
       </div>
     </TooltipProvider>

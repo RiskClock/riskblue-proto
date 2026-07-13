@@ -276,6 +276,9 @@ export const FileViewerModal = ({
     width: number;
     height: number;
   } | null>(null);
+  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
+  const [downloadIncludeOverlays, setDownloadIncludeOverlays] = useState(true);
+  const [downloadBusy, setDownloadBusy] = useState(false);
 
   // Keep currentPage in sync with the requested pageIndex when the modal opens
   // or when the parent changes the target page.
@@ -1289,6 +1292,7 @@ export const FileViewerModal = ({
               source={source}
               layout="single-page"
               page={currentPage}
+              onDownload={() => setDownloadDialogOpen(true)}
               onPageChange={singlePageOnly ? () => {} : setCurrentPage}
               hidePageNav
               overlays={overlays}
@@ -1619,6 +1623,19 @@ export const FileViewerModal = ({
           );
         })()}
       </DialogContent>
+
+      <PageDownloadDialog
+        open={downloadDialogOpen}
+        onOpenChange={setDownloadDialogOpen}
+        busy={downloadBusy}
+        setBusy={setDownloadBusy}
+        includeOverlays={downloadIncludeOverlays}
+        setIncludeOverlays={setDownloadIncludeOverlays}
+        source={source}
+        page={currentPage}
+        overlays={overlays}
+        fileName={fileName}
+      />
     </Dialog>
   );
 };
@@ -2482,6 +2499,138 @@ const PlaceUnitBboxControl = ({ onPlace }: PlaceUnitBboxControlProps) => {
     </div>
   );
 };
+
+
+// ============================================================================
+// Per-page vector-PDF download dialog. Opened from the drawing modal's toolbar
+// (Download button replaces the fit-page button). Loads the original PDF via
+// the shared source resolver, extracts the currently visible page, and stamps
+// the overlay layer on top (when the checkbox is enabled).
+// ============================================================================
+function PageDownloadDialog({
+  open,
+  onOpenChange,
+  busy,
+  setBusy,
+  includeOverlays,
+  setIncludeOverlays,
+  source,
+  page,
+  overlays,
+  fileName,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  busy: boolean;
+  setBusy: (v: boolean) => void;
+  includeOverlays: boolean;
+  setIncludeOverlays: (v: boolean) => void;
+  source: DocumentSourceDescriptor | null;
+  page: number;
+  overlays: OverlayInput[];
+  fileName: string;
+}) {
+  const { toast } = useToast();
+
+  const outputName = useMemo(() => {
+    const base = (fileName || "drawing").replace(/\.[^.]+$/, "");
+    return `${base}_page${page}.pdf`;
+  }, [fileName, page]);
+
+  const handleDownload = async () => {
+    if (busy || !source) return;
+    setBusy(true);
+    try {
+      const { resolveDocumentSource } = await import(
+        "@/components/viewer/hooks/useDocumentSource"
+      );
+      const { buildAnnotatedPdf, triggerPdfDownload } = await import(
+        "@/lib/pdfPageOverlayExport"
+      );
+
+      const { blob, mime } = await resolveDocumentSource(source);
+      if (!mime.toLowerCase().includes("pdf")) {
+        toast({
+          title: "Not a PDF",
+          description: "Only PDF drawings can be downloaded from this dialog.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      const merged = await buildAnnotatedPdf(
+        [
+          {
+            fileName,
+            sourceBytes: bytes,
+            source,
+            pages: [{ page, overlays: overlays as any[] }],
+          },
+        ],
+        { includeOverlays },
+      );
+      triggerPdfDownload(merged, outputName);
+      onOpenChange(false);
+    } catch (e: any) {
+      toast({
+        title: "Download failed",
+        description: e?.message || "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => (busy ? null : onOpenChange(v))}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Download page</DialogTitle>
+        </DialogHeader>
+
+        <div className="text-sm">
+          <div className="text-muted-foreground">File name</div>
+          <div className="font-mono text-xs mt-1 truncate">{outputName}</div>
+        </div>
+
+        <div className="flex items-center gap-2 pt-1">
+          <input
+            id="page-download-overlays"
+            type="checkbox"
+            className="h-4 w-4"
+            checked={includeOverlays}
+            disabled={busy}
+            onChange={(e) => setIncludeOverlays(e.target.checked)}
+          />
+          <label
+            htmlFor="page-download-overlays"
+            className="text-sm cursor-pointer"
+          >
+            Include annotations &amp; detail boxes
+          </label>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={busy}
+          >
+            Cancel
+          </Button>
+          <Button onClick={handleDownload} disabled={busy || !source}>
+            {busy ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : null}
+            Download
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 
 
 

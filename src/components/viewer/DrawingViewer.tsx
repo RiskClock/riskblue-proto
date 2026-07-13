@@ -77,6 +77,12 @@ export interface DrawingViewerProps {
   onEditorBboxChange?: (next: EditorBbox) => void;
   /** Border/handle color for the editor bbox. */
   editorColor?: string;
+  /**
+   * When set, replaces the toolbar's Fit-page button with a Download button
+   * that invokes this callback. Used by the drawing modal to open the
+   * per-page vector-PDF download dialog.
+   */
+  onDownload?: () => void;
 }
 
 
@@ -111,6 +117,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       editorBbox,
       onEditorBboxChange,
       editorColor,
+      onDownload,
     },
 
     ref
@@ -390,6 +397,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                   ? () => doFitOverlay(initialFitOverlayId)
                   : undefined
               }
+              onDownload={onDownload}
               pageNav={
                 !hidePageNav && layout === "single-page" && totalPages > 1
                   ? {

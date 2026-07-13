@@ -26,6 +26,12 @@ import { DrawingViewer, type DocumentSourceDescriptor } from "@/components/viewe
 export interface RasterizeOptions {
   /** Output canvas scale factor over the CSS layout size. Default: 2. */
   outScale?: number;
+  /**
+   * When true, skip drawing the underlying PDF raster and produce a
+   * transparent PNG containing only the overlays. Used by the vector-PDF
+   * export path (overlays are stamped onto the original PDF page).
+   */
+  overlaysOnly?: boolean;
 }
 
 export interface RasterizedPage {
@@ -39,6 +45,7 @@ export async function rasterizeViewerSurface(
   opts: RasterizeOptions = {},
 ): Promise<RasterizedPage> {
   const outScale = opts.outScale ?? 2;
+  const overlaysOnly = !!opts.overlaysOnly;
 
   const pageImg = surfaceEl.querySelector("img") as HTMLImageElement | null;
   if (!pageImg) throw new Error("Drawing not yet loaded.");
@@ -51,25 +58,30 @@ export async function rasterizeViewerSurface(
   canvas.width = Math.round(cssW * outScale);
   canvas.height = Math.round(cssH * outScale);
   const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (!overlaysOnly) {
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
 
-  // Reload the image to bypass any tainted decode state.
-  const sourceImg: HTMLImageElement = await new Promise((resolve, reject) => {
-    const im = new Image();
-    im.crossOrigin = "anonymous";
-    im.onload = () => resolve(im);
-    im.onerror = () => reject(new Error("Could not load page image."));
-    im.src = pageImg.src;
-  });
-  ctx.drawImage(sourceImg, 0, 0, canvas.width, canvas.height);
+  if (!overlaysOnly) {
+    // Reload the image to bypass any tainted decode state.
+    const sourceImg: HTMLImageElement = await new Promise((resolve, reject) => {
+      const im = new Image();
+      im.crossOrigin = "anonymous";
+      im.onload = () => resolve(im);
+      im.onerror = () => reject(new Error("Could not load page image."));
+      im.src = pageImg.src;
+    });
+    ctx.drawImage(sourceImg, 0, 0, canvas.width, canvas.height);
+  }
 
   const toLocal = (clientX: number, clientY: number) => ({
     x: (clientX - imgRect.left) * outScale,
     y: (clientY - imgRect.top) * outScale,
   });
+
 
   // Leader lines (SVG) — map SVG coords → client via getScreenCTM.
   const leaderLines = surfaceEl.querySelectorAll<SVGLineElement>(
@@ -131,6 +143,34 @@ export async function rasterizeViewerSurface(
     ctx.stroke();
     ctx.restore();
   });
+
+  // Rectangles (Detail-N floor-plan bboxes). Match OverlayLayer's border-only
+  // style: 50%-alpha stroke at the recorded border width.
+  const rects = surfaceEl.querySelectorAll<HTMLDivElement>(
+    '[data-export-kind="rect"]',
+  );
+  rects.forEach((div) => {
+    const r = div.getBoundingClientRect();
+    const tl = toLocal(r.left, r.top);
+    const w = r.width * outScale;
+    const h = r.height * outScale;
+    const color = div.getAttribute("data-color") || "#dc2626";
+    const borderPx = Number(div.getAttribute("data-border-px") || "2") * outScale;
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = borderPx;
+    // Stroke inset by half the line width so the visible edge aligns with the
+    // CSS box-sizing:border-box rect (which draws the border inside the box).
+    ctx.strokeRect(
+      tl.x + borderPx / 2,
+      tl.y + borderPx / 2,
+      Math.max(0, w - borderPx),
+      Math.max(0, h - borderPx),
+    );
+    ctx.restore();
+  });
+
 
   // Labels (pill + text) — draw fully opaque on an offscreen canvas, then
   // composite at the configured opacity to match CSS group-opacity.
@@ -214,6 +254,12 @@ export interface CapturePageInput {
   targetLongEdgePx?: number;
   /** Wait timeout for viewer readiness. Default 30s. */
   timeoutMs?: number;
+  /**
+   * When true, output a transparent PNG of the overlays only (no PDF raster
+   * underneath). Used by the vector-PDF export path which stamps overlays
+   * onto the original PDF page.
+   */
+  overlaysOnly?: boolean;
 }
 
 export async function capturePageToPng(
@@ -264,7 +310,11 @@ export async function capturePageToPng(
     await new Promise<void>((r) =>
       requestAnimationFrame(() => requestAnimationFrame(() => r())),
     );
-    return await rasterizeViewerSurface(surface, { outScale });
+    return await rasterizeViewerSurface(surface, {
+      outScale,
+      overlaysOnly: input.overlaysOnly,
+    });
+
   } catch (e) {
     console.warn("[threatReportPageCapture] capture failed", e);
     return null;
