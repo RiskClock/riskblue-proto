@@ -1,23 +1,23 @@
 // Vector-PDF export with overlay compositing.
 //
-// Loads the original PDF via pdf-lib, copies the requested page(s), and
-// stamps a transparent PNG (captured from the shared DrawingViewer via
-// `capturePageToPng({ overlaysOnly: true })`) on top of each page.
+// Loads the original PDF via pdf-lib, embeds each requested page as a Form
+// XObject, and re-draws it upright onto a fresh page of the display size
+// (baking any page /Rotate). A transparent overlay PNG is then stamped on
+// top at the same display dimensions.
+//
+// Baking rotation into the output means:
+//   • The output PDF opens looking identical to the source PDF (same
+//     orientation, same content).
+//   • Overlays captured in display orientation can be drawn at (0, 0) with
+//     display dimensions, without any per-rotation coordinate math.
 //
 // Consumers:
 //   - FileViewerModal per-page Download dialog (single page)
 //   - BulkDrawingDownloadModal on the workbench (all pages of many files
 //     merged into one PDF).
-//
-// Overlay parity with the viewer is guaranteed because the overlay PNG is
-// produced by the same DrawingViewer mount used on-screen — same label
-// optimizer, same coordinates, same clamping.
 
-import { PDFDocument } from "pdf-lib";
-import {
-  capturePageToPng,
-  type CapturePageInput,
-} from "@/lib/threatReportPageCapture";
+import { PDFDocument, degrees } from "pdf-lib";
+import { captureOverlayOnly } from "@/lib/overlayOnlyCapture";
 import type { DocumentSourceDescriptor } from "@/components/viewer";
 
 export interface PageOverlaySpec {
@@ -33,11 +33,10 @@ export interface PdfExportEntry {
   /** Raw source PDF bytes. */
   sourceBytes: ArrayBuffer | Uint8Array;
   /**
-   * Descriptor used when we need to capture overlays for this file's pages.
-   * Must resolve to the SAME PDF as `sourceBytes` (both come from the same
-   * storage row).
+   * Descriptor kept for API compatibility; no longer required by the
+   * overlay-capture step (which uses OverlayLayer directly).
    */
-  source: DocumentSourceDescriptor;
+  source?: DocumentSourceDescriptor;
   /** Pages to include, in output order. */
   pages: PageOverlaySpec[];
 }
@@ -84,28 +83,42 @@ export async function buildAnnotatedPdf(
         continue;
       }
 
-      const [copied] = await out.copyPages(src, [idx]);
-      const addedPage = out.addPage(copied);
-      const { width: pageW, height: pageH } = addedPage.getSize();
+      const srcPage = src.getPage(idx);
+      const rot = (srcPage.getRotation().angle % 360 + 360) % 360;
+      const { width: mW, height: mH } = srcPage.getSize();
+      // Display dimensions after applying the page /Rotate.
+      const dispW = rot % 180 === 0 ? mW : mH;
+      const dispH = rot % 180 === 0 ? mH : mW;
+
+      // Embed the source page as a Form XObject, then draw it (rotated so
+      // that after baking the rotation is 0) onto a new upright page.
+      const [embedded] = await out.embedPages([srcPage]);
+      const newPage = out.addPage([dispW, dispH]);
+      let ox = 0;
+      let oy = 0;
+      if (rot === 90) { ox = 0; oy = mW; }
+      else if (rot === 180) { ox = mW; oy = mH; }
+      else if (rot === 270) { ox = mH; oy = 0; }
+      newPage.drawPage(embedded, {
+        x: ox,
+        y: oy,
+        rotate: degrees(rot),
+      });
 
       if (includeOverlays && spec.overlays.length > 0) {
-        const capture = await capturePageToPng({
-          source: entry.source,
-          page: spec.page,
+        const capture = await captureOverlayOnly({
+          pageSize: { width: dispW, height: dispH },
           overlays: spec.overlays,
-          overlaysOnly: true,
-          // Overlay pixels are small; a modest raster keeps the resulting
-          // PDF light while still looking crisp when the viewer zooms in.
-          targetLongEdgePx: 2400,
+          outScale: 3,
         });
         if (capture) {
           const overlayBytes = await capture.blob.arrayBuffer();
           const png = await out.embedPng(new Uint8Array(overlayBytes));
-          addedPage.drawImage(png, {
+          newPage.drawImage(png, {
             x: 0,
             y: 0,
-            width: pageW,
-            height: pageH,
+            width: dispW,
+            height: dispH,
           });
         }
       }
@@ -134,8 +147,7 @@ export function triggerPdfDownload(bytes: Uint8Array, filename: string) {
 }
 
 /**
- * Read the page count of a PDF blob without keeping it in memory. Cheap when
- * the caller already has the bytes; otherwise a network fetch is required.
+ * Read the page count of a PDF blob without keeping it in memory.
  */
 export async function readPdfPageCount(
   bytes: ArrayBuffer | Uint8Array,
@@ -145,5 +157,5 @@ export async function readPdfPageCount(
   return doc.getPageCount();
 }
 
-// Re-export for callers that only import from this module.
-export type { CapturePageInput };
+// Backward-compat re-export.
+export type { CapturePageInput } from "@/lib/threatReportPageCapture";
