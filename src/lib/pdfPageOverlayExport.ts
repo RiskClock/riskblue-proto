@@ -1,15 +1,8 @@
 // Vector-PDF export with overlay compositing.
 //
-// Loads the original PDF via pdf-lib, embeds each requested page as a Form
-// XObject, and re-draws it upright onto a fresh page of the display size
-// (baking any page /Rotate). A transparent overlay PNG is then stamped on
-// top at the same display dimensions.
-//
-// Baking rotation into the output means:
-//   • The output PDF opens looking identical to the source PDF (same
-//     orientation, same content).
-//   • Overlays captured in display orientation can be drawn at (0, 0) with
-//     display dimensions, without any per-rotation coordinate math.
+// Loads the original PDF via pdf-lib, copies each requested page as-is, and
+// stamps a transparent overlay PNG on top. The copied page keeps its original
+// vector content, MediaBox, CropBox, and /Rotate metadata.
 //
 // Consumers:
 //   - FileViewerModal per-page Download dialog (single page)
@@ -51,6 +44,55 @@ export interface BuildPdfOptions {
   onProgress?: (done: number, total: number) => void;
 }
 
+function normalizedRotation(angle: number): 0 | 90 | 180 | 270 {
+  const rot = ((Math.round(angle) % 360) + 360) % 360;
+  if (rot === 90 || rot === 180 || rot === 270) return rot;
+  return 0;
+}
+
+function overlayDrawOptionsForCopiedPage(opts: {
+  mediaWidth: number;
+  mediaHeight: number;
+  displayWidth: number;
+  displayHeight: number;
+  rotation: 0 | 90 | 180 | 270;
+}) {
+  const { mediaWidth, mediaHeight, displayWidth, displayHeight, rotation } = opts;
+  if (rotation === 90) {
+    return {
+      x: mediaWidth,
+      y: 0,
+      width: displayWidth,
+      height: displayHeight,
+      rotate: degrees(90),
+    };
+  }
+  if (rotation === 180) {
+    return {
+      x: mediaWidth,
+      y: mediaHeight,
+      width: displayWidth,
+      height: displayHeight,
+      rotate: degrees(180),
+    };
+  }
+  if (rotation === 270) {
+    return {
+      x: 0,
+      y: mediaHeight,
+      width: displayWidth,
+      height: displayHeight,
+      rotate: degrees(270),
+    };
+  }
+  return {
+    x: 0,
+    y: 0,
+    width: displayWidth,
+    height: displayHeight,
+  };
+}
+
 /**
  * Build a merged, annotated PDF from one or more source PDFs.
  * Returns the merged PDF bytes.
@@ -84,42 +126,35 @@ export async function buildAnnotatedPdf(
       }
 
       const srcPage = src.getPage(idx);
-      const rot = (srcPage.getRotation().angle % 360 + 360) % 360;
-      const { width: mW, height: mH } = srcPage.getSize();
-      // Display dimensions after applying the page /Rotate.
-      const dispW = rot % 180 === 0 ? mW : mH;
-      const dispH = rot % 180 === 0 ? mH : mW;
+      const rotation = normalizedRotation(srcPage.getRotation().angle);
+      const { width: mediaWidth, height: mediaHeight } = srcPage.getSize();
+      const displayWidth = rotation % 180 === 0 ? mediaWidth : mediaHeight;
+      const displayHeight = rotation % 180 === 0 ? mediaHeight : mediaWidth;
 
-      // Embed the source page as a Form XObject, then draw it (rotated so
-      // that after baking the rotation is 0) onto a new upright page.
-      const [embedded] = await out.embedPages([srcPage]);
-      const newPage = out.addPage([dispW, dispH]);
-      let ox = 0;
-      let oy = 0;
-      if (rot === 90) { ox = 0; oy = mW; }
-      else if (rot === 180) { ox = mW; oy = mH; }
-      else if (rot === 270) { ox = mH; oy = 0; }
-      newPage.drawPage(embedded, {
-        x: ox,
-        y: oy,
-        rotate: degrees(rot),
-      });
+      // Preserve the original vector page. Re-drawing rotated pages as XObjects
+      // caused blank output for real drawings whose MediaBox and /Rotate differ.
+      const [newPage] = await out.copyPages(src, [idx]);
+      out.addPage(newPage);
 
       if (includeOverlays && spec.overlays.length > 0) {
         const capture = await captureOverlayOnly({
-          pageSize: { width: dispW, height: dispH },
+          pageSize: { width: displayWidth, height: displayHeight },
           overlays: spec.overlays,
           outScale: 3,
         });
         if (capture) {
           const overlayBytes = await capture.blob.arrayBuffer();
           const png = await out.embedPng(new Uint8Array(overlayBytes));
-          newPage.drawImage(png, {
-            x: 0,
-            y: 0,
-            width: dispW,
-            height: dispH,
-          });
+          newPage.drawImage(
+            png,
+            overlayDrawOptionsForCopiedPage({
+              mediaWidth,
+              mediaHeight,
+              displayWidth,
+              displayHeight,
+              rotation,
+            }),
+          );
         }
       }
 

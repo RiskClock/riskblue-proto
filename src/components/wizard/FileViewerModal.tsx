@@ -140,6 +140,10 @@ interface FileViewerModalProps {
   accessToken: string;
   detections: SystemDetection[];
   sourceOverride?: DocumentSourceDescriptor;
+  /** Optional original source used by the page-download action. */
+  downloadSourceOverride?: DocumentSourceDescriptor;
+  /** Optional 1-based source page used by the page-download action. */
+  downloadPageOverride?: number;
   // --- Workbench enhancements ---
   awpClasses?: AwpClassOption[];
   analysisRequestId?: string;
@@ -239,6 +243,8 @@ export const FileViewerModal = ({
   accessToken,
   detections,
   sourceOverride,
+  downloadSourceOverride,
+  downloadPageOverride,
   awpClasses,
   analysisRequestId,
   parentFileId,
@@ -1632,7 +1638,8 @@ export const FileViewerModal = ({
         includeOverlays={downloadIncludeOverlays}
         setIncludeOverlays={setDownloadIncludeOverlays}
         source={source}
-        page={currentPage}
+        downloadSource={downloadSourceOverride ?? source}
+        page={downloadPageOverride ?? currentPage}
         overlays={overlays}
         fileName={fileName}
       />
@@ -2515,6 +2522,7 @@ function PageDownloadDialog({
   includeOverlays,
   setIncludeOverlays,
   source,
+  downloadSource,
   page,
   overlays,
   fileName,
@@ -2526,6 +2534,7 @@ function PageDownloadDialog({
   includeOverlays: boolean;
   setIncludeOverlays: (v: boolean) => void;
   source: DocumentSourceDescriptor | null;
+  downloadSource?: DocumentSourceDescriptor | null;
   page: number;
   overlays: OverlayInput[];
   fileName: string;
@@ -2538,7 +2547,8 @@ function PageDownloadDialog({
   }, [fileName, page]);
 
   const handleDownload = async () => {
-    if (busy || !source) return;
+    const sourceToDownload = downloadSource ?? source;
+    if (busy || !sourceToDownload) return;
     setBusy(true);
     try {
       const { resolveDocumentSource } = await import(
@@ -2548,7 +2558,7 @@ function PageDownloadDialog({
         "@/lib/pdfPageOverlayExport"
       );
 
-      const { blob, mime } = await resolveDocumentSource(source);
+      const { blob, mime } = await resolveDocumentSource(sourceToDownload);
       if (!mime.toLowerCase().includes("pdf")) {
         toast({
           title: "Not a PDF",
@@ -2619,7 +2629,7 @@ function PageDownloadDialog({
           >
             Cancel
           </Button>
-          <Button onClick={handleDownload} disabled={busy || !source}>
+          <Button onClick={handleDownload} disabled={busy || !(downloadSource ?? source)}>
             {busy ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : null}
