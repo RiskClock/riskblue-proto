@@ -285,25 +285,35 @@ export async function runThreatReportExport(
     if (!pr.parentPath) {
       renderedByKey.set(key, null);
     } else {
-      const rendered = await capturePageToPng({
-        source: {
+      try {
+        const resolved = await resolveDocumentSource({
           kind: "supabase-storage",
           bucket: pr.bucket,
           path: pr.parentPath,
           mimeType: "application/pdf",
           version: pr.sizeBytes ?? undefined,
-        },
-        page: pr.pageIdx,
-        overlays: pr.overlays,
-        targetLongEdgePx: 1600,
-      });
-      if (rendered) {
-        renderedByKey.set(key, {
-          png: await rendered.blob.arrayBuffer(),
-          width: rendered.width,
-          height: rendered.height,
         });
-      } else {
+        if (!resolved.pdfBlob) {
+          renderedByKey.set(key, null);
+        } else {
+          const rendered = await renderPageWithOverlays(
+            resolved.pdfBlob,
+            pr.pageIdx,
+            pr.overlays,
+            1800,
+          );
+          if (rendered) {
+            renderedByKey.set(key, {
+              png: await rendered.blob.arrayBuffer(),
+              width: rendered.width,
+              height: rendered.height,
+            });
+          } else {
+            renderedByKey.set(key, null);
+          }
+        }
+      } catch (e) {
+        console.warn("[threatReportExport] resolve/render failed", pr.fileName, pr.pageIdx, e);
         renderedByKey.set(key, null);
       }
     }
