@@ -862,6 +862,9 @@ export const OverlayLayer = ({
       {rects.map((r) => (
         <div key={r.id} style={{ position: "absolute", left: r.x, top: r.y }}>
           <div
+            data-export-kind="rect"
+            data-color={r.color}
+            data-border-px={r.hovered ? 3 : 2}
             style={{
               width: r.w,
               height: r.h,
