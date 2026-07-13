@@ -150,28 +150,99 @@ export function BulkDrawingDownloadModal({
       if (includeOverlays && analysisRequestId) {
         const { data, error } = await supabase
           .from("drawing_instances" as any)
-          .select("id, file_id, page_index, awp_class_name, nx, ny, instance_number, metadata")
+          .select(
+            "id, file_id, page_index, awp_class_name, nx, ny, instance_number, metadata, created_at",
+          )
           .eq("analysis_request_id", analysisRequestId);
         if (error) throw error;
-        for (const row of (data as any[]) || []) {
-          // Skip internal unit-plan indicator rows — those are already
-          // rendered as Detail-N bounding boxes via extraOverlaysByFilePage.
-          if (row.awp_class_name === "__unit_marker__") continue;
+        const rows = ((data as any[]) || []).filter(
+          (r) => Number.isFinite(Number(r.nx)) && Number.isFinite(Number(r.ny)),
+        );
+
+        // Build per-(file, class) instance numbering that mirrors the viewer
+        // modal: prefer persisted instance_number, otherwise assign 1..N by
+        // created_at. Used to render labels like `CW-BCWS-001`.
+        const numberById = new Map<string, number>();
+        const byFileClass = new Map<string, any[]>();
+        for (const r of rows) {
+          if (r.awp_class_name === "__unit_marker__") continue;
+          const k = `${r.file_id}::${r.awp_class_name}`;
+          const arr = byFileClass.get(k) || [];
+          arr.push(r);
+          byFileClass.set(k, arr);
+        }
+        for (const [, arr] of byFileClass) {
+          let maxNum = 0;
+          for (const r of arr) {
+            if (typeof r.instance_number === "number") {
+              numberById.set(String(r.id), r.instance_number);
+              if (r.instance_number > maxNum) maxNum = r.instance_number;
+            }
+          }
+          const missing = arr
+            .filter((r) => typeof r.instance_number !== "number")
+            .sort((a, b) =>
+              String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")),
+            );
+          for (const r of missing) {
+            maxNum += 1;
+            numberById.set(String(r.id), maxNum);
+          }
+        }
+
+        const prefixFor = (className: string): string => {
+          const p = classPrefixByName?.get(className);
+          if (p && p.trim()) return p.trim();
+          return className.slice(0, 3).toUpperCase();
+        };
+
+        for (const row of rows) {
           // drawing_instances.page_index is stored 1-based (matches display
           // "p.N"). Bulk export keys pages 0-based (p-1), so normalize here.
           const pageIdx0 = Math.max(0, (Number(row.page_index) || 1) - 1);
           const key = `${row.file_id}::${pageIdx0}`;
           const arr = overlaysByFilePage.get(key) ?? [];
-          const label =
-            row.instance_number != null
-              ? `${row.awp_class_name}-${row.instance_number}`
-              : row.awp_class_name;
+
+          // Unit-plan indicator dots: colored dot, no label. Matches the
+          // on-screen viewer's `unitMarkerOverlays`.
+          if (row.awp_class_name === "__unit_marker__") {
+            arr.push({
+              id: `um-${row.id}`,
+              bbox: [Number(row.nx), Number(row.ny), 0, 0],
+              coordSpace: "normalized",
+              page: pageIdx0 + 1,
+              color: awpClassColor("Unit Floor Plan"),
+              shape: "circle",
+              variant: "dot",
+            });
+            overlaysByFilePage.set(key, arr);
+            continue;
+          }
+
+          const meta =
+            row.metadata && typeof row.metadata === "object"
+              ? (row.metadata as Record<string, any>)
+              : {};
+          const pipeType =
+            typeof meta.pipe_type === "string" ? meta.pipe_type.trim() : "";
+          const diameter =
+            typeof meta.pipe_diameter === "string"
+              ? meta.pipe_diameter.trim()
+              : "";
+          const n = numberById.get(String(row.id)) ?? 0;
+          const prefix = prefixFor(row.awp_class_name);
+          const padded = String(n).padStart(3, "0");
+          const base = pipeType
+            ? `${prefix}-${pipeType}-${padded}`
+            : `${prefix}-${padded}`;
+          const label = diameter ? `${base} (${diameter})` : base;
+
           arr.push({
-            id: String(row.id),
-            bbox: [Number(row.nx) || 0, Number(row.ny) || 0, 0, 0],
+            id: `inst-${row.id}`,
+            bbox: [Number(row.nx), Number(row.ny), 0, 0],
             coordSpace: "normalized",
             page: pageIdx0 + 1,
-            color: awpClassColor(row.awp_class_name),
+            color: awpClassColorForType(row.awp_class_name, pipeType),
             label,
             shape: "circle",
           });
