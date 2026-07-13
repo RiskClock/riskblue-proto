@@ -203,7 +203,6 @@ export async function runThreatReportExport(
     }
   }
 
-  const pdfCache: PdfCache = new Map();
   const renderedByKey = new Map<
     string,
     { png: ArrayBuffer; width: number; height: number } | null
@@ -216,12 +215,22 @@ export async function runThreatReportExport(
       current: done,
       total: pageRefs.length,
     });
-    const pdf = await loadPdf(pr.bucket, pr.parentPath!, pdfCache, pr.sizeBytes ?? undefined);
     const key = renderKeyFor(pr);
-    if (!pdf) {
+    if (!pr.parentPath) {
       renderedByKey.set(key, null);
     } else {
-      const rendered = await renderPageWithMarkers(pdf, pr.pageIdx, pr.overlays);
+      const rendered = await capturePageToPng({
+        source: {
+          kind: "supabase-storage",
+          bucket: pr.bucket,
+          path: pr.parentPath,
+          mimeType: "application/pdf",
+          version: pr.sizeBytes ?? undefined,
+        },
+        page: pr.pageIdx,
+        overlays: pr.overlays,
+        targetLongEdgePx: 1600,
+      });
       if (rendered) {
         renderedByKey.set(key, {
           png: await rendered.blob.arrayBuffer(),
@@ -237,15 +246,6 @@ export async function runThreatReportExport(
     await sleep(0);
   }
 
-  // Drop pdf.js handles.
-  for (const pdf of pdfCache.values()) {
-    try {
-      pdf?.cleanup?.();
-      pdf?.destroy?.();
-    } catch {
-      // ignore
-    }
-  }
 
   // 3) Build DOCX.
   onProgress({ phase: "assembling", message: "Assembling report document..." });
