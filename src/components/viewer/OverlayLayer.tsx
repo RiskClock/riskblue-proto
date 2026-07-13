@@ -772,7 +772,7 @@ export const OverlayLayer = ({
               height: c.r * 2,
               borderRadius: "9999px",
               borderColor: withAlpha(c.color, 0.5),
-              borderWidth: c.hovered ? 3.5 : 2.5,
+              borderWidth: (c.hovered ? 3.5 : 2.5) * exportScale,
               borderStyle: "solid",
               backgroundColor: withAlpha(c.color, c.hovered ? 0.35 : 0.2),
               boxSizing: "border-box",
