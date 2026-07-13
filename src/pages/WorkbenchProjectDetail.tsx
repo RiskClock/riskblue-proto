@@ -5031,6 +5031,22 @@ export default function WorkbenchProjectDetail() {
             queryClient.invalidateQueries({ queryKey: ["workbench-consolidations", requestId] });
           }}
         />
+
+        <BulkDrawingDownloadModal
+          open={bulkDownloadOpen}
+          onOpenChange={setBulkDownloadOpen}
+          analysisRequestId={requestId ?? null}
+          projectName={project?.name || "Project"}
+          files={fileGroups.map((g) => ({
+            fileId: g.file.id,
+            fileName: g.file.name,
+            storagePath: g.file.storage_path,
+            bucket: bucketForSource(g.file.source_type),
+            mimeType: g.file.mime_type,
+            sizeBytes: g.file.size_bytes ?? null,
+            knownPageCount: g.sheets.length || undefined,
+          }))}
+        />
       </div>
     </TooltipProvider>
   );
