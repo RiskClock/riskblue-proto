@@ -126,7 +126,11 @@ export const ViewerToolbar = ({
       <Button variant="outline" size="icon" onClick={onZoomIn}>
         <ZoomIn className="w-4 h-4" />
       </Button>
-      {onFitPage && (
+      {onDownload ? (
+        <Button variant="outline" size="icon" onClick={onDownload} title="Download page">
+          <Download className="w-4 h-4" />
+        </Button>
+      ) : onFitPage && (
         <Button variant="outline" size="icon" onClick={onFitPage} title="Fit page">
           <Maximize2 className="w-4 h-4" />
         </Button>
