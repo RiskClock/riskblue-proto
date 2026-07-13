@@ -117,6 +117,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       editorBbox,
       onEditorBboxChange,
       editorColor,
+      onDownload,
     },
 
     ref
