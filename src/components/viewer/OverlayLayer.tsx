@@ -533,10 +533,10 @@ export const OverlayLayer = ({
     [rects],
   );
 
-  const fontPx = LABEL_FONT_PX;
-  const padX = LABEL_PAD_X;
-  const labelH = LABEL_H;
-  const gap = LABEL_GAP;
+  const fontPx = LABEL_FONT_PX * exportScale;
+  const padX = LABEL_PAD_X * exportScale;
+  const labelH = LABEL_H * exportScale;
+  const gap = LABEL_GAP * exportScale;
   // Slightly generous per-character width so clamped labels near the page
   // edge don't visually spill past their computed rect.
   const charPx = fontPx * 0.72;
