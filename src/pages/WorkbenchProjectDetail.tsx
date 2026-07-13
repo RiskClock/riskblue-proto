@@ -296,7 +296,7 @@ function consolidateLevelLabels(labels: string[]): string[] {
       const label =
         i === j
           ? start.raw
-          : `${prefix}${fmt(start.num, start.pad)}–${prefix}${fmt(end.num, end.pad)}`;
+          : `${prefix}${fmt(start.num, start.pad)} – ${prefix}${fmt(end.num, end.pad)}`;
       out.push({ sortKey: start.num, label });
       i = j + 1;
     }
