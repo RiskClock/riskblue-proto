@@ -5062,12 +5062,25 @@ export default function WorkbenchProjectDetail() {
             sizeBytes: g.file.size_bytes ?? null,
             knownPageCount: g.sheets.length || undefined,
           }))}
+          classPrefixByName={(() => {
+            const m = new Map<string, string | null>();
+            for (const [name, opt] of optionByName.entries()) {
+              m.set(name, opt.idPrefix ?? null);
+            }
+            return m;
+          })()}
           extraOverlaysByFilePage={(() => {
-            // Detail-N (unit floor plan) bounding boxes only, keyed by
-            // `${fileId}::${pageIndex0}` so the bulk PDF export can stamp
-            // them alongside circle annotations.
+            // Unit floor-plan and level floor-plan bounding boxes, keyed by
+            // `${fileId}::${pageIndex0}`. Stamped alongside the drawing_instance
+            // circle annotations so the export mirrors the on-screen viewer.
             const out = new Map<string, any[]>();
+            const push = (mapKey: string, o: any) => {
+              const arr = out.get(mapKey) ?? [];
+              arr.push(o);
+              out.set(mapKey, arr);
+            };
             for (const g of fileGroups) {
+              // Unit floor plans (pink rects with unit label).
               for (const [key, unitPlans] of pageUnitPlansMap.entries()) {
                 const sep = key.lastIndexOf("::");
                 if (sep < 0) continue;
@@ -5075,11 +5088,10 @@ export default function WorkbenchProjectDetail() {
                 const pageNum = Number(key.slice(sep + 2));
                 if (fName !== g.file.name || !Number.isFinite(pageNum)) continue;
                 const mapKey = `${g.file.id}::${pageNum - 1}`;
-                const arr = out.get(mapKey) ?? [];
                 for (const up of unitPlans) {
                   if (!up.bbox) continue;
                   const [bx, by, bw, bh] = up.bbox;
-                  arr.push({
+                  push(mapKey, {
                     id: `unit-bbox-${g.file.id}-${pageNum}-${up.unitLabel}`,
                     bbox: [bx / 100, by / 100, bw / 100, bh / 100],
                     coordSpace: "normalized",
@@ -5088,7 +5100,28 @@ export default function WorkbenchProjectDetail() {
                     shape: "rect",
                   });
                 }
-                if (arr.length > 0) out.set(mapKey, arr);
+              }
+              // Level floor plans (green rects with level name label).
+              for (const [key, levelPlans] of pageLevelPlansMap.entries()) {
+                const sep = key.lastIndexOf("::");
+                if (sep < 0) continue;
+                const fName = key.slice(0, sep);
+                const pageNum = Number(key.slice(sep + 2));
+                if (fName !== g.file.name || !Number.isFinite(pageNum)) continue;
+                const mapKey = `${g.file.id}::${pageNum - 1}`;
+                for (const lp of levelPlans) {
+                  if (!lp.bbox) continue;
+                  const [bx, by, bw, bh] = lp.bbox;
+                  const label = lp.levels.filter(Boolean).join(" / ");
+                  push(mapKey, {
+                    id: `level-bbox-${g.file.id}-${pageNum}-${label || "level"}`,
+                    bbox: [bx / 100, by / 100, bw / 100, bh / 100],
+                    coordSpace: "normalized",
+                    color: awpClassColor("Level Floor Plan"),
+                    label,
+                    shape: "rect",
+                  });
+                }
               }
             }
             return out;
