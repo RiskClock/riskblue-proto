@@ -5046,6 +5046,37 @@ export default function WorkbenchProjectDetail() {
             sizeBytes: g.file.size_bytes ?? null,
             knownPageCount: g.sheets.length || undefined,
           }))}
+          extraOverlaysByFilePage={(() => {
+            // Detail-N (unit floor plan) bounding boxes only, keyed by
+            // `${fileId}::${pageIndex0}` so the bulk PDF export can stamp
+            // them alongside circle annotations.
+            const out = new Map<string, any[]>();
+            for (const g of fileGroups) {
+              for (const [key, unitPlans] of pageUnitPlansMap.entries()) {
+                const sep = key.lastIndexOf("::");
+                if (sep < 0) continue;
+                const fName = key.slice(0, sep);
+                const pageNum = Number(key.slice(sep + 2));
+                if (fName !== g.file.name || !Number.isFinite(pageNum)) continue;
+                const mapKey = `${g.file.id}::${pageNum - 1}`;
+                const arr = out.get(mapKey) ?? [];
+                for (const up of unitPlans) {
+                  if (!up.bbox) continue;
+                  const [bx, by, bw, bh] = up.bbox;
+                  arr.push({
+                    id: `unit-bbox-${g.file.id}-${pageNum}-${up.unitLabel}`,
+                    bbox: [bx / 100, by / 100, bw / 100, bh / 100],
+                    coordSpace: "normalized",
+                    color: awpClassColor("Unit Floor Plan"),
+                    label: up.unitLabel,
+                    shape: "rect",
+                  });
+                }
+                if (arr.length > 0) out.set(mapKey, arr);
+              }
+            }
+            return out;
+          })()}
         />
       </div>
     </TooltipProvider>
