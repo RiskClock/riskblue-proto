@@ -7249,7 +7249,7 @@ function DrawingPageBlock({
             {fileName} · Page {pageIdx}
           </div>
         )}
-        <Button size="sm" variant="outline" onClick={handleDownload} disabled={downloading || !inView}>
+        <Button size="sm" variant="outline" onClick={handleDownload} disabled={downloading}>
           {downloading ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
           ) : (
