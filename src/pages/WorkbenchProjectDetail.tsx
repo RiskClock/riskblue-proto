@@ -258,6 +258,53 @@ function formatSpaceBadge(spaces: string[]): string {
   return formatLevelSetLabel(spaces);
 }
 
+/**
+ * Consolidate a list of level labels into consecutive ranges.
+ * Groups by alphabetic prefix; within a prefix, contiguous integers collapse to
+ * "P01–P10". Labels without a `<letters><digits>` shape (e.g. "Roof") pass
+ * through unchanged. Preserves the original zero-padding per group.
+ * Output order: numeric groups sorted ascending by first value, then
+ * unmatched labels in their original order.
+ */
+function consolidateLevelLabels(labels: string[]): string[] {
+  const groups = new Map<string, { num: number; pad: number; raw: string }[]>();
+  const passthrough: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of labels) {
+    if (seen.has(raw)) continue;
+    seen.add(raw);
+    const m = /^([A-Za-z]+)(\d+)$/.exec(raw.trim());
+    if (!m) {
+      passthrough.push(raw);
+      continue;
+    }
+    const prefix = m[1];
+    const arr = groups.get(prefix) ?? [];
+    arr.push({ num: parseInt(m[2], 10), pad: m[2].length, raw });
+    groups.set(prefix, arr);
+  }
+  const out: { sortKey: number; label: string }[] = [];
+  for (const [prefix, items] of groups) {
+    items.sort((a, b) => a.num - b.num);
+    let i = 0;
+    while (i < items.length) {
+      let j = i;
+      while (j + 1 < items.length && items[j + 1].num === items[j].num + 1) j++;
+      const start = items[i];
+      const end = items[j];
+      const fmt = (n: number, pad: number) => String(n).padStart(pad, "0");
+      const label =
+        i === j
+          ? start.raw
+          : `${prefix}${fmt(start.num, start.pad)}–${prefix}${fmt(end.num, end.pad)}`;
+      out.push({ sortKey: start.num, label });
+      i = j + 1;
+    }
+  }
+  out.sort((a, b) => a.sortKey - b.sortKey);
+  return [...out.map((o) => o.label), ...passthrough];
+}
+
 function formatDuration(ms: number): string {
   if (!Number.isFinite(ms) || ms <= 0) return "-";
   if (ms < 1000) return `${Math.round(ms)}ms`;
