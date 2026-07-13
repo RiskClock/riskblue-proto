@@ -2440,6 +2440,19 @@ export default function WorkbenchProjectDetail() {
     };
   }, [activeFile]);
 
+  const activeSheetDownloadSource = useMemo<DocumentSourceDescriptor | null>(() => {
+    if (!activeSheet) return null;
+    const parent = fileGroups.find((g) => g.file.id === activeSheet.parent_file_id)?.file;
+    if (!parent?.storage_path) return null;
+    return {
+      kind: "supabase-storage",
+      bucket: bucketForSource(parent.source_type),
+      path: parent.storage_path,
+      mimeType: parent.mime_type || "application/pdf",
+      version: parent.size_bytes ?? undefined,
+    };
+  }, [activeSheet, fileGroups]);
+
   // --- Pipeline actions -----------------------------------------------------
   const runPipeline = async (
     phase: "extract" | "triage" | "analyze",
@@ -4291,6 +4304,8 @@ export default function WorkbenchProjectDetail() {
             accessToken=""
             detections={[]}
             sourceOverride={sheetSource}
+            downloadSourceOverride={activeSheetDownloadSource ?? sheetSource}
+            downloadPageOverride={activeSheet.page_index}
             analysisRequestId={requestId}
             parentFileId={activeSheet.parent_file_id}
             sheetId={activeSheet.id}
@@ -4359,6 +4374,7 @@ export default function WorkbenchProjectDetail() {
             accessToken=""
             detections={[]}
             sourceOverride={activePageViewSource}
+            downloadPageOverride={activePageView.page}
             analysisRequestId={requestId}
             parentFileId={activePageView.file.id}
             sheetId={activeSheetIdForPage}

@@ -80,10 +80,13 @@ export async function captureOverlayOnly(
     "data:image/gif;base64,R0lGODlhAQABAAAAACwAAAAAAQABAAA=";
   anchorImg.style.cssText = `display:block;width:${pageSize.width}px;height:${pageSize.height}px;pointer-events:none;`;
   surface.appendChild(anchorImg);
+  const overlayHost = document.createElement("div");
+  overlayHost.style.cssText = "position:absolute;inset:0;pointer-events:none;";
+  surface.appendChild(overlayHost);
   container.appendChild(surface);
   document.body.appendChild(container);
 
-  const root = createRoot(surface);
+  const root = createRoot(overlayHost);
   try {
     root.render(
       createElement(OverlayLayer, {
