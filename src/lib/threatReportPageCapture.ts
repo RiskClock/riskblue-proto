@@ -254,6 +254,12 @@ export interface CapturePageInput {
   targetLongEdgePx?: number;
   /** Wait timeout for viewer readiness. Default 30s. */
   timeoutMs?: number;
+  /**
+   * When true, output a transparent PNG of the overlays only (no PDF raster
+   * underneath). Used by the vector-PDF export path which stamps overlays
+   * onto the original PDF page.
+   */
+  overlaysOnly?: boolean;
 }
 
 export async function capturePageToPng(
@@ -304,7 +310,11 @@ export async function capturePageToPng(
     await new Promise<void>((r) =>
       requestAnimationFrame(() => requestAnimationFrame(() => r())),
     );
-    return await rasterizeViewerSurface(surface, { outScale });
+    return await rasterizeViewerSurface(surface, {
+      outScale,
+      overlaysOnly: input.overlaysOnly,
+    });
+
   } catch (e) {
     console.warn("[threatReportPageCapture] capture failed", e);
     return null;
