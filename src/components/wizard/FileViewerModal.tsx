@@ -1623,6 +1623,19 @@ export const FileViewerModal = ({
           );
         })()}
       </DialogContent>
+
+      <PageDownloadDialog
+        open={downloadDialogOpen}
+        onOpenChange={setDownloadDialogOpen}
+        busy={downloadBusy}
+        setBusy={setDownloadBusy}
+        includeOverlays={downloadIncludeOverlays}
+        setIncludeOverlays={setDownloadIncludeOverlays}
+        source={source}
+        page={currentPage}
+        overlays={overlays}
+        fileName={fileName}
+      />
     </Dialog>
   );
 };
