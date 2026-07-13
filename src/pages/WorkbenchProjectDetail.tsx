@@ -4129,22 +4129,22 @@ export default function WorkbenchProjectDetail() {
                                         {(() => {
                                           if (levelPlans.length === 0) return null;
                                           const c = awpClassColor("Level Floor Plan");
-                                          return levelPlans.map((lvl, i) => {
-                                            const label =
-                                              (lvl.floors && lvl.floors.length > 0
-                                                ? formatLevelSetLabel(lvl.floors)
-                                                : "") || floorPlanDisplayLabel(lvl);
-                                            return (
-                                              <Badge
-                                                key={`lvl-${i}-${lvl.plan_id}`}
-                                                variant="outline"
-                                                className="h-5 px-1.5 text-[10px]"
-                                                style={{ backgroundColor: softBgFrom(c), color: c, borderColor: softBgFrom(c, 0.5) }}
-                                              >
-                                                {label}
-                                              </Badge>
-                                            );
-                                          });
+                                          const labels = levelPlans.map((lvl) =>
+                                            (lvl.floors && lvl.floors.length > 0
+                                              ? formatLevelSetLabel(lvl.floors)
+                                              : "") || floorPlanDisplayLabel(lvl),
+                                          );
+                                          const consolidated = consolidateLevelLabels(labels);
+                                          return consolidated.map((label, i) => (
+                                            <Badge
+                                              key={`lvl-${i}-${label}`}
+                                              variant="outline"
+                                              className="h-5 px-1.5 text-[10px]"
+                                              style={{ backgroundColor: softBgFrom(c), color: c, borderColor: softBgFrom(c, 0.5) }}
+                                            >
+                                              {label}
+                                            </Badge>
+                                          ));
                                         })()}
                                         {unitPlans.length > 0 && (() => {
                                           const c = awpClassColor("Unit Floor Plan");
