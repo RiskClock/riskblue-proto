@@ -15,16 +15,15 @@
 // project member; the frontend then calls `download-threat-report` to mint a
 // fresh 5-minute signed URL.
 
-import * as pdfjsLib from "pdfjs-dist";
-import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { supabase } from "@/integrations/supabase/client";
-import { resolveDocumentSource } from "@/components/viewer";
 import { readableTextOn } from "@/lib/awpColor";
 import riskblueLogoUrl from "@/assets/logo-riskblue.png";
+import { capturePageToPng } from "@/lib/threatReportPageCapture";
 
-if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
-}
+// `readableTextOn` is re-exported so incidental callers keep resolving; it
+// is not used directly in this module anymore.
+void readableTextOn;
+
 
 
 export interface ThreatReportPageRef {
