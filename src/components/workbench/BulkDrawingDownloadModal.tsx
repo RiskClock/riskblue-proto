@@ -147,7 +147,13 @@ export function BulkDrawingDownloadModal({
           .eq("analysis_request_id", analysisRequestId);
         if (error) throw error;
         for (const row of (data as any[]) || []) {
-          const key = `${row.file_id}::${row.page_index}`;
+          // Skip internal unit-plan indicator rows — those are already
+          // rendered as Detail-N bounding boxes via extraOverlaysByFilePage.
+          if (row.awp_class_name === "__unit_marker__") continue;
+          // drawing_instances.page_index is stored 1-based (matches display
+          // "p.N"). Bulk export keys pages 0-based (p-1), so normalize here.
+          const pageIdx0 = Math.max(0, (Number(row.page_index) || 1) - 1);
+          const key = `${row.file_id}::${pageIdx0}`;
           const arr = overlaysByFilePage.get(key) ?? [];
           const label =
             row.instance_number != null
@@ -157,7 +163,7 @@ export function BulkDrawingDownloadModal({
             id: String(row.id),
             bbox: [Number(row.nx) || 0, Number(row.ny) || 0, 0, 0],
             coordSpace: "normalized",
-            page: (row.page_index as number) + 1,
+            page: pageIdx0 + 1,
             color: awpClassColor(row.awp_class_name),
             label,
             shape: "circle",
