@@ -98,6 +98,7 @@ export async function captureOverlayOnly(
       createElement(OverlayLayer, {
         overlays: normalized,
         pageSize,
+        exportScale,
       } as any),
     );
 
