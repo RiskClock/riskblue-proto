@@ -69,6 +69,7 @@ export function BulkDrawingDownloadModal({
   files,
   analysisRequestId,
   projectName,
+  extraOverlaysByFilePage,
 }: BulkDrawingDownloadModalProps) {
   const { toast } = useToast();
   const [selected, setSelected] = useState<Set<string>>(new Set());
