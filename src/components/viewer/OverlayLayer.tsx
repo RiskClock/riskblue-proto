@@ -729,7 +729,7 @@ export const OverlayLayer = ({
               x2={x2}
               y2={y2}
               stroke={p.color}
-              strokeWidth={1.5}
+              strokeWidth={1.5 * exportScale}
               opacity={LABEL_OPACITY}
             />
           );
