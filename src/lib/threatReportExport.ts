@@ -293,11 +293,11 @@ export async function runThreatReportExport(
           mimeType: "application/pdf",
           version: pr.sizeBytes ?? undefined,
         });
-        if (!resolved.pdfBlob) {
+        if (!resolved.blob || !resolved.mime.toLowerCase().includes("pdf")) {
           renderedByKey.set(key, null);
         } else {
           const rendered = await renderPageWithOverlays(
-            resolved.pdfBlob,
+            resolved.blob,
             pr.pageIdx,
             pr.overlays,
             1800,
