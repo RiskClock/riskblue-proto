@@ -5046,6 +5046,37 @@ export default function WorkbenchProjectDetail() {
             sizeBytes: g.file.size_bytes ?? null,
             knownPageCount: g.sheets.length || undefined,
           }))}
+          extraOverlaysByFilePage={(() => {
+            // Detail-N (unit floor plan) bounding boxes only, keyed by
+            // `${fileId}::${pageIndex0}` so the bulk PDF export can stamp
+            // them alongside circle annotations.
+            const out = new Map<string, any[]>();
+            for (const g of fileGroups) {
+              for (const [key, unitPlans] of pageUnitPlansMap.entries()) {
+                const sep = key.lastIndexOf("::");
+                if (sep < 0) continue;
+                const fName = key.slice(0, sep);
+                const pageNum = Number(key.slice(sep + 2));
+                if (fName !== g.file.name || !Number.isFinite(pageNum)) continue;
+                const mapKey = `${g.file.id}::${pageNum - 1}`;
+                const arr = out.get(mapKey) ?? [];
+                for (const up of unitPlans) {
+                  if (!up.bbox) continue;
+                  const [bx, by, bw, bh] = up.bbox;
+                  arr.push({
+                    id: `unit-bbox-${g.file.id}-${pageNum}-${up.unitLabel}`,
+                    bbox: [bx / 100, by / 100, bw / 100, bh / 100],
+                    coordSpace: "normalized",
+                    color: awpClassColor("Unit Floor Plan"),
+                    label: up.unitLabel,
+                    shape: "rect",
+                  });
+                }
+                if (arr.length > 0) out.set(mapKey, arr);
+              }
+            }
+            return out;
+          })()}
         />
       </div>
     </TooltipProvider>
@@ -7170,23 +7201,36 @@ function DrawingPageBlock({
   }, [inView]);
 
   const handleDownload = async () => {
-    const el = surfaceRef.current;
-    if (!el) return;
     setDownloading(true);
     try {
-      const { rasterizeViewerSurface } = await import("@/lib/threatReportPageCapture");
-      const { blob } = await rasterizeViewerSurface(el, { outScale: 2 });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      const safeName = `${fileName.replace(/\.[^.]+$/, "")}_page${pageIdx}.png`;
-      link.download = safeName;
-      link.href = url;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const { resolveDocumentSource } = await import(
+        "@/components/viewer/hooks/useDocumentSource"
+      );
+      const { buildAnnotatedPdf, triggerPdfDownload } = await import(
+        "@/lib/pdfPageOverlayExport"
+      );
+      const { blob, mime } = await resolveDocumentSource(source);
+      if (!mime.toLowerCase().includes("pdf")) {
+        throw new Error("Only PDF drawings can be downloaded.");
+      }
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      const merged = await buildAnnotatedPdf(
+        [
+          {
+            fileName,
+            sourceBytes: bytes,
+            source,
+            pages: [{ page: page ?? 1, overlays }],
+          },
+        ],
+        { includeOverlays: true },
+      );
+      const safeName = `${fileName.replace(/\.[^.]+$/, "")}_page${pageIdx}.pdf`;
+      triggerPdfDownload(merged, safeName);
     } catch (err) {
       toast({
         title: "Download failed",
-        description: (err as any)?.message ?? "Could not capture drawing.",
+        description: (err as any)?.message ?? "Could not export drawing.",
         variant: "destructive",
       });
     } finally {
@@ -7205,7 +7249,7 @@ function DrawingPageBlock({
             {fileName} · Page {pageIdx}
           </div>
         )}
-        <Button size="sm" variant="outline" onClick={handleDownload} disabled={downloading || !inView}>
+        <Button size="sm" variant="outline" onClick={handleDownload} disabled={downloading}>
           {downloading ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
           ) : (
