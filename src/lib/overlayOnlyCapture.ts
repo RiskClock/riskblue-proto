@@ -34,22 +34,20 @@ export interface OverlayOnlyCaptureInput {
   outScale?: number;
 }
 
-function normalizeOverlays(
-  overlays: any[],
-  pageSize: { width: number; height: number },
-): NormalizedOverlay[] {
+function normalizeOverlays(overlays: any[]): NormalizedOverlay[] {
   const out: NormalizedOverlay[] = [];
   for (const o of overlays) {
-    const rect = toNormalizedRect(o, pageSize);
+    const rect = toNormalizedRect(o as OverlayInput);
     if (!rect) continue;
     out.push({
       id: String(o.id),
+      page: o.page ?? 1,
       rect,
       color: o.color,
       label: o.label,
       shape: (o.shape as any) ?? "circle",
       variant: o.variant,
-    } as any);
+    });
   }
   return out;
 }
