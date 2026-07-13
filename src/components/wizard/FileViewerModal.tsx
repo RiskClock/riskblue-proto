@@ -276,6 +276,9 @@ export const FileViewerModal = ({
     width: number;
     height: number;
   } | null>(null);
+  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
+  const [downloadIncludeOverlays, setDownloadIncludeOverlays] = useState(true);
+  const [downloadBusy, setDownloadBusy] = useState(false);
 
   // Keep currentPage in sync with the requested pageIndex when the modal opens
   // or when the parent changes the target page.
