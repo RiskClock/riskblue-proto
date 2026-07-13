@@ -144,6 +144,34 @@ export async function rasterizeViewerSurface(
     ctx.restore();
   });
 
+  // Rectangles (Detail-N floor-plan bboxes). Match OverlayLayer's border-only
+  // style: 50%-alpha stroke at the recorded border width.
+  const rects = surfaceEl.querySelectorAll<HTMLDivElement>(
+    '[data-export-kind="rect"]',
+  );
+  rects.forEach((div) => {
+    const r = div.getBoundingClientRect();
+    const tl = toLocal(r.left, r.top);
+    const w = r.width * outScale;
+    const h = r.height * outScale;
+    const color = div.getAttribute("data-color") || "#dc2626";
+    const borderPx = Number(div.getAttribute("data-border-px") || "2") * outScale;
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = borderPx;
+    // Stroke inset by half the line width so the visible edge aligns with the
+    // CSS box-sizing:border-box rect (which draws the border inside the box).
+    ctx.strokeRect(
+      tl.x + borderPx / 2,
+      tl.y + borderPx / 2,
+      Math.max(0, w - borderPx),
+      Math.max(0, h - borderPx),
+    );
+    ctx.restore();
+  });
+
+
   // Labels (pill + text) — draw fully opaque on an offscreen canvas, then
   // composite at the configured opacity to match CSS group-opacity.
   const labels = surfaceEl.querySelectorAll<HTMLDivElement>(
