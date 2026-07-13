@@ -62,6 +62,7 @@ export async function captureOverlayOnly(
 ): Promise<RasterizedPage | null> {
   const { pageSize } = input;
   const outScale = input.outScale ?? 2;
+  const exportScale = input.exportScale ?? EXPORT_OVERLAY_SCALE;
   const normalized = normalizeOverlays(input.overlays);
 
   const container = document.createElement("div");
