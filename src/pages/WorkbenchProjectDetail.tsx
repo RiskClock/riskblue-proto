@@ -7201,23 +7201,36 @@ function DrawingPageBlock({
   }, [inView]);
 
   const handleDownload = async () => {
-    const el = surfaceRef.current;
-    if (!el) return;
     setDownloading(true);
     try {
-      const { rasterizeViewerSurface } = await import("@/lib/threatReportPageCapture");
-      const { blob } = await rasterizeViewerSurface(el, { outScale: 2 });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      const safeName = `${fileName.replace(/\.[^.]+$/, "")}_page${pageIdx}.png`;
-      link.download = safeName;
-      link.href = url;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const { resolveDocumentSource } = await import(
+        "@/components/viewer/hooks/useDocumentSource"
+      );
+      const { buildAnnotatedPdf, triggerPdfDownload } = await import(
+        "@/lib/pdfPageOverlayExport"
+      );
+      const { blob, mime } = await resolveDocumentSource(source);
+      if (!mime.toLowerCase().includes("pdf")) {
+        throw new Error("Only PDF drawings can be downloaded.");
+      }
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      const merged = await buildAnnotatedPdf(
+        [
+          {
+            fileName,
+            sourceBytes: bytes,
+            source,
+            pages: [{ page: page ?? 1, overlays }],
+          },
+        ],
+        { includeOverlays: true },
+      );
+      const safeName = `${fileName.replace(/\.[^.]+$/, "")}_page${pageIdx}.pdf`;
+      triggerPdfDownload(merged, safeName);
     } catch (err) {
       toast({
         title: "Download failed",
-        description: (err as any)?.message ?? "Could not capture drawing.",
+        description: (err as any)?.message ?? "Could not export drawing.",
         variant: "destructive",
       });
     } finally {
