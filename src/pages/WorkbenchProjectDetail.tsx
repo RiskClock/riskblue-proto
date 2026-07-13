@@ -3877,16 +3877,16 @@ export default function WorkbenchProjectDetail() {
                               <TooltipTrigger asChild>
                                 <button
                                   type="button"
-                                  onClick={handleDownloadAllFiles}
-                                  disabled={downloadingAll || pageInfoRows.length === 0}
+                                  onClick={() => setBulkDownloadOpen(true)}
+                                  disabled={pageInfoRows.length === 0}
                                   className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                  aria-label="Download all files"
+                                  aria-label="Download drawings"
                                 >
-                                  <Download className={`h-3.5 w-3.5 ${downloadingAll ? "animate-pulse" : ""}`} />
+                                  <Download className="h-3.5 w-3.5" />
                                 </button>
                               </TooltipTrigger>
                               <TooltipContent side="bottom">
-                                {downloadingAll ? "Preparing ZIP…" : "Download all files (ZIP)"}
+                                Download drawings (PDF)
                               </TooltipContent>
                             </Tooltip>
                           </div>
