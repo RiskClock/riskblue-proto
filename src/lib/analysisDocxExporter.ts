@@ -262,7 +262,7 @@ async function findSourceFile(
   awpClassName: string,
   instanceId: string,
   files: Array<{ id: string; name: string; storage_path: string | null; size_bytes?: number | null }>
-): Promise<{ fileName: string; storagePath: string | null; sizeBytes: number | null }> {
+): Promise<{ fileId: string | null; fileName: string; storagePath: string | null; sizeBytes: number | null }> {
   const { data: results } = await supabase
     .from("analysis_results")
     .select("file_id, result_text")
@@ -274,14 +274,20 @@ async function findSourceFile(
     for (const r of results) {
       if (r.result_text && r.result_text.includes(instanceId)) {
         const file = files.find((f) => f.id === r.file_id);
-        if (file) return { fileName: file.name, storagePath: file.storage_path, sizeBytes: file.size_bytes ?? null };
+        if (file) return { fileId: file.id, fileName: file.name, storagePath: file.storage_path, sizeBytes: file.size_bytes ?? null };
       }
     }
   }
   if (files.length > 0) {
-    return { fileName: files[0].name, storagePath: files[0].storage_path, sizeBytes: files[0].size_bytes ?? null };
+    return { fileId: files[0].id, fileName: files[0].name, storagePath: files[0].storage_path, sizeBytes: files[0].size_bytes ?? null };
   }
-  return { fileName: "Unknown", storagePath: null, sizeBytes: null };
+  return { fileId: null, fileName: "Unknown", storagePath: null, sizeBytes: null };
+}
+
+type RotationDeg = 0 | 90 | 180 | 270;
+function normalizeRotation(v: unknown): RotationDeg {
+  const n = ((Number(v) || 0) % 360 + 360) % 360;
+  return (n === 90 || n === 180 || n === 270 ? n : 0) as RotationDeg;
 }
 
 // ---------------------------------------------------------------------------
