@@ -474,9 +474,14 @@ function optimizePlacements(
   const seedShort = candidatesPerLabel.map(
     (cands) => cands.reduce((best, c) => (c.leader < best.leader ? c : best), cands[0]),
   );
+  const startedAt = Date.now();
+  const timeBudgetMs = 1500;
   let best = runOnce(seedShort);
 
-  for (let r = 0; r < 3; r++) {
+  const N = candidatesPerLabel.length;
+  const extraSeeds = N > 60 ? 0 : N > 30 ? 1 : 3;
+  for (let r = 0; r < extraSeeds; r++) {
+    if (Date.now() - startedAt > timeBudgetMs) break;
     const seed = candidatesPerLabel.map(
       (cands) => cands[Math.floor(rand() * cands.length)],
     );
