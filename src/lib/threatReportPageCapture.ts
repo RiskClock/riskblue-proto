@@ -32,6 +32,14 @@ export interface RasterizeOptions {
    * export path (overlays are stamped onto the original PDF page).
    */
   overlaysOnly?: boolean;
+  /**
+   * Optional CCW rotation (degrees) applied to each label pill around its
+   * own center when rasterizing. Circles/rects/leaders are drawn normally.
+   * Used by the vector-PDF export when the page is baked with a user
+   * rotation so the labels stay upright after the PDF viewer rotates the
+   * whole page.
+   */
+  labelCounterRotationDeg?: number;
 }
 
 export interface RasterizedPage {
@@ -247,7 +255,16 @@ export async function rasterizeViewerSurface(
 
     ctx.save();
     ctx.globalAlpha = opacity;
-    ctx.drawImage(off, tl.x, tl.y);
+    const labelRot = opts.labelCounterRotationDeg ?? 0;
+    if (labelRot) {
+      const cx = tl.x + w / 2;
+      const cy = tl.y + h / 2;
+      ctx.translate(cx, cy);
+      ctx.rotate((labelRot * Math.PI) / 180);
+      ctx.drawImage(off, -w / 2, -h / 2);
+    } else {
+      ctx.drawImage(off, tl.x, tl.y);
+    }
     ctx.restore();
   });
 

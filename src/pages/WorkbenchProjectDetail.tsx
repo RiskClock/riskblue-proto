@@ -7359,62 +7359,30 @@ function DrawingPageBlock({
   const handleDownload = async () => {
     setDownloading(true);
     try {
-      const safeName = `${fileName.replace(/\.[^.]+$/, "")}_page${pageIdx}.pdf`;
-
-      if (rotation === 0) {
-        // No user rotation — keep the crisp vector export path.
-        const { resolveDocumentSource } = await import(
-          "@/components/viewer/hooks/useDocumentSource"
-        );
-        const { buildAnnotatedPdf, triggerPdfDownload } = await import(
-          "@/lib/pdfPageOverlayExport"
-        );
-        const { blob, mime } = await resolveDocumentSource(source);
-        if (!mime.toLowerCase().includes("pdf")) {
-          throw new Error("Only PDF drawings can be downloaded.");
-        }
-        const bytes = new Uint8Array(await blob.arrayBuffer());
-        const merged = await buildAnnotatedPdf(
-          [
-            {
-              fileName,
-              sourceBytes: bytes,
-              source,
-              pages: [{ page: page ?? 1, overlays }],
-            },
-          ],
-          { includeOverlays: true },
-        );
-        triggerPdfDownload(merged, safeName);
-      } else {
-        // Rotated pages: rasterize the viewer output (page + upright labels)
-        // and wrap the PNG in a PDF sized to the image. This matches the in-app
-        // preview exactly — including horizontally-oriented annotation labels
-        // that must not rotate with the underlying page.
-        const { capturePageToPng } = await import("@/lib/threatReportPageCapture");
-        const { PDFDocument } = await import("pdf-lib");
-        const { triggerPdfDownload } = await import("@/lib/pdfPageOverlayExport");
-        const captured = await capturePageToPng({
-          source,
-          page: page ?? 1,
-          overlays,
-          rotation,
-          targetLongEdgePx: 2400,
-        });
-        if (!captured) throw new Error("Could not render the drawing preview.");
-        const doc = await PDFDocument.create();
-        const pngBytes = new Uint8Array(await captured.blob.arrayBuffer());
-        const png = await doc.embedPng(pngBytes);
-        const newPage = doc.addPage([captured.width, captured.height]);
-        newPage.drawImage(png, {
-          x: 0,
-          y: 0,
-          width: captured.width,
-          height: captured.height,
-        });
-        const bytes = await doc.save();
-        triggerPdfDownload(bytes, safeName);
+      const { resolveDocumentSource } = await import(
+        "@/components/viewer/hooks/useDocumentSource"
+      );
+      const { buildAnnotatedPdf, triggerPdfDownload } = await import(
+        "@/lib/pdfPageOverlayExport"
+      );
+      const { blob, mime } = await resolveDocumentSource(source);
+      if (!mime.toLowerCase().includes("pdf")) {
+        throw new Error("Only PDF drawings can be downloaded.");
       }
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      const merged = await buildAnnotatedPdf(
+        [
+          {
+            fileName,
+            sourceBytes: bytes,
+            source,
+            pages: [{ page: page ?? 1, overlays, userRotation: rotation }],
+          },
+        ],
+        { includeOverlays: true },
+      );
+      const safeName = `${fileName.replace(/\.[^.]+$/, "")}_page${pageIdx}.pdf`;
+      triggerPdfDownload(merged, safeName);
     } catch (err) {
       toast({
         title: "Download failed",
