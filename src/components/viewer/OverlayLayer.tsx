@@ -346,11 +346,6 @@ export const OverlayLayer = ({
   }, [overlays, pageSize.width, pageSize.height, defaultColor]);
 
 
-  const rectFootprints: RectInfo[] = useMemo(
-    () => rects.map((r) => ({ x: r.x, y: r.y, w: r.w, h: r.h })),
-    [rects],
-  );
-
   const fontPx = LABEL_FONT_PX * exportScale;
   const padX = LABEL_PAD_X * exportScale;
   const labelH = LABEL_H * exportScale;
@@ -359,7 +354,7 @@ export const OverlayLayer = ({
   // edge don't visually spill past their computed rect.
   const charPx = fontPx * 0.72;
 
-  // Layout keys omit hover/drag state so the placement optimizer doesn't
+  // Layout keys omit hover/drag state so the placement worker doesn't
   // recompute (and reshuffle labels) on every hover or pan.
   const circleLayoutKey = useMemo(
     () =>
@@ -376,144 +371,57 @@ export const OverlayLayer = ({
     [rects],
   );
 
-
-  // The label-placement optimizer is O(candidates * obstacles) and dominates
-  // mount time for pages with dozens of annotations. Extract the whole pass
-  // into a plain function so we can invoke it either synchronously (export
-  // capture) or deferred to a microtask (interactive viewer) without
-  // blocking paint.
-  const runPlacement = (): PlacedLabel[] => {
-    const labeledCircles = circles.filter((c) => !!c.label);
-    const labeledRects = rects.filter((r) => !!r.label);
-    if (labeledCircles.length === 0 && labeledRects.length === 0) return [];
-
-    // Deterministic seed so identical inputs yield identical layouts (no
-    // reshuffling as the user pans/zooms or hovers).
-    const seedKey = [
-      Math.round(pageSize.width),
-      Math.round(pageSize.height),
-      labeledCircles.length,
-      labeledRects.length,
-      ...labeledCircles.slice(0, 24).map((c) => `${c.id}:${Math.round(c.cx)}:${Math.round(c.cy)}`),
-      ...labeledRects.slice(0, 24).map((r) => `${r.id}:${Math.round(r.x)}:${Math.round(r.y)}`),
-    ].join("|");
-    let h = 2166136261;
-    for (let i = 0; i < seedKey.length; i++) {
-      h ^= seedKey.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    const rand = mulberry32(h);
-
-    // ---- Pass 1: place bbox (rect) labels first, treating them as fixed
-    // obstacles for the circle-label pass.
-    const lineH = Math.round(fontPx * 1.25);
-    const heightFor = (text: string) => {
-      const lines = text.split("\n").length;
-      return lines <= 1 ? labelH : labelH + (lines - 1) * lineH;
-    };
-    const widthFor = (text: string) => {
-      const longest = text.split("\n").reduce((m, s) => Math.max(m, s.length), 0);
-      return Math.ceil(longest * charPx) + padX * 2 + 4;
-    };
-
-    const rectItems = labeledRects.map((r) => ({
-      id: r.id,
-      color: r.color,
-      text: r.label!,
-      anchor: { cx: r.x, cy: r.y } as Anchor,
-      width: widthFor(r.label!),
-      height: heightFor(r.label!),
-    }));
-    const rectCands: LabelCandidate[][] = rectItems.map((it, i) =>
-      generateRectCandidates(labeledRects[i], it.width, it.height, gap, pageSize),
-    );
-    const rectAnchors = rectItems.map((it) => it.anchor);
-    const rectOwners = rectItems.map(() => null as string | null);
-    const rectPositions =
-      rectItems.length > 0
-        ? optimizePlacements(rectCands, [], rectFootprints, rectAnchors, rectOwners, rand)
-        : [];
-
-    // ---- Pass 2: place circle labels, with rect footprints AND the just-
-    // placed rect labels as fixed obstacles.
-    const circleItems = labeledCircles.map((c) => ({
-      id: c.id,
-      color: c.color,
-      text: c.label!,
-      anchor: { cx: c.cx, cy: c.cy } as Anchor,
-      width: widthFor(c.label!),
-      height: heightFor(c.label!),
-    }));
-    const circleCands: LabelCandidate[][] = circleItems.map((it, i) =>
-      generateCircleCandidates(labeledCircles[i], it.width, it.height, gap, pageSize),
-    );
-    const circleAnchors = circleItems.map((it) => it.anchor);
-    const circleOwners = circleItems.map((it) => it.id);
-    const rectObstaclesForCircles: RectInfo[] = [
-      ...rectFootprints,
-      ...rectPositions.map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h })),
-    ];
-    const circlePositions =
-      circleItems.length > 0
-        ? optimizePlacements(circleCands, circles, rectObstaclesForCircles, circleAnchors, circleOwners, rand)
-        : [];
-
-    const out: PlacedLabel[] = [];
-    for (let i = 0; i < circleItems.length; i++) {
-      out.push({
-        ...circlePositions[i],
-        id: circleItems[i].id,
-        color: circleItems[i].color,
-        text: circleItems[i].text,
-        kind: "circle",
-      });
-    }
-    for (let i = 0; i < rectItems.length; i++) {
-      out.push({
-        ...rectPositions[i],
-        id: rectItems[i].id,
-        color: rectItems[i].color,
-        text: rectItems[i].text,
-        kind: "rect",
-      });
-    }
-    return out;
-  };
+  // Build a stable input snapshot for the placement pass. Referenced by both
+  // the sync (export) branch and the async worker branch below.
+  const buildPlacementInput = () => ({
+    pageSize,
+    circles: circles.map((c) => ({
+      id: c.id, cx: c.cx, cy: c.cy, r: c.r, color: c.color,
+      label: c.label, isDot: c.isDot,
+    })),
+    rects: rects.map((r) => ({
+      id: r.id, x: r.x, y: r.y, w: r.w, h: r.h, color: r.color, label: r.label,
+    })),
+    fontPx, padX, labelH, gap, charPx,
+  });
 
   // Synchronous branch — used by offscreen export capture, which rasterizes
-  // on the next animation frame and can't wait for a deferred setState.
+  // on the next animation frame and can't wait for a worker roundtrip.
   const syncPlaced = useMemo(
-    () => (syncPlacement ? runPlacement() : null),
+    () => (syncPlacement ? runPlacement(buildPlacementInput()) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [syncPlacement, circleLayoutKey, rectLayoutKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx],
   );
 
-  // Async branch — defers the heavy optimizer pass out of the render tick so
-  // opening a viewer with many annotations doesn't block paint.
+  // Async branch — pushes the heavy optimizer pass into a Web Worker so
+  // opening a viewer with many annotations doesn't block paint or input.
   const [asyncPlaced, setAsyncPlaced] = useState<PlacedLabel[]>([]);
   useEffect(() => {
     if (syncPlacement) return;
     const hasLabels =
-      circles.some((c) => !!c.label) || rects.some((r) => !!r.label);
+      circles.some((c) => !!c.label && !c.isDot) || rects.some((r) => !!r.label);
     if (!hasLabels) {
       setAsyncPlaced([]);
       onPlacingChangeRef.current?.(false);
       return;
     }
     onPlacingChangeRef.current?.(true);
-    let cancelled = false;
-    const handle = setTimeout(() => {
-      if (cancelled) return;
-      const result = runPlacement();
-      setAsyncPlaced(result);
-      onPlacingChangeRef.current?.(false);
-    }, 0);
-    return () => {
-      cancelled = true;
-      clearTimeout(handle);
-    };
+    const ticket = requestPlacement(
+      buildPlacementInput(),
+      (placed) => {
+        setAsyncPlaced(placed);
+        onPlacingChangeRef.current?.(false);
+      },
+      (err) => {
+        // eslint-disable-next-line no-console
+        console.warn("[OverlayLayer] placement failed", err);
+        onPlacingChangeRef.current?.(false);
+      },
+    );
+    return () => ticket.cancel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncPlacement, circleLayoutKey, rectLayoutKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx]);
+
 
   // On unmount, ensure the parent's "placing" flag doesn't stay stuck on.
   useEffect(() => {
