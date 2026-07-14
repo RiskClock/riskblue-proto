@@ -5077,7 +5077,11 @@ export default function WorkbenchProjectDetail() {
             bucket: bucketForSource(g.file.source_type),
             mimeType: g.file.mime_type,
             sizeBytes: g.file.size_bytes ?? null,
-            knownPageCount: g.sheets.length || undefined,
+            // Intentionally omit knownPageCount: g.sheets.length only counts
+            // analyzed (triaged) pages, which caps the export short of the
+            // full source PDF. The modal computes the true page count via
+            // readPdfPageCount(bytes) so every source page is included.
+
           }))}
           classPrefixByName={(() => {
             const m = new Map<string, string | null>();
