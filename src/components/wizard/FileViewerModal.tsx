@@ -286,6 +286,14 @@ export const FileViewerModal = ({
   const [downloadIncludeOverlays, setDownloadIncludeOverlays] = useState(true);
   const [downloadBusy, setDownloadBusy] = useState(false);
 
+  // Tracks whether OverlayLayer's label-placement optimizer is currently
+  // running. Placement is deferred to a microtask on the interactive
+  // viewer (see OverlayLayer.syncPlacement), so pages with many annotations
+  // no longer block paint — but until it finishes, the side-panel lists can
+  // read stale data if the user starts renaming/deleting. Show a spinner +
+  // skim over the panels and disable pointer events while it's true.
+  const [isPlacingLabels, setIsPlacingLabels] = useState(false);
+
   // Per-page rotation persisted on analysis_request_files.page_rotations
   const [rotationByPage, setRotationByPage] = useState<Record<number, 0 | 90 | 180 | 270>>({});
   const rotationLatestRef = useRef<Record<number, 0 | 90 | 180 | 270>>({});
