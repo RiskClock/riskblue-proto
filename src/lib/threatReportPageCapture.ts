@@ -321,10 +321,12 @@ export async function capturePageToPng(
         source: input.source,
         page: input.page,
         overlays: input.overlays,
+        rotation: input.rotation ?? 0,
         showToolbar: false,
         interactive: false,
       }),
     );
+
 
     const ready = await waitForViewerReady(surface, input.timeoutMs ?? 30000);
     if (!ready) return null;
