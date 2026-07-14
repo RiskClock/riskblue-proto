@@ -97,6 +97,8 @@ export interface DrawingViewerProps {
   rotation?: RotationDeg;
   /** Optional rotate button in the toolbar. */
   onRotate?: () => void;
+  /** When true, suppress the purple glow indicator (used in report previews). */
+  hideRotationIndicator?: boolean;
 }
 
 
