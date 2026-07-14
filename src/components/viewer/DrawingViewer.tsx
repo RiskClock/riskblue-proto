@@ -576,6 +576,17 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
               </div>
             </div>
           )}
+          {rotation !== 0 && (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 z-20"
+              style={{
+                boxShadow:
+                  "inset 0 0 0 2px #6C3BAA, inset 0 0 18px 0 rgba(108,59,170,0.55)",
+                borderRadius: "inherit",
+              }}
+            />
+          )}
           {showToolbar && toolbarSlot === "top" && (
             <div className="absolute bottom-3 left-3 z-30 flex items-center gap-2 rounded-lg border bg-background/95 backdrop-blur px-2 py-1.5 shadow-md">
               <ViewerToolbar
