@@ -255,7 +255,16 @@ export async function rasterizeViewerSurface(
 
     ctx.save();
     ctx.globalAlpha = opacity;
-    ctx.drawImage(off, tl.x, tl.y);
+    const labelRot = opts.labelCounterRotationDeg ?? 0;
+    if (labelRot) {
+      const cx = tl.x + w / 2;
+      const cy = tl.y + h / 2;
+      ctx.translate(cx, cy);
+      ctx.rotate((labelRot * Math.PI) / 180);
+      ctx.drawImage(off, -w / 2, -h / 2);
+    } else {
+      ctx.drawImage(off, tl.x, tl.y);
+    }
     ctx.restore();
   });
 
