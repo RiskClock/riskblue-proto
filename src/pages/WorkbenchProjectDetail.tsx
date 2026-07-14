@@ -141,12 +141,19 @@ function materializeFloorPlan(
   plan: ParsedFloorPlan,
   overrides: Record<string, any> | null | undefined,
 ): ParsedFloorPlan {
+  const rawName = overrides?.[plan.plan_id]?.name;
+  const overrideName =
+    typeof rawName === "string" && rawName.trim() ? rawName.trim() : null;
   return {
     ...plan,
     type: getEffectiveType(plan, overrides),
     reference_id: getEffectiveLabel(plan, overrides) || plan.reference_id,
     xy_width_height_pct: getEffectiveBbox(plan, overrides),
-  };
+    // Non-standard passthrough so the Pages-by-File list can prefer the
+    // user-typed rename over Scout's floors[] label without re-fetching
+    // overrides at render time.
+    ...(overrideName ? { __overrideName: overrideName } : {}),
+  } as ParsedFloorPlan;
 }
 
 function overrideOnlyFloorPlans(
