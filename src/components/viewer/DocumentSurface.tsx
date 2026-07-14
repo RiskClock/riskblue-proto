@@ -37,6 +37,10 @@ interface DocumentSurfaceProps {
    * in already rotated by the caller.
    */
   rotation?: 0 | 90 | 180 | 270;
+  /** Forwarded to OverlayLayer.syncPlacement. */
+  syncPlacement?: boolean;
+  /** Forwarded to OverlayLayer.onPlacingChange. */
+  onPlacingChange?: (isPlacing: boolean) => void;
 }
 
 
