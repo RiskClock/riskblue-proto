@@ -672,9 +672,13 @@ export async function generateAnalysisDocx(
   report({ stage: "loading", percent: 6, detail: "Loading export data…" });
   const { data: filesData } = await supabase
     .from("analysis_request_files")
-    .select("id, name, storage_path, size_bytes")
+    .select("id, name, storage_path, size_bytes, page_rotations")
     .eq("analysis_request_id", requestId);
   const files = filesData || [];
+  const rotationsByFileId = new Map<string, Record<string, number>>();
+  for (const f of files) {
+    rotationsByFileId.set(f.id, ((f as any).page_rotations ?? {}) as Record<string, number>);
+  }
   checkAbort(signal);
 
   // 2. Gather all analysis results for matching
