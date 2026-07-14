@@ -30,7 +30,15 @@ interface DocumentSurfaceProps {
   onEditorBboxChange?: (next: EditorBbox) => void;
   /** Border / corner-handle color for the editor bbox. Defaults to primary. */
   editorColor?: string;
+  /**
+   * Visual rotation (degrees CW) applied to the underlying page image only.
+   * `pageSize` is expected to already reflect the rotated dimensions — this
+   * prop rotates the raster inside that box. Overlays/editor bbox are passed
+   * in already rotated by the caller.
+   */
+  rotation?: 0 | 90 | 180 | 270;
 }
+
 
 const CLICK_MOVE_THRESHOLD = 4;
 
