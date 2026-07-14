@@ -938,132 +938,25 @@ export const OverlayLayer = ({
       </svg>
 
       {circles.map((c) => {
-        const clickable = !!onOverlayClick;
-        // Any circle overlay is draggable when a drag handler is wired up -
-        // annotation circles as well as dots. Click still fires when the
-        // pointer barely moves (< DRAG_THRESHOLD).
-        const draggable = !!onOverlayDrag;
         const isDragging = drag?.id === c.id;
-        const dotBaseAlpha = draggable ? 0.5 : (c.hovered ? 0.85 : 0.7);
-        const style: CSSProperties = c.isDot
-          ? {
-              position: "absolute",
-              left: c.cx - c.r + (isDragging ? drag!.dx : 0),
-              top: c.cy - c.r + (isDragging ? drag!.dy : 0),
-              width: c.r * 2,
-              height: c.r * 2,
-              borderRadius: "9999px",
-              backgroundColor: withAlpha(c.color, dotBaseAlpha),
-              boxSizing: "border-box",
-              pointerEvents: clickable || draggable ? "auto" : "none",
-              cursor: draggable
-                ? isDragging
-                  ? "grabbing"
-                  : "grab"
-                : clickable
-                  ? "pointer"
-                  : undefined,
-              touchAction: draggable ? "none" : undefined,
-            }
-          : {
-              position: "absolute",
-              left: c.cx - c.r + (isDragging ? drag!.dx : 0),
-              top: c.cy - c.r + (isDragging ? drag!.dy : 0),
-              width: c.r * 2,
-              height: c.r * 2,
-              borderRadius: "9999px",
-              borderColor: withAlpha(c.color, 0.5),
-              borderWidth: (c.hovered ? 3.5 : 2.5) * exportScale,
-              borderStyle: "solid",
-              backgroundColor: withAlpha(c.color, c.hovered ? 0.35 : 0.2),
-              boxSizing: "border-box",
-              pointerEvents: clickable || draggable ? "auto" : "none",
-              cursor: draggable
-                ? isDragging
-                  ? "grabbing"
-                  : "grab"
-                : clickable
-                  ? "pointer"
-                  : undefined,
-              touchAction: draggable ? "none" : undefined,
-            };
-
-        const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
-
-        const DRAG_THRESHOLD = 4;
-        const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-          e.stopPropagation();
-          if (!draggable) return;
-          (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
-          setDrag({
-            id: c.id,
-            startClientX: e.clientX,
-            startClientY: e.clientY,
-            dx: 0,
-            dy: 0,
-            moved: false,
-          });
-        };
-        const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
-          if (!draggable) return;
-          const cur = dragRef.current;
-          if (!cur || cur.id !== c.id) return;
-          const rawDx = e.clientX - cur.startClientX;
-          const rawDy = e.clientY - cur.startClientY;
-          const s = viewScale || 1;
-          const dx = rawDx / s;
-          const dy = rawDy / s;
-          const moved =
-            cur.moved ||
-            Math.hypot(rawDx, rawDy) > DRAG_THRESHOLD;
-          setDrag({ ...cur, dx, dy, moved });
-        };
-        const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
-          e.stopPropagation();
-          const cur = dragRef.current;
-          if (draggable && cur && cur.id === c.id) {
-            try {
-              (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId);
-            } catch { /* ignore */ }
-            if (cur.moved) {
-              const newCx = c.cx + cur.dx;
-              const newCy = c.cy + cur.dy;
-              const nx = Math.max(0, Math.min(1, newCx / pageSize.width));
-              const ny = Math.max(0, Math.min(1, newCy / pageSize.height));
-              setDrag(null);
-              onOverlayDrag!(c.id, nx, ny);
-              return;
-            }
-            setDrag(null);
-          }
-          if (clickable) onOverlayClick!(c.id);
-        };
-
         return (
-          <div
+          <CircleOverlay
             key={c.id}
-            data-export-kind="circle"
-            className={draggable ? "overlay-draggable" : undefined}
-            data-color={c.color}
-            data-cx={c.cx}
-            data-cy={c.cy}
-            data-radius={c.r}
-            style={style}
-            onPointerDown={
-              draggable ? onPointerDown : clickable ? stop : undefined
-            }
-            onPointerMove={draggable ? onPointerMove : undefined}
-            onPointerUp={
-              draggable ? onPointerUp : clickable ? stop : undefined
-            }
-            onClick={
-              !draggable && clickable
-                ? (e) => {
-                    e.stopPropagation();
-                    onOverlayClick!(c.id);
-                  }
-                : (e) => e.stopPropagation()
-            }
+            c={c}
+            hovered={hoveredId === c.id}
+            exportScale={exportScale}
+            clickable={!!onOverlayClick}
+            draggable={!!onOverlayDrag}
+            isDragging={isDragging}
+            dragDx={isDragging ? drag!.dx : 0}
+            dragDy={isDragging ? drag!.dy : 0}
+            viewScale={viewScale}
+            pageWidth={pageSize.width}
+            pageHeight={pageSize.height}
+            dragRef={dragRef}
+            setDrag={setDrag}
+            onOverlayClick={onOverlayClick}
+            onOverlayDrag={onOverlayDrag}
           />
         );
       })}
@@ -1071,24 +964,14 @@ export const OverlayLayer = ({
 
       {/* Rectangle overlays - outline only. Labels are placed by the optimizer below. */}
       {rects.map((r) => (
-        <div key={r.id} style={{ position: "absolute", left: r.x, top: r.y }}>
-          <div
-            data-export-kind="rect"
-            data-color={r.color}
-            data-border-px={r.hovered ? 3 : 2}
-            style={{
-              width: r.w,
-              height: r.h,
-              borderColor: withAlpha(r.color, 0.5),
-              borderWidth: (r.hovered ? 3 : 2) * exportScale,
-              borderStyle: "solid",
-              backgroundColor: "transparent",
-              boxSizing: "border-box",
-              pointerEvents: "none",
-            }}
-          />
-        </div>
+        <RectOverlay
+          key={r.id}
+          r={r}
+          hovered={hoveredId === r.id}
+          exportScale={exportScale}
+        />
       ))}
+
 
 
       {/* Labels (above circles & rects). Positions chosen by the optimizer. */}
