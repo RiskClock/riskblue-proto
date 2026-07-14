@@ -600,6 +600,166 @@ function optimizePlacements(
 }
 
 
+// ---- Memoized child components --------------------------------------------
+//
+// Extracted so React can skip reconciling unchanged annotations when the
+// hovered id changes. Only the previously-hovered and newly-hovered items
+// re-render; the rest are bailed out by `React.memo`'s shallow-equal check.
+
+interface RectOverlayProps {
+  r: { id: string; x: number; y: number; w: number; h: number; color: string };
+  hovered: boolean;
+  exportScale: number;
+}
+const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale }: RectOverlayProps) {
+  return (
+    <div style={{ position: "absolute", left: r.x, top: r.y }}>
+      <div
+        data-export-kind="rect"
+        data-color={r.color}
+        data-border-px={hovered ? 3 : 2}
+        style={{
+          width: r.w,
+          height: r.h,
+          borderColor: withAlpha(r.color, 0.5),
+          borderWidth: (hovered ? 3 : 2) * exportScale,
+          borderStyle: "solid",
+          backgroundColor: "transparent",
+          boxSizing: "border-box",
+          pointerEvents: "none",
+        }}
+      />
+    </div>
+  );
+});
+
+interface DragState {
+  id: string;
+  startClientX: number;
+  startClientY: number;
+  dx: number;
+  dy: number;
+  moved: boolean;
+}
+interface CircleOverlayProps {
+  c: CircleInfo;
+  hovered: boolean;
+  exportScale: number;
+  clickable: boolean;
+  draggable: boolean;
+  isDragging: boolean;
+  dragDx: number;
+  dragDy: number;
+  viewScale: number;
+  pageWidth: number;
+  pageHeight: number;
+  dragRef: React.MutableRefObject<DragState | null>;
+  setDrag: (d: DragState | null) => void;
+  onOverlayClick?: (id: string) => void;
+  onOverlayDrag?: (id: string, nx: number, ny: number) => void;
+}
+const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
+  const {
+    c, hovered, exportScale, clickable, draggable, isDragging, dragDx, dragDy,
+    viewScale, pageWidth, pageHeight, dragRef, setDrag, onOverlayClick, onOverlayDrag,
+  } = props;
+
+  const dotBaseAlpha = draggable ? 0.5 : (hovered ? 0.85 : 0.7);
+  const style: CSSProperties = c.isDot
+    ? {
+        position: "absolute",
+        left: c.cx - c.r + dragDx,
+        top: c.cy - c.r + dragDy,
+        width: c.r * 2,
+        height: c.r * 2,
+        borderRadius: "9999px",
+        backgroundColor: withAlpha(c.color, dotBaseAlpha),
+        boxSizing: "border-box",
+        pointerEvents: clickable || draggable ? "auto" : "none",
+        cursor: draggable ? (isDragging ? "grabbing" : "grab") : clickable ? "pointer" : undefined,
+        touchAction: draggable ? "none" : undefined,
+      }
+    : {
+        position: "absolute",
+        left: c.cx - c.r + dragDx,
+        top: c.cy - c.r + dragDy,
+        width: c.r * 2,
+        height: c.r * 2,
+        borderRadius: "9999px",
+        borderColor: withAlpha(c.color, 0.5),
+        borderWidth: (hovered ? 3.5 : 2.5) * exportScale,
+        borderStyle: "solid",
+        backgroundColor: withAlpha(c.color, hovered ? 0.35 : 0.2),
+        boxSizing: "border-box",
+        pointerEvents: clickable || draggable ? "auto" : "none",
+        cursor: draggable ? (isDragging ? "grabbing" : "grab") : clickable ? "pointer" : undefined,
+        touchAction: draggable ? "none" : undefined,
+      };
+
+  const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
+  const DRAG_THRESHOLD = 4;
+
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    if (!draggable) return;
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+    setDrag({ id: c.id, startClientX: e.clientX, startClientY: e.clientY, dx: 0, dy: 0, moved: false });
+  };
+  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!draggable) return;
+    const cur = dragRef.current;
+    if (!cur || cur.id !== c.id) return;
+    const rawDx = e.clientX - cur.startClientX;
+    const rawDy = e.clientY - cur.startClientY;
+    const s = viewScale || 1;
+    const dx = rawDx / s;
+    const dy = rawDy / s;
+    const moved = cur.moved || Math.hypot(rawDx, rawDy) > DRAG_THRESHOLD;
+    setDrag({ ...cur, dx, dy, moved });
+  };
+  const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    const cur = dragRef.current;
+    if (draggable && cur && cur.id === c.id) {
+      try { (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+      if (cur.moved) {
+        const newCx = c.cx + cur.dx;
+        const newCy = c.cy + cur.dy;
+        const nx = Math.max(0, Math.min(1, newCx / pageWidth));
+        const ny = Math.max(0, Math.min(1, newCy / pageHeight));
+        setDrag(null);
+        onOverlayDrag!(c.id, nx, ny);
+        return;
+      }
+      setDrag(null);
+    }
+    if (clickable) onOverlayClick!(c.id);
+  };
+
+  return (
+    <div
+      data-export-kind="circle"
+      className={draggable ? "overlay-draggable" : undefined}
+      data-color={c.color}
+      data-cx={c.cx}
+      data-cy={c.cy}
+      data-radius={c.r}
+      style={style}
+      onPointerDown={draggable ? onPointerDown : clickable ? stop : undefined}
+      onPointerMove={draggable ? onPointerMove : undefined}
+      onPointerUp={draggable ? onPointerUp : clickable ? stop : undefined}
+      onClick={
+        !draggable && clickable
+          ? (e) => { e.stopPropagation(); onOverlayClick!(c.id); }
+          : (e) => e.stopPropagation()
+      }
+    />
+  );
+});
+
+
+
+
 
 
 export const OverlayLayer = ({
