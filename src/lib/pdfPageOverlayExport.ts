@@ -18,6 +18,13 @@ export interface PageOverlaySpec {
   page: number;
   /** Overlays for this page (may be empty if none are attached). */
   overlays: any[];
+  /**
+   * Optional extra rotation to apply on top of the source page's /Rotate.
+   * Baked into the output PDF via setRotation, so PDF viewers show the page
+   * in the same orientation as the in-app DrawingViewer (which composes
+   * source /Rotate with the user's rotation).
+   */
+  userRotation?: 0 | 90 | 180 | 270;
 }
 
 export interface PdfExportEntry {
