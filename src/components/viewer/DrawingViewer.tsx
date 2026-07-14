@@ -356,6 +356,21 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activePage, pageCssSize.width, pageCssSize.height, viewportSize.width, viewportSize.height, initialFit, initialFitOverlayId]);
 
+    // When rotation changes, re-fit the page so the newly-sized (potentially
+    // landscape-swapped) content fills the viewport instead of staying at the
+    // pre-rotation zoom/pan (which visually reads as "squished" or off-center).
+    const lastRotationRef = useRef<RotationDeg>(rotation);
+    useEffect(() => {
+      if (lastRotationRef.current === rotation) return;
+      lastRotationRef.current = rotation;
+      if (!activePage || pageCssSize.width === 0 || viewportSize.width === 0) return;
+      // Defer so pageCssSize picks up the swapped aspect before we re-fit.
+      const id = requestAnimationFrame(() => fitPage());
+      return () => cancelAnimationFrame(id);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [rotation, pageCssSize.width, pageCssSize.height]);
+
+
     // Imperative API. Depend on primitive scalars so the object identity is
     // stable across renders that don't actually change layout (avoids
     // re-running consumer effects keyed on the api). `reset` returns to the
