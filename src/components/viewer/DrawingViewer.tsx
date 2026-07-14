@@ -502,6 +502,38 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
               </div>
             </div>
           )}
+          {showToolbar && toolbarSlot === "top" && (
+            <div className="absolute bottom-3 left-3 z-30 flex items-center gap-2 rounded-lg border bg-background/95 backdrop-blur px-2 py-1.5 shadow-md">
+              <ViewerToolbar
+                scale={scale}
+                minScale={minScale}
+                maxScale={maxScale}
+                onZoomIn={api.zoomIn}
+                onZoomOut={api.zoomOut}
+                onReset={api.reset}
+                onFitPage={api.fitPage}
+                onFitSelection={
+                  initialFitOverlayId
+                    ? () => doFitOverlay(initialFitOverlayId)
+                    : undefined
+                }
+                onDownload={onDownload}
+                pageNav={
+                  !hidePageNav && layout === "single-page" && totalPages > 1
+                    ? {
+                        current: page,
+                        total: totalPages,
+                        onPrev: () => onPageChange?.(Math.max(1, page - 1)),
+                        onNext: () =>
+                          onPageChange?.(Math.min(totalPages, page + 1)),
+                        onJump: (n) =>
+                          onPageChange?.(Math.max(1, Math.min(totalPages, n))),
+                      }
+                    : undefined
+                }
+              />
+            </div>
+          )}
         </div>
       </div>
     );
