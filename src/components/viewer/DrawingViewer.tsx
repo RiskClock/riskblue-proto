@@ -544,6 +544,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                         : undefined
                     }
                     editorColor={editorColor}
+                    onPlacingChange={onPlacingChange}
                   />
                 ) : (
 
