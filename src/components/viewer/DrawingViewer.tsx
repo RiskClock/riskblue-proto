@@ -21,10 +21,15 @@ import { useFitToSelection } from "./hooks/useFitToSelection";
 import {
   computeFitToRect,
   toNormalizedRect,
+  rotateNormalizedRect,
+  inverseRotateNormalizedRect,
+  inverseRotateNormalizedPoint,
+  type RotationDeg,
   type NormalizedOverlay,
   type OverlayInput,
 } from "./viewerGeometry";
 import type { EditorBbox } from "./DocumentSurface";
+
 
 export type ViewerLayout = "single-page" | "stacked-pages";
 
@@ -83,7 +88,17 @@ export interface DrawingViewerProps {
    * per-page vector-PDF download dialog.
    */
   onDownload?: () => void;
+  /**
+   * Visual rotation applied to the currently-visible page (single-page
+   * layout only). Overlay coordinates coming in as `overlays` and going out
+   * via callbacks stay in source-page space; the viewer handles the
+   * transform internally.
+   */
+  rotation?: RotationDeg;
+  /** Optional rotate button in the toolbar. */
+  onRotate?: () => void;
 }
+
 
 
 
@@ -118,7 +133,10 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       onEditorBboxChange,
       editorColor,
       onDownload,
+      rotation = 0,
+      onRotate,
     },
+
 
     ref
   ) {
@@ -218,13 +236,18 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       const pad = 16;
       const cw = Math.max(1, viewportSize.width - pad * 2);
       const ch = Math.max(1, viewportSize.height - pad * 2);
-      const aspect = activePage.pdfSize.w / activePage.pdfSize.h;
+      // When rotated 90/270, the effective on-screen aspect swaps.
+      const swap = layout === "single-page" && (rotation === 90 || rotation === 270);
+      const srcW = activePage.pdfSize.w;
+      const srcH = activePage.pdfSize.h;
+      const aspect = swap ? srcH / srcW : srcW / srcH;
       const cAspect = cw / ch;
       if (aspect > cAspect) {
         return { width: cw, height: cw / aspect };
       }
       return { width: ch * aspect, height: ch };
-    }, [activePage, viewportSize]);
+    }, [activePage, viewportSize, rotation, layout]);
+
 
     // Normalize overlays for the active page (single-page) or all pages (stacked).
     const normalizedByPage = useMemo(() => {
@@ -240,11 +263,15 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
         };
         const rect = toNormalizedRect(enriched);
         if (!rect) continue;
+        // Only the active single-page view rotates; stacked stays as-is.
+        const applyRot =
+          layout === "single-page" && p.pageNum === page && rotation !== 0;
+        const finalRect = applyRot ? rotateNormalizedRect(rect, rotation) : rect;
         const arr = byPage.get(p.pageNum) ?? [];
         arr.push({
           id: ov.id,
           page: p.pageNum,
-          rect,
+          rect: finalRect,
           shape: ov.shape ?? "circle",
           color: ov.color,
           label: ov.label,
@@ -253,7 +280,8 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
         byPage.set(p.pageNum, arr);
       }
       return byPage;
-    }, [overlays, allPages]);
+    }, [overlays, allPages, rotation, layout, page]);
+
 
     // Adaptive reraster on settle (panning/zooming stop) - and track scale via onTransform.
     const handleTransform = (
@@ -385,7 +413,16 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
         <div
           ref={containerRef}
           className="relative flex-1 min-h-0 overflow-hidden bg-muted/30"
+          style={
+            rotation
+              ? {
+                  boxShadow:
+                    "inset 0 0 0 2px #6C3BAA, inset 0 0 18px 0 rgba(108,59,170,0.55)",
+                }
+              : undefined
+          }
         >
+
           {loading && !activePage ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center space-y-2">
@@ -450,19 +487,48 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                     overlays={normalizedByPage.get(activePage.pageNum) ?? []}
                     hoveredOverlayId={hoveredOverlayId}
                     viewScale={scale}
+                    rotation={rotation}
                     onCanvasClick={
                       onCanvasClick
-                        ? (nx, ny) => onCanvasClick(nx, ny, activePage.pageNum)
+                        ? (nx, ny) => {
+                            const src = rotation
+                              ? inverseRotateNormalizedPoint({ nx, ny }, rotation)
+                              : { nx, ny };
+                            onCanvasClick(src.nx, src.ny, activePage.pageNum);
+                          }
                         : undefined
                     }
                     onOverlayClick={onOverlayClick}
-                    onOverlayDrag={onOverlayDrag}
+                    onOverlayDrag={
+                      onOverlayDrag
+                        ? (id, nx, ny) => {
+                            const src = rotation
+                              ? inverseRotateNormalizedPoint({ nx, ny }, rotation)
+                              : { nx, ny };
+                            onOverlayDrag(id, src.nx, src.ny);
+                          }
+                        : undefined
+                    }
                     onRenderedSizeChange={onActivePageRenderedSizeChange}
-                    editorBbox={editorBbox ?? null}
-                    onEditorBboxChange={onEditorBboxChange}
+                    editorBbox={
+                      editorBbox && rotation
+                        ? (rotateNormalizedRect(editorBbox, rotation) as EditorBbox)
+                        : editorBbox ?? null
+                    }
+                    onEditorBboxChange={
+                      onEditorBboxChange
+                        ? (next) => {
+                            const src = rotation
+                              ? inverseRotateNormalizedRect(next, rotation)
+                              : next;
+                            onEditorBboxChange(src as EditorBbox);
+                          }
+                        : undefined
+                    }
                     editorColor={editorColor}
                   />
                 ) : (
+
                   <div className="flex flex-col gap-4">
                     {allPages.map((p) => {
                       // For stacked layout, size each page based on viewport width
@@ -518,6 +584,9 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                     : undefined
                 }
                 onDownload={onDownload}
+                rotation={rotation}
+                onRotate={onRotate}
+
                 pageNav={
                   !hidePageNav && layout === "single-page" && totalPages > 1
                     ? {

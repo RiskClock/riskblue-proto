@@ -50,9 +50,16 @@ export async function rasterizeViewerSurface(
   const pageImg = surfaceEl.querySelector("img") as HTMLImageElement | null;
   if (!pageImg) throw new Error("Drawing not yet loaded.");
   const imgRect = pageImg.getBoundingClientRect();
-  const cssW = pageImg.clientWidth;
-  const cssH = pageImg.clientHeight;
+  // Use BCR (which reflects CSS transforms including rotation) so the output
+  // canvas matches what the user sees on screen. clientWidth/clientHeight
+  // would return the pre-rotation layout size and misalign the overlays.
+  const cssW = imgRect.width;
+  const cssH = imgRect.height;
   if (!cssW || !cssH) throw new Error("Drawing not yet loaded.");
+
+  // Detect rotation from the img's inline transform (see DocumentSurface).
+  const rotMatch = /rotate\((-?\d+)deg\)/.exec(pageImg.style.transform || "");
+  const rotationDeg = rotMatch ? ((parseInt(rotMatch[1], 10) % 360) + 360) % 360 : 0;
 
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(cssW * outScale);
@@ -74,13 +81,25 @@ export async function rasterizeViewerSurface(
       im.onerror = () => reject(new Error("Could not load page image."));
       im.src = pageImg.src;
     });
-    ctx.drawImage(sourceImg, 0, 0, canvas.width, canvas.height);
+    if (rotationDeg) {
+      const swap = rotationDeg === 90 || rotationDeg === 270;
+      const drawW = swap ? canvas.height : canvas.width;
+      const drawH = swap ? canvas.width : canvas.height;
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate((rotationDeg * Math.PI) / 180);
+      ctx.drawImage(sourceImg, -drawW / 2, -drawH / 2, drawW, drawH);
+      ctx.restore();
+    } else {
+      ctx.drawImage(sourceImg, 0, 0, canvas.width, canvas.height);
+    }
   }
 
   const toLocal = (clientX: number, clientY: number) => ({
     x: (clientX - imgRect.left) * outScale,
     y: (clientY - imgRect.top) * outScale,
   });
+
 
 
   // Leader lines (SVG) — map SVG coords → client via getScreenCTM.
@@ -260,6 +279,8 @@ export interface CapturePageInput {
    * onto the original PDF page.
    */
   overlaysOnly?: boolean;
+  /** Optional visual rotation (degrees CW) applied to the captured page. */
+  rotation?: 0 | 90 | 180 | 270;
 }
 
 export async function capturePageToPng(
@@ -272,6 +293,7 @@ export async function capturePageToPng(
   // the viewer fits to whichever fits inside, preserving aspect.
   const cssLong = Math.round(target / outScale);
   const cssShort = Math.round(cssLong * 0.75);
+
 
   const container = document.createElement("div");
   container.setAttribute("data-threat-report-capture", "1");
@@ -299,10 +321,12 @@ export async function capturePageToPng(
         source: input.source,
         page: input.page,
         overlays: input.overlays,
+        rotation: input.rotation ?? 0,
         showToolbar: false,
         interactive: false,
       }),
     );
+
 
     const ready = await waitForViewerReady(surface, input.timeoutMs ?? 30000);
     if (!ready) return null;

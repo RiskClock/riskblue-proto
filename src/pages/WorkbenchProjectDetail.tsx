@@ -6958,6 +6958,51 @@ function InstancesReportModal({
           })),
         };
       });
+      // Look up per-page rotations for all files referenced by the export.
+      const usedFileIds = Array.from(
+        new Set(
+          spacesData.flatMap((sp) =>
+            sp.pages
+              .map((p) => {
+                for (const [id, name] of fileNameById.entries()) {
+                  if (name === p.fileName) return id;
+                }
+                return null;
+              })
+              .filter((v): v is string => !!v),
+          ),
+        ),
+      );
+      const rotationsByFileId = new Map<string, Record<string, number>>();
+      if (usedFileIds.length > 0) {
+        try {
+          const { data: rotData } = await supabase
+            .from("analysis_request_files")
+            .select("id, page_rotations")
+            .in("id", usedFileIds);
+          for (const row of (rotData ?? []) as any[]) {
+            rotationsByFileId.set(row.id, (row.page_rotations ?? {}) as Record<string, number>);
+          }
+        } catch {
+          /* rotations are optional; carry on if fetch fails */
+        }
+      }
+      const withRotations = spacesData.map((sp) => ({
+        ...sp,
+        pages: sp.pages.map((p) => {
+          let rot: 0 | 90 | 180 | 270 = 0;
+          for (const [id, name] of fileNameById.entries()) {
+            if (name === p.fileName) {
+              const map = rotationsByFileId.get(id);
+              const v = map ? Number(map[String(p.pageIdx)] || 0) : 0;
+              const n = ((v % 360) + 360) % 360;
+              if (n === 90 || n === 180 || n === 270) rot = n as 90 | 180 | 270;
+              break;
+            }
+          }
+          return { ...p, rotation: rot };
+        }),
+      }));
       const payload: ThreatReportPayload = {
         projectId,
         analysisRequestId: requestId ?? null,
@@ -6970,9 +7015,10 @@ function InstancesReportModal({
         sourceDrawings,
         overviewClasses,
         summary,
-        spaces: spacesData,
+        spaces: withRotations,
       };
       await runThreatReportExport(payload, (p) => setExportProgress(p));
+
       toast({
         title: "Report ready",
         description: "Sent an email with a link to download the report.",

@@ -38,15 +38,16 @@ async function renderPageWithOverlays(
   pageIdx: number,
   overlays: ThreatReportPageRef["overlays"],
   targetLongEdgePx: number,
+  rotation: 0 | 90 | 180 | 270 = 0,
 ): Promise<{ blob: Blob; width: number; height: number } | null> {
   try {
     const data = await pdfBlob.arrayBuffer();
     const doc = await pdfjsLib.getDocument({ data }).promise;
     if (pageIdx < 1 || pageIdx > doc.numPages) return null;
     const page = await doc.getPage(pageIdx);
-    const base = page.getViewport({ scale: 1 });
+    const base = page.getViewport({ scale: 1, rotation });
     const scale = targetLongEdgePx / Math.max(base.width, base.height);
-    const viewport = page.getViewport({ scale });
+    const viewport = page.getViewport({ scale, rotation });
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(viewport.width);
     canvas.height = Math.round(viewport.height);
@@ -56,14 +57,40 @@ async function renderPageWithOverlays(
     await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
 
     if (overlays && overlays.length > 0) {
-      const overlayInputs = overlays.map((o) => ({
-        id: o.id,
-        bbox: [o.nx, o.ny, o.nw ?? 0, o.nh ?? 0] as [number, number, number, number],
-        coordSpace: "normalized" as const,
-        color: o.color,
-        label: o.label,
-        shape: o.shape ?? ("circle" as const),
-      }));
+      // Rotate overlay coordinates from source-page space into rotated space
+      // so the stamped markers align with the rotated raster above.
+      const rotOv = (o: (typeof overlays)[number]) => {
+        if (!rotation) return o;
+        const nw = o.nw ?? 0;
+        const nh = o.nh ?? 0;
+        let nx = o.nx;
+        let ny = o.ny;
+        let onw = nw;
+        let onh = nh;
+        switch (rotation) {
+          case 90:
+            [nx, ny, onw, onh] = [1 - o.ny - nh, o.nx, nh, nw];
+            break;
+          case 180:
+            [nx, ny, onw, onh] = [1 - o.nx - nw, 1 - o.ny - nh, nw, nh];
+            break;
+          case 270:
+            [nx, ny, onw, onh] = [o.ny, 1 - o.nx - nw, nh, nw];
+            break;
+        }
+        return { ...o, nx, ny, nw: onw, nh: onh };
+      };
+      const overlayInputs = overlays.map((o) => {
+        const r = rotOv(o);
+        return {
+          id: r.id,
+          bbox: [r.nx, r.ny, r.nw ?? 0, r.nh ?? 0] as [number, number, number, number],
+          coordSpace: "normalized" as const,
+          color: r.color,
+          label: r.label,
+          shape: r.shape ?? ("circle" as const),
+        };
+      });
       const overlayCap = await captureOverlayOnly({
         pageSize: { width: canvas.width, height: canvas.height },
         overlays: overlayInputs,
@@ -92,6 +119,7 @@ async function renderPageWithOverlays(
 
 
 
+
 export interface ThreatReportPageRef {
   fileName: string;
   shortName: string;
@@ -113,7 +141,10 @@ export interface ThreatReportPageRef {
     nh?: number;
   }>;
   tabLabel: string;
+  /** Optional per-page rotation baked into the exported raster. */
+  rotation?: 0 | 90 | 180 | 270;
 }
+
 
 export interface ThreatReportSpace {
   name: string; // "Level 2" or "__unassigned__"
@@ -301,7 +332,9 @@ export async function runThreatReportExport(
             pr.pageIdx,
             pr.overlays,
             1800,
+            pr.rotation ?? 0,
           );
+
           if (rendered) {
             renderedByKey.set(key, {
               png: await rendered.blob.arrayBuffer(),
