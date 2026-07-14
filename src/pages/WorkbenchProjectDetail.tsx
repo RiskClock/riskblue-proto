@@ -6265,8 +6265,17 @@ function InstancesReportModal({
           addByFileNamePage(fileName, pageStr);
         }
       }
+      // Spatial-architect-mapped pages: include any page that the user (or
+      // the Spatial Architect run) explicitly attached to this level even if
+      // no floor-plan bbox parsed it and no annotations were placed on it.
+      for (const [key, levels] of pageSpaceMap.entries()) {
+        if (!levels.includes(space)) continue;
+        const [fileName, pageStr] = key.split("::");
+        addByFileNamePage(fileName, pageStr);
+      }
     }
     const pageKeys = Array.from(pageKeySet);
+
 
     const showUnitCol = rows.some((r) => !!r.unitName);
     // Show attribute columns whenever any row in this space carries that
