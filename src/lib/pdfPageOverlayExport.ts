@@ -143,11 +143,18 @@ export async function buildAnnotatedPdf(
       const [newPage] = await out.copyPages(src, [idx]);
       out.addPage(newPage);
 
+      const userRot = spec.userRotation ?? 0;
+
       if (includeOverlays && spec.overlays.length > 0) {
         const capture = await captureOverlayOnly({
           pageSize: { width: displayWidth, height: displayHeight },
           overlays: spec.overlays,
           outScale: 3,
+          // Pre-rotate label pills by -userRot so that after the PDF viewer
+          // applies /Rotate = (source + userRot), labels appear upright while
+          // circles/rects (which we intentionally leave alone) rotate with
+          // the page and stay pinned to the same features.
+          labelCounterRotationDeg: userRot ? -userRot : 0,
         });
         if (capture) {
           const overlayBytes = await capture.blob.arrayBuffer();
@@ -167,8 +174,8 @@ export async function buildAnnotatedPdf(
 
       // Bake the user's rotation on top of the source page's /Rotate. The
       // overlay stamp was drawn into the page content stream above, so it
-      // rotates together with the page — matching the in-app viewer.
-      const userRot = spec.userRotation ?? 0;
+      // rotates together with the page — matching the in-app viewer. Labels
+      // inside the stamp were pre-rotated by -userRot so they land upright.
       if (userRot) {
         const combined = ((rotation + userRot) % 360 + 360) % 360;
         newPage.setRotation(degrees(combined));
