@@ -143,6 +143,22 @@ export const ViewerToolbar = ({
           <Maximize2 className="w-4 h-4" />
         </Button>
       )}
+      {onRotate && (
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={onRotate}
+          title={rotation ? `Rotated ${rotation}° — click to rotate again` : "Rotate 90°"}
+          style={
+            rotation
+              ? { color: "#6C3BAA", borderColor: "#6C3BAA", boxShadow: "0 0 0 1px #6C3BAA" }
+              : undefined
+          }
+        >
+          <RotateCw className="w-4 h-4" />
+        </Button>
+      )}
+
       {onFitSelection && (
         <Button
           variant="outline"
