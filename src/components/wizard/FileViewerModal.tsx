@@ -1399,7 +1399,10 @@ export const FileViewerModal = ({
               source={source}
               layout="single-page"
               page={currentPage}
+              rotation={rotationByPage[currentPage] ?? 0}
+              onRotate={handleRotate}
               onDownload={() => setDownloadDialogOpen(true)}
+
               onPageChange={singlePageOnly ? () => {} : setCurrentPage}
               hidePageNav={singlePageOnly}
               overlays={overlays}
