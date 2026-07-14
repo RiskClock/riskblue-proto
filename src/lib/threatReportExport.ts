@@ -332,7 +332,9 @@ export async function runThreatReportExport(
             pr.pageIdx,
             pr.overlays,
             1800,
+            pr.rotation ?? 0,
           );
+
           if (rendered) {
             renderedByKey.set(key, {
               png: await rendered.blob.arrayBuffer(),
