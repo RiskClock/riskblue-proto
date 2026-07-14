@@ -165,6 +165,15 @@ export async function buildAnnotatedPdf(
         }
       }
 
+      // Bake the user's rotation on top of the source page's /Rotate. The
+      // overlay stamp was drawn into the page content stream above, so it
+      // rotates together with the page — matching the in-app viewer.
+      const userRot = spec.userRotation ?? 0;
+      if (userRot) {
+        const combined = ((rotation + userRot) % 360 + 360) % 360;
+        newPage.setRotation(degrees(combined));
+      }
+
       done += 1;
       opts.onProgress?.(done, totalPages);
     }
