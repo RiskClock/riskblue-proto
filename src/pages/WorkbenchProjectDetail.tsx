@@ -4153,11 +4153,17 @@ export default function WorkbenchProjectDetail() {
                                         {(() => {
                                           if (levelPlans.length === 0) return null;
                                           const c = awpClassColor("Level Floor Plan");
-                                          const labels = levelPlans.map((lvl) =>
-                                            (lvl.floors && lvl.floors.length > 0
-                                              ? formatLevelSetLabel(lvl.floors)
-                                              : "") || floorPlanDisplayLabel(lvl),
-                                          );
+                                          const labels = levelPlans.map((lvl) => {
+                                            const overrideName = (lvl as any).__overrideName as
+                                              | string
+                                              | undefined;
+                                            if (overrideName) return overrideName;
+                                            return (
+                                              (lvl.floors && lvl.floors.length > 0
+                                                ? formatLevelSetLabel(lvl.floors)
+                                                : "") || floorPlanDisplayLabel(lvl)
+                                            );
+                                          });
                                           const consolidated = consolidateLevelLabels(labels);
                                           return consolidated.map((label, i) => (
                                             <Badge
