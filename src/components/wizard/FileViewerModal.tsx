@@ -1571,40 +1571,60 @@ export const FileViewerModal = ({
 
 
           ) : detections.length > 0 ? (
-            <div className="w-64 flex-shrink-0 border rounded-lg p-3 flex flex-col">
-              <h4 className="text-sm font-medium mb-2">
-                Detected Systems ({detections.length})
-              </h4>
-              <ScrollArea className="flex-1">
-                <div className="space-y-2 pr-2">
-                  {detections.map((detection, i) => (
-                    <div
-                      key={i}
-                      className="p-2 rounded-md border cursor-pointer transition-colors hover:bg-muted/50"
-                      style={{
-                        borderLeftWidth: 4,
-                        borderLeftColor: BOUNDING_BOX_COLOR,
-                        backgroundColor:
-                          hoveredCode === detection.lineCode
-                            ? "hsl(var(--muted))"
-                            : undefined,
-                      }}
-                      onMouseEnter={() => setHoveredCode(detection.lineCode)}
-                      onMouseLeave={() => setHoveredCode(null)}
-                    >
-                      <p className="text-xs font-medium truncate">
-                        {detection.lineCode}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {detection.systemType}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {detection.lineMonitored}
-                      </p>
-                    </div>
-                  ))}
+            <div className="w-64 flex-shrink-0 border rounded-lg p-3 flex flex-col relative">
+              {isPlacingLabels && (
+                <div
+                  className="absolute inset-0 z-20 flex items-center justify-center bg-background/60 backdrop-blur-[1px] rounded-lg"
+                  aria-live="polite"
+                  aria-busy="true"
+                >
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground bg-background/90 border rounded-md px-3 py-1.5 shadow-sm">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Placing labels…
+                  </div>
                 </div>
-              </ScrollArea>
+              )}
+              <div
+                className={
+                  isPlacingLabels
+                    ? "flex-1 flex flex-col min-h-0 pointer-events-none select-none"
+                    : "flex-1 flex flex-col min-h-0"
+                }
+              >
+                <h4 className="text-sm font-medium mb-2">
+                  Detected Systems ({detections.length})
+                </h4>
+                <ScrollArea className="flex-1">
+                  <div className="space-y-2 pr-2">
+                    {detections.map((detection, i) => (
+                      <div
+                        key={i}
+                        className="p-2 rounded-md border cursor-pointer transition-colors hover:bg-muted/50"
+                        style={{
+                          borderLeftWidth: 4,
+                          borderLeftColor: BOUNDING_BOX_COLOR,
+                          backgroundColor:
+                            hoveredCode === detection.lineCode
+                              ? "hsl(var(--muted))"
+                              : undefined,
+                        }}
+                        onMouseEnter={() => setHoveredCode(detection.lineCode)}
+                        onMouseLeave={() => setHoveredCode(null)}
+                      >
+                        <p className="text-xs font-medium truncate">
+                          {detection.lineCode}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {detection.systemType}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {detection.lineMonitored}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
             </div>
           ) : null}
         </div>
