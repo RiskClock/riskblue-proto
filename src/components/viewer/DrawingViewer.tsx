@@ -137,6 +137,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       onDownload,
       rotation = 0,
       onRotate,
+      hideRotationIndicator = false,
     },
 
 
