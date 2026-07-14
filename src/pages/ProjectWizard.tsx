@@ -243,6 +243,13 @@ const ProjectWizardContent = () => {
         addedBytes += file.size;
         addedCount += 1;
 
+        // Extract page count client-side so the workbench list renders
+        // instantly without a lazy pdf.js download on first visit.
+        const isPdf = (file.type || "").includes("pdf") || file.name.toLowerCase().endsWith(".pdf");
+        const pageCount = isPdf
+          ? await (await import("@/lib/pdfProcessor")).extractPdfPageCount(file)
+          : null;
+
         // 3. Create analysis_request_files record for each new file
         await supabase.from("analysis_request_files").insert({
           analysis_request_id: analysisRequest.id,
@@ -253,7 +260,8 @@ const ProjectWizardContent = () => {
           relative_path: file.name,
           storage_path: filePath,
           copy_status: "copied",
-        });
+          expected_page_count: pageCount ?? null,
+        } as any);
       }
 
       // 4. Update analysis_request with accumulated counts/size and status

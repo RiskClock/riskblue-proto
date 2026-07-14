@@ -230,6 +230,10 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
                 });
               continue;
             }
+            const isPdf = (f.type || "").includes("pdf") || f.name.toLowerCase().endsWith(".pdf");
+            const pageCount = isPdf
+              ? await (await import("@/lib/pdfProcessor")).extractPdfPageCount(f)
+              : null;
             await supabase.from("analysis_request_files").insert({
               analysis_request_id: req.id,
               drive_file_id: `manual_${Date.now()}_${Math.random().toString(36).slice(2)}_${f.name}`,
@@ -239,7 +243,8 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
               relative_path: f.name,
               storage_path: path,
               copy_status: "copied",
-            });
+              expected_page_count: pageCount ?? null,
+            } as any);
             copied++;
             totalBytes += f.size;
           }
