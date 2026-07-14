@@ -99,6 +99,12 @@ export interface DrawingViewerProps {
   onRotate?: () => void;
   /** When true, suppress the purple glow indicator (used in report previews). */
   hideRotationIndicator?: boolean;
+  /**
+   * Fires when the label-placement optimizer is running (true) or has
+   * finished (false). Consumers use this to render a loading affordance
+   * on side panels while placement blocks the overlay from being final.
+   */
+  onPlacingChange?: (isPlacing: boolean) => void;
 }
 
 
@@ -138,6 +144,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       rotation = 0,
       onRotate,
       hideRotationIndicator = false,
+      onPlacingChange,
     },
 
 
@@ -537,6 +544,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                         : undefined
                     }
                     editorColor={editorColor}
+                    onPlacingChange={onPlacingChange}
                   />
                 ) : (
 

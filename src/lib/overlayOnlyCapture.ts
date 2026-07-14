@@ -127,6 +127,7 @@ export async function captureOverlayOnly(
         overlays: normalized,
         pageSize,
         exportScale,
+        syncPlacement: true,
       } as any),
     );
 

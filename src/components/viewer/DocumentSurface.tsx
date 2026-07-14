@@ -37,6 +37,10 @@ interface DocumentSurfaceProps {
    * in already rotated by the caller.
    */
   rotation?: 0 | 90 | 180 | 270;
+  /** Forwarded to OverlayLayer.syncPlacement. */
+  syncPlacement?: boolean;
+  /** Forwarded to OverlayLayer.onPlacingChange. */
+  onPlacingChange?: (isPlacing: boolean) => void;
 }
 
 
@@ -79,6 +83,8 @@ export const DocumentSurface = ({
   onEditorBboxChange,
   editorColor,
   rotation = 0,
+  syncPlacement,
+  onPlacingChange,
 }: DocumentSurfaceProps) => {
   const downRef = useRef<{ x: number; y: number } | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -300,6 +306,8 @@ export const DocumentSurface = ({
           viewScale={viewScale}
           onOverlayClick={onOverlayClick}
           onOverlayDrag={onOverlayDrag}
+          syncPlacement={syncPlacement}
+          onPlacingChange={onPlacingChange}
         />
       )}
       {renderEditor()}
