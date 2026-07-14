@@ -20,6 +20,7 @@ import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { OverlayLayer } from "@/components/viewer/OverlayLayer";
 import {
+  rotateNormalizedRect,
   toNormalizedRect,
   type NormalizedOverlay,
   type OverlayInput,
@@ -38,13 +39,16 @@ export interface OverlayOnlyCaptureInput {
   /** Multiplier for overlay geometry (borders, fonts, dot size). Default: EXPORT_OVERLAY_SCALE. */
   exportScale?: number;
   /**
-   * Optional CCW rotation (degrees) applied to each label pill around its
-   * own center. Used by the vector-PDF export when the underlying page is
-   * baked with a user rotation, so labels stay upright after the PDF viewer
-   * rotates the whole page.
+   * Optional user rotation (0/90/180/270 CW) applied to the overlay layout
+   * before rendering. Overlay rects are rotated into the rotated view and
+   * `pageSize` is swapped when the rotation is 90/270, so the label
+   * optimizer places pills correctly for the final rotated composition.
+   * The resulting PNG matches the rotated view's dimensions; callers must
+   * stamp it onto the source page accounting for that rotation.
    */
-  labelCounterRotationDeg?: number;
+  userRotationDeg?: 0 | 90 | 180 | 270;
 }
+
 
 function normalizeOverlays(overlays: any[]): NormalizedOverlay[] {
   const out: NormalizedOverlay[] = [];
