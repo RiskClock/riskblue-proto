@@ -1746,6 +1746,7 @@ export const FileViewerModal = ({
         page={downloadPageOverride ?? currentPage}
         overlays={overlays}
         fileName={fileName}
+        userRotation={rotationByPage[currentPage] ?? 0}
       />
     </Dialog>
   );
@@ -2630,6 +2631,7 @@ function PageDownloadDialog({
   page,
   overlays,
   fileName,
+  userRotation = 0,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -2642,6 +2644,7 @@ function PageDownloadDialog({
   page: number;
   overlays: OverlayInput[];
   fileName: string;
+  userRotation?: 0 | 90 | 180 | 270;
 }) {
   const { toast } = useToast();
 
@@ -2678,7 +2681,7 @@ function PageDownloadDialog({
             fileName,
             sourceBytes: bytes,
             source,
-            pages: [{ page, overlays: overlays as any[] }],
+            pages: [{ page, overlays: overlays as any[], userRotation }],
           },
         ],
         { includeOverlays },
