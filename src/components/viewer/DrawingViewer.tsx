@@ -97,6 +97,8 @@ export interface DrawingViewerProps {
   rotation?: RotationDeg;
   /** Optional rotate button in the toolbar. */
   onRotate?: () => void;
+  /** When true, suppress the purple glow indicator (used in report previews). */
+  hideRotationIndicator?: boolean;
 }
 
 
@@ -135,6 +137,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       onDownload,
       rotation = 0,
       onRotate,
+      hideRotationIndicator = false,
     },
 
 
@@ -576,7 +579,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
               </div>
             </div>
           )}
-          {rotation !== 0 && (
+          {rotation !== 0 && !hideRotationIndicator && (
             <div
               aria-hidden
               className="pointer-events-none absolute inset-0 z-20"

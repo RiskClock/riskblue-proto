@@ -281,6 +281,8 @@ export const DocumentSurface = ({
               top,
               width: innerW,
               height: innerH,
+              maxWidth: "none",
+              maxHeight: "none",
               display: "block",
               pointerEvents: "none",
               transform: rotation ? `rotate(${rotation}deg)` : undefined,
