@@ -165,8 +165,8 @@ function generateCircleCandidates(
   gap: number,
   bounds: { width: number; height: number },
 ): LabelCandidate[] {
-  const directions = 48;
-  const rings = 10;
+  const directions = 24;
+  const rings = 5;
   const out: LabelCandidate[] = [];
   const fallback: LabelCandidate[] = [];
   for (let ring = 0; ring < rings; ring++) {
