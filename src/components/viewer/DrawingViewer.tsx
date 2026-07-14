@@ -263,11 +263,15 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
         };
         const rect = toNormalizedRect(enriched);
         if (!rect) continue;
+        // Only the active single-page view rotates; stacked stays as-is.
+        const applyRot =
+          layout === "single-page" && p.pageNum === page && rotation !== 0;
+        const finalRect = applyRot ? rotateNormalizedRect(rect, rotation) : rect;
         const arr = byPage.get(p.pageNum) ?? [];
         arr.push({
           id: ov.id,
           page: p.pageNum,
-          rect,
+          rect: finalRect,
           shape: ov.shape ?? "circle",
           color: ov.color,
           label: ov.label,
@@ -276,7 +280,8 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
         byPage.set(p.pageNum, arr);
       }
       return byPage;
-    }, [overlays, allPages]);
+    }, [overlays, allPages, rotation, layout, page]);
+
 
     // Adaptive reraster on settle (panning/zooming stop) - and track scale via onTransform.
     const handleTransform = (
