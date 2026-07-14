@@ -413,7 +413,16 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
         <div
           ref={containerRef}
           className="relative flex-1 min-h-0 overflow-hidden bg-muted/30"
+          style={
+            rotation
+              ? {
+                  boxShadow:
+                    "inset 0 0 0 2px #6C3BAA, inset 0 0 18px 0 rgba(108,59,170,0.55)",
+                }
+              : undefined
+          }
         >
+
           {loading && !activePage ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center space-y-2">
