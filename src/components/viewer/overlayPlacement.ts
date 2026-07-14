@@ -165,8 +165,8 @@ function generateCircleCandidates(
   gap: number,
   bounds: { width: number; height: number },
 ): LabelCandidate[] {
-  const directions = 48;
-  const rings = 10;
+  const directions = 24;
+  const rings = 5;
   const out: LabelCandidate[] = [];
   const fallback: LabelCandidate[] = [];
   for (let ring = 0; ring < rings; ring++) {
@@ -406,7 +406,8 @@ function optimizePlacements(
       return { ...bboxOfSegment(a.cx, a.cy, bx, by), idx: i, ax: a.cx, ay: a.cy, bx, by };
     });
 
-    const maxIters = 20;
+    const N = positions.length;
+    const maxIters = N > 80 ? 4 : N > 40 ? 6 : N > 20 ? 10 : 15;
     for (let iter = 0; iter < maxIters; iter++) {
       let improved = false;
       const order = positions.map((_, i) => i);
@@ -473,9 +474,14 @@ function optimizePlacements(
   const seedShort = candidatesPerLabel.map(
     (cands) => cands.reduce((best, c) => (c.leader < best.leader ? c : best), cands[0]),
   );
+  const startedAt = Date.now();
+  const timeBudgetMs = 1500;
   let best = runOnce(seedShort);
 
-  for (let r = 0; r < 3; r++) {
+  const N = candidatesPerLabel.length;
+  const extraSeeds = N > 60 ? 0 : N > 30 ? 1 : 3;
+  for (let r = 0; r < extraSeeds; r++) {
+    if (Date.now() - startedAt > timeBudgetMs) break;
     const seed = candidatesPerLabel.map(
       (cands) => cands[Math.floor(rand() * cands.length)],
     );
