@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Download,
   Maximize2,
+  RotateCw,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -25,6 +26,10 @@ export interface ViewerToolbarProps {
    * to expose per-page vector-PDF download.
    */
   onDownload?: () => void;
+  /** Rotation in degrees CW (0/90/180/270). Colors the rotate button when != 0. */
+  rotation?: 0 | 90 | 180 | 270;
+  /** Advance rotation 90° CW. When set, renders a rotate button. */
+  onRotate?: () => void;
   pageNav?: {
     current: number;
     total: number;
@@ -41,8 +46,11 @@ export const ViewerToolbar = ({
   onFitPage,
   onFitSelection,
   onDownload,
+  rotation = 0,
+  onRotate,
   pageNav,
 }: ViewerToolbarProps) => {
+
   const [jumpValue, setJumpValue] = useState<string>(
     pageNav ? String(pageNav.current) : "",
   );
