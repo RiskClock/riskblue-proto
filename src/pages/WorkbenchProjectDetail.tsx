@@ -992,33 +992,9 @@ export default function WorkbenchProjectDetail() {
   );
 
 
-  useEffect(() => {
-    if (!projectId || requestId || pageInfoRows.length > 0) return;
-    try {
-      const cached = window.localStorage.getItem(`riskblue:workbench-page-info:project:${projectId}`);
-      const parsed = cached ? JSON.parse(cached) : null;
-      if (Array.isArray(parsed?.rows)) {
-        const cachedRows = parsed.rows
-          .filter((r: any) => r && typeof r.id === "string" && typeof r.name === "string")
-          .map((r: any) => ({
-            id: r.id,
-            name: r.name,
-            source_type: typeof r.source_type === "string" ? r.source_type : "manual_upload",
-            storage_path: typeof r.storage_path === "string" ? r.storage_path : null,
-            mime_type: typeof r.mime_type === "string" ? r.mime_type : null,
-            // Only accept positive integers. `Number(null)` is 0 and `isFinite(0)` is true,
-            // which used to poison the cache with `page_count: 0` and hide the expand icon.
-            page_count:
-              typeof r.page_count === "number" && Number.isFinite(r.page_count) && r.page_count > 0
-                ? r.page_count
-                : null,
-          })) as PageInfoRow[];
-        if (cachedRows.length > 0) setPageInfoRows(cachedRows);
-      }
-    } catch {
-      /* ignore cache */
-    }
-  }, [projectId, requestId, pageInfoRows.length]);
+
+
+
 
   // Load Page Info: list files for the project (not blocked on analysisRequest),
   // fill missing page counts via pdf.js, cache to DB. We join analysis_requests
