@@ -21,10 +21,15 @@ import { useFitToSelection } from "./hooks/useFitToSelection";
 import {
   computeFitToRect,
   toNormalizedRect,
+  rotateNormalizedRect,
+  inverseRotateNormalizedRect,
+  inverseRotateNormalizedPoint,
+  type RotationDeg,
   type NormalizedOverlay,
   type OverlayInput,
 } from "./viewerGeometry";
 import type { EditorBbox } from "./DocumentSurface";
+
 
 export type ViewerLayout = "single-page" | "stacked-pages";
 
