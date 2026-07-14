@@ -306,6 +306,8 @@ export const DocumentSurface = ({
           viewScale={viewScale}
           onOverlayClick={onOverlayClick}
           onOverlayDrag={onOverlayDrag}
+          syncPlacement={syncPlacement}
+          onPlacingChange={onPlacingChange}
         />
       )}
       {renderEditor()}
