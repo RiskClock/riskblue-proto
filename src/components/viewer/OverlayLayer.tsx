@@ -25,6 +25,20 @@ interface OverlayLayerProps {
    * to 1 so the on-screen viewer is unaffected.
    */
   exportScale?: number;
+  /**
+   * When true, the label-placement optimizer runs synchronously during
+   * render (via useMemo). Used by the offscreen export capture, which
+   * rasterizes on the next rAF and can't wait for a deferred setState.
+   * When false (default), placement runs asynchronously in a microtask so
+   * mounting the viewer with many annotations doesn't block the main thread.
+   */
+  syncPlacement?: boolean;
+  /**
+   * Fired whenever the async placement pass starts (true) or finishes
+   * (false). Consumers can use this to render a loading affordance on
+   * side panels that let the user mutate annotations.
+   */
+  onPlacingChange?: (isPlacing: boolean) => void;
 }
 
 const MIN_CIRCLE_DIAMETER_CSS = 24;
