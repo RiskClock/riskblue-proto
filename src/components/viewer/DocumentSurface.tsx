@@ -78,6 +78,7 @@ export const DocumentSurface = ({
   editorBbox,
   onEditorBboxChange,
   editorColor,
+  rotation = 0,
 }: DocumentSurfaceProps) => {
   const downRef = useRef<{ x: number; y: number } | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -89,6 +90,7 @@ export const DocumentSurface = ({
     userSelect: "none",
     cursor: !editing && onCanvasClick ? "crosshair" : undefined,
   };
+
   const handlePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     downRef.current = { x: e.clientX, y: e.clientY };
   };
