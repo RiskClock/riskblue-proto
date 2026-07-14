@@ -326,12 +326,42 @@ function leaderEndpoints(
 }
 
 
+// ---- Spatial indexing (rbush) ---------------------------------------------
+//
+// The naive optimizer was O(N²) per candidate because every cost lookup
+// walked all N labels/circles/rects/leaders. With hundreds of annotations
+// this dominates mount time. rbush gives us log-time bbox queries; we then
+// run the precise geometric test only on returned candidates.
+
+type BBoxEntry = { minX: number; minY: number; maxX: number; maxY: number };
+type CircleEntry = BBoxEntry & { c: CircleInfo };
+type RectEntry = BBoxEntry & { r: RectInfo };
+type LabelEntry = BBoxEntry & { idx: number };
+type LeaderEntry = BBoxEntry & { idx: number; ax: number; ay: number; bx: number; by: number };
+
+function bboxOfRect(r: { x: number; y: number; w: number; h: number }): BBoxEntry {
+  return { minX: r.x, minY: r.y, maxX: r.x + r.w, maxY: r.y + r.h };
+}
+function bboxOfCircle(c: CircleInfo): BBoxEntry {
+  return { minX: c.cx - c.r, minY: c.cy - c.r, maxX: c.cx + c.r, maxY: c.cy + c.r };
+}
+function bboxOfSegment(ax: number, ay: number, bx: number, by: number): BBoxEntry {
+  return {
+    minX: Math.min(ax, bx),
+    minY: Math.min(ay, by),
+    maxX: Math.max(ax, bx),
+    maxY: Math.max(ay, by),
+  };
+}
+
 function candidateCost(
   cand: LabelCandidate,
   selfIdx: number,
   positions: LabelCandidate[],
-  circles: CircleInfo[],
-  rects: RectInfo[],
+  circleIdx: RBush<CircleEntry>,
+  rectIdx: RBush<RectEntry>,
+  labelIdx: RBush<LabelEntry>,
+  leaderIdx: RBush<LeaderEntry>,
   anchors: Anchor[],
   ownerIds: (string | null)[],
 ): number {
@@ -346,37 +376,47 @@ function candidateCost(
   const belowPenalty = Math.max(0, dy) * 1.5;
   const rightPenalty = Math.max(0, dx) * 0.75;
   let cost = cand.leader + horizontalOffset * 0.5 + belowPenalty + rightPenalty;
-  for (let j = 0; j < positions.length; j++) {
-    if (j === selfIdx) continue;
-    if (rectsOverlap(cand, positions[j])) cost += OVERLAP_PENALTY;
-  }
-  for (const c of circles) {
-    if (c.id === ownerId) continue;
-    if (rectIntersectsCircle(cand, c)) cost += CIRCLE_PENALTY;
-  }
-  for (const r of rects) {
-    if (rectsOverlap(cand, r)) cost += RECT_PENALTY;
+
+  const candBBox = bboxOfRect(cand);
+
+  // Label-label overlap
+  const labelHits = labelIdx.search(candBBox);
+  for (const lh of labelHits) {
+    if (lh.idx === selfIdx) continue;
+    if (rectsOverlap(cand, positions[lh.idx])) cost += OVERLAP_PENALTY;
   }
 
-  // Leader-line collision penalties (circle-owned labels only). A leader is
-  // drawn from the owner circle centroid toward the label rectangle. Two
-  // separate penalties keep the optimizer from placing labels/leaders on top
-  // of other annotations' leaders:
-  //   • label rect sitting across another annotation's leader
-  //   • this candidate's own leader crossing another leader
+  // Label-circle overlap (skip owner circle)
+  const circleHits = circleIdx.search(candBBox);
+  for (const ch of circleHits) {
+    if (ch.c.id === ownerId) continue;
+    if (rectIntersectsCircle(cand, ch.c)) cost += CIRCLE_PENALTY;
+  }
+
+  // Label-rect overlap
+  const rectHits = rectIdx.search(candBBox);
+  for (const rh of rectHits) {
+    if (rectsOverlap(cand, rh.r)) cost += RECT_PENALTY;
+  }
+
+  // Leader-line collision penalties (circle-owned labels only).
   if (self && ownerId) {
-    const myLeader = leaderEndpoints(cand, self);
-    for (let j = 0; j < positions.length; j++) {
-      if (j === selfIdx) continue;
-      const otherOwner = ownerIds[j];
-      if (!otherOwner) continue; // rects have no leader
-      const otherAnchor = anchors[j];
-      if (!otherAnchor) continue;
-      const otherLeader = leaderEndpoints(positions[j], otherAnchor);
-      if (rectIntersectsSegment(cand, otherLeader.a, otherLeader.b)) {
+    // (a) label rect sitting across another annotation's leader
+    const leaderHits = leaderIdx.search(candBBox);
+    for (const lh of leaderHits) {
+      if (lh.idx === selfIdx) continue;
+      if (rectIntersectsSegment(cand, { x: lh.ax, y: lh.ay }, { x: lh.bx, y: lh.by })) {
         cost += LABEL_ON_LEADER_PENALTY;
       }
-      if (segmentsIntersect(myLeader.a, myLeader.b, otherLeader.a, otherLeader.b)) {
+    }
+    // (b) this candidate's own leader crossing another leader
+    const myA = { x: self.cx, y: self.cy };
+    const myB = { x: labelCx, y: labelCy };
+    const myLeaderBBox = bboxOfSegment(myA.x, myA.y, myB.x, myB.y);
+    const myLeaderHits = leaderIdx.search(myLeaderBBox);
+    for (const lh of myLeaderHits) {
+      if (lh.idx === selfIdx) continue;
+      if (segmentsIntersect(myA, myB, { x: lh.ax, y: lh.ay }, { x: lh.bx, y: lh.by })) {
         cost += LEADER_CROSS_PENALTY;
       }
     }
@@ -396,6 +436,32 @@ function mulberry32(seed: number) {
   };
 }
 
+function buildLabelIdx(positions: LabelCandidate[]): RBush<LabelEntry> {
+  const idx = new RBush<LabelEntry>();
+  const items: LabelEntry[] = positions.map((p, i) => ({ ...bboxOfRect(p), idx: i }));
+  idx.load(items);
+  return idx;
+}
+function buildLeaderIdx(
+  positions: LabelCandidate[],
+  anchors: Anchor[],
+  ownerIds: (string | null)[],
+): RBush<LeaderEntry> {
+  const idx = new RBush<LeaderEntry>();
+  const items: LeaderEntry[] = [];
+  for (let i = 0; i < positions.length; i++) {
+    if (!ownerIds[i]) continue; // rects have no leader
+    const a = anchors[i];
+    if (!a) continue;
+    const p = positions[i];
+    const bx = p.x + p.w / 2;
+    const by = p.y + p.h / 2;
+    items.push({ ...bboxOfSegment(a.cx, a.cy, bx, by), idx: i, ax: a.cx, ay: a.cy, bx, by });
+  }
+  idx.load(items);
+  return idx;
+}
+
 function optimizePlacements(
   candidatesPerLabel: LabelCandidate[][],
   circles: CircleInfo[],
@@ -404,8 +470,28 @@ function optimizePlacements(
   ownerIds: (string | null)[],
   rand: () => number,
 ): LabelCandidate[] {
+  // Static indexes (rebuilt once per run — circles and rects never move).
+  const circleIdx = new RBush<CircleEntry>();
+  circleIdx.load(circles.map((c) => ({ ...bboxOfCircle(c), c })));
+  const rectIdx = new RBush<RectEntry>();
+  rectIdx.load(rects.map((r) => ({ ...bboxOfRect(r), r })));
+
   const runOnce = (seed: LabelCandidate[]): { positions: LabelCandidate[]; totalCost: number } => {
     const positions = seed.slice();
+    // Dynamic indexes — rebuilt after each full sweep, plus incrementally
+    // updated when a label swaps position within a sweep.
+    let labelIdx = buildLabelIdx(positions);
+    let leaderIdx = buildLeaderIdx(positions, anchors, ownerIds);
+    const labelEntries: LabelEntry[] = positions.map((p, i) => ({ ...bboxOfRect(p), idx: i }));
+    const leaderEntries: (LeaderEntry | null)[] = positions.map((p, i) => {
+      if (!ownerIds[i]) return null;
+      const a = anchors[i];
+      if (!a) return null;
+      const bx = p.x + p.w / 2;
+      const by = p.y + p.h / 2;
+      return { ...bboxOfSegment(a.cx, a.cy, bx, by), idx: i, ax: a.cx, ay: a.cy, bx, by };
+    });
+
     const maxIters = 20;
     for (let iter = 0; iter < maxIters; iter++) {
       let improved = false;
@@ -415,10 +501,16 @@ function optimizePlacements(
         [order[i], order[j]] = [order[j], order[i]];
       }
       for (const i of order) {
+        // Remove self from dynamic indexes so cand costs don't collide with
+        // this label's own current placement.
+        labelIdx.remove(labelEntries[i]);
+        const oldLeader = leaderEntries[i];
+        if (oldLeader) leaderIdx.remove(oldLeader);
+
         let bestCand = positions[i];
-        let bestCost = candidateCost(bestCand, i, positions, circles, rects, anchors, ownerIds);
+        let bestCost = candidateCost(bestCand, i, positions, circleIdx, rectIdx, labelIdx, leaderIdx, anchors, ownerIds);
         for (const cand of candidatesPerLabel[i]) {
-          const cost = candidateCost(cand, i, positions, circles, rects, anchors, ownerIds);
+          const cost = candidateCost(cand, i, positions, circleIdx, rectIdx, labelIdx, leaderIdx, anchors, ownerIds);
           if (cost < bestCost - 0.01) {
             bestCost = cost;
             bestCand = cand;
@@ -428,12 +520,42 @@ function optimizePlacements(
           positions[i] = bestCand;
           improved = true;
         }
+
+        // Re-insert with (possibly new) position.
+        const newLabelEntry: LabelEntry = { ...bboxOfRect(positions[i]), idx: i };
+        labelEntries[i] = newLabelEntry;
+        labelIdx.insert(newLabelEntry);
+        if (ownerIds[i] && anchors[i]) {
+          const a = anchors[i];
+          const p = positions[i];
+          const bx = p.x + p.w / 2;
+          const by = p.y + p.h / 2;
+          const newLeader: LeaderEntry = { ...bboxOfSegment(a.cx, a.cy, bx, by), idx: i, ax: a.cx, ay: a.cy, bx, by };
+          leaderEntries[i] = newLeader;
+          leaderIdx.insert(newLeader);
+        }
       }
       if (!improved) break;
+      // Fully rebuild after each sweep to keep the tree balanced.
+      labelIdx = buildLabelIdx(positions);
+      leaderIdx = buildLeaderIdx(positions, anchors, ownerIds);
+      for (let k = 0; k < positions.length; k++) {
+        labelEntries[k] = { ...bboxOfRect(positions[k]), idx: k };
+        if (ownerIds[k] && anchors[k]) {
+          const a = anchors[k];
+          const p = positions[k];
+          const bx = p.x + p.w / 2;
+          const by = p.y + p.h / 2;
+          leaderEntries[k] = { ...bboxOfSegment(a.cx, a.cy, bx, by), idx: k, ax: a.cx, ay: a.cy, bx, by };
+        } else {
+          leaderEntries[k] = null;
+        }
+      }
     }
+
     let total = 0;
     for (let i = 0; i < positions.length; i++) {
-      total += candidateCost(positions[i], i, positions, circles, rects, anchors, ownerIds);
+      total += candidateCost(positions[i], i, positions, circleIdx, rectIdx, labelIdx, leaderIdx, anchors, ownerIds);
     }
     return { positions, totalCost: total };
   };
@@ -452,12 +574,17 @@ function optimizePlacements(
   }
   const positions = best.positions;
 
+  // Final cleanup: nudge any label still overlapping a non-owner circle to
+  // the shortest-leader alternative that doesn't overlap. Uses the static
+  // circleIdx built above for O(log N + k) lookups.
   for (let i = 0; i < positions.length; i++) {
     const ownerId = ownerIds[i];
     const hits = (cand: LabelCandidate) => {
-      for (const c of circles) {
-        if (c.id === ownerId) continue;
-        if (rectIntersectsCircle(cand, c)) return true;
+      const box = bboxOfRect(cand);
+      const near = circleIdx.search(box);
+      for (const ch of near) {
+        if (ch.c.id === ownerId) continue;
+        if (rectIntersectsCircle(cand, ch.c)) return true;
       }
       return false;
     };
@@ -471,6 +598,7 @@ function optimizePlacements(
   }
   return positions;
 }
+
 
 
 
