@@ -274,24 +274,29 @@ function formatSpaceBadge(spaces: string[]): string {
  * unmatched labels in their original order.
  */
 function consolidateLevelLabels(labels: string[]): string[] {
-  const groups = new Map<string, { num: number; pad: number; raw: string }[]>();
+  const groups = new Map<string, { num: number; pad: number; raw: string; sep: string }[]>();
   const passthrough: string[] = [];
   const seen = new Set<string>();
   for (const raw of labels) {
     if (seen.has(raw)) continue;
     seen.add(raw);
-    const m = /^([A-Za-z]+)(\d+)$/.exec(raw.trim());
+    // Allow optional separator (space, hyphen, underscore) between prefix
+    // and digits, e.g. "Floor 27", "Level-3", "P01".
+    const m = /^([A-Za-z]+)([\s\-_]*)(\d+)$/.exec(raw.trim());
     if (!m) {
       passthrough.push(raw);
       continue;
     }
     const prefix = m[1];
-    const arr = groups.get(prefix) ?? [];
-    arr.push({ num: parseInt(m[2], 10), pad: m[2].length, raw });
-    groups.set(prefix, arr);
+    const sep = m[2] ?? "";
+    const key = `${prefix}\u0000${sep}`;
+    const arr = groups.get(key) ?? [];
+    arr.push({ num: parseInt(m[3], 10), pad: m[3].length, raw, sep });
+    groups.set(key, arr);
   }
   const out: { sortKey: number; label: string }[] = [];
-  for (const [prefix, items] of groups) {
+  for (const [key, items] of groups) {
+    const prefix = key.split("\u0000")[0];
     items.sort((a, b) => a.num - b.num);
     let i = 0;
     while (i < items.length) {
@@ -303,7 +308,7 @@ function consolidateLevelLabels(labels: string[]): string[] {
       const label =
         i === j
           ? start.raw
-          : `${prefix}${fmt(start.num, start.pad)} – ${prefix}${fmt(end.num, end.pad)}`;
+          : `${prefix}${start.sep}${fmt(start.num, start.pad)} – ${prefix}${end.sep}${fmt(end.num, end.pad)}`;
       out.push({ sortKey: start.num, label });
       i = j + 1;
     }
