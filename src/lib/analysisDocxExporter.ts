@@ -502,7 +502,11 @@ async function renderDrawingImage(
     checkAbort(signal);
 
     const page = await pdf.getPage(pageNum);
-    const rotation = normalizeRotation(fileRotations[String(pageNum)]);
+    const userRotation = normalizeRotation(fileRotations[String(pageNum)]);
+    // Compose source /Rotate with the user's rotation so the exported raster
+    // matches the in-app viewer (which layers CSS rotate on top of pdf.js's
+    // default page.rotate). getViewport({ rotation }) is absolute in pdf.js.
+    const rotation = normalizeRotation(((page.rotate || 0) + userRotation) % 360);
     // pdfjs bakes rotation into the viewport (swaps width/height for 90/270
     // and transforms pdf-points coords via convertToViewportRectangle).
     const exportViewport = page.getViewport({ scale: EXPORT_SCALE, rotation });
