@@ -133,7 +133,10 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       onEditorBboxChange,
       editorColor,
       onDownload,
+      rotation = 0,
+      onRotate,
     },
+
 
     ref
   ) {
