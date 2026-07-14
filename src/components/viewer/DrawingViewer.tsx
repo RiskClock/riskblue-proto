@@ -382,38 +382,6 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
 
     return (
       <div className={`flex flex-col h-full min-h-0 ${className ?? ""}`}>
-        {showToolbar && toolbarSlot === "top" && (
-          <div className="flex items-center justify-end gap-2 p-2 border-b">
-            <ViewerToolbar
-              scale={scale}
-              minScale={minScale}
-              maxScale={maxScale}
-              onZoomIn={api.zoomIn}
-              onZoomOut={api.zoomOut}
-              onReset={api.reset}
-              onFitPage={api.fitPage}
-              onFitSelection={
-                initialFitOverlayId
-                  ? () => doFitOverlay(initialFitOverlayId)
-                  : undefined
-              }
-              onDownload={onDownload}
-              pageNav={
-                !hidePageNav && layout === "single-page" && totalPages > 1
-                  ? {
-                      current: page,
-                      total: totalPages,
-                      onPrev: () => onPageChange?.(Math.max(1, page - 1)),
-                      onNext: () =>
-                        onPageChange?.(Math.min(totalPages, page + 1)),
-                      onJump: (n) =>
-                        onPageChange?.(Math.max(1, Math.min(totalPages, n))),
-                    }
-                  : undefined
-              }
-            />
-          </div>
-        )}
         <div
           ref={containerRef}
           className="relative flex-1 min-h-0 overflow-hidden bg-muted/30"
@@ -532,6 +500,38 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                 <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mx-auto" />
                 <p className="text-sm text-muted-foreground">Loading page {page}…</p>
               </div>
+            </div>
+          )}
+          {showToolbar && toolbarSlot === "top" && (
+            <div className="absolute bottom-3 left-3 z-30 flex items-center gap-2 rounded-lg border bg-background/95 backdrop-blur px-2 py-1.5 shadow-md">
+              <ViewerToolbar
+                scale={scale}
+                minScale={minScale}
+                maxScale={maxScale}
+                onZoomIn={api.zoomIn}
+                onZoomOut={api.zoomOut}
+                onReset={api.reset}
+                onFitPage={api.fitPage}
+                onFitSelection={
+                  initialFitOverlayId
+                    ? () => doFitOverlay(initialFitOverlayId)
+                    : undefined
+                }
+                onDownload={onDownload}
+                pageNav={
+                  !hidePageNav && layout === "single-page" && totalPages > 1
+                    ? {
+                        current: page,
+                        total: totalPages,
+                        onPrev: () => onPageChange?.(Math.max(1, page - 1)),
+                        onNext: () =>
+                          onPageChange?.(Math.min(totalPages, page + 1)),
+                        onJump: (n) =>
+                          onPageChange?.(Math.max(1, Math.min(totalPages, n))),
+                      }
+                    : undefined
+                }
+              />
             </div>
           )}
         </div>
