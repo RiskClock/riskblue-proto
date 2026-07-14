@@ -579,7 +579,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
               </div>
             </div>
           )}
-          {rotation !== 0 && (
+          {rotation !== 0 && !hideRotationIndicator && (
             <div
               aria-hidden
               className="pointer-events-none absolute inset-0 z-20"
