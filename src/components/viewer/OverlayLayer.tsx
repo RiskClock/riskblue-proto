@@ -1,7 +1,12 @@
 import { CSSProperties, PointerEvent as ReactPointerEvent, memo, useEffect, useMemo, useRef, useState } from "react";
-import RBush from "rbush";
 import type { NormalizedOverlay } from "./viewerGeometry";
 import { readableTextOn } from "@/lib/awpColor";
+import {
+  requestPlacement,
+  runPlacement,
+  type PlacedLabel,
+} from "./overlayPlacementClient";
+
 
 
 interface OverlayLayerProps {
