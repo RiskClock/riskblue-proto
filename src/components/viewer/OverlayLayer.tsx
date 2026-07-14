@@ -656,11 +656,14 @@ export const OverlayLayer = ({
           r: diameter / 2,
           color,
           label: isDot ? undefined : o.label,
-          hovered: hoveredId === o.id,
+          // NOTE: `hovered` is intentionally not included here — recomputed
+          // per-render in the JSX map so hover changes don't invalidate this
+          // memo (which would rebuild every derived structure downstream).
+          hovered: false,
           isDot,
         };
       });
-  }, [overlays, pageSize.width, pageSize.height, defaultColor, hoveredId, exportScale]);
+  }, [overlays, pageSize.width, pageSize.height, defaultColor, exportScale]);
 
   const rects = useMemo(() => {
     return overlays
@@ -673,9 +676,9 @@ export const OverlayLayer = ({
         h: Math.max(1, o.rect.px?.h ?? o.rect.nh * pageSize.height),
         color: o.color ?? defaultColor,
         label: o.label,
-        hovered: hoveredId === o.id,
       }));
-  }, [overlays, pageSize.width, pageSize.height, defaultColor, hoveredId]);
+  }, [overlays, pageSize.width, pageSize.height, defaultColor]);
+
 
   const rectFootprints: RectInfo[] = useMemo(
     () => rects.map((r) => ({ x: r.x, y: r.y, w: r.w, h: r.h })),
