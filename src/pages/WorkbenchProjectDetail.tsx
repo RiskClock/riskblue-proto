@@ -7423,6 +7423,7 @@ function DrawingPageBlock({
             showToolbar={false}
             interactive={false}
             rotation={rotation}
+            hideRotationIndicator
           />
         ) : (
           <div className="flex items-center justify-center h-full">
