@@ -134,15 +134,6 @@ export const ViewerToolbar = ({
       <Button variant="outline" size="icon" onClick={onZoomIn}>
         <ZoomIn className="w-4 h-4" />
       </Button>
-      {onDownload ? (
-        <Button variant="outline" size="icon" onClick={onDownload} title="Download page">
-          <Download className="w-4 h-4" />
-        </Button>
-      ) : onFitPage && (
-        <Button variant="outline" size="icon" onClick={onFitPage} title="Fit page">
-          <Maximize2 className="w-4 h-4" />
-        </Button>
-      )}
       {onRotate && (
         <Button
           variant="outline"
@@ -151,11 +142,24 @@ export const ViewerToolbar = ({
           title={rotation ? `Rotated ${rotation}° — click to rotate again` : "Rotate 90°"}
           style={
             rotation
-              ? { color: "#6C3BAA", borderColor: "#6C3BAA", boxShadow: "0 0 0 1px #6C3BAA" }
+              ? {
+                  backgroundColor: "#6C3BAA",
+                  borderColor: "#6C3BAA",
+                  color: "#ffffff",
+                }
               : undefined
           }
         >
-          <RotateCw className="w-4 h-4" />
+          <RotateCw className="w-4 h-4" style={rotation ? { color: "#ffffff" } : undefined} />
+        </Button>
+      )}
+      {onDownload ? (
+        <Button variant="outline" size="icon" onClick={onDownload} title="Download page">
+          <Download className="w-4 h-4" />
+        </Button>
+      ) : onFitPage && (
+        <Button variant="outline" size="icon" onClick={onFitPage} title="Fit page">
+          <Maximize2 className="w-4 h-4" />
         </Button>
       )}
 

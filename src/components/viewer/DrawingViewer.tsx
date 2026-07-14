@@ -356,6 +356,21 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activePage, pageCssSize.width, pageCssSize.height, viewportSize.width, viewportSize.height, initialFit, initialFitOverlayId]);
 
+    // When rotation changes, re-fit the page so the newly-sized (potentially
+    // landscape-swapped) content fills the viewport instead of staying at the
+    // pre-rotation zoom/pan (which visually reads as "squished" or off-center).
+    const lastRotationRef = useRef<RotationDeg>(rotation);
+    useEffect(() => {
+      if (lastRotationRef.current === rotation) return;
+      lastRotationRef.current = rotation;
+      if (!activePage || pageCssSize.width === 0 || viewportSize.width === 0) return;
+      // Defer so pageCssSize picks up the swapped aspect before we re-fit.
+      const id = requestAnimationFrame(() => fitPage());
+      return () => cancelAnimationFrame(id);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [rotation, pageCssSize.width, pageCssSize.height]);
+
+
     // Imperative API. Depend on primitive scalars so the object identity is
     // stable across renders that don't actually change layout (avoids
     // re-running consumer effects keyed on the api). `reset` returns to the
@@ -413,15 +428,8 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
         <div
           ref={containerRef}
           className="relative flex-1 min-h-0 overflow-hidden bg-muted/30"
-          style={
-            rotation
-              ? {
-                  boxShadow:
-                    "inset 0 0 0 2px #6C3BAA, inset 0 0 18px 0 rgba(108,59,170,0.55)",
-                }
-              : undefined
-          }
         >
+
 
           {loading && !activePage ? (
             <div className="flex items-center justify-center h-full">
@@ -567,6 +575,17 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                 <p className="text-sm text-muted-foreground">Loading page {page}…</p>
               </div>
             </div>
+          )}
+          {rotation !== 0 && (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 z-20"
+              style={{
+                boxShadow:
+                  "inset 0 0 0 2px #6C3BAA, inset 0 0 18px 0 rgba(108,59,170,0.55)",
+                borderRadius: "inherit",
+              }}
+            />
           )}
           {showToolbar && toolbarSlot === "top" && (
             <div className="absolute bottom-3 left-3 z-30 flex items-center gap-2 rounded-lg border bg-background/95 backdrop-blur px-2 py-1.5 shadow-md">

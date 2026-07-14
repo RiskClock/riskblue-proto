@@ -6265,8 +6265,17 @@ function InstancesReportModal({
           addByFileNamePage(fileName, pageStr);
         }
       }
+      // Spatial-architect-mapped pages: include any page that the user (or
+      // the Spatial Architect run) explicitly attached to this level even if
+      // no floor-plan bbox parsed it and no annotations were placed on it.
+      for (const [key, levels] of pageSpaceMap.entries()) {
+        if (!levels.includes(space)) continue;
+        const [fileName, pageStr] = key.split("::");
+        addByFileNamePage(fileName, pageStr);
+      }
     }
     const pageKeys = Array.from(pageKeySet);
+
 
     const showUnitCol = rows.some((r) => !!r.unitName);
     // Show attribute columns whenever any row in this space carries that
@@ -6456,7 +6465,9 @@ function InstancesReportModal({
         </div>
         {rows.length === 0 ? (
           <div className="text-sm text-muted-foreground">
-            No objects found in this space.
+            {tabs.length > 0
+              ? "No detections have been placed on this space yet. Drawings mapped to this level are shown below."
+              : "No objects found in this space."}
           </div>
         ) : (
           <div className="relative w-full">
@@ -6502,6 +6513,7 @@ function InstancesReportModal({
             </table>
           </div>
         )}
+
 
         {unitsList.length > 0 && (
           <div className="border rounded-md">
@@ -7196,6 +7208,7 @@ function TabbedPagesBlock({
 }: {
   tabs: Array<{
     key: string;
+    fileId: string;
     fileName: string;
     shortName: string;
     pageIdx: number;
@@ -7221,6 +7234,7 @@ function TabbedPagesBlock({
         {active.parentPath ? (
           <DrawingPageBlock
             key={active.key}
+            fileId={active.fileId}
             fileName={active.fileName}
             pageIdx={active.pageIdx}
             source={{
@@ -7264,6 +7278,7 @@ function TabbedPagesBlock({
 
 
 
+
 // ---------------------------------------------------------------------------
 // DrawingPageBlock - renders a single drawing page in the Instances Report
 // with a docked header (file name + Download button) and a non-interactive
@@ -7271,6 +7286,7 @@ function TabbedPagesBlock({
 // to PNG via html2canvas.
 // ---------------------------------------------------------------------------
 function DrawingPageBlock({
+  fileId,
   fileName,
   pageIdx,
   source,
@@ -7278,6 +7294,7 @@ function DrawingPageBlock({
   page,
   customSelector,
 }: {
+  fileId: string;
   fileName: string;
   pageIdx: number;
   source: DocumentSourceDescriptor;
@@ -7289,6 +7306,7 @@ function DrawingPageBlock({
   const containerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const [downloading, setDownloading] = useState(false);
+  const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
   // Lazy-mount the DrawingViewer only when this block scrolls near the
   // viewport. Renders dozens of pages in the Threat Report at once would
   // otherwise hammer the main thread with simultaneous pdf.js rasterization.
@@ -7311,6 +7329,32 @@ function DrawingPageBlock({
     io.observe(node);
     return () => io.disconnect();
   }, [inView]);
+
+  // Fetch persisted per-page rotation for this drawing so the preview matches
+  // what the user set in the drawing modal.
+  useEffect(() => {
+    if (!fileId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("analysis_request_files")
+          .select("page_rotations")
+          .eq("id", fileId)
+          .maybeSingle();
+        if (cancelled) return;
+        const raw = (data?.page_rotations ?? {}) as Record<string, number>;
+        const v = ((Number(raw[String(pageIdx)]) || 0) % 360 + 360) % 360;
+        if (v === 90 || v === 180 || v === 270) setRotation(v as 90 | 180 | 270);
+        else setRotation(0);
+      } catch {
+        /* ignore — non-blocking */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fileId, pageIdx]);
 
   const handleDownload = async () => {
     setDownloading(true);
@@ -7378,6 +7422,7 @@ function DrawingPageBlock({
             overlays={overlays}
             showToolbar={false}
             interactive={false}
+            rotation={rotation}
           />
         ) : (
           <div className="flex items-center justify-center h-full">
@@ -7385,6 +7430,7 @@ function DrawingPageBlock({
           </div>
         )}
       </div>
+
     </div>
   );
 }
