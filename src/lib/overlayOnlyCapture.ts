@@ -20,6 +20,7 @@ import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { OverlayLayer } from "@/components/viewer/OverlayLayer";
 import {
+  rotateNormalizedRect,
   toNormalizedRect,
   type NormalizedOverlay,
   type OverlayInput,
@@ -38,13 +39,16 @@ export interface OverlayOnlyCaptureInput {
   /** Multiplier for overlay geometry (borders, fonts, dot size). Default: EXPORT_OVERLAY_SCALE. */
   exportScale?: number;
   /**
-   * Optional CCW rotation (degrees) applied to each label pill around its
-   * own center. Used by the vector-PDF export when the underlying page is
-   * baked with a user rotation, so labels stay upright after the PDF viewer
-   * rotates the whole page.
+   * Optional user rotation (0/90/180/270 CW) applied to the overlay layout
+   * before rendering. Overlay rects are rotated into the rotated view and
+   * `pageSize` is swapped when the rotation is 90/270, so the label
+   * optimizer places pills correctly for the final rotated composition.
+   * The resulting PNG matches the rotated view's dimensions; callers must
+   * stamp it onto the source page accounting for that rotation.
    */
-  labelCounterRotationDeg?: number;
+  userRotationDeg?: 0 | 90 | 180 | 270;
 }
+
 
 function normalizeOverlays(overlays: any[]): NormalizedOverlay[] {
   const out: NormalizedOverlay[] = [];
@@ -67,10 +71,30 @@ function normalizeOverlays(overlays: any[]): NormalizedOverlay[] {
 export async function captureOverlayOnly(
   input: OverlayOnlyCaptureInput,
 ): Promise<RasterizedPage | null> {
-  const { pageSize } = input;
   const outScale = input.outScale ?? 2;
   const exportScale = input.exportScale ?? EXPORT_OVERLAY_SCALE;
-  const normalized = normalizeOverlays(input.overlays);
+  const userRot = ((input.userRotationDeg ?? 0) % 360) as 0 | 90 | 180 | 270;
+
+  // Swap page dims for 90/270 so the label optimizer works in the same
+  // coordinate space the final rotated page will be displayed in.
+  const pageSize =
+    userRot === 90 || userRot === 270
+      ? { width: input.pageSize.height, height: input.pageSize.width }
+      : { width: input.pageSize.width, height: input.pageSize.height };
+
+  // Rotate each overlay's normalized rect into the rotated view so labels
+  // are placed adjacent to annotations in the orientation the user sees.
+  const normalized = normalizeOverlays(input.overlays).map((o) =>
+    userRot
+      ? {
+          ...o,
+          rect: {
+            ...o.rect,
+            ...rotateNormalizedRect(o.rect, userRot),
+          },
+        }
+      : o,
+  );
 
   const container = document.createElement("div");
   container.style.cssText = [
@@ -85,9 +109,6 @@ export async function captureOverlayOnly(
   ].join(";");
   const surface = document.createElement("div");
   surface.style.cssText = `position:relative;width:${pageSize.width}px;height:${pageSize.height}px;`;
-  // Include a fake <img> element so rasterizeViewerSurface can anchor its
-  // toLocal(x,y) mapping. The img is 1x1 transparent, sized to pageSize via
-  // width/height attributes — this gives it a bounding rect we can measure.
   const anchorImg = document.createElement("img");
   anchorImg.src =
     "data:image/gif;base64,R0lGODlhAQABAAAAACwAAAAAAQABAAA=";
@@ -109,16 +130,13 @@ export async function captureOverlayOnly(
       } as any),
     );
 
-    // Wait for React to commit + layout to settle.
     await new Promise<void>((r) =>
       requestAnimationFrame(() => requestAnimationFrame(() => r())),
     );
-    // Extra RAF for label optimizer's useMemo second pass.
     await new Promise<void>((r) =>
       requestAnimationFrame(() => requestAnimationFrame(() => r())),
     );
 
-    // Wait for the anchor img to be laid out.
     if (!anchorImg.clientWidth || !anchorImg.clientHeight) {
       await new Promise((r) => setTimeout(r, 30));
     }
@@ -126,7 +144,6 @@ export async function captureOverlayOnly(
     return await rasterizeViewerSurface(surface, {
       outScale,
       overlaysOnly: true,
-      labelCounterRotationDeg: input.labelCounterRotationDeg,
     });
   } catch (e) {
     console.warn("[overlayOnlyCapture] failed", e);
