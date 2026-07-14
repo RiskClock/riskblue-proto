@@ -7286,6 +7286,7 @@ function TabbedPagesBlock({
 // to PNG via html2canvas.
 // ---------------------------------------------------------------------------
 function DrawingPageBlock({
+  fileId,
   fileName,
   pageIdx,
   source,
@@ -7293,6 +7294,7 @@ function DrawingPageBlock({
   page,
   customSelector,
 }: {
+  fileId: string;
   fileName: string;
   pageIdx: number;
   source: DocumentSourceDescriptor;
@@ -7304,6 +7306,7 @@ function DrawingPageBlock({
   const containerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const [downloading, setDownloading] = useState(false);
+  const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
   // Lazy-mount the DrawingViewer only when this block scrolls near the
   // viewport. Renders dozens of pages in the Threat Report at once would
   // otherwise hammer the main thread with simultaneous pdf.js rasterization.
@@ -7326,6 +7329,32 @@ function DrawingPageBlock({
     io.observe(node);
     return () => io.disconnect();
   }, [inView]);
+
+  // Fetch persisted per-page rotation for this drawing so the preview matches
+  // what the user set in the drawing modal.
+  useEffect(() => {
+    if (!fileId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("analysis_request_files")
+          .select("page_rotations")
+          .eq("id", fileId)
+          .maybeSingle();
+        if (cancelled) return;
+        const raw = (data?.page_rotations ?? {}) as Record<string, number>;
+        const v = ((Number(raw[String(pageIdx)]) || 0) % 360 + 360) % 360;
+        if (v === 90 || v === 180 || v === 270) setRotation(v as 90 | 180 | 270);
+        else setRotation(0);
+      } catch {
+        /* ignore — non-blocking */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fileId, pageIdx]);
 
   const handleDownload = async () => {
     setDownloading(true);
@@ -7393,6 +7422,7 @@ function DrawingPageBlock({
             overlays={overlays}
             showToolbar={false}
             interactive={false}
+            rotation={rotation}
           />
         ) : (
           <div className="flex items-center justify-center h-full">
@@ -7400,6 +7430,7 @@ function DrawingPageBlock({
           </div>
         )}
       </div>
+
     </div>
   );
 }
