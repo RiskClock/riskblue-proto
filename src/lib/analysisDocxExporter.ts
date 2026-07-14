@@ -429,6 +429,7 @@ async function renderDrawingImage(
   pdfCache: PdfCache,
   signal?: AbortSignal,
   sizeBytes?: number | null,
+  rotation: RotationDeg = 0,
 ): Promise<{ png: Uint8Array; width: number; height: number; hasHighlight: boolean } | null> {
   if (!storagePath) return null;
 
@@ -449,6 +450,7 @@ async function renderDrawingImage(
     let bbox: [number, number, number, number] | null = null;
     let coordSpace: "pixels" | "pdf-points" = "pixels";
     let aiViewportWidth = 0;
+    let aiViewportHeight = 0;
     let pageResolved = false;
 
     if (aiBBox) {
@@ -456,12 +458,12 @@ async function renderDrawingImage(
       bbox = [aiBBox.x1, aiBBox.y1, aiBBox.x2, aiBBox.y2];
       coordSpace = "pixels";
       const refPage = await pdf.getPage(pageNum);
+      // aiBBox is in the UNROTATED raster space of the reference viewport.
       const refVp = refPage.getViewport({ scale: 4 });
       aiViewportWidth = refVp.width;
+      aiViewportHeight = refVp.height;
       pageResolved = true;
     } else {
-      // Occurrence index: how many earlier rows on the same page share the
-      // same primary candidate text. Disambiguates duplicate-text rows.
       let occurrenceIndex = 0;
       if (matchingRow) {
         const primary = matchingRow.candidates[0];
@@ -500,7 +502,9 @@ async function renderDrawingImage(
     checkAbort(signal);
 
     const page = await pdf.getPage(pageNum);
-    const exportViewport = page.getViewport({ scale: EXPORT_SCALE });
+    // pdfjs bakes rotation into the viewport (swaps width/height for 90/270
+    // and transforms pdf-points coords via convertToViewportRectangle).
+    const exportViewport = page.getViewport({ scale: EXPORT_SCALE, rotation });
 
     const sourceCanvas = document.createElement("canvas");
     sourceCanvas.width = exportViewport.width;
@@ -515,11 +519,29 @@ async function renderDrawingImage(
       const [x1, y1, x2, y2] = bbox;
       let cx: number, cy: number, side: number;
       if (coordSpace === "pixels") {
-        const k = exportViewport.width / aiViewportWidth;
-        cx = ((x1 + x2) / 2) * k;
-        cy = ((y1 + y2) / 2) * k;
-        side = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) * k;
+        // Normalize in the source (unrotated) raster, then apply rotation to
+        // land on the rotated exportViewport.
+        const nxc = ((x1 + x2) / 2) / aiViewportWidth;
+        const nyc = ((y1 + y2) / 2) / aiViewportHeight;
+        const nw = Math.abs(x2 - x1) / aiViewportWidth;
+        const nh = Math.abs(y2 - y1) / aiViewportHeight;
+        let rxc = nxc, ryc = nyc;
+        switch (rotation) {
+          case 90: rxc = 1 - nyc; ryc = nxc; break;
+          case 180: rxc = 1 - nxc; ryc = 1 - nyc; break;
+          case 270: rxc = nyc; ryc = 1 - nxc; break;
+        }
+        cx = rxc * exportViewport.width;
+        cy = ryc * exportViewport.height;
+        const rotSwap = rotation === 90 || rotation === 270;
+        const sidePx = Math.max(
+          (rotSwap ? nh : nw) * exportViewport.width,
+          (rotSwap ? nw : nh) * exportViewport.height,
+        );
+        side = sidePx;
       } else {
+        // pdf-points → convertToViewportRectangle on the rotated viewport
+        // already yields rotated pixel coords.
         const [vx1, vy1, vx2, vy2] = exportViewport.convertToViewportRectangle([x1, y1, x2, y2]);
         cx = (vx1 + vx2) / 2;
         cy = (vy1 + vy2) / 2;
