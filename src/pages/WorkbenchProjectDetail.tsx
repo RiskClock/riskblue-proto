@@ -1020,18 +1020,18 @@ export default function WorkbenchProjectDetail() {
     }
   }, [projectId, requestId, pageInfoRows.length]);
 
-  // Load Page Info: list files, fill missing page counts via pdf.js, cache to DB.
-  // source_type lives on analysis_requests, not on analysis_request_files.
-  const requestSourceType = (analysisRequest as any)?.source_type as string | undefined;
+  // Load Page Info: list files for the project (not blocked on analysisRequest),
+  // fill missing page counts via pdf.js, cache to DB. We join analysis_requests
+  // inline to obtain source_type (needed to pick the right storage bucket) in a
+  // single round-trip.
   useEffect(() => {
-    if (!requestId || !requestSourceType) { setPageInfoRows([]); return; }
+    if (!projectId) return;
     let cancelled = false;
-    const cacheKey = `riskblue:workbench-page-info:${requestId}`;
-    const projectCacheKey = projectId ? `riskblue:workbench-page-info:project:${projectId}` : null;
+    const projectCacheKey = `riskblue:workbench-page-info:project:${projectId}`;
     let hasCachedRows = false;
     const cachedPageCounts = new Map<string, number>();
     try {
-      const cached = window.localStorage.getItem(cacheKey);
+      const cached = window.localStorage.getItem(projectCacheKey);
       const parsed = cached ? JSON.parse(cached) : null;
       if (Array.isArray(parsed?.rows)) {
         const cachedRows = parsed.rows
@@ -1039,11 +1039,12 @@ export default function WorkbenchProjectDetail() {
           .map((r: any) => ({
             id: r.id,
             name: r.name,
-            source_type: requestSourceType,
+            source_type: typeof r.source_type === "string" ? r.source_type : "manual_upload",
             storage_path: typeof r.storage_path === "string" ? r.storage_path : null,
             mime_type: typeof r.mime_type === "string" ? r.mime_type : null,
-            // Same null-cache guard as the project-level cache above - only trust
-            // positive integers so a half-written cache entry can't stick as `0`.
+            size_bytes: typeof r.size_bytes === "number" ? r.size_bytes : null,
+            // Same null-cache guard - only trust positive integers so a half-written
+            // cache entry can't stick as `0`.
             page_count:
               typeof r.page_count === "number" && Number.isFinite(r.page_count) && r.page_count > 0
                 ? r.page_count
@@ -1063,16 +1064,20 @@ export default function WorkbenchProjectDetail() {
     (async () => {
       setPageInfoLoading(!hasCachedRows);
       try {
+        // Single query, keyed by project_id via inner join on analysis_requests.
+        // Runs in parallel with the analysisRequest query above - no waterfall.
         const { data, error } = await supabase
           .from("analysis_request_files")
-          .select("id, name, storage_path, mime_type, size_bytes, expected_page_count")
-          .eq("analysis_request_id", requestId)
+          .select(
+            "id, name, storage_path, mime_type, size_bytes, expected_page_count, analysis_requests!inner(source_type, project_id)",
+          )
+          .eq("analysis_requests.project_id", projectId)
           .order("name");
         if (error) throw error;
         const initial: PageInfoRow[] = ((data ?? []) as any[]).map((r) => ({
           id: r.id,
           name: r.name,
-          source_type: requestSourceType,
+          source_type: (r.analysis_requests?.source_type as string | undefined) ?? "manual_upload",
           storage_path: r.storage_path,
           mime_type: r.mime_type,
           size_bytes: r.size_bytes ?? null,
@@ -1081,57 +1086,22 @@ export default function WorkbenchProjectDetail() {
         if (cancelled) return;
         setPageInfoRows(initial);
         try {
-          window.localStorage.setItem(cacheKey, JSON.stringify({ rows: initial, updatedAt: Date.now() }));
-          if (projectCacheKey) window.localStorage.setItem(projectCacheKey, JSON.stringify({ rows: initial, updatedAt: Date.now() }));
+          window.localStorage.setItem(projectCacheKey, JSON.stringify({ rows: initial, updatedAt: Date.now() }));
         } catch {
           /* ignore cache */
         }
 
+        // Opportunistic backfill for legacy rows that lack expected_page_count.
+        // We no longer pre-verify with storage.list() - we trust the DB and let
+        // the resolver fail lazily if an object is missing.
         const missing = initial.filter(
           (r) => r.page_count == null && r.storage_path && (r.mime_type ?? "application/pdf").includes("pdf"),
         );
         if (missing.length === 0) return;
-
-        // Verify objects exist before signing to avoid 400 spam for orphans.
-        const existsByRow = new Map<string, boolean>();
-        const dirGroups = new Map<string, { bucket: string; dir: string; rows: typeof missing }>();
-        for (const r of missing) {
-          const bucket = bucketForSource(r.source_type);
-          const path = r.storage_path!;
-          const lastSlash = path.lastIndexOf("/");
-          const dir = lastSlash >= 0 ? path.slice(0, lastSlash) : "";
-          const key = `${bucket}::${dir}`;
-          let g = dirGroups.get(key);
-          if (!g) {
-            g = { bucket, dir, rows: [] };
-            dirGroups.set(key, g);
-          }
-          g.rows.push(r);
-        }
-        await Promise.all(
-          Array.from(dirGroups.values()).map(async ({ bucket, dir, rows: grpRows }) => {
-            try {
-              const { data, error: listErr } = await supabase.storage
-                .from(bucket)
-                .list(dir, { limit: 1000 });
-              if (listErr || !data) return;
-              const names = new Set(data.map((d) => d.name));
-              for (const r of grpRows) {
-                const fname = r.storage_path!.slice(r.storage_path!.lastIndexOf("/") + 1);
-                if (names.has(fname)) existsByRow.set(r.id, true);
-              }
-            } catch {
-              /* ignore */
-            }
-          }),
-        );
         const pdfjsLib = await import("pdfjs-dist");
         for (const row of missing) {
           if (cancelled) return;
-          if (!existsByRow.get(row.id)) continue;
           try {
-            // Route through the shared cache so this one-time page-count
-            // download populates the same store the viewer/exporters read.
             const { blob } = await resolveDocumentSource({
               kind: "supabase-storage",
               bucket: bucketForSource(row.source_type),
@@ -1144,18 +1114,16 @@ export default function WorkbenchProjectDetail() {
             const count = doc.numPages;
             try { doc.destroy(); } catch { /* ignore */ }
             if (cancelled) return;
-            setPageInfoRows((prev) =>
-              {
-                const next = prev.map((r) => (r.id === row.id ? { ...r, page_count: count } : r));
-                try {
-                  window.localStorage.setItem(cacheKey, JSON.stringify({ rows: next, updatedAt: Date.now() }));
-                  if (projectCacheKey) window.localStorage.setItem(projectCacheKey, JSON.stringify({ rows: next, updatedAt: Date.now() }));
-                } catch {
-                  /* ignore cache */
-                }
-                return next;
-              },
-            );
+            setPageInfoRows((prev) => {
+              const next = prev.map((r) => (r.id === row.id ? { ...r, page_count: count } : r));
+              try {
+                window.localStorage.setItem(projectCacheKey, JSON.stringify({ rows: next, updatedAt: Date.now() }));
+              } catch {
+                /* ignore cache */
+              }
+              return next;
+            });
+            // Backfill DB so the next visit skips this download.
             void supabase
               .from("analysis_request_files")
               .update({ expected_page_count: count })
@@ -1171,7 +1139,8 @@ export default function WorkbenchProjectDetail() {
       }
     })();
     return () => { cancelled = true; };
-  }, [requestId, requestSourceType, projectId]);
+  }, [projectId]);
+
 
 
 
