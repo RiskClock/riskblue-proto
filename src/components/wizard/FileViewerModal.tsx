@@ -1746,6 +1746,7 @@ export const FileViewerModal = ({
         page={downloadPageOverride ?? currentPage}
         overlays={overlays}
         fileName={fileName}
+        userRotation={rotationByPage[currentPage] ?? 0}
       />
     </Dialog>
   );
