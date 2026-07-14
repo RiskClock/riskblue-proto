@@ -7376,7 +7376,7 @@ function DrawingPageBlock({
             fileName,
             sourceBytes: bytes,
             source,
-            pages: [{ page: page ?? 1, overlays }],
+            pages: [{ page: page ?? 1, overlays, userRotation: rotation }],
           },
         ],
         { includeOverlays: true },
