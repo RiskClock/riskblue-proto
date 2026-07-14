@@ -37,6 +37,13 @@ export interface OverlayOnlyCaptureInput {
   outScale?: number;
   /** Multiplier for overlay geometry (borders, fonts, dot size). Default: EXPORT_OVERLAY_SCALE. */
   exportScale?: number;
+  /**
+   * Optional CCW rotation (degrees) applied to each label pill around its
+   * own center. Used by the vector-PDF export when the underlying page is
+   * baked with a user rotation, so labels stay upright after the PDF viewer
+   * rotates the whole page.
+   */
+  labelCounterRotationDeg?: number;
 }
 
 function normalizeOverlays(overlays: any[]): NormalizedOverlay[] {
