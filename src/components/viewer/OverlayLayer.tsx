@@ -481,6 +481,8 @@ export const OverlayLayer = ({
   onOverlayClick,
   onOverlayDrag,
   exportScale = 1,
+  syncPlacement = false,
+  onPlacingChange,
 }: OverlayLayerProps) => {
   const [drag, setDrag] = useState<null | {
     id: string;
@@ -492,6 +494,9 @@ export const OverlayLayer = ({
   }>(null);
   const dragRef = useRef(drag);
   dragRef.current = drag;
+
+  const onPlacingChangeRef = useRef(onPlacingChange);
+  onPlacingChangeRef.current = onPlacingChange;
 
   const circles: CircleInfo[] = useMemo(() => {
     return overlays
