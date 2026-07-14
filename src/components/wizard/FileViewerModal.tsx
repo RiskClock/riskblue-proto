@@ -286,12 +286,105 @@ export const FileViewerModal = ({
   const [downloadIncludeOverlays, setDownloadIncludeOverlays] = useState(true);
   const [downloadBusy, setDownloadBusy] = useState(false);
 
+  // Per-page rotation persisted on analysis_request_files.page_rotations
+  const [rotationByPage, setRotationByPage] = useState<Record<number, 0 | 90 | 180 | 270>>({});
+  const rotationLatestRef = useRef<Record<number, 0 | 90 | 180 | 270>>({});
+  const rotationDirtyRef = useRef(false);
+  const rotationTimerRef = useRef<number | null>(null);
+
+  // Load rotations when file changes / modal opens
+  useEffect(() => {
+    if (!isOpen || !fileId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("analysis_request_files")
+          .select("page_rotations")
+          .eq("id", fileId)
+          .maybeSingle();
+        if (cancelled) return;
+        const raw = (data?.page_rotations ?? {}) as Record<string, number>;
+        const norm: Record<number, 0 | 90 | 180 | 270> = {};
+        for (const [k, v] of Object.entries(raw)) {
+          const n = ((Number(v) || 0) % 360 + 360) % 360;
+          if (n === 90 || n === 180 || n === 270) norm[Number(k)] = n as 90 | 180 | 270;
+        }
+        setRotationByPage(norm);
+        rotationLatestRef.current = norm;
+        rotationDirtyRef.current = false;
+      } catch {
+        /* ignore — non-blocking */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, fileId]);
+
+  const flushRotations = useCallback(async () => {
+    if (!fileId || !rotationDirtyRef.current) return;
+    const payload = { ...rotationLatestRef.current };
+    // Strip zeros to keep the map compact.
+    const compact: Record<string, number> = {};
+    for (const [k, v] of Object.entries(payload)) if (v) compact[k] = v;
+    try {
+      await supabase
+        .from("analysis_request_files")
+        .update({ page_rotations: compact })
+        .eq("id", fileId);
+      rotationDirtyRef.current = false;
+    } catch {
+      /* keep dirty so a later flush retries */
+    }
+  }, [fileId]);
+
+  const scheduleRotationFlush = useCallback(() => {
+    if (rotationTimerRef.current) window.clearTimeout(rotationTimerRef.current);
+    rotationTimerRef.current = window.setTimeout(() => {
+      rotationTimerRef.current = null;
+      void flushRotations();
+    }, 500);
+  }, [flushRotations]);
+
+  const handleRotate = useCallback(() => {
+    const cur = rotationByPage[currentPage] ?? 0;
+    const next = ((cur + 90) % 360) as 0 | 90 | 180 | 270;
+    const nextMap = { ...rotationByPage, [currentPage]: next };
+    setRotationByPage(nextMap);
+    rotationLatestRef.current = nextMap;
+    rotationDirtyRef.current = true;
+    scheduleRotationFlush();
+  }, [rotationByPage, currentPage, scheduleRotationFlush]);
+
+  // Save on beforeunload (tab close) using keepalive
+  useEffect(() => {
+    const onBeforeUnload = () => {
+      if (!rotationDirtyRef.current) return;
+      // Fire-and-forget; supabase-js runs fetch under the hood.
+      void flushRotations();
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+    };
+  }, [flushRotations]);
+
+  // Cleanup / best-effort save on unmount
+  useEffect(() => {
+    return () => {
+      if (rotationTimerRef.current) window.clearTimeout(rotationTimerRef.current);
+      if (rotationDirtyRef.current) void flushRotations();
+    };
+  }, [flushRotations]);
+
   // Keep currentPage in sync with the requested pageIndex when the modal opens
   // or when the parent changes the target page.
   useEffect(() => {
     setCurrentPage(pageIndex);
     setRenderedPageSize(null);
   }, [pageIndex, fileId]);
+
 
   const sidebarEnabled =
     !!awpClasses && !!analysisRequestId && !!parentFileId;
