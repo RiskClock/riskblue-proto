@@ -135,50 +135,54 @@ export async function buildAnnotatedPdf(
       const srcPage = src.getPage(idx);
       const rotation = normalizedRotation(srcPage.getRotation().angle);
       const { width: mediaWidth, height: mediaHeight } = srcPage.getSize();
-      const displayWidth = rotation % 180 === 0 ? mediaWidth : mediaHeight;
-      const displayHeight = rotation % 180 === 0 ? mediaHeight : mediaWidth;
+      const userRot = spec.userRotation ?? 0;
+      const totalRot = (((rotation + userRot) % 360) + 360) % 360 as 0 | 90 | 180 | 270;
+
+      // Dimensions the overlay PNG must match — the fully-rotated display view.
+      const totalDisplayWidth = totalRot % 180 === 0 ? mediaWidth : mediaHeight;
+      const totalDisplayHeight = totalRot % 180 === 0 ? mediaHeight : mediaWidth;
 
       // Preserve the original vector page. Re-drawing rotated pages as XObjects
       // caused blank output for real drawings whose MediaBox and /Rotate differ.
       const [newPage] = await out.copyPages(src, [idx]);
       out.addPage(newPage);
 
-      const userRot = spec.userRotation ?? 0;
-
       if (includeOverlays && spec.overlays.length > 0) {
         const capture = await captureOverlayOnly({
-          pageSize: { width: displayWidth, height: displayHeight },
+          // Base the layout on the post-source-rotation dims (the coordinate
+          // space overlays are stored in). captureOverlayOnly will swap dims
+          // internally when userRotationDeg is 90/270.
+          pageSize: {
+            width: rotation % 180 === 0 ? mediaWidth : mediaHeight,
+            height: rotation % 180 === 0 ? mediaHeight : mediaWidth,
+          },
           overlays: spec.overlays,
           outScale: 3,
-          // Pre-rotate label pills by -userRot so that after the PDF viewer
-          // applies /Rotate = (source + userRot), labels appear upright while
-          // circles/rects (which we intentionally leave alone) rotate with
-          // the page and stay pinned to the same features.
-          labelCounterRotationDeg: userRot ? -userRot : 0,
+          userRotationDeg: userRot,
         });
         if (capture) {
           const overlayBytes = await capture.blob.arrayBuffer();
           const png = await out.embedPng(new Uint8Array(overlayBytes));
+          // Stamp using the total (source + user) rotation so the PNG lands
+          // correctly after the PDF viewer applies setRotation(totalRot).
           newPage.drawImage(
             png,
             overlayDrawOptionsForCopiedPage({
               mediaWidth,
               mediaHeight,
-              displayWidth,
-              displayHeight,
-              rotation,
+              displayWidth: totalDisplayWidth,
+              displayHeight: totalDisplayHeight,
+              rotation: totalRot,
             }),
           );
         }
       }
 
       // Bake the user's rotation on top of the source page's /Rotate. The
-      // overlay stamp was drawn into the page content stream above, so it
-      // rotates together with the page — matching the in-app viewer. Labels
-      // inside the stamp were pre-rotated by -userRot so they land upright.
+      // overlay stamp was drawn into the page content stream above; it will
+      // rotate together with the page and match the in-app viewer.
       if (userRot) {
-        const combined = ((rotation + userRot) % 360 + 360) % 360;
-        newPage.setRotation(degrees(combined));
+        newPage.setRotation(degrees(totalRot));
       }
 
       done += 1;
