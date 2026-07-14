@@ -17,6 +17,22 @@ export interface PDFMetadata {
   pages: PDFPageData[];
 }
 
+/**
+ * Extract the page count of a PDF file client-side. Best-effort: returns null
+ * on any failure so callers can proceed without blocking an upload.
+ */
+export const extractPdfPageCount = async (file: File | Blob): Promise<number | null> => {
+  try {
+    const buf = await file.arrayBuffer();
+    const doc = await pdfjsLib.getDocument({ data: buf }).promise;
+    const count = doc.numPages;
+    try { doc.destroy(); } catch { /* ignore */ }
+    return count;
+  } catch {
+    return null;
+  }
+};
+
 export const formatFileSize = (bytes: number): string => {
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
