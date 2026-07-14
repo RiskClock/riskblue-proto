@@ -578,7 +578,12 @@ export const OverlayLayer = ({
   );
 
 
-  const placedLabels: PlacedLabel[] = useMemo(() => {
+  // The label-placement optimizer is O(candidates * obstacles) and dominates
+  // mount time for pages with dozens of annotations. Extract the whole pass
+  // into a plain function so we can invoke it either synchronously (export
+  // capture) or deferred to a microtask (interactive viewer) without
+  // blocking paint.
+  const runPlacement = (): PlacedLabel[] => {
     const labeledCircles = circles.filter((c) => !!c.label);
     const labeledRects = rects.filter((r) => !!r.label);
     if (labeledCircles.length === 0 && labeledRects.length === 0) return [];
@@ -674,8 +679,52 @@ export const OverlayLayer = ({
       });
     }
     return out;
+  };
+
+  // Synchronous branch — used by offscreen export capture, which rasterizes
+  // on the next animation frame and can't wait for a deferred setState.
+  const syncPlaced = useMemo(
+    () => (syncPlacement ? runPlacement() : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [circleLayoutKey, rectLayoutKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx]);
+    [syncPlacement, circleLayoutKey, rectLayoutKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx],
+  );
+
+  // Async branch — defers the heavy optimizer pass out of the render tick so
+  // opening a viewer with many annotations doesn't block paint.
+  const [asyncPlaced, setAsyncPlaced] = useState<PlacedLabel[]>([]);
+  useEffect(() => {
+    if (syncPlacement) return;
+    const hasLabels =
+      circles.some((c) => !!c.label) || rects.some((r) => !!r.label);
+    if (!hasLabels) {
+      setAsyncPlaced([]);
+      onPlacingChangeRef.current?.(false);
+      return;
+    }
+    onPlacingChangeRef.current?.(true);
+    let cancelled = false;
+    const handle = setTimeout(() => {
+      if (cancelled) return;
+      const result = runPlacement();
+      setAsyncPlaced(result);
+      onPlacingChangeRef.current?.(false);
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncPlacement, circleLayoutKey, rectLayoutKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx]);
+
+  // On unmount, ensure the parent's "placing" flag doesn't stay stuck on.
+  useEffect(() => {
+    return () => {
+      onPlacingChangeRef.current?.(false);
+    };
+  }, []);
+
+  const placedLabels: PlacedLabel[] = syncPlacement ? (syncPlaced ?? []) : asyncPlaced;
+
 
 
   return (
