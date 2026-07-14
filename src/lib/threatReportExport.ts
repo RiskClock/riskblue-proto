@@ -141,7 +141,10 @@ export interface ThreatReportPageRef {
     nh?: number;
   }>;
   tabLabel: string;
+  /** Optional per-page rotation baked into the exported raster. */
+  rotation?: 0 | 90 | 180 | 270;
 }
+
 
 export interface ThreatReportSpace {
   name: string; // "Level 2" or "__unassigned__"
