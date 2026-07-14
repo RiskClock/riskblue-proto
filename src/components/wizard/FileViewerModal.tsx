@@ -1463,12 +1463,32 @@ export const FileViewerModal = ({
                     )
                   : undefined
               }
+              onPlacingChange={setIsPlacingLabels}
             />
           </div>
 
 
           {sidebarEnabled && awpClasses ? (
-            <div className="w-80 flex-shrink-0 border rounded-lg flex flex-col min-h-0">
+            <div className="w-80 flex-shrink-0 border rounded-lg flex flex-col min-h-0 relative">
+              {isPlacingLabels && (
+                <div
+                  className="absolute inset-0 z-20 flex items-center justify-center bg-background/60 backdrop-blur-[1px] rounded-lg"
+                  aria-live="polite"
+                  aria-busy="true"
+                >
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground bg-background/90 border rounded-md px-3 py-1.5 shadow-sm">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Placing labels…
+                  </div>
+                </div>
+              )}
+              <div
+                className={
+                  isPlacingLabels
+                    ? "flex-1 flex flex-col min-h-0 pointer-events-none select-none"
+                    : "flex-1 flex flex-col min-h-0"
+                }
+              >
               <Tabs
                 value={activeTab}
                 onValueChange={(v) => {
