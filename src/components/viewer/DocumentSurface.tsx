@@ -261,18 +261,35 @@ export const DocumentSurface = ({
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
     >
-      <img
-        ref={imgRef}
-        className="pdf-canvas-element"
-        src={imageUrl}
-        draggable={false}
-        style={{
-          width: pageSize.width,
-          height: pageSize.height,
-          display: "block",
-          pointerEvents: "none",
-        }}
-      />
+      {(() => {
+        // When rotated 90/270, the underlying image is rendered at its native
+        // (unrotated) aspect and CSS-rotated inside the rotated outer box.
+        const swapped = rotation === 90 || rotation === 270;
+        const innerW = swapped ? pageSize.height : pageSize.width;
+        const innerH = swapped ? pageSize.width : pageSize.height;
+        const left = (pageSize.width - innerW) / 2;
+        const top = (pageSize.height - innerH) / 2;
+        return (
+          <img
+            ref={imgRef}
+            className="pdf-canvas-element"
+            src={imageUrl}
+            draggable={false}
+            style={{
+              position: "absolute",
+              left,
+              top,
+              width: innerW,
+              height: innerH,
+              display: "block",
+              pointerEvents: "none",
+              transform: rotation ? `rotate(${rotation}deg)` : undefined,
+              transformOrigin: "center center",
+            }}
+          />
+        );
+      })()}
+
       {overlays && overlays.length > 0 && (
         <OverlayLayer
           overlays={overlays}
