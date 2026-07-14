@@ -584,6 +584,9 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                     : undefined
                 }
                 onDownload={onDownload}
+                rotation={rotation}
+                onRotate={onRotate}
+
                 pageNav={
                   !hidePageNav && layout === "single-page" && totalPages > 1
                     ? {
