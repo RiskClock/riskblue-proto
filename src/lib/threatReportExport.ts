@@ -45,9 +45,18 @@ async function renderPageWithOverlays(
     const doc = await pdfjsLib.getDocument({ data }).promise;
     if (pageIdx < 1 || pageIdx > doc.numPages) return null;
     const page = await doc.getPage(pageIdx);
-    const base = page.getViewport({ scale: 1, rotation });
+    // The in-app viewer composes source /Rotate with the user's rotation
+    // (raster uses page.rotate default, then CSS rotate applies user angle).
+    // pdf.js's getViewport({ rotation }) treats rotation as absolute, so we
+    // must combine them ourselves to match what the user sees.
+    const combined = (((page.rotate || 0) + rotation) % 360 + 360) % 360 as
+      | 0
+      | 90
+      | 180
+      | 270;
+    const base = page.getViewport({ scale: 1, rotation: combined });
     const scale = targetLongEdgePx / Math.max(base.width, base.height);
-    const viewport = page.getViewport({ scale, rotation });
+    const viewport = page.getViewport({ scale, rotation: combined });
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(viewport.width);
     canvas.height = Math.round(viewport.height);
