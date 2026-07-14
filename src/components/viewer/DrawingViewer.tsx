@@ -88,7 +88,17 @@ export interface DrawingViewerProps {
    * per-page vector-PDF download dialog.
    */
   onDownload?: () => void;
+  /**
+   * Visual rotation applied to the currently-visible page (single-page
+   * layout only). Overlay coordinates coming in as `overlays` and going out
+   * via callbacks stay in source-page space; the viewer handles the
+   * transform internally.
+   */
+  rotation?: RotationDeg;
+  /** Optional rotate button in the toolbar. */
+  onRotate?: () => void;
 }
+
 
 
 
