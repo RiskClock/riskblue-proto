@@ -406,7 +406,8 @@ function optimizePlacements(
       return { ...bboxOfSegment(a.cx, a.cy, bx, by), idx: i, ax: a.cx, ay: a.cy, bx, by };
     });
 
-    const maxIters = 20;
+    const N = positions.length;
+    const maxIters = N > 80 ? 4 : N > 40 ? 6 : N > 20 ? 10 : 15;
     for (let iter = 0; iter < maxIters; iter++) {
       let improved = false;
       const order = positions.map((_, i) => i);
