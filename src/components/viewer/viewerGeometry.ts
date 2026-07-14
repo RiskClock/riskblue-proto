@@ -172,3 +172,76 @@ export function computeFitToRect(opts: {
 
   return { scale, positionX, positionY };
 }
+
+// ---------- Rotation helpers -------------------------------------------------
+
+export type RotationDeg = 0 | 90 | 180 | 270;
+
+export function normalizeRotation(v: unknown): RotationDeg {
+  const n = ((Number(v) || 0) % 360 + 360) % 360;
+  if (n === 90 || n === 180 || n === 270) return n as RotationDeg;
+  return 0;
+}
+
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+const q6 = (v: number) => Math.round(v * 1e6) / 1e6;
+const qc = (v: number) => q6(clamp01(v));
+
+/** Rotate a normalized rect (source-space) into rotated-space. Clamped + quantized. */
+export function rotateNormalizedRect(
+  rect: { nx: number; ny: number; nw: number; nh: number },
+  rotation: RotationDeg,
+): { nx: number; ny: number; nw: number; nh: number } {
+  const { nx, ny, nw, nh } = rect;
+  let out: { nx: number; ny: number; nw: number; nh: number };
+  switch (rotation) {
+    case 90:
+      out = { nx: 1 - ny - nh, ny: nx, nw: nh, nh: nw };
+      break;
+    case 180:
+      out = { nx: 1 - nx - nw, ny: 1 - ny - nh, nw, nh };
+      break;
+    case 270:
+      out = { nx: ny, ny: 1 - nx - nw, nw: nh, nh: nw };
+      break;
+    default:
+      out = { nx, ny, nw, nh };
+  }
+  const cx = qc(out.nx);
+  const cy = qc(out.ny);
+  const cw = q6(Math.max(0, Math.min(1 - cx, out.nw)));
+  const ch = q6(Math.max(0, Math.min(1 - cy, out.nh)));
+  return { nx: cx, ny: cy, nw: cw, nh: ch };
+}
+
+/** Inverse: rotated-space back to source-space. */
+export function inverseRotateNormalizedRect(
+  rect: { nx: number; ny: number; nw: number; nh: number },
+  rotation: RotationDeg,
+): { nx: number; ny: number; nw: number; nh: number } {
+  return rotateNormalizedRect(rect, normalizeRotation(360 - rotation));
+}
+
+/** Rotate a normalized point (source-space) into rotated-space. */
+export function rotateNormalizedPoint(
+  pt: { nx: number; ny: number },
+  rotation: RotationDeg,
+): { nx: number; ny: number } {
+  const { nx, ny } = pt;
+  let out: { nx: number; ny: number };
+  switch (rotation) {
+    case 90: out = { nx: 1 - ny, ny: nx }; break;
+    case 180: out = { nx: 1 - nx, ny: 1 - ny }; break;
+    case 270: out = { nx: ny, ny: 1 - nx }; break;
+    default: out = { nx, ny };
+  }
+  return { nx: qc(out.nx), ny: qc(out.ny) };
+}
+
+export function inverseRotateNormalizedPoint(
+  pt: { nx: number; ny: number },
+  rotation: RotationDeg,
+): { nx: number; ny: number } {
+  return rotateNormalizedPoint(pt, normalizeRotation(360 - rotation));
+}
+
