@@ -1300,7 +1300,7 @@ export const FileViewerModal = ({
               page={currentPage}
               onDownload={() => setDownloadDialogOpen(true)}
               onPageChange={singlePageOnly ? () => {} : setCurrentPage}
-              hidePageNav
+              hidePageNav={singlePageOnly}
               overlays={overlays}
               hoveredOverlayId={
                 hoveredCode
