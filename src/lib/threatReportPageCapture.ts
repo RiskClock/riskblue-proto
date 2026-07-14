@@ -279,6 +279,8 @@ export interface CapturePageInput {
    * onto the original PDF page.
    */
   overlaysOnly?: boolean;
+  /** Optional visual rotation (degrees CW) applied to the captured page. */
+  rotation?: 0 | 90 | 180 | 270;
 }
 
 export async function capturePageToPng(
@@ -291,6 +293,7 @@ export async function capturePageToPng(
   // the viewer fits to whichever fits inside, preserving aspect.
   const cssLong = Math.round(target / outScale);
   const cssShort = Math.round(cssLong * 0.75);
+
 
   const container = document.createElement("div");
   container.setAttribute("data-threat-report-capture", "1");
