@@ -126,6 +126,7 @@ export async function captureOverlayOnly(
     return await rasterizeViewerSurface(surface, {
       outScale,
       overlaysOnly: true,
+      labelCounterRotationDeg: input.labelCounterRotationDeg,
     });
   } catch (e) {
     console.warn("[overlayOnlyCapture] failed", e);
