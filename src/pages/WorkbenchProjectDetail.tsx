@@ -7208,6 +7208,7 @@ function TabbedPagesBlock({
 }: {
   tabs: Array<{
     key: string;
+    fileId: string;
     fileName: string;
     shortName: string;
     pageIdx: number;
@@ -7233,6 +7234,7 @@ function TabbedPagesBlock({
         {active.parentPath ? (
           <DrawingPageBlock
             key={active.key}
+            fileId={active.fileId}
             fileName={active.fileName}
             pageIdx={active.pageIdx}
             source={{
@@ -7273,6 +7275,7 @@ function TabbedPagesBlock({
     </div>
   );
 }
+
 
 
 
