@@ -6465,7 +6465,9 @@ function InstancesReportModal({
         </div>
         {rows.length === 0 ? (
           <div className="text-sm text-muted-foreground">
-            No objects found in this space.
+            {tabs.length > 0
+              ? "No detections have been placed on this space yet. Drawings mapped to this level are shown below."
+              : "No objects found in this space."}
           </div>
         ) : (
           <div className="relative w-full">
@@ -6511,6 +6513,7 @@ function InstancesReportModal({
             </table>
           </div>
         )}
+
 
         {unitsList.length > 0 && (
           <div className="border rounded-md">
