@@ -1565,6 +1565,7 @@ export const FileViewerModal = ({
                   />
                 </TabsContent>
               </Tabs>
+              </div>
             </div>
 
 
