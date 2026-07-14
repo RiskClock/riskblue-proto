@@ -1370,9 +1370,17 @@ export const FileViewerModal = ({
       open={isOpen}
       onOpenChange={(open) => {
         if (!open) {
-          guardThen("close", onClose);
+          guardThen("close", () => {
+            if (rotationTimerRef.current) {
+              window.clearTimeout(rotationTimerRef.current);
+              rotationTimerRef.current = null;
+            }
+            void flushRotations();
+            onClose();
+          });
         }
       }}
+
     >
       <DialogContent className="max-w-[95vw] w-[95vw] h-[90vh] flex flex-col p-4 [&>button]:top-4 [&>button]:right-4">
         <DialogHeader className="flex-shrink-0">
