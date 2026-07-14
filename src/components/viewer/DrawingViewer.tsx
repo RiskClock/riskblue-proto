@@ -478,19 +478,48 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                     overlays={normalizedByPage.get(activePage.pageNum) ?? []}
                     hoveredOverlayId={hoveredOverlayId}
                     viewScale={scale}
+                    rotation={rotation}
                     onCanvasClick={
                       onCanvasClick
-                        ? (nx, ny) => onCanvasClick(nx, ny, activePage.pageNum)
+                        ? (nx, ny) => {
+                            const src = rotation
+                              ? inverseRotateNormalizedPoint({ nx, ny }, rotation)
+                              : { nx, ny };
+                            onCanvasClick(src.nx, src.ny, activePage.pageNum);
+                          }
                         : undefined
                     }
                     onOverlayClick={onOverlayClick}
-                    onOverlayDrag={onOverlayDrag}
+                    onOverlayDrag={
+                      onOverlayDrag
+                        ? (id, nx, ny) => {
+                            const src = rotation
+                              ? inverseRotateNormalizedPoint({ nx, ny }, rotation)
+                              : { nx, ny };
+                            onOverlayDrag(id, src.nx, src.ny);
+                          }
+                        : undefined
+                    }
                     onRenderedSizeChange={onActivePageRenderedSizeChange}
-                    editorBbox={editorBbox ?? null}
-                    onEditorBboxChange={onEditorBboxChange}
+                    editorBbox={
+                      editorBbox && rotation
+                        ? (rotateNormalizedRect(editorBbox, rotation) as EditorBbox)
+                        : editorBbox ?? null
+                    }
+                    onEditorBboxChange={
+                      onEditorBboxChange
+                        ? (next) => {
+                            const src = rotation
+                              ? inverseRotateNormalizedRect(next, rotation)
+                              : next;
+                            onEditorBboxChange(src as EditorBbox);
+                          }
+                        : undefined
+                    }
                     editorColor={editorColor}
                   />
                 ) : (
+
                   <div className="flex flex-col gap-4">
                     {allPages.map((p) => {
                       // For stacked layout, size each page based on viewport width
