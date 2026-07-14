@@ -83,6 +83,8 @@ export const DocumentSurface = ({
   onEditorBboxChange,
   editorColor,
   rotation = 0,
+  syncPlacement,
+  onPlacingChange,
 }: DocumentSurfaceProps) => {
   const downRef = useRef<{ x: number; y: number } | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
