@@ -236,13 +236,18 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       const pad = 16;
       const cw = Math.max(1, viewportSize.width - pad * 2);
       const ch = Math.max(1, viewportSize.height - pad * 2);
-      const aspect = activePage.pdfSize.w / activePage.pdfSize.h;
+      // When rotated 90/270, the effective on-screen aspect swaps.
+      const swap = layout === "single-page" && (rotation === 90 || rotation === 270);
+      const srcW = activePage.pdfSize.w;
+      const srcH = activePage.pdfSize.h;
+      const aspect = swap ? srcH / srcW : srcW / srcH;
       const cAspect = cw / ch;
       if (aspect > cAspect) {
         return { width: cw, height: cw / aspect };
       }
       return { width: ch * aspect, height: ch };
-    }, [activePage, viewportSize]);
+    }, [activePage, viewportSize, rotation, layout]);
+
 
     // Normalize overlays for the active page (single-page) or all pages (stacked).
     const normalizedByPage = useMemo(() => {
