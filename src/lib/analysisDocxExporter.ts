@@ -429,7 +429,7 @@ async function renderDrawingImage(
   pdfCache: PdfCache,
   signal?: AbortSignal,
   sizeBytes?: number | null,
-  rotation: RotationDeg = 0,
+  fileRotations: Record<string, number> = {},
 ): Promise<{ png: Uint8Array; width: number; height: number; hasHighlight: boolean } | null> {
   if (!storagePath) return null;
 
