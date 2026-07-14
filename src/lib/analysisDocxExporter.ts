@@ -755,6 +755,7 @@ export async function generateAnalysisDocx(
       }
     }
 
+    const fileRotations = sourceFile.fileId ? (rotationsByFileId.get(sourceFile.fileId) ?? {}) : {};
     const drawingImage = await renderDrawingImage(
       sourceFile.storagePath,
       instance,
@@ -763,6 +764,7 @@ export async function generateAnalysisDocx(
       pdfCache,
       signal,
       sourceFile.sizeBytes,
+      fileRotations,
     );
 
     rows.push({
