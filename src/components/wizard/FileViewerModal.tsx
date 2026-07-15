@@ -281,6 +281,7 @@ export const FileViewerModal = ({
   riskElementClasses,
   annotationAssignments,
   onAssignAnnotation,
+  readOnly = false,
 }: FileViewerModalProps) => {
 
   const { toast } = useToast();
