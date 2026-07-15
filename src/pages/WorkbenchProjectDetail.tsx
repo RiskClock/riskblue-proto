@@ -5998,23 +5998,38 @@ function InstancesReportModal({
           typeGroup: null,
         }];
       }
-      return Array.from(combos.values())
-        .sort((a, b) => {
-          const t = a.type.localeCompare(b.type);
-          if (t !== 0) return t;
-          return diameterSortKey(a.diameter) - diameterSortKey(b.diameter);
-        })
-        .map(({ type, diameter }) => {
-          const typeLabel = type === "(untyped)" ? "" : ` ${shortToken(type)}`;
-          const typePrefix = type === "(untyped)" ? "" : `-${shortToken(type)}`;
-          return {
-            key: `${c.name}::${type}::${diameter}`,
-            canonicalName: c.name,
-            displayName: `${base}${typeLabel} ${diameter}`.replace(/\s+/g, " ").trim(),
-            displayPrefix: `${basePrefix}${typePrefix} ${diameter}`.replace(/\s+/g, " ").trim(),
-            typeGroup: type,
-          };
-        });
+      const combosArr = Array.from(combos.values()).sort((a, b) => {
+        const t = a.type.localeCompare(b.type);
+        if (t !== 0) return t;
+        return diameterSortKey(a.diameter) - diameterSortKey(b.diameter);
+      });
+      // If the class has a single combo whose diameter is unknown, omit the
+      // "(no size)" suffix from the visible label. Same when every combo
+      // shares the same "(no size)" diameter for a given type.
+      const noSizeCountByType = new Map<string, number>();
+      const totalByType = new Map<string, number>();
+      for (const { type, diameter } of combosArr) {
+        totalByType.set(type, (totalByType.get(type) || 0) + 1);
+        if (diameter === "(no size)") {
+          noSizeCountByType.set(type, (noSizeCountByType.get(type) || 0) + 1);
+        }
+      }
+      return combosArr.map(({ type, diameter }) => {
+        const typeLabel = type === "(untyped)" ? "" : ` ${shortToken(type)}`;
+        const typePrefix = type === "(untyped)" ? "" : `-${shortToken(type)}`;
+        const hideDiameter =
+          diameter === "(no size)" &&
+          totalByType.get(type) === 1 &&
+          noSizeCountByType.get(type) === 1;
+        const diameterLabel = hideDiameter ? "" : ` ${diameter}`;
+        return {
+          key: `${c.name}::${type}::${diameter}`,
+          canonicalName: c.name,
+          displayName: `${base}${typeLabel}${diameterLabel}`.replace(/\s+/g, " ").trim(),
+          displayPrefix: `${basePrefix}${typePrefix}${diameterLabel}`.replace(/\s+/g, " ").trim(),
+          typeGroup: type,
+        };
+      });
     });
   }, [classCols, expanded, displayClassName, displayPrefix, isTypedClassName]);
 
