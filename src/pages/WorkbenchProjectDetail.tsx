@@ -3586,8 +3586,7 @@ export default function WorkbenchProjectDetail() {
                     }
                   }}
                   variant="outline"
-                  disabled={!requestId || surveyRunning || !canManage}
-                  title={!canManage ? "No permission" : undefined}
+                  disabled={!requestId || surveyRunning || !canManage || processingLock}
                 >
                   {surveyRunning ? (
                     <>
@@ -3601,8 +3600,7 @@ export default function WorkbenchProjectDetail() {
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={!requestId || surveyRunning || identifyRunning || enabledCols.length === 0 || !canManage}
-                  title={!canManage ? "No permission" : undefined}
+                  disabled={!requestId || surveyRunning || identifyRunning || enabledCols.length === 0 || !canManage || processingLock}
                   onClick={() => openRiskRadarModal()}
                 >
                   {identifyRunning ? (
@@ -3614,22 +3612,37 @@ export default function WorkbenchProjectDetail() {
                     "Risk Radar"
                   )}
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setSpatialArchitectOpen(true)}
-                  disabled={!requestId}
-                  title="View and edit canonical levels; run the Spatial Architect agent."
-                >
-                  {spaceHierarchyRunning ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Spatial Architect…
-                    </>
-                  ) : (
-                    "Spatial Architect"
-                  )}
-                </Button>
+                {(() => {
+                  const disabled = !requestId || processingLock;
+                  const tip = processingLock
+                    ? processingLockTip
+                    : "View and edit canonical levels; run the Spatial Architect agent.";
+                  return (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span tabIndex={0}>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setSpatialArchitectOpen(true)}
+                            disabled={disabled}
+                            className={disabled ? "pointer-events-none" : ""}
+                          >
+                            {spaceHierarchyRunning ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Spatial Architect…
+                              </>
+                            ) : (
+                              "Spatial Architect"
+                            )}
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">{tip}</TooltipContent>
+                    </Tooltip>
+                  );
+                })()}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span tabIndex={0}>
@@ -3637,64 +3650,116 @@ export default function WorkbenchProjectDetail() {
                         type="button"
                         variant="outline"
                         onClick={() => setConsolidateOpen(true)}
-                        disabled={!requestId || !hasRisersSelected}
+                        disabled={!requestId || !hasRisersSelected || processingLock}
+                        className={(!requestId || !hasRisersSelected || processingLock) ? "pointer-events-none" : ""}
                       >
                         Riser Unifier
                       </Button>
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">
-                    {!hasRisersSelected
-                      ? "No riser selected for risk identification"
-                      : "Group riser annotations into multi-space instances"}
+                    {processingLock
+                      ? processingLockTip
+                      : !hasRisersSelected
+                        ? "No riser selected for risk identification"
+                        : "Group riser annotations into multi-space instances"}
                   </TooltipContent>
                 </Tooltip>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setInstancesReportOpen(true)}
-                  disabled={!requestId}
-                  title="Generate per-space threat report"
-                >
-                  Threat Report
-                </Button>
+                {(() => {
+                  const disabled = !requestId || processingLock;
+                  const tip = processingLock ? processingLockTip : "Generate per-space threat report";
+                  return (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span tabIndex={0}>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setInstancesReportOpen(true)}
+                            disabled={disabled}
+                            className={disabled ? "pointer-events-none" : ""}
+                          >
+                            Threat Report
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">{tip}</TooltipContent>
+                    </Tooltip>
+                  );
+                })()}
 
                 <div className="flex-1" />
 
                 {analysisRequest && totalFiles > 0 && enabledCols.length > 0 && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setCleanupChecked(new Set());
-                      setCleanupOpen(true);
-                    }}
-                  >
-                    Renumber IDs
-                  </Button>
+                  (() => {
+                    const disabled = processingLock || !canManage;
+                    const tip = processingLock
+                      ? processingLockTip
+                      : !canManage
+                        ? "No permission"
+                        : "Reassign annotation IDs starting from 1";
+                    return (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span tabIndex={0}>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => {
+                                setCleanupChecked(new Set());
+                                setCleanupConfirmPending(false);
+                                setCleanupOpen(true);
+                              }}
+                              disabled={disabled}
+                              className={disabled ? "pointer-events-none" : ""}
+                            >
+                              Renumber IDs
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">{tip}</TooltipContent>
+                      </Tooltip>
+                    );
+                  })()
                 )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={openClearAllDialog}
-                  disabled={!requestId || phaseRunning}
-                >
-                  Clear All
-                </Button>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setScoutDebugOpen(true)}
-                      aria-label="Agent debug"
-                    >
-                      <Bug className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Agent debug</TooltipContent>
-                </Tooltip>
+                {(() => {
+                  const disabled = !requestId || phaseRunning || processingLock;
+                  const tip = processingLock ? processingLockTip : phaseRunning ? "Analysis is running" : "Clear all workbench results";
+                  return (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span tabIndex={0}>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={openClearAllDialog}
+                            disabled={disabled}
+                            className={disabled ? "pointer-events-none" : ""}
+                          >
+                            Clear All
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">{tip}</TooltipContent>
+                    </Tooltip>
+                  );
+                })()}
+                {canManage && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setScoutDebugOpen(true)}
+                        aria-label="Agent debug"
+                      >
+                        <Bug className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">Agent debug</TooltipContent>
+                  </Tooltip>
+                )}
 
               </div>
 
