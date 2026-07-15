@@ -347,6 +347,7 @@ export default function WorkbenchProjectDetail() {
   const [cleanupChecked, setCleanupChecked] = useState<Set<string>>(new Set());
   const [cleanupRunning, setCleanupRunning] = useState(false);
   const [cleanupConfirmOpen, setCleanupConfirmOpen] = useState(false);
+  const [colsImpactConfirmOpen, setColsImpactConfirmOpen] = useState(false);
 
   
   const [manageOpen, setManageOpen] = useState(false);
