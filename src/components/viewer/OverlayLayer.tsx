@@ -614,41 +614,52 @@ export const OverlayLayer = ({
 
 
 
-      {/* Labels (above circles & rects). Positions chosen by the optimizer. */}
-      {placedLabels.map((p) => (
-        <div
-          key={`label-${p.id}`}
-          data-export-kind="label"
-          data-color={p.color}
-          data-text-color={readableTextOn(p.color)}
-          data-x={p.x}
-          data-y={p.y}
-          data-w={p.w}
-          data-h={p.h}
-          data-font-px={fontPx}
-          data-opacity={LABEL_OPACITY}
-          className="absolute font-bold pointer-events-none text-center"
-          style={{
-            left: p.x,
-            top: p.y,
-            width: p.w,
-            height: p.h,
-            lineHeight: `${Math.round(fontPx * 1.25)}px`,
-            fontSize: fontPx,
-            paddingLeft: padX,
-            paddingRight: padX,
-            paddingTop: Math.max(0, (p.h - Math.round(fontPx * 1.25) * p.text.split("\n").length) / 2),
-            boxSizing: "border-box",
-            borderRadius: 3,
-            backgroundColor: p.color,
-            color: readableTextOn(p.color),
-            opacity: LABEL_OPACITY,
-            whiteSpace: "pre",
-          }}
-        >
-          {p.text}
-        </div>
-      ))}
+      {/* Labels (above circles & rects). Positions chosen by the optimizer.
+          Rendered at constant on-screen size by dividing font/padding by
+          the current viewport zoom scale; anchored at the center of the
+          optimizer's chosen rect so labels stay put across zoom levels. */}
+      {placedLabels.map((p) => {
+        const s = Math.max(0.0001, viewScale);
+        const renderFont = (LABEL_FONT_PX_SCREEN / s) * exportScale;
+        const renderPadX = (LABEL_PAD_X_SCREEN / s) * exportScale;
+        const renderPadY = (2 / s) * exportScale;
+        const centerX = p.x + p.w / 2;
+        const centerY = p.y + p.h / 2;
+        return (
+          <div
+            key={`label-${p.id}`}
+            data-export-kind="label"
+            data-color={p.color}
+            data-text-color={readableTextOn(p.color)}
+            data-x={p.x}
+            data-y={p.y}
+            data-w={p.w}
+            data-h={p.h}
+            data-font-px={fontPx}
+            data-opacity={LABEL_OPACITY}
+            className="absolute font-bold pointer-events-none text-center"
+            style={{
+              left: centerX,
+              top: centerY,
+              transform: "translate(-50%, -50%)",
+              lineHeight: `${Math.round(renderFont * 1.25)}px`,
+              fontSize: renderFont,
+              paddingLeft: renderPadX,
+              paddingRight: renderPadX,
+              paddingTop: renderPadY,
+              paddingBottom: renderPadY,
+              boxSizing: "border-box",
+              borderRadius: (3 / s) * exportScale,
+              backgroundColor: p.color,
+              color: readableTextOn(p.color),
+              opacity: LABEL_OPACITY,
+              whiteSpace: "pre",
+            }}
+          >
+            {p.text}
+          </div>
+        );
+      })}
 
     </div>
   );
