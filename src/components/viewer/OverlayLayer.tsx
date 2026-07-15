@@ -113,28 +113,83 @@ interface CircleInfo {
 // re-render; the rest are bailed out by `React.memo`'s shallow-equal check.
 
 interface RectOverlayProps {
-  r: { id: string; x: number; y: number; w: number; h: number; color: string };
+  r: { id: string; x: number; y: number; w: number; h: number; color: string; label?: string };
   hovered: boolean;
   exportScale: number;
+  /**
+   * Current viewport zoom scale from react-zoom-pan-pinch. Because the
+   * overlay layer sits *inside* the transformed content, we divide screen
+   * sizes (border width, label font, padding) by this so borders stay a
+   * constant ~2px and labels a constant ~12px on-screen regardless of
+   * zoom. The box itself still scales with the drawing so it keeps
+   * hugging the same physical region.
+   */
+  viewScale: number;
 }
-const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale }: RectOverlayProps) {
+const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewScale }: RectOverlayProps) {
+  const s = Math.max(0.0001, viewScale);
+  const borderPxScreen = hovered ? 3 : 2;
+  const borderCss = (borderPxScreen / s) * exportScale;
+  // Label docks to the top-left corner of the box like a header tab. It
+  // shares the box's top-left origin so it visually "sits on" the border.
+  const label = r.label ?? "";
+  const fontScreen = 12; // constant on-screen font size in CSS px
+  const fontCss = (fontScreen / s) * exportScale;
+  const padXCss = (6 / s) * exportScale;
+  const padYCss = (2 / s) * exportScale;
+  const labelHCss = fontCss * 1.4 + padYCss * 2;
+  const textColor = readableTextOn(r.color);
   return (
-    <div style={{ position: "absolute", left: r.x, top: r.y }}>
+    <div style={{ position: "absolute", left: r.x, top: r.y, pointerEvents: "none" }}>
       <div
         data-export-kind="rect"
         data-color={r.color}
-        data-border-px={hovered ? 3 : 2}
+        data-border-px={borderPxScreen}
         style={{
           width: r.w,
           height: r.h,
           borderColor: withAlpha(r.color, 0.5),
-          borderWidth: (hovered ? 3 : 2) * exportScale,
+          borderWidth: borderCss,
           borderStyle: "solid",
           backgroundColor: "transparent",
           boxSizing: "border-box",
           pointerEvents: "none",
         }}
       />
+      {label ? (
+        <div
+          data-export-kind="label"
+          data-color={r.color}
+          data-text-color={textColor}
+          data-x={r.x}
+          data-y={r.y}
+          data-font-px={fontCss}
+          data-opacity={1}
+          className="absolute font-bold pointer-events-none"
+          style={{
+            left: 0,
+            top: 0,
+            maxWidth: r.w,
+            height: labelHCss,
+            lineHeight: `${fontCss * 1.4}px`,
+            fontSize: fontCss,
+            paddingLeft: padXCss,
+            paddingRight: padXCss,
+            paddingTop: padYCss,
+            paddingBottom: padYCss,
+            boxSizing: "border-box",
+            backgroundColor: r.color,
+            color: textColor,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            borderTopLeftRadius: 0,
+          }}
+          title={label}
+        >
+          {label}
+        </div>
+      ) : null}
     </div>
   );
 });
@@ -373,15 +428,17 @@ export const OverlayLayer = ({
 
   // Build a stable input snapshot for the placement pass. Referenced by both
   // the sync (export) branch and the async worker branch below.
+  // Rect labels are docked to their box's top-left corner (rendered inside
+  // RectOverlay) and are intentionally excluded from the placement
+  // optimizer — they have a fixed anchor and don't compete with circles
+  // for space.
   const buildPlacementInput = () => ({
     pageSize,
     circles: circles.map((c) => ({
       id: c.id, cx: c.cx, cy: c.cy, r: c.r, color: c.color,
       label: c.label, isDot: c.isDot,
     })),
-    rects: rects.map((r) => ({
-      id: r.id, x: r.x, y: r.y, w: r.w, h: r.h, color: r.color, label: r.label,
-    })),
+    rects: [],
     fontPx, padX, labelH, gap, charPx,
   });
 
@@ -398,8 +455,7 @@ export const OverlayLayer = ({
   const [asyncPlaced, setAsyncPlaced] = useState<PlacedLabel[]>([]);
   useEffect(() => {
     if (syncPlacement) return;
-    const hasLabels =
-      circles.some((c) => !!c.label && !c.isDot) || rects.some((r) => !!r.label);
+    const hasLabels = circles.some((c) => !!c.label && !c.isDot);
     if (!hasLabels) {
       setAsyncPlaced([]);
       onPlacingChangeRef.current?.(false);
@@ -536,13 +592,16 @@ export const OverlayLayer = ({
       })}
 
 
-      {/* Rectangle overlays - outline only. Labels are placed by the optimizer below. */}
+      {/* Rectangle overlays. Border + docked top-left label render inside
+          RectOverlay; both stay at constant on-screen size by dividing by
+          the current viewport zoom scale. */}
       {rects.map((r) => (
         <RectOverlay
           key={r.id}
           r={r}
           hovered={hoveredId === r.id}
           exportScale={exportScale}
+          viewScale={viewScale}
         />
       ))}
 

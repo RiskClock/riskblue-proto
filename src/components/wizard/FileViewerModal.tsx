@@ -24,6 +24,12 @@ import type {
   DocumentSourceDescriptor,
   OverlayInput,
 } from "@/components/viewer";
+import { inverseRotateNormalizedRect } from "@/components/viewer/viewerGeometry";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { X as XIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -612,13 +618,24 @@ export const FileViewerModal = ({
   const cancelPlanEdit = useCallback(() => setEditingPlan(null), []);
 
   // 50%-of-viewport bbox centered on the current pan/zoom, clamped to page.
+  // NOTE: `getVisibleRect` returns coordinates in the *rotated* display
+  // space (that's what the viewer's transform operates on). Persisted bbox
+  // coordinates live in the *source* (unrotated) page space — overlays are
+  // rotated for display via `rotateNormalizedRect`. So when the drawing is
+  // rotated (90/180/270), we must invert-rotate the visible rect before
+  // deriving the centered bbox, otherwise the new box spawns far outside
+  // the visible viewport.
   const computeCenteredBboxPct = useCallback((): [number, number, number, number] => {
-    const visible = viewerApiRef.current?.getVisibleRect?.() as
+    const visibleDisplay = viewerApiRef.current?.getVisibleRect?.() as
       | { nx: number; ny: number; nw: number; nh: number }
       | null
       | undefined;
     let bbox_pct: [number, number, number, number] = [30, 30, 40, 40];
-    if (visible && Number.isFinite(visible.nw) && Number.isFinite(visible.nh)) {
+    if (visibleDisplay && Number.isFinite(visibleDisplay.nw) && Number.isFinite(visibleDisplay.nh)) {
+      const rot = (rotationByPage[currentPage] ?? 0) as 0 | 90 | 180 | 270;
+      const visible = rot === 0
+        ? visibleDisplay
+        : inverseRotateNormalizedRect(visibleDisplay, rot);
       const cx = visible.nx + visible.nw / 2;
       const cy = visible.ny + visible.nh / 2;
       const w = Math.max(0.05, Math.min(0.9, visible.nw * 0.5));
@@ -630,7 +647,7 @@ export const FileViewerModal = ({
       bbox_pct = [x * 100, y * 100, w * 100, h * 100];
     }
     return bbox_pct;
-  }, []);
+  }, [rotationByPage, currentPage]);
 
   const handleAddPlan = useCallback(async () => {
     if (!onAddPlan) return;
@@ -2272,12 +2289,16 @@ const FloorPlansPanel = ({
                     }}
                   />
                 ) : (
-                  <span
-                    className="font-medium text-sm truncate flex-1"
-                    title={displayLabel}
-                  >
-                    {displayLabel}
-                  </span>
+                  <Tooltip delayDuration={200}>
+                    <TooltipTrigger asChild>
+                      <span className="font-medium text-sm truncate flex-1 cursor-default">
+                        {displayLabel}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" align="start" className="max-w-[320px] break-words">
+                      {displayLabel}
+                    </TooltipContent>
+                  </Tooltip>
                 )}
                 {isEditingThis ? (
                   <select
