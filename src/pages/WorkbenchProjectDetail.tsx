@@ -3708,7 +3708,6 @@ export default function WorkbenchProjectDetail() {
                               variant="outline"
                               onClick={() => {
                                 setCleanupChecked(new Set());
-                                setCleanupConfirmPending(false);
                                 setCleanupOpen(true);
                               }}
                               disabled={disabled}
