@@ -567,7 +567,7 @@ export const OverlayLayer = ({
               x2={x2}
               y2={y2}
               stroke={p.color}
-              strokeWidth={1.5 * exportScale}
+              strokeWidth={(LEADER_STROKE_PX_SCREEN / Math.max(0.0001, viewScale)) * exportScale}
               opacity={LABEL_OPACITY}
             />
           );
