@@ -347,6 +347,7 @@ export default function WorkbenchProjectDetail() {
   const [cleanupChecked, setCleanupChecked] = useState<Set<string>>(new Set());
   const [cleanupRunning, setCleanupRunning] = useState(false);
   const [cleanupConfirmOpen, setCleanupConfirmOpen] = useState(false);
+  const [colsImpactConfirmOpen, setColsImpactConfirmOpen] = useState(false);
 
   
   const [manageOpen, setManageOpen] = useState(false);
@@ -2417,7 +2418,7 @@ export default function WorkbenchProjectDetail() {
     );
   };
 
-  const saveColumns = async () => {
+  const doSaveColumns = async () => {
     setSavingPrefs(true);
     try {
       const { error } = await supabase.from("workbench_column_preferences").upsert({
@@ -2457,6 +2458,18 @@ export default function WorkbenchProjectDetail() {
       setSavingPrefs(false);
     }
   };
+
+  const saveColumns = async () => {
+    // End users saving during Processing with newly added classes → warn about
+    // impact on processing time before committing.
+    const addedClasses = draftCols.filter((n) => !enabledCols.includes(n));
+    if (!canManage && workbenchStatus === "processing" && addedClasses.length > 0) {
+      setColsImpactConfirmOpen(true);
+      return;
+    }
+    await doSaveColumns();
+  };
+
 
   const sheetSource = useMemo<DocumentSourceDescriptor | null>(() => {
     if (!activeSheet || !activeSheet.storage_path) return null;
@@ -3397,7 +3410,11 @@ export default function WorkbenchProjectDetail() {
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-start gap-2">
                 <span className="text-sm font-medium text-muted-foreground mr-1">Risk Agents:</span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span tabIndex={0}>
                 <Button
+                  className={(!requestId || surveyRunning || !canManage || processingLock) ? "pointer-events-none" : ""}
                   type="button"
                   onClick={async () => {
                     if (!requestId) return;
@@ -3598,9 +3615,19 @@ export default function WorkbenchProjectDetail() {
                     "Scout"
                   )}
                 </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {processingLock ? processingLockTip : !canManage ? "No permission" : "Run the Scout survey agent"}
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span tabIndex={0}>
                 <Button
                   type="button"
                   variant="outline"
+                  className={(!requestId || surveyRunning || identifyRunning || enabledCols.length === 0 || !canManage || processingLock) ? "pointer-events-none" : ""}
                   disabled={!requestId || surveyRunning || identifyRunning || enabledCols.length === 0 || !canManage || processingLock}
                   onClick={() => openRiskRadarModal()}
                 >
@@ -3613,6 +3640,19 @@ export default function WorkbenchProjectDetail() {
                     "Risk Radar"
                   )}
                 </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {processingLock
+                      ? processingLockTip
+                      : !canManage
+                        ? "No permission"
+                        : enabledCols.length === 0
+                          ? "Select at least one class"
+                          : "Identify risk elements across enabled classes"}
+                  </TooltipContent>
+                </Tooltip>
+
                 {(() => {
                   const disabled = !requestId || processingLock;
                   const tip = processingLock
@@ -5052,6 +5092,35 @@ export default function WorkbenchProjectDetail() {
                 disabled={cleanupRunning}
               >
                 {cleanupRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm renumber"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Columns-impact confirmation - end user adding classes while the
+            project is Processing should be warned that it may affect timing. */}
+        <Dialog open={colsImpactConfirmOpen} onOpenChange={(o) => !savingPrefs && setColsImpactConfirmOpen(o)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Adding classes may extend processing time</DialogTitle>
+              <DialogDescription>
+                This project is currently being processed. Adding one or more
+                new classes to the analysis may increase the time it takes to
+                complete. Continue and save your column selection?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setColsImpactConfirmOpen(false)} disabled={savingPrefs}>
+                Cancel
+              </Button>
+              <Button
+                onClick={async () => {
+                  setColsImpactConfirmOpen(false);
+                  await doSaveColumns();
+                }}
+                disabled={savingPrefs}
+              >
+                {savingPrefs ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save anyway"}
               </Button>
             </DialogFooter>
           </DialogContent>
