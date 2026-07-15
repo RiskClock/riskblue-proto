@@ -230,6 +230,8 @@ interface FileViewerModalProps {
   annotationAssignments?: Record<string, string>;
   /** @deprecated - assignments are no longer used. Kept for API compat. */
   onAssignAnnotation?: (className: string, planId: string | null) => Promise<void> | void;
+  /** When true, disable placement of detections and any floor-plan editing. */
+  readOnly?: boolean;
 }
 
 
