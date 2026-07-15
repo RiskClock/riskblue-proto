@@ -460,7 +460,7 @@ export function SpatialArchitectModal({
         {/* Levels list */}
         <div className="flex-1 min-h-0 flex flex-col border rounded-md overflow-hidden">
           {/* Header */}
-          <div className="grid grid-cols-[minmax(0,1fr)_70px_minmax(0,1.6fr)_96px] items-center gap-2 px-3 py-2 bg-muted/40 border-b text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="grid grid-cols-[minmax(0,1fr)_70px_minmax(0,1.6fr)_128px] items-center gap-2 px-3 py-2 bg-muted/40 border-b text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             <div>Level name</div>
             <div className="text-center">Index</div>
             <div>Drawings</div>
@@ -478,7 +478,7 @@ export function SpatialArchitectModal({
                 <div
                   key={l.uid}
                   data-level-uid={l.uid}
-                  className="grid grid-cols-[minmax(0,1fr)_70px_minmax(0,1.6fr)_96px] items-start gap-2 px-3 py-2"
+                  className="grid grid-cols-[minmax(0,1fr)_70px_minmax(0,1.6fr)_128px] items-start gap-2 px-3 py-2"
                 >
                   <Input
                     value={l.name}
