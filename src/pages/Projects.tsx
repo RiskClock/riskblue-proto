@@ -343,10 +343,10 @@ const Projects = () => {
               <thead className="bg-muted/50">
                 <tr className="text-left">
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Project Name</th>
-                  <th className="px-6 py-3 text-sm font-medium text-foreground">Credit Cost</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Status</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Created By</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Created On</th>
+                  <th className="px-6 py-3 text-sm font-medium text-foreground">Credit Cost</th>
                   <th className="px-6 py-3 w-[120px]"></th>
                 </tr>
               </thead>
