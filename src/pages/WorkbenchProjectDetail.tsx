@@ -6488,7 +6488,7 @@ function InstancesReportModal({
         {rows.length === 0 ? (
           <div className="text-sm text-muted-foreground">
             {tabs.length > 0
-              ? "No detections have been placed on this space yet. Drawings mapped to this level are shown below."
+              ? "No detections have been found on this space. Drawings mapped to this level are shown below."
               : "No objects found in this space."}
           </div>
         ) : (
