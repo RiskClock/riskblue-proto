@@ -366,9 +366,6 @@ const Projects = () => {
                     <td className="px-6 py-4">
                       <span className="text-foreground">{project.name}</span>
                     </td>
-                    <td className="px-6 py-4 text-muted-foreground tabular-nums">
-                      {typeof project.credits_consumed === "number" ? project.credits_consumed : "-"}
-                    </td>
                     <td className="px-6 py-4">
                       {(() => {
                         const s = (project.workbench_status || "processing") as "processing" | "processed";
@@ -402,6 +399,9 @@ const Projects = () => {
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">
                       {formatDateShort(project.created_at)}
+                    </td>
+                    <td className="px-6 py-4 text-muted-foreground tabular-nums">
+                      {typeof project.credits_consumed === "number" ? project.credits_consumed : "-"}
                     </td>
                     <td className="px-6 py-4">
                       <div className="h-9 flex items-center justify-end gap-1">
