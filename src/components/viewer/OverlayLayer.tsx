@@ -82,6 +82,37 @@ function labelSizingForZoom(viewScale: number) {
   return { font, padX, padY, t };
 }
 
+// Shared canvas 2d context for true (font-metric-accurate) text measurement.
+// Uses the exact same font stack the rasterizer paints with, so DOM pill
+// widths and canvas fillText widths agree in the export path.
+export const LABEL_CANVAS_FONT_STACK =
+  'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+
+let _measureCtx: CanvasRenderingContext2D | null = null;
+function getMeasureCtx(): CanvasRenderingContext2D | null {
+  if (_measureCtx) return _measureCtx;
+  if (typeof document === "undefined") return null;
+  try {
+    const c = document.createElement("canvas");
+    _measureCtx = c.getContext("2d");
+    return _measureCtx;
+  } catch {
+    return null;
+  }
+}
+export function measureLabelWidthPx(text: string, fontPx: number): number | undefined {
+  const ctx = getMeasureCtx();
+  if (!ctx) return undefined;
+  ctx.font = `bold ${fontPx}px ${LABEL_CANVAS_FONT_STACK}`;
+  const lines = text.split("\n");
+  let max = 0;
+  for (const ln of lines) {
+    const w = ctx.measureText(ln).width;
+    if (w > max) max = w;
+  }
+  return max + 1; // +1px safety
+}
+
 function withAlpha(color: string, alpha: number): string {
   const trimmed = color.trim();
   if (trimmed.startsWith("hsl(") && trimmed.endsWith(")")) {
@@ -199,7 +230,6 @@ const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewSca
           style={{
             left: 0,
             top: 0,
-            maxWidth: r.w,
             height: labelHCss,
             lineHeight: `${fontCss * 1.4}px`,
             fontSize: fontCss,
@@ -211,9 +241,7 @@ const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewSca
             backgroundColor: r.color,
             color: textColor,
             whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            borderTopLeftRadius: 0,
+            borderRadius: 0,
           }}
           title={label}
         >
@@ -496,6 +524,8 @@ export const OverlayLayer = ({
     circles: circles.map((c) => ({
       id: c.id, cx: c.cx, cy: c.cy, r: c.r, color: c.color,
       label: c.label, isDot: c.isDot,
+      measuredWidthPx:
+        c.label && !c.isDot ? measureLabelWidthPx(c.label, fontPx) : undefined,
     })),
     rects: [],
     fontPx, padX, labelH, gap, charPx,
@@ -761,7 +791,7 @@ export const OverlayLayer = ({
               paddingTop: renderPadY,
               paddingBottom: renderPadY,
               boxSizing: "border-box",
-              borderRadius: (3 / s) * exportScale,
+              borderRadius: 0,
               backgroundColor: p.color,
               color: readableTextOn(p.color),
               opacity: LABEL_OPACITY,

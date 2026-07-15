@@ -207,7 +207,7 @@ export async function rasterizeViewerSurface(
   labels.forEach((div) => {
     const r = div.getBoundingClientRect();
     const tl = toLocal(r.left, r.top);
-    const w = r.width * outScale;
+    const domW = r.width * outScale;
     const h = r.height * outScale;
     const bg = div.getAttribute("data-color") || "#dc2626";
     const textColor = div.getAttribute("data-text-color") || "#ffffff";
@@ -217,29 +217,36 @@ export async function rasterizeViewerSurface(
     // Preserve multi-line labels (viewer renders newlines as <br>).
     const lines = rawText.split(/\r?\n/);
 
+    const fontStr = `bold ${fontPx}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+
+    // Safety net: if canvas measures the text wider than the DOM pill (font
+    // fallback mismatch), grow the offscreen canvas so text isn't clipped.
+    // Composite is shifted left by half the extra so the pill remains
+    // centered on the DOM label position.
+    const probe = document.createElement("canvas").getContext("2d")!;
+    probe.font = fontStr;
+    let maxTextW = 0;
+    for (const ln of lines) {
+      const tw = probe.measureText(ln).width;
+      if (tw > maxTextW) maxTextW = tw;
+    }
+    const padX = 4 * outScale;
+    const needed = maxTextW + padX * 2;
+    const w = Math.max(domW, needed);
+    const drawX = tl.x - (w - domW) / 2;
+
     const off = document.createElement("canvas");
     off.width = Math.max(1, Math.ceil(w));
     off.height = Math.max(1, Math.ceil(h));
     const octx = off.getContext("2d")!;
-    const radius = 3 * outScale;
-    octx.beginPath();
-    octx.moveTo(radius, 0);
-    octx.lineTo(w - radius, 0);
-    octx.quadraticCurveTo(w, 0, w, radius);
-    octx.lineTo(w, h - radius);
-    octx.quadraticCurveTo(w, h, w - radius, h);
-    octx.lineTo(radius, h);
-    octx.quadraticCurveTo(0, h, 0, h - radius);
-    octx.lineTo(0, radius);
-    octx.quadraticCurveTo(0, 0, radius, 0);
-    octx.closePath();
+    // Sharp-cornered rectangle (matches on-screen bbox label spec).
     octx.fillStyle = bg;
-    octx.fill();
+    octx.fillRect(0, 0, w, h);
     octx.lineWidth = 1 * outScale;
     octx.strokeStyle = "rgba(255,255,255,0.9)";
-    octx.stroke();
+    octx.strokeRect(0.5, 0.5, Math.max(0, w - 1), Math.max(0, h - 1));
     octx.fillStyle = textColor;
-    octx.font = `bold ${fontPx}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+    octx.font = fontStr;
     octx.textAlign = "center";
     octx.textBaseline = "middle";
     if (lines.length <= 1) {
@@ -257,13 +264,13 @@ export async function rasterizeViewerSurface(
     ctx.globalAlpha = opacity;
     const labelRot = opts.labelCounterRotationDeg ?? 0;
     if (labelRot) {
-      const cx = tl.x + w / 2;
+      const cx = tl.x + domW / 2;
       const cy = tl.y + h / 2;
       ctx.translate(cx, cy);
       ctx.rotate((labelRot * Math.PI) / 180);
       ctx.drawImage(off, -w / 2, -h / 2);
     } else {
-      ctx.drawImage(off, tl.x, tl.y);
+      ctx.drawImage(off, drawX, tl.y);
     }
     ctx.restore();
   });
@@ -347,6 +354,16 @@ export async function capturePageToPng(
 
     const ready = await waitForViewerReady(surface, input.timeoutMs ?? 30000);
     if (!ready) return null;
+    // Wait for custom fonts to be usable so DOM pill widths match Canvas
+    // fillText widths in the rasterizer (prevents symmetric text clipping).
+    try {
+      if (typeof document !== "undefined" && (document as any).fonts) {
+        await Promise.race([
+          (document as any).fonts.ready,
+          new Promise((r) => setTimeout(r, 500)),
+        ]);
+      }
+    } catch { /* ignore */ }
     // Extra RAF pair after readiness so overlay layout settles.
     await new Promise<void>((r) =>
       requestAnimationFrame(() => requestAnimationFrame(() => r())),
