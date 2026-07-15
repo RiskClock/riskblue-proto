@@ -4700,6 +4700,7 @@ export default function WorkbenchProjectDetail() {
             onInstancesChanged={() => {
               queryClient.refetchQueries({ queryKey: ["workbench-instances", requestId] });
             }}
+            readOnly={processingLock}
           />
 
         )}
