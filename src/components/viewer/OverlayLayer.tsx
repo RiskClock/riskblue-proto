@@ -1,4 +1,4 @@
-import { CSSProperties, PointerEvent as ReactPointerEvent, memo, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, PointerEvent as ReactPointerEvent, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { NormalizedOverlay } from "./viewerGeometry";
 import { readableTextOn } from "@/lib/awpColor";
 import {
