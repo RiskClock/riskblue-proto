@@ -169,8 +169,8 @@ function generateCircleCandidates(
   const out: LabelCandidate[] = [];
   const fallback: LabelCandidate[] = [];
   // Absolute ring distances (in page CSS px) added to the circle radius.
-  // Wider spacing gives crowded labels physical room to escape.
-  const ringDistances = [40, 80, 130];
+  // Tight inner ring keeps open areas compact; outer rings let dense labels escape.
+  const ringDistances = [20, 50, 100];
   for (let ring = 0; ring < ringDistances.length; ring++) {
     const dist = c.r + gap + ringDistances[ring];
     for (let i = 0; i < directions; i++) {

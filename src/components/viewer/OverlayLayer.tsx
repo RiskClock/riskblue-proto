@@ -1,4 +1,4 @@
-import { CSSProperties, PointerEvent as ReactPointerEvent, memo, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, PointerEvent as ReactPointerEvent, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { NormalizedOverlay } from "./viewerGeometry";
 import { readableTextOn } from "@/lib/awpColor";
 import {
@@ -401,6 +401,12 @@ export const OverlayLayer = ({
   const onPlacingChangeRef = useRef(onPlacingChange);
   onPlacingChangeRef.current = onPlacingChange;
 
+  const overlayRootRef = useRef<HTMLDivElement>(null);
+  const labelRefMap = useRef<Map<string, HTMLDivElement>>(new Map());
+  const leaderRefMap = useRef<Map<string, SVGLineElement>>(new Map());
+  labelRefMap.current.clear();
+  leaderRefMap.current.clear();
+
   const circles: CircleInfo[] = useMemo(() => {
     return overlays
       .filter((o) => (o.shape ?? "circle") !== "rect")
@@ -541,10 +547,69 @@ export const OverlayLayer = ({
 
   const placedLabels: PlacedLabel[] = syncPlacement ? (syncPlaced ?? []) : asyncPlaced;
 
+  // After labels render, measure their actual bounding boxes and snap every
+  // leader line endpoint flush to the visible label edge. This guarantees
+  // perfect alignment even when font metrics or zoom interpolation change the
+  // rendered size, which is especially important on the tight 20px ring.
+  useLayoutEffect(() => {
+    const root = overlayRootRef.current;
+    if (!root) return;
+    const rootRect = root.getBoundingClientRect();
+    const s = Math.max(0.0001, viewScale);
+    const circleMap = new Map(circles.map((c) => [c.id, c]));
+
+    placedLabels.forEach((p) => {
+      if (p.kind !== "circle") return;
+      const labelEl = labelRefMap.current.get(p.id);
+      const lineEl = leaderRefMap.current.get(p.id);
+      const c = circleMap.get(p.id);
+      if (!labelEl || !lineEl || !c) return;
+
+      const labelRect = labelEl.getBoundingClientRect();
+      const labelX = (labelRect.left - rootRect.left) / s;
+      const labelY = (labelRect.top - rootRect.top) / s;
+      const labelW = labelRect.width / s;
+      const labelH = labelRect.height / s;
+      const labelCx = labelX + labelW / 2;
+      const labelCy = labelY + labelH / 2;
+
+      const ax = c.cx;
+      const ay = c.cy;
+      const dx = labelCx - ax;
+      const dy = labelCy - ay;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len;
+      const uy = dy / len;
+
+      const x1 = ax + ux * c.r;
+      const y1 = ay + uy * c.r;
+
+      const halfW = labelW / 2;
+      const halfH = labelH / 2;
+      const tX = Math.abs(ux) > 1e-6 ? halfW / Math.abs(ux) : Infinity;
+      const tY = Math.abs(uy) > 1e-6 ? halfH / Math.abs(uy) : Infinity;
+      const tEdge = Math.min(tX, tY);
+      const x2 = labelCx - ux * tEdge;
+      const y2 = labelCy - uy * tEdge;
+
+      const leaderLen = Math.hypot(x2 - x1, y2 - y1);
+      if (leaderLen < 0.5) {
+        lineEl.setAttribute("display", "none");
+      } else {
+        lineEl.setAttribute("display", "block");
+        lineEl.setAttribute("x1", String(x1));
+        lineEl.setAttribute("y1", String(y1));
+        lineEl.setAttribute("x2", String(x2));
+        lineEl.setAttribute("y2", String(y2));
+      }
+    });
+  }, [placedLabels, circles, viewScale]);
+
 
 
   return (
     <div
+      ref={overlayRootRef}
       data-overlay-root
       className="pointer-events-none absolute inset-0"
       style={{ width: pageSize.width, height: pageSize.height }}
@@ -597,6 +662,7 @@ export const OverlayLayer = ({
           if (leaderLen < 0.5) return null;
           return (
             <line
+              ref={(el) => { if (el) leaderRefMap.current.set(p.id, el); }}
               key={`leader-${p.id}-${idx}`}
               data-export-kind="leader"
               data-color={p.color}
@@ -672,6 +738,7 @@ export const OverlayLayer = ({
         const centerY = p.y + p.h / 2;
         return (
           <div
+            ref={(el) => { if (el) labelRefMap.current.set(p.id, el); }}
             key={`label-${p.id}`}
             data-export-kind="label"
             data-color={p.color}
