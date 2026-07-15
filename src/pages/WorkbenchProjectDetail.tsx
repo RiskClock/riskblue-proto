@@ -1565,12 +1565,26 @@ export default function WorkbenchProjectDetail() {
     queryKey: ["workbench-instances", requestId],
     enabled: !!requestId,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("drawing_instances" as any)
-        .select("file_id, awp_class_name, page_index")
-        .eq("analysis_request_id", requestId!);
-      if (error) throw error;
-      return ((data as unknown) as { file_id: string; awp_class_name: string; page_index: number }[]) || [];
+      // Paginate to bypass PostgREST's 1000-row default cap; projects with
+      // heavy annotation coverage can easily exceed it and silently drop
+      // rows, which shows up as missing counts in the per-file/per-page grid.
+      const PAGE_SIZE = 1000;
+      const all: { file_id: string; awp_class_name: string; page_index: number }[] = [];
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from("drawing_instances" as any)
+          .select("file_id, awp_class_name, page_index")
+          .eq("analysis_request_id", requestId!)
+          .order("created_at", { ascending: true })
+          .range(from, from + PAGE_SIZE - 1);
+        if (error) throw error;
+        const rows = (data as unknown as { file_id: string; awp_class_name: string; page_index: number }[]) || [];
+        all.push(...rows);
+        if (rows.length < PAGE_SIZE) break;
+        from += PAGE_SIZE;
+      }
+      return all;
     },
   });
 

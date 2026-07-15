@@ -783,20 +783,36 @@ export const FileViewerModal = ({
     let cancelled = false;
     (async () => {
       setLoadingInstances(true);
-      const { data, error } = await supabase
-        .from("drawing_instances" as any)
-        .select("id, awp_class_name, nx, ny, page_index, file_id, created_at, instance_number, metadata")
-        .eq("analysis_request_id", analysisRequestId!)
-        .order("created_at", { ascending: true });
+      // PostgREST caps a single select at 1000 rows; paginate so requests
+      // with more than 1000 markers still load every instance. Without this,
+      // the newest markers silently disappear from the sidebar and canvas.
+      const PAGE_SIZE = 1000;
+      const all: DrawingInstanceRow[] = [];
+      let from = 0;
+      let fetchError: any = null;
+      while (true) {
+        const { data, error } = await supabase
+          .from("drawing_instances" as any)
+          .select("id, awp_class_name, nx, ny, page_index, file_id, created_at, instance_number, metadata")
+          .eq("analysis_request_id", analysisRequestId!)
+          .order("created_at", { ascending: true })
+          .range(from, from + PAGE_SIZE - 1);
+        if (error) { fetchError = error; break; }
+        const rows = (data as unknown as DrawingInstanceRow[]) || [];
+        all.push(...rows);
+        if (rows.length < PAGE_SIZE) break;
+        from += PAGE_SIZE;
+        if (cancelled) return;
+      }
       if (!cancelled) {
-        if (error) {
+        if (fetchError) {
           toast({
             variant: "destructive",
             title: "Could not load markers",
-            description: getUserFriendlyError(error),
+            description: getUserFriendlyError(fetchError),
           });
         }
-        setInstances(((data as unknown) as DrawingInstanceRow[]) || []);
+        setInstances(all);
         setLoadingInstances(false);
       }
     })();
