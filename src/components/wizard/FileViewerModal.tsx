@@ -1266,6 +1266,7 @@ export const FileViewerModal = ({
 
   // ---- Overlays ----------------------------------------------------------
   const detectionOverlays: OverlayInput[] = useMemo(() => {
+    if (readOnly) return [];
     return detections.map((d, i) => {
       const coords = d.coordinates;
       const maxCoord = Math.max(...coords);
@@ -1279,7 +1280,7 @@ export const FileViewerModal = ({
         label: d.lineCode || d.systemType,
       };
     });
-  }, [detections]);
+  }, [detections, readOnly]);
 
   // User-placed circles, but only for THIS file and current page.
   // Overlay page depends on the source shape:
