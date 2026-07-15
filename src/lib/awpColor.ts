@@ -89,9 +89,35 @@ export function awpClassColorForType(
 ): string {
   const t = (typeValue ?? "").trim();
   if (!t) return awpClassColor(name);
-  const key = `${name.trim().toLowerCase()}::${t.toLowerCase()}`;
-  const hue = hashStr(key) % 360;
+  // Anchor to the base class hue so variants stay in the same color family
+  // (CW variants remain blue-ish, HW variants remain orange-ish), then shift
+  // by a deterministic per-type delta so each attribute is still visually
+  // distinguishable within the family.
+  const baseHue = hueFromHex(awpClassColor(name));
+  const delta = (hashStr(t.toLowerCase()) % 61) - 30; // -30..+30 degrees
+  const hue = ((baseHue + delta) % 360 + 360) % 360;
   return hslToHex(hue, 65, 42);
+}
+
+// Extract hue (0-360) from a #rrggbb string.
+function hueFromHex(hex: string): number {
+  const m = hex.trim().match(/^#?([0-9a-f]{6})$/i);
+  if (!m) return 0;
+  const v = parseInt(m[1], 16);
+  const r = ((v >> 16) & 255) / 255;
+  const g = ((v >> 8) & 255) / 255;
+  const b = (v & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  if (d === 0) return 0;
+  let h: number;
+  if (max === r) h = ((g - b) / d) % 6;
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  h *= 60;
+  if (h < 0) h += 360;
+  return h;
 }
 
 /**
