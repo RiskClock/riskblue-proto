@@ -82,6 +82,37 @@ function labelSizingForZoom(viewScale: number) {
   return { font, padX, padY, t };
 }
 
+// Shared canvas 2d context for true (font-metric-accurate) text measurement.
+// Uses the exact same font stack the rasterizer paints with, so DOM pill
+// widths and canvas fillText widths agree in the export path.
+export const LABEL_CANVAS_FONT_STACK =
+  'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+
+let _measureCtx: CanvasRenderingContext2D | null = null;
+function getMeasureCtx(): CanvasRenderingContext2D | null {
+  if (_measureCtx) return _measureCtx;
+  if (typeof document === "undefined") return null;
+  try {
+    const c = document.createElement("canvas");
+    _measureCtx = c.getContext("2d");
+    return _measureCtx;
+  } catch {
+    return null;
+  }
+}
+export function measureLabelWidthPx(text: string, fontPx: number): number | undefined {
+  const ctx = getMeasureCtx();
+  if (!ctx) return undefined;
+  ctx.font = `bold ${fontPx}px ${LABEL_CANVAS_FONT_STACK}`;
+  const lines = text.split("\n");
+  let max = 0;
+  for (const ln of lines) {
+    const w = ctx.measureText(ln).width;
+    if (w > max) max = w;
+  }
+  return max + 1; // +1px safety
+}
+
 function withAlpha(color: string, alpha: number): string {
   const trimmed = color.trim();
   if (trimmed.startsWith("hsl(") && trimmed.endsWith(")")) {
