@@ -511,7 +511,7 @@ export function SpatialArchitectModal({
                         variant="secondary"
                         className="gap-1 font-normal max-w-full"
                       >
-                        <span className="truncate max-w-[220px]" title={`${m.file_name} · p${m.page_number}`}>
+                        <span className="truncate min-w-0" title={`${m.file_name} · p${m.page_number}`}>
                           {m.file_name} · p{m.page_number}
                         </span>
                         <button
