@@ -230,7 +230,6 @@ const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewSca
           style={{
             left: 0,
             top: 0,
-            maxWidth: r.w,
             height: labelHCss,
             lineHeight: `${fontCss * 1.4}px`,
             fontSize: fontCss,
@@ -242,9 +241,7 @@ const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewSca
             backgroundColor: r.color,
             color: textColor,
             whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            borderTopLeftRadius: 0,
+            borderRadius: 0,
           }}
           title={label}
         >
