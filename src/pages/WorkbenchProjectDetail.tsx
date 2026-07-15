@@ -3604,20 +3604,20 @@ export default function WorkbenchProjectDetail() {
                     }
                   }}
                   variant="outline"
-                  disabled={!requestId || surveyRunning || !canManage || processingLock}
-                >
-                  {surveyRunning ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Surveying…
-                    </>
-                  ) : (
-                    "Scout"
-                  )}
                 </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {processingLock ? processingLockTip : !canManage ? "No permission" : "Run the Scout survey agent"}
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span tabIndex={0}>
                 <Button
                   type="button"
                   variant="outline"
+                  className={(!requestId || surveyRunning || identifyRunning || enabledCols.length === 0 || !canManage || processingLock) ? "pointer-events-none" : ""}
                   disabled={!requestId || surveyRunning || identifyRunning || enabledCols.length === 0 || !canManage || processingLock}
                   onClick={() => openRiskRadarModal()}
                 >
@@ -3630,6 +3630,19 @@ export default function WorkbenchProjectDetail() {
                     "Risk Radar"
                   )}
                 </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {processingLock
+                      ? processingLockTip
+                      : !canManage
+                        ? "No permission"
+                        : enabledCols.length === 0
+                          ? "Select at least one class"
+                          : "Identify risk elements across enabled classes"}
+                  </TooltipContent>
+                </Tooltip>
+
                 {(() => {
                   const disabled = !requestId || processingLock;
                   const tip = processingLock
