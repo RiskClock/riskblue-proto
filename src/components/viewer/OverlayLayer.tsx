@@ -403,7 +403,7 @@ export const OverlayLayer = ({
         // `exportScale` bumps everything larger for downloaded PDFs.
         const baseDiameter = isDot
           ? Math.max(10, MIN_CIRCLE_DIAMETER_CSS * 0.55)
-          : Math.max(MIN_CIRCLE_DIAMETER_CSS, bboxSidePx * 1.5) * 0.39;
+          : Math.max(MIN_CIRCLE_DIAMETER_CSS, bboxSidePx * 1.5) * 0.195;
         const diameter = baseDiameter * exportScale;
 
         return {

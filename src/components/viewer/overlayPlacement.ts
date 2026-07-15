@@ -79,11 +79,11 @@ interface Anchor {
 
 // ---- Penalty constants ----------------------------------------------------
 
-const OVERLAP_PENALTY = 100_000;
+const OVERLAP_PENALTY = 1_000_000;
 const CIRCLE_PENALTY = 100_000;
 const RECT_PENALTY = 50_000;
 const LEADER_CROSS_PENALTY = 80_000;
-const LABEL_ON_LEADER_PENALTY = 90_000;
+const LABEL_ON_LEADER_PENALTY = 900_000;
 
 // ---- Geometry helpers -----------------------------------------------------
 
@@ -165,12 +165,13 @@ function generateCircleCandidates(
   gap: number,
   bounds: { width: number; height: number },
 ): LabelCandidate[] {
-  const directions = 24;
-  const rings = 5;
+  const directions = 32;
+  const rings = 3;
   const out: LabelCandidate[] = [];
   const fallback: LabelCandidate[] = [];
+  const ringStep = Math.max(14, labelH * 1.4);
   for (let ring = 0; ring < rings; ring++) {
-    const dist = c.r + gap + ring * Math.max(6, labelH * 0.6);
+    const dist = c.r + gap + ring * ringStep;
     for (let i = 0; i < directions; i++) {
       const angle = -Math.PI / 2 + (i * 2 * Math.PI) / directions;
       const cos = Math.cos(angle);
@@ -407,7 +408,7 @@ function optimizePlacements(
     });
 
     const N = positions.length;
-    const maxIters = N > 80 ? 4 : N > 40 ? 6 : N > 20 ? 10 : 15;
+    const maxIters = Math.min(6, N > 80 ? 4 : N > 40 ? 6 : N > 20 ? 6 : 6);
     for (let iter = 0; iter < maxIters; iter++) {
       let improved = false;
       const order = positions.map((_, i) => i);
@@ -479,7 +480,7 @@ function optimizePlacements(
   let best = runOnce(seedShort);
 
   const N = candidatesPerLabel.length;
-  const extraSeeds = N > 60 ? 0 : N > 30 ? 1 : 3;
+  const extraSeeds = Math.max(2, N > 60 ? 2 : N > 30 ? 2 : 3);
   for (let r = 0; r < extraSeeds; r++) {
     if (Date.now() - startedAt > timeBudgetMs) break;
     const seed = candidatesPerLabel.map(
