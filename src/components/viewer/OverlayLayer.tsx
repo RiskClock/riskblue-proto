@@ -52,12 +52,19 @@ const MIN_CIRCLE_DIAMETER_CSS = 24;
 
 // Label sizing in unscaled page CSS px. These scale naturally with the page
 // transform, so markers/labels grow when zooming in and shrink when zooming out.
-// Sizes are 30% smaller than the previous baseline (font 11 → 8, pad 6 → 4, h 18 → 13).
-const LABEL_FONT_PX = 8;
+// Layout sizing used by the placement optimizer (in unscaled page CSS px).
+// Rendered labels use a constant ON-SCREEN size (see LABEL_FONT_PX_SCREEN
+// below) by dividing by the current viewport zoom scale.
+const LABEL_FONT_PX = 10;
 const LABEL_PAD_X = 4;
-const LABEL_H = 13;
+const LABEL_H = 15;
 const LABEL_GAP = 0;
-const LABEL_OPACITY = 0.7;
+const LABEL_OPACITY = 0.85;
+// Target constant on-screen sizes (CSS px, independent of zoom).
+const LABEL_FONT_PX_SCREEN = 10;
+const LABEL_PAD_X_SCREEN = 4;
+const CIRCLE_BORDER_PX_SCREEN = 2;
+const LEADER_STROKE_PX_SCREEN = 1.25;
 
 function withAlpha(color: string, alpha: number): string {
   const trimmed = color.trim();
@@ -133,11 +140,11 @@ const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewSca
   // Label docks to the top-left corner of the box like a header tab. It
   // shares the box's top-left origin so it visually "sits on" the border.
   const label = r.label ?? "";
-  const fontScreen = 12; // constant on-screen font size in CSS px
+  const fontScreen = 10; // constant on-screen font size in CSS px
   const fontCss = (fontScreen / s) * exportScale;
-  const padXCss = (6 / s) * exportScale;
+  const padXCss = (4 / s) * exportScale;
   const padYCss = (2 / s) * exportScale;
-  const labelHCss = fontCss * 1.4 + padYCss * 2;
+  const labelHCss = fontCss * 1.35 + padYCss * 2;
   const textColor = readableTextOn(r.color);
   return (
     <div style={{ position: "absolute", left: r.x, top: r.y, pointerEvents: "none" }}>
@@ -248,7 +255,7 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
         height: c.r * 2,
         borderRadius: "9999px",
         borderColor: withAlpha(c.color, 0.5),
-        borderWidth: (hovered ? 3.5 : 2.5) * exportScale,
+        borderWidth: ((hovered ? 3 : CIRCLE_BORDER_PX_SCREEN) / Math.max(0.0001, viewScale)) * exportScale,
         borderStyle: "solid",
         backgroundColor: withAlpha(c.color, hovered ? 0.35 : 0.2),
         boxSizing: "border-box",
@@ -560,7 +567,7 @@ export const OverlayLayer = ({
               x2={x2}
               y2={y2}
               stroke={p.color}
-              strokeWidth={1.5 * exportScale}
+              strokeWidth={(LEADER_STROKE_PX_SCREEN / Math.max(0.0001, viewScale)) * exportScale}
               opacity={LABEL_OPACITY}
             />
           );
@@ -607,41 +614,52 @@ export const OverlayLayer = ({
 
 
 
-      {/* Labels (above circles & rects). Positions chosen by the optimizer. */}
-      {placedLabels.map((p) => (
-        <div
-          key={`label-${p.id}`}
-          data-export-kind="label"
-          data-color={p.color}
-          data-text-color={readableTextOn(p.color)}
-          data-x={p.x}
-          data-y={p.y}
-          data-w={p.w}
-          data-h={p.h}
-          data-font-px={fontPx}
-          data-opacity={LABEL_OPACITY}
-          className="absolute font-bold pointer-events-none text-center"
-          style={{
-            left: p.x,
-            top: p.y,
-            width: p.w,
-            height: p.h,
-            lineHeight: `${Math.round(fontPx * 1.25)}px`,
-            fontSize: fontPx,
-            paddingLeft: padX,
-            paddingRight: padX,
-            paddingTop: Math.max(0, (p.h - Math.round(fontPx * 1.25) * p.text.split("\n").length) / 2),
-            boxSizing: "border-box",
-            borderRadius: 3,
-            backgroundColor: p.color,
-            color: readableTextOn(p.color),
-            opacity: LABEL_OPACITY,
-            whiteSpace: "pre",
-          }}
-        >
-          {p.text}
-        </div>
-      ))}
+      {/* Labels (above circles & rects). Positions chosen by the optimizer.
+          Rendered at constant on-screen size by dividing font/padding by
+          the current viewport zoom scale; anchored at the center of the
+          optimizer's chosen rect so labels stay put across zoom levels. */}
+      {placedLabels.map((p) => {
+        const s = Math.max(0.0001, viewScale);
+        const renderFont = (LABEL_FONT_PX_SCREEN / s) * exportScale;
+        const renderPadX = (LABEL_PAD_X_SCREEN / s) * exportScale;
+        const renderPadY = (2 / s) * exportScale;
+        const centerX = p.x + p.w / 2;
+        const centerY = p.y + p.h / 2;
+        return (
+          <div
+            key={`label-${p.id}`}
+            data-export-kind="label"
+            data-color={p.color}
+            data-text-color={readableTextOn(p.color)}
+            data-x={p.x}
+            data-y={p.y}
+            data-w={p.w}
+            data-h={p.h}
+            data-font-px={fontPx}
+            data-opacity={LABEL_OPACITY}
+            className="absolute font-bold pointer-events-none text-center"
+            style={{
+              left: centerX,
+              top: centerY,
+              transform: "translate(-50%, -50%)",
+              lineHeight: `${Math.round(renderFont * 1.25)}px`,
+              fontSize: renderFont,
+              paddingLeft: renderPadX,
+              paddingRight: renderPadX,
+              paddingTop: renderPadY,
+              paddingBottom: renderPadY,
+              boxSizing: "border-box",
+              borderRadius: (3 / s) * exportScale,
+              backgroundColor: p.color,
+              color: readableTextOn(p.color),
+              opacity: LABEL_OPACITY,
+              whiteSpace: "pre",
+            }}
+          >
+            {p.text}
+          </div>
+        );
+      })}
 
     </div>
   );
