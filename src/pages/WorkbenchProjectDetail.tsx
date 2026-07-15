@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useActivityLogger } from "@/hooks/useActivityLogger";
+import { useAccountType } from "@/hooks/useAccountType";
 import { SpaceEditModal } from "@/components/workbench/SpaceEditModal";
 import { ConsolidateRisersModal } from "@/components/workbench/ConsolidateRisersModal";
 import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectModal";
@@ -335,6 +336,9 @@ export default function WorkbenchProjectDetail() {
   const queryClient = useQueryClient();
   const { logActivity } = useActivityLogger();
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
+  const { isWMSV } = useAccountType();
+  const canAccess = isInternal || isWMSV;
+  const canManage = isInternal;
 
   const [activeSheet, setActiveSheet] = useState<SheetRow | null>(null);
   const [activeFile, setActiveFile] = useState<FileRow | null>(null);
@@ -857,8 +861,8 @@ export default function WorkbenchProjectDetail() {
 
 
   useEffect(() => {
-    if (user && !isInternal) navigate("/projects", { replace: true });
-  }, [user, isInternal, navigate]);
+    if (user && !canAccess) navigate("/projects", { replace: true });
+  }, [user, canAccess, navigate]);
 
 
 
@@ -870,11 +874,11 @@ export default function WorkbenchProjectDetail() {
   // Project metadata
   const { data: project } = useQuery({
     queryKey: ["workbench-project", projectId],
-    enabled: !!projectId && isInternal,
+    enabled: !!projectId && canAccess,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("projects")
-        .select("id, name, user_id, selected_awp_class_names, selected_other_classes, report_file_path, report_file_name")
+        .select("id, name, user_id, selected_awp_class_names, selected_other_classes, report_file_path, report_file_name, workbench_status")
         .eq("id", projectId!)
         .maybeSingle();
       if (error) throw error;
@@ -885,7 +889,7 @@ export default function WorkbenchProjectDetail() {
   // Latest analysis_request for this project
   const { data: analysisRequest, isLoading: isLoadingAnalysisRequest } = useQuery({
     queryKey: ["workbench-analysis-request", projectId],
-    enabled: !!projectId && isInternal,
+    enabled: !!projectId && canAccess,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("analysis_requests")
@@ -3237,13 +3241,13 @@ export default function WorkbenchProjectDetail() {
     }
   };
 
-  if (!user || !isInternal) {
+  if (!user || !canAccess) {
     return (
       <div className="h-screen flex flex-col bg-background overflow-hidden">
         <AppHeader />
         <main className="container mx-auto px-6 py-12 flex-1 overflow-auto">
           <div className="flex items-center gap-2 text-muted-foreground">
-            <ShieldAlert className="h-4 w-4" /> Internal users only.
+            <ShieldAlert className="h-4 w-4" /> You don't have access to this page.
           </div>
         </main>
       </div>
@@ -3302,14 +3306,69 @@ export default function WorkbenchProjectDetail() {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => navigate("/internal/workbench")}
-                aria-label="Back to Workbench"
+                onClick={() => navigate(canManage ? "/internal/workbench" : "/projects")}
+                aria-label="Back"
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <h1 className="text-xl font-bold text-foreground truncate">
                 {project?.name || "Project"}
               </h1>
+              <div className="flex items-center gap-2 ml-3">
+                <span className="text-xs font-medium text-muted-foreground">Status:</span>
+                {canManage ? (
+                  <Select
+                    value={((project as any)?.workbench_status as string) || "processing"}
+                    onValueChange={async (val) => {
+                      if (!projectId) return;
+                      const prev = ((project as any)?.workbench_status as string) || "processing";
+                      queryClient.setQueryData(
+                        ["workbench-project", projectId],
+                        (old: any) => (old ? { ...old, workbench_status: val } : old),
+                      );
+                      const { error } = await supabase
+                        .from("projects")
+                        .update({ workbench_status: val } as any)
+                        .eq("id", projectId);
+                      if (error) {
+                        queryClient.setQueryData(
+                          ["workbench-project", projectId],
+                          (old: any) => (old ? { ...old, workbench_status: prev } : old),
+                        );
+                        toast({
+                          variant: "destructive",
+                          title: "Failed to update status",
+                          description: getUserFriendlyError(error),
+                        });
+                      } else {
+                        queryClient.invalidateQueries({ queryKey: ["workbench-project", projectId] });
+                        toast({ title: "Status updated" });
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-7 text-xs w-[130px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="processing">Processing</SelectItem>
+                      <SelectItem value="processed">Processed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  (() => {
+                    const s = ((project as any)?.workbench_status as string) || "processing";
+                    const cls =
+                      s === "processed"
+                        ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                        : "bg-amber-100 text-amber-800 border-amber-300";
+                    return (
+                      <Badge variant="outline" className={cls}>
+                        {s === "processed" ? "Processed" : "Processing"}
+                      </Badge>
+                    );
+                  })()
+                )}
+              </div>
             </div>
             {activePhase && (
               <Badge variant="outline" className="text-xs capitalize">
@@ -3318,6 +3377,7 @@ export default function WorkbenchProjectDetail() {
             )}
           </div>
         </div>
+
 
         <main className="flex-1 overflow-auto">
           <div className="container mx-auto px-6 pt-4 pb-6 space-y-4">
@@ -3520,7 +3580,8 @@ export default function WorkbenchProjectDetail() {
                     }
                   }}
                   variant="outline"
-                  disabled={!requestId || surveyRunning}
+                  disabled={!requestId || surveyRunning || !canManage}
+                  title={!canManage ? "No permission" : undefined}
                 >
                   {surveyRunning ? (
                     <>
@@ -3534,7 +3595,8 @@ export default function WorkbenchProjectDetail() {
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={!requestId || surveyRunning || identifyRunning || enabledCols.length === 0}
+                  disabled={!requestId || surveyRunning || identifyRunning || enabledCols.length === 0 || !canManage}
+                  title={!canManage ? "No permission" : undefined}
                   onClick={() => openRiskRadarModal()}
                 >
                   {identifyRunning ? (
@@ -4231,6 +4293,7 @@ export default function WorkbenchProjectDetail() {
             </div>
 
             {/* Upload Report - moved below Pages by File table */}
+            {canManage && (
             <div className="flex items-center justify-end gap-3 mt-4">
               <input
                 ref={reportInputRef}
@@ -4304,6 +4367,7 @@ export default function WorkbenchProjectDetail() {
                 Upload Report
               </Button>
             </div>
+            )}
 
 
 
@@ -5053,6 +5117,7 @@ export default function WorkbenchProjectDetail() {
           consolidations={consolidations || []}
           aliasMap={aliasMap}
           aliasPrefixMap={aliasPrefixMap}
+          canManage={canManage}
         />
 
         <SpatialArchitectModal
@@ -5066,6 +5131,7 @@ export default function WorkbenchProjectDetail() {
           running={spaceHierarchyRunning}
           fileGroups={fileGroups}
           onBuild={buildSpaceHierarchy}
+          canBuild={canManage}
           onSaved={() => {
             queryClient.invalidateQueries({ queryKey: ["workbench-analysis-request", projectId] });
           }}
@@ -5467,6 +5533,7 @@ function InstancesReportModal({
   consolidations,
   aliasMap,
   aliasPrefixMap,
+  canManage = true,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -5490,6 +5557,7 @@ function InstancesReportModal({
   }>;
   aliasMap: Record<string, string>;
   aliasPrefixMap: Record<string, string>;
+  canManage?: boolean;
 }) {
   const displayClassName = useCallback(
     (name: string) => aliasMap[name] || name,
@@ -7161,16 +7229,18 @@ function InstancesReportModal({
               )}
               Export Report
             </Button>
-            <Button
-              onClick={() =>
-                toast({
-                  title: "Sent to WMG Project",
-                  description: "Results have been sent.",
-                })
-              }
-            >
-              Send to WMG Project
-            </Button>
+            {canManage && (
+              <Button
+                onClick={() =>
+                  toast({
+                    title: "Sent to WMG Project",
+                    description: "Results have been sent.",
+                  })
+                }
+              >
+                Send to WMG Project
+              </Button>
+            )}
           </div>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
         </DialogFooter>
