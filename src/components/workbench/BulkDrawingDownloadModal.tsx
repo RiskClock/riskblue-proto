@@ -283,7 +283,42 @@ export function BulkDrawingDownloadModal({
       );
       const entries: PdfExportEntry[] = [];
       for (const f of chosen) {
-...
+        const descriptor = {
+          kind: "supabase-storage" as const,
+          bucket: f.bucket,
+          path: f.storagePath!,
+          mimeType: f.mimeType || "application/pdf",
+          version: f.sizeBytes ?? undefined,
+        };
+        let bytes: Uint8Array;
+        try {
+          const { blob, mime } = await resolveDocumentSource(descriptor);
+          if (!mime.toLowerCase().includes("pdf")) {
+            toast({
+              title: "Skipped",
+              description: `${f.fileName} is not a PDF.`,
+              variant: "destructive",
+            });
+            continue;
+          }
+          bytes = new Uint8Array(await blob.arrayBuffer());
+        } catch (err: any) {
+          toast({
+            title: "Download failed",
+            description: `Could not fetch ${f.fileName}: ${err?.message || "unknown error"}`,
+            variant: "destructive",
+          });
+          continue;
+        }
+        let count = pageCounts.get(f.fileId);
+        if (!count) {
+          try {
+            count = await readPdfPageCount(bytes);
+            setPageCounts((prev) => new Map(prev).set(f.fileId, count!));
+          } catch {
+            count = 1;
+          }
+        }
         const pages: PageOverlaySpec[] = [];
         for (let p = 1; p <= count; p++) {
           const key = `${f.fileId}::${p - 1}`;
