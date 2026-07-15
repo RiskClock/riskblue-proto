@@ -2418,7 +2418,7 @@ export default function WorkbenchProjectDetail() {
     );
   };
 
-  const saveColumns = async () => {
+  const doSaveColumns = async () => {
     setSavingPrefs(true);
     try {
       const { error } = await supabase.from("workbench_column_preferences").upsert({
@@ -2458,6 +2458,18 @@ export default function WorkbenchProjectDetail() {
       setSavingPrefs(false);
     }
   };
+
+  const saveColumns = async () => {
+    // End users saving during Processing with newly added classes → warn about
+    // impact on processing time before committing.
+    const addedClasses = draftCols.filter((n) => !enabledCols.includes(n));
+    if (!canManage && workbenchStatus === "processing" && addedClasses.length > 0) {
+      setColsImpactConfirmOpen(true);
+      return;
+    }
+    await doSaveColumns();
+  };
+
 
   const sheetSource = useMemo<DocumentSourceDescriptor | null>(() => {
     if (!activeSheet || !activeSheet.storage_path) return null;
