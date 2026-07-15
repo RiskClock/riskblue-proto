@@ -408,7 +408,7 @@ function optimizePlacements(
     });
 
     const N = positions.length;
-    const maxIters = N > 80 ? 4 : N > 40 ? 6 : N > 20 ? 10 : 15;
+    const maxIters = Math.min(6, N > 80 ? 4 : N > 40 ? 6 : N > 20 ? 6 : 6);
     for (let iter = 0; iter < maxIters; iter++) {
       let improved = false;
       const order = positions.map((_, i) => i);
