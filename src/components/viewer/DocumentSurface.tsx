@@ -202,6 +202,7 @@ export const DocumentSurface = ({
     const handleSize = 10;
     const half = handleSize / 2;
     const edgeColor = editorColor || "hsl(var(--primary))";
+    const strokePxPage = 2 / Math.max(0.0001, viewScale || 1);
     const handles: { id: HandleId; left: number; top: number; w: number; h: number }[] = [
       // edges (thin strips)
       { id: "n", left: 0, top: -half, w: width, h: handleSize },
@@ -225,14 +226,32 @@ export const DocumentSurface = ({
           style={{
             position: "absolute",
             inset: 0,
-            border: `2px dashed ${edgeColor}`,
             backgroundColor: "transparent",
             cursor: HANDLE_CURSORS.move,
             pointerEvents: "auto",
             boxSizing: "border-box",
             boxShadow: "0 0 0 1px rgba(255,255,255,0.9)",
           }}
-        />
+        >
+          <svg
+            width={width}
+            height={height}
+            style={{ position: "absolute", inset: 0, overflow: "visible", pointerEvents: "none" }}
+          >
+            <rect
+              x={strokePxPage / 2}
+              y={strokePxPage / 2}
+              width={Math.max(0, width - strokePxPage)}
+              height={Math.max(0, height - strokePxPage)}
+              fill="none"
+              stroke={edgeColor}
+              strokeWidth={strokePxPage}
+              strokeDasharray={`${6 / Math.max(0.0001, viewScale || 1)} ${4 / Math.max(0.0001, viewScale || 1)}`}
+              vectorEffect="non-scaling-stroke"
+              style={{ vectorEffect: "non-scaling-stroke", strokeWidth: strokePxPage }}
+            />
+          </svg>
+        </div>
         {handles.map((h) => (
           <div
             key={h.id}
