@@ -1644,7 +1644,7 @@ export default function WorkbenchProjectDetail() {
   const prefId = projectId || PREF_ID;
   const { data: prefs } = useQuery({
     queryKey: ["workbench-column-prefs", prefId],
-    enabled: isInternal && !!prefId,
+    enabled: !!prefId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("workbench_column_preferences")
