@@ -79,11 +79,11 @@ interface Anchor {
 
 // ---- Penalty constants ----------------------------------------------------
 
-const OVERLAP_PENALTY = 100_000;
+const OVERLAP_PENALTY = 1_000_000;
 const CIRCLE_PENALTY = 100_000;
 const RECT_PENALTY = 50_000;
 const LEADER_CROSS_PENALTY = 80_000;
-const LABEL_ON_LEADER_PENALTY = 90_000;
+const LABEL_ON_LEADER_PENALTY = 900_000;
 
 // ---- Geometry helpers -----------------------------------------------------
 
