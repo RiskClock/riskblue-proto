@@ -5009,10 +5009,38 @@ export default function WorkbenchProjectDetail() {
                 Cancel
               </Button>
               <Button
-                onClick={runCleanupIdAssignment}
+                onClick={() => setCleanupConfirmOpen(true)}
                 disabled={cleanupRunning || cleanupChecked.size === 0}
               >
                 {cleanupRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : "Renumber"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Renumber IDs confirmation */}
+        <Dialog open={cleanupConfirmOpen} onOpenChange={(o) => !cleanupRunning && setCleanupConfirmOpen(o)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Renumber IDs?</DialogTitle>
+              <DialogDescription>
+                This will reassign every annotation ID for the selected class{cleanupChecked.size === 1 ? "" : "es"}
+                {" "}({cleanupChecked.size}) starting from 1 across all pages and files in this analysis.
+                Existing IDs cannot be recovered.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCleanupConfirmOpen(false)} disabled={cleanupRunning}>
+                Cancel
+              </Button>
+              <Button
+                onClick={async () => {
+                  setCleanupConfirmOpen(false);
+                  await runCleanupIdAssignment();
+                }}
+                disabled={cleanupRunning}
+              >
+                {cleanupRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm renumber"}
               </Button>
             </DialogFooter>
           </DialogContent>
