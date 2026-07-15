@@ -560,7 +560,10 @@ export function runPlacement(input: PlacementInput): PlacedLabel[] {
     const lines = text.split("\n").length;
     return lines <= 1 ? labelH : labelH + (lines - 1) * lineH;
   };
-  const widthFor = (text: string) => {
+  const widthFor = (text: string, measured?: number) => {
+    if (typeof measured === "number" && measured > 0) {
+      return Math.ceil(measured) + padX * 2 + 4;
+    }
     const longest = text.split("\n").reduce((m, s) => Math.max(m, s.length), 0);
     return Math.ceil(longest * charPx) + padX * 2 + 4;
   };
@@ -574,7 +577,7 @@ export function runPlacement(input: PlacementInput): PlacedLabel[] {
   const rectItems = labeledRects.map((r) => ({
     id: r.id, color: r.color, text: r.label!,
     anchor: { cx: r.x, cy: r.y } as Anchor,
-    width: widthFor(r.label!), height: heightFor(r.label!),
+    width: widthFor(r.label!, r.measuredWidthPx), height: heightFor(r.label!),
   }));
   const rectCands: LabelCandidate[][] = rectItems.map((it, i) =>
     generateRectCandidates(labeledRects[i], it.width, it.height, gap, pageSize),
@@ -590,7 +593,7 @@ export function runPlacement(input: PlacementInput): PlacedLabel[] {
   const circleItems = labeledCircles.map((c) => ({
     id: c.id, color: c.color, text: c.label!,
     anchor: { cx: c.cx, cy: c.cy } as Anchor,
-    width: widthFor(c.label!), height: heightFor(c.label!),
+    width: widthFor(c.label!, c.measuredWidthPx), height: heightFor(c.label!),
   }));
   const circleCands: LabelCandidate[][] = circleItems.map((it, i) =>
     generateCircleCandidates(
