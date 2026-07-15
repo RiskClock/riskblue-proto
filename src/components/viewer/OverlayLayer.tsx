@@ -140,11 +140,11 @@ const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewSca
   // Label docks to the top-left corner of the box like a header tab. It
   // shares the box's top-left origin so it visually "sits on" the border.
   const label = r.label ?? "";
-  const fontScreen = 12; // constant on-screen font size in CSS px
+  const fontScreen = 10; // constant on-screen font size in CSS px
   const fontCss = (fontScreen / s) * exportScale;
-  const padXCss = (6 / s) * exportScale;
+  const padXCss = (4 / s) * exportScale;
   const padYCss = (2 / s) * exportScale;
-  const labelHCss = fontCss * 1.4 + padYCss * 2;
+  const labelHCss = fontCss * 1.35 + padYCss * 2;
   const textColor = readableTextOn(r.color);
   return (
     <div style={{ position: "absolute", left: r.x, top: r.y, pointerEvents: "none" }}>
