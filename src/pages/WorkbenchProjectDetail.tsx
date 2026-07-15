@@ -4128,15 +4128,19 @@ export default function WorkbenchProjectDetail() {
                               <div className="inline-flex items-center gap-1">
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <button
-                                      type="button"
-                                      className="font-semibold hover:underline underline-offset-2"
-                                      onClick={() => setPromptClass(name)}
-                                    >
-                                      {label}
-                                    </button>
+                                    {canManage ? (
+                                      <button
+                                        type="button"
+                                        className="font-semibold hover:underline underline-offset-2"
+                                        onClick={() => setPromptClass(name)}
+                                      >
+                                        {label}
+                                      </button>
+                                    ) : (
+                                      <span className="font-semibold">{label}</span>
+                                    )}
                                   </TooltipTrigger>
-                                  <TooltipContent side="bottom">{tooltipName} - click to view prompt</TooltipContent>
+                                  <TooltipContent side="bottom">{canManage ? `${tooltipName} - click to view prompt` : tooltipName}</TooltipContent>
                                 </Tooltip>
                               </div>
                             </TableHead>
