@@ -135,8 +135,7 @@ interface RectOverlayProps {
 }
 const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewScale }: RectOverlayProps) {
   const s = Math.max(0.0001, viewScale);
-  const borderPxScreen = hovered ? 3 : 2;
-  const borderCss = (borderPxScreen / s) * exportScale;
+  const borderPxScreen = (hovered ? 3 : 2) * exportScale;
   // Label docks to the top-left corner of the box like a header tab. It
   // shares the box's top-left origin so it visually "sits on" the border.
   const label = r.label ?? "";
@@ -148,21 +147,27 @@ const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewSca
   const textColor = readableTextOn(r.color);
   return (
     <div style={{ position: "absolute", left: r.x, top: r.y, pointerEvents: "none" }}>
-      <div
-        data-export-kind="rect"
-        data-color={r.color}
-        data-border-px={borderPxScreen}
-        style={{
-          width: r.w,
-          height: r.h,
-          borderColor: withAlpha(r.color, 0.5),
-          borderWidth: borderCss,
-          borderStyle: "solid",
-          backgroundColor: "transparent",
-          boxSizing: "border-box",
-          pointerEvents: "none",
-        }}
-      />
+      {/* SVG border with non-scaling-stroke keeps the stroke a constant
+          number of device pixels regardless of ancestor CSS transforms. */}
+      <svg
+        width={r.w}
+        height={r.h}
+        style={{ position: "absolute", left: 0, top: 0, overflow: "visible", pointerEvents: "none" }}
+      >
+        <rect
+          data-export-kind="rect"
+          data-color={r.color}
+          data-border-px={borderPxScreen}
+          x={borderPxScreen / (2 * s)}
+          y={borderPxScreen / (2 * s)}
+          width={Math.max(0, r.w - borderPxScreen / s)}
+          height={Math.max(0, r.h - borderPxScreen / s)}
+          fill="none"
+          stroke={withAlpha(r.color, 0.5)}
+          strokeWidth={borderPxScreen}
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
       {label ? (
         <div
           data-export-kind="label"
@@ -253,10 +258,10 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
         top: c.cy - c.r + dragDy,
         width: c.r * 2,
         height: c.r * 2,
+        // Border is rendered via SVG below with non-scaling-stroke so it
+        // stays a constant pixel size regardless of ancestor CSS zoom
+        // transforms. Keep the fill on the div so hit-testing works.
         borderRadius: "9999px",
-        borderColor: withAlpha(c.color, 0.5),
-        borderWidth: ((hovered ? 3 : CIRCLE_BORDER_PX_SCREEN) / Math.max(0.0001, viewScale)) * exportScale,
-        borderStyle: "solid",
         backgroundColor: withAlpha(c.color, hovered ? 0.35 : 0.2),
         boxSizing: "border-box",
         pointerEvents: clickable || draggable ? "auto" : "none",
@@ -304,6 +309,8 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
     if (clickable) onOverlayClick!(c.id);
   };
 
+  const strokePxScreen = (hovered ? 3 : CIRCLE_BORDER_PX_SCREEN) * exportScale;
+
   return (
     <div
       data-export-kind="circle"
@@ -321,7 +328,25 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
           ? (e) => { e.stopPropagation(); onOverlayClick!(c.id); }
           : (e) => e.stopPropagation()
       }
-    />
+    >
+      {!c.isDot ? (
+        <svg
+          width={c.r * 2}
+          height={c.r * 2}
+          style={{ position: "absolute", inset: 0, overflow: "visible", pointerEvents: "none" }}
+        >
+          <circle
+            cx={c.r}
+            cy={c.r}
+            r={Math.max(0, c.r - 0.5)}
+            fill="none"
+            stroke={withAlpha(c.color, 0.5)}
+            strokeWidth={strokePxScreen}
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+      ) : null}
+    </div>
   );
 });
 
@@ -511,12 +536,16 @@ export const OverlayLayer = ({
         style={{ overflow: "visible" }}
       >
         {placedLabels.filter((p) => p.kind === "circle").map((p, idx) => {
-          const labelCx = p.x + p.w / 2;
+          const s = Math.max(0.0001, viewScale);
+          // The label renders at a constant on-screen size, so in
+          // page-coord space its footprint is `p.w / s` × `p.h / s`.
+          // Use that shrunk footprint when computing where the leader
+          // should terminate so the line always reaches the visible
+          // label edge, not the optimizer's unscaled rect.
+          const labelWPage = p.w / s;
+          const labelHPage = p.h / s;
+          const labelCx = p.x + p.w / 2; // center is anchor-invariant
           const labelCy = p.y + p.h / 2;
-          // Always resolve anchor from the live circle by id — never trust
-          // p.ax/p.ay if the corresponding circle has moved since the layout
-          // was memoized, and never draw a leader to a phantom (0,0) anchor
-          // if the circle is missing (skip instead).
           const c = circles.find((c) => c.id === p.id);
           if (!c) return null;
           const ax = c.cx;
@@ -529,11 +558,9 @@ export const OverlayLayer = ({
           // Start the leader on the circle's edge (radius offset toward label).
           const x1 = ax + ux * c.r;
           const y1 = ay + uy * c.r;
-          // Terminate the leader at the label rectangle's edge (not its
-          // center), so a label sitting close to its circle still shows a
-          // visible connector rather than a stub buried under the label.
-          const halfW = p.w / 2;
-          const halfH = p.h / 2;
+          // Terminate at the actual on-screen label rect edge.
+          const halfW = labelWPage / 2;
+          const halfH = labelHPage / 2;
           const tX = Math.abs(ux) > 1e-6 ? halfW / Math.abs(ux) : Infinity;
           const tY = Math.abs(uy) > 1e-6 ? halfH / Math.abs(uy) : Infinity;
           const tEdge = Math.min(tX, tY);
@@ -541,21 +568,6 @@ export const OverlayLayer = ({
           const y2 = labelCy - uy * tEdge;
           const leaderLen = Math.hypot(x2 - x1, y2 - y1);
           if (leaderLen < 0.5) return null;
-          if (import.meta.env.DEV) {
-            const off =
-              x1 < -2 || y1 < -2 || x1 > pageSize.width + 2 || y1 > pageSize.height + 2;
-            if (off) {
-              // eslint-disable-next-line no-console
-              console.warn("[OverlayLayer] leader anchor off-page", {
-                id: p.id,
-                text: p.text,
-                circle: { cx: c.cx, cy: c.cy, r: c.r },
-                pAxAy: { ax: p.ax, ay: p.ay },
-                pageSize,
-                x1, y1, x2, y2,
-              });
-            }
-          }
           return (
             <line
               key={`leader-${p.id}-${idx}`}
@@ -567,7 +579,8 @@ export const OverlayLayer = ({
               x2={x2}
               y2={y2}
               stroke={p.color}
-              strokeWidth={(LEADER_STROKE_PX_SCREEN / Math.max(0.0001, viewScale)) * exportScale}
+              strokeWidth={LEADER_STROKE_PX_SCREEN * exportScale}
+              vectorEffect="non-scaling-stroke"
               opacity={LABEL_OPACITY}
             />
           );
