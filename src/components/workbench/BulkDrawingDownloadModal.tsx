@@ -269,9 +269,11 @@ export function BulkDrawingDownloadModal({
       } catch {
         /* non-blocking — default to 0 rotation */
       }
-      const rotationFor = (fileId: string, pageIdx0: number): 0 | 90 | 180 | 270 => {
+      const rotationFor = (fileId: string, pageNum1: number): 0 | 90 | 180 | 270 => {
+        // page_rotations is keyed by 1-based page number (matches the
+        // drawing modal's `currentPage`).
         const map = rotationsByFile.get(fileId) || {};
-        const v = ((Number(map[String(pageIdx0)]) || 0) % 360 + 360) % 360;
+        const v = ((Number(map[String(pageNum1)]) || 0) % 360 + 360) % 360;
         return (v === 90 || v === 180 || v === 270 ? v : 0) as 0 | 90 | 180 | 270;
       };
 
@@ -329,7 +331,7 @@ export function BulkDrawingDownloadModal({
           pages.push({
             page: p,
             overlays: [...circleOverlays, ...extraOverlays],
-            userRotation: rotationFor(f.fileId, p - 1),
+            userRotation: rotationFor(f.fileId, p),
           });
         }
         entries.push({
