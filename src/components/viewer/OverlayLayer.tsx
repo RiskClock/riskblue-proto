@@ -527,6 +527,8 @@ export const OverlayLayer = ({
     circles: circles.map((c) => ({
       id: c.id, cx: c.cx, cy: c.cy, r: c.r, color: c.color,
       label: c.label, isDot: c.isDot,
+      measuredWidthPx:
+        c.label && !c.isDot ? measureLabelWidthPx(c.label, fontPx) : undefined,
     })),
     rects: [],
     fontPx, padX, labelH, gap, charPx,
