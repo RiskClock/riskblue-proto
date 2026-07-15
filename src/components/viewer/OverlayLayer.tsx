@@ -428,15 +428,17 @@ export const OverlayLayer = ({
 
   // Build a stable input snapshot for the placement pass. Referenced by both
   // the sync (export) branch and the async worker branch below.
+  // Rect labels are docked to their box's top-left corner (rendered inside
+  // RectOverlay) and are intentionally excluded from the placement
+  // optimizer — they have a fixed anchor and don't compete with circles
+  // for space.
   const buildPlacementInput = () => ({
     pageSize,
     circles: circles.map((c) => ({
       id: c.id, cx: c.cx, cy: c.cy, r: c.r, color: c.color,
       label: c.label, isDot: c.isDot,
     })),
-    rects: rects.map((r) => ({
-      id: r.id, x: r.x, y: r.y, w: r.w, h: r.h, color: r.color, label: r.label,
-    })),
+    rects: [],
     fontPx, padX, labelH, gap, charPx,
   });
 
