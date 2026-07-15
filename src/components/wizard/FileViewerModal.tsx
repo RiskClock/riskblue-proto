@@ -2289,12 +2289,16 @@ const FloorPlansPanel = ({
                     }}
                   />
                 ) : (
-                  <span
-                    className="font-medium text-sm truncate flex-1"
-                    title={displayLabel}
-                  >
-                    {displayLabel}
-                  </span>
+                  <Tooltip delayDuration={200}>
+                    <TooltipTrigger asChild>
+                      <span className="font-medium text-sm truncate flex-1 cursor-default">
+                        {displayLabel}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" align="start" className="max-w-[320px] break-words">
+                      {displayLabel}
+                    </TooltipContent>
+                  </Tooltip>
                 )}
                 {isEditingThis ? (
                   <select
