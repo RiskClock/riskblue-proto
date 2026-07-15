@@ -354,6 +354,16 @@ export async function capturePageToPng(
 
     const ready = await waitForViewerReady(surface, input.timeoutMs ?? 30000);
     if (!ready) return null;
+    // Wait for custom fonts to be usable so DOM pill widths match Canvas
+    // fillText widths in the rasterizer (prevents symmetric text clipping).
+    try {
+      if (typeof document !== "undefined" && (document as any).fonts) {
+        await Promise.race([
+          (document as any).fonts.ready,
+          new Promise((r) => setTimeout(r, 500)),
+        ]);
+      }
+    } catch { /* ignore */ }
     // Extra RAF pair after readiness so overlay layout settles.
     await new Promise<void>((r) =>
       requestAnimationFrame(() => requestAnimationFrame(() => r())),
