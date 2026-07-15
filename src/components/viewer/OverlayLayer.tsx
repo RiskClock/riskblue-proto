@@ -785,7 +785,7 @@ export const OverlayLayer = ({
         const sizing = labelSizingForZoom(viewScale);
         const renderFont = (sizing.font / s) * exportScale;
         const renderPadX = (sizing.padX / s) * exportScale;
-        const renderPadY = (sizing.padY / s) * exportScale;
+        const renderPadY = (1 / s) * exportScale;
         const centerX = p.x + p.w / 2;
         const centerY = p.y + p.h / 2;
         return (
