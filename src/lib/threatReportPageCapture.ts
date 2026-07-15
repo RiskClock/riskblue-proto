@@ -151,23 +151,33 @@ export async function rasterizeViewerSurface(
     const center = toLocal(r.left + r.width / 2, r.top + r.height / 2);
     const radius = (r.width / 2) * outScale;
     const color = div.getAttribute("data-color") || "#dc2626";
+    const isDot = div.getAttribute("data-is-dot") === "1";
     ctx.save();
-    ctx.beginPath();
-    ctx.arc(center.x, center.y, radius - 1.25 * outScale, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.globalAlpha = 0.35;
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.beginPath();
-    ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
-    ctx.lineWidth = 1 * outScale;
-    ctx.strokeStyle = "rgba(255,255,255,0.85)";
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(center.x, center.y, radius - 1.25 * outScale, 0, Math.PI * 2);
-    ctx.lineWidth = 2.5 * outScale;
-    ctx.strokeStyle = color;
-    ctx.stroke();
+    if (isDot) {
+      // Unit-floor-plan dot: translucent filled disc, no border.
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.5;
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, radius - 1.25 * outScale, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.35;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+      ctx.lineWidth = 1 * outScale;
+      ctx.strokeStyle = "rgba(255,255,255,0.85)";
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, radius - 1.25 * outScale, 0, Math.PI * 2);
+      ctx.lineWidth = 2.5 * outScale;
+      ctx.strokeStyle = color;
+      ctx.stroke();
+    }
     ctx.restore();
   });
 
