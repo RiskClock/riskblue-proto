@@ -361,6 +361,7 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
   return (
     <div
       data-export-kind="circle"
+      data-is-dot={c.isDot ? "1" : "0"}
       className={draggable ? "overlay-draggable" : undefined}
       data-color={c.color}
       data-cx={c.cx}
