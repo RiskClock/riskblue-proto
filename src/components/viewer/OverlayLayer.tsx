@@ -662,6 +662,7 @@ export const OverlayLayer = ({
           if (leaderLen < 0.5) return null;
           return (
             <line
+              ref={(el) => { if (el) leaderRefMap.current.set(p.id, el); }}
               key={`leader-${p.id}-${idx}`}
               data-export-kind="leader"
               data-color={p.color}
