@@ -618,20 +618,21 @@ function AddPagePopover({
   pages,
   existing,
   onAdd,
+  onRemove,
 }: {
   pages: Array<{ file_name: string; page_number: number; label: string }>;
   existing: Array<{ file_name: string; page_number: number }>;
   onAdd: (p: { file_name: string; page_number: number }) => void;
+  onRemove: (p: { file_name: string; page_number: number }) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const existingKey = new Set(existing.map((e) => `${e.file_name}::${e.page_number}`));
   const filtered = pages.filter(
     (p) =>
-      !existingKey.has(`${p.file_name}::${p.page_number}`) &&
-      (q.trim() === "" ||
-        p.file_name.toLowerCase().includes(q.toLowerCase()) ||
-        p.label.toLowerCase().includes(q.toLowerCase())),
+      q.trim() === "" ||
+      p.file_name.toLowerCase().includes(q.toLowerCase()) ||
+      p.label.toLowerCase().includes(q.toLowerCase()),
   );
   const byFile = new Map<string, typeof filtered>();
   for (const p of filtered) {
@@ -646,8 +647,8 @@ function AddPagePopover({
           <Plus className="h-3 w-3 mr-1" /> Add pages
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-96 p-0" align="start">
-        <div className="p-2 border-b">
+      <PopoverContent className="w-96 p-0 flex flex-col max-h-[24rem]" align="start">
+        <div className="p-2 border-b shrink-0">
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -655,7 +656,10 @@ function AddPagePopover({
             className="h-8 text-xs"
           />
         </div>
-        <div className="max-h-80 overflow-auto">
+        <div
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
+          onWheel={(e) => e.stopPropagation()}
+        >
           {byFile.size === 0 && (
             <div className="p-3 text-xs text-muted-foreground text-center">
               No pages match.
@@ -666,18 +670,34 @@ function AddPagePopover({
               <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground truncate">
                 {fname}
               </div>
-              {arr.map((p) => (
-                <button
-                  key={`${p.file_name}-${p.page_number}`}
-                  type="button"
-                  className="w-full text-left px-3 py-1 text-xs hover:bg-muted truncate"
-                  onClick={() => {
-                    onAdd({ file_name: p.file_name, page_number: p.page_number });
-                  }}
-                >
-                  {p.label}
-                </button>
-              ))}
+              {arr.map((p) => {
+                const isSelected = existingKey.has(`${p.file_name}::${p.page_number}`);
+                return (
+                  <button
+                    key={`${p.file_name}-${p.page_number}`}
+                    type="button"
+                    className="w-full text-left px-3 py-1 text-xs hover:bg-muted flex items-center gap-2"
+                    onClick={() => {
+                      if (isSelected) {
+                        onRemove({ file_name: p.file_name, page_number: p.page_number });
+                      } else {
+                        onAdd({ file_name: p.file_name, page_number: p.page_number });
+                      }
+                    }}
+                  >
+                    <span
+                      className={`inline-flex items-center justify-center h-4 w-4 shrink-0 rounded border ${
+                        isSelected
+                          ? "bg-primary border-primary text-primary-foreground"
+                          : "border-input bg-background"
+                      }`}
+                    >
+                      {isSelected && <Check className="h-3 w-3" />}
+                    </span>
+                    <span className="truncate">{p.label}</span>
+                  </button>
+                );
+              })}
             </div>
           ))}
         </div>
