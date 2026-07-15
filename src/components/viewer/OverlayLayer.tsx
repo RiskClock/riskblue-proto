@@ -401,6 +401,12 @@ export const OverlayLayer = ({
   const onPlacingChangeRef = useRef(onPlacingChange);
   onPlacingChangeRef.current = onPlacingChange;
 
+  const overlayRootRef = useRef<HTMLDivElement>(null);
+  const labelRefMap = useRef<Map<string, HTMLDivElement>>(new Map());
+  const leaderRefMap = useRef<Map<string, SVGLineElement>>(new Map());
+  labelRefMap.current.clear();
+  leaderRefMap.current.clear();
+
   const circles: CircleInfo[] = useMemo(() => {
     return overlays
       .filter((o) => (o.shape ?? "circle") !== "rect")
