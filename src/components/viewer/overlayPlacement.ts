@@ -303,12 +303,22 @@ function candidateCost(
   const rightPenalty = Math.max(0, dx) * 0.75;
   let cost = cand.leader + horizontalOffset * 0.5 + belowPenalty + rightPenalty;
 
-  const candBBox = bboxOfRect(cand);
+  // Safety buffer: inflate the candidate's footprint by 6px on every side
+  // (12px total) when checking label-to-label overlaps. This forces the
+  // optimizer to leave breathing room between neighbors.
+  const SAFETY = 6;
+  const inflated = {
+    x: cand.x - SAFETY,
+    y: cand.y - SAFETY,
+    w: cand.w + SAFETY * 2,
+    h: cand.h + SAFETY * 2,
+  };
+  const candBBox = bboxOfRect(inflated);
 
   const labelHits = labelIdx.search(candBBox);
   for (const lh of labelHits) {
     if (lh.idx === selfIdx) continue;
-    if (rectsOverlap(cand, positions[lh.idx])) cost += OVERLAP_PENALTY;
+    if (rectsOverlap(inflated, positions[lh.idx])) cost += OVERLAP_PENALTY;
   }
 
   const circleHits = circleIdx.search(candBBox);
