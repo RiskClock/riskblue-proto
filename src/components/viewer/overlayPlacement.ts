@@ -165,12 +165,13 @@ function generateCircleCandidates(
   gap: number,
   bounds: { width: number; height: number },
 ): LabelCandidate[] {
-  const directions = 24;
-  const rings = 5;
+  const directions = 32;
+  const rings = 3;
   const out: LabelCandidate[] = [];
   const fallback: LabelCandidate[] = [];
+  const ringStep = Math.max(14, labelH * 1.4);
   for (let ring = 0; ring < rings; ring++) {
-    const dist = c.r + gap + ring * Math.max(6, labelH * 0.6);
+    const dist = c.r + gap + ring * ringStep;
     for (let i = 0; i < directions; i++) {
       const angle = -Math.PI / 2 + (i * 2 * Math.PI) / directions;
       const cos = Math.cos(angle);
