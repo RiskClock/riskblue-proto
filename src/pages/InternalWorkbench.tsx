@@ -63,6 +63,7 @@ interface WorkbenchProject {
   file_count: number;
   total_size_bytes: number | null;
   status: string | null;
+  workbench_status: string | null;
   pipeline_phase: string | null;
   error_message: string | null;
   pipeline_progress_done: number | null;
@@ -139,17 +140,18 @@ type SortKey =
   | "total_size_bytes";
 type SortDir = "asc" | "desc";
 
-type WBColumnId = "creator" | "created_at" | "file_count" | "total_size_bytes";
+type WBColumnId = "creator" | "created_at" | "file_count" | "total_size_bytes" | "workbench_status";
 const WB_ALL_COLUMNS: { id: WBColumnId; label: string }[] = [
+  { id: "workbench_status", label: "Status" },
   { id: "creator", label: "Created By" },
   { id: "created_at", label: "Created On" },
   { id: "file_count", label: "Files" },
   { id: "total_size_bytes", label: "Total Size" },
 ];
-const WB_COLUMN_PREFS_KEY = "workbench-column-prefs-v1";
+const WB_COLUMN_PREFS_KEY = "workbench-column-prefs-v2";
 const loadWBColumnPrefs = (): Record<WBColumnId, boolean> => {
   const defaults: Record<WBColumnId, boolean> = {
-    creator: true, created_at: true, file_count: true, total_size_bytes: true,
+    creator: true, created_at: true, file_count: true, total_size_bytes: true, workbench_status: true,
   };
   try {
     const raw = localStorage.getItem(WB_COLUMN_PREFS_KEY);
@@ -210,7 +212,7 @@ export default function InternalWorkbench() {
     queryFn: async (): Promise<WorkbenchProject[]> => {
       const { data: projectsData, error } = await supabase
         .from("projects")
-        .select("id, name, user_id, created_at")
+        .select("id, name, user_id, created_at, workbench_status")
         .order("created_at", { ascending: false });
       if (error) throw error;
 
@@ -260,6 +262,7 @@ export default function InternalWorkbench() {
           file_count: analysis?.file_count ?? 0,
           total_size_bytes: analysis?.total_size_bytes ?? null,
           status: analysis?.status ?? null,
+          workbench_status: (p.workbench_status as string) ?? "processing",
           pipeline_phase: analysis?.pipeline_phase ?? null,
           error_message: analysis?.error_message ?? null,
           pipeline_progress_done: analysis?.pipeline_progress_done ?? null,
@@ -527,6 +530,9 @@ export default function InternalWorkbench() {
                   >
                     Project Name <SortIcon k="name" />
                   </TableHead>
+                  {columnPrefs.workbench_status && (
+                    <TableHead>Status</TableHead>
+                  )}
                   {columnPrefs.creator && (
                     <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("creator")}>
                       Created By <SortIcon k="creator" />
@@ -590,6 +596,22 @@ export default function InternalWorkbench() {
                       onClick={() => navigate(`/internal/workbench/project/${p.id}`)}
                     >
                       <TableCell className="font-medium">{p.name}</TableCell>
+                      {columnPrefs.workbench_status && (
+                        <TableCell>
+                          {(() => {
+                            const s = (p.workbench_status || "processing") as "processing" | "processed";
+                            const cls =
+                              s === "processed"
+                                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                : "bg-amber-100 text-amber-800 border-amber-300";
+                            return (
+                              <Badge variant="outline" className={cls}>
+                                {s === "processed" ? "Processed" : "Processing"}
+                              </Badge>
+                            );
+                          })()}
+                        </TableCell>
+                      )}
                       {columnPrefs.creator && (
                         <TableCell>
                           <TooltipProvider delayDuration={200}>

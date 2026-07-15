@@ -2008,6 +2008,7 @@ export type Database = {
           underground_parking_start: string | null
           updated_at: string
           user_id: string
+          workbench_status: string
           zip_code: string | null
         }
         Insert: {
@@ -2046,6 +2047,7 @@ export type Database = {
           underground_parking_start?: string | null
           updated_at?: string
           user_id: string
+          workbench_status?: string
           zip_code?: string | null
         }
         Update: {
@@ -2084,6 +2086,7 @@ export type Database = {
           underground_parking_start?: string | null
           updated_at?: string
           user_id?: string
+          workbench_status?: string
           zip_code?: string | null
         }
         Relationships: []

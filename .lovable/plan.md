@@ -1,67 +1,63 @@
-## Root cause
+# Plan: WMSV Workbench Access, Status Column & Permission Gating
 
-The exported page in the screenshot ("M001@Floo") is symmetrically chopped on both sides. That happens in `threatReportPageCapture.rasterizeViewerSurface` because:
+## 1. Schema — new `workbench_status` on projects
 
-- The offscreen pill canvas is sized to `div.getBoundingClientRect().width` (DOM width).
-- Text is drawn with `ctx.font = "bold Npx ui-sans-serif, system-ui, …"` and `textAlign:"center"`.
-- Inside the hidden offscreen container, custom app fonts aren't guaranteed to be loaded/applied, so canvas falls back to a wider system font. Canvas text ends up wider than the DOM pill → the centered draw is clipped on both edges.
-- Additionally, the placement optimizer uses a heuristic (`charPx = fontPx * 0.82`) that underestimates wide glyphs (`@`, `M`, `W`, digits, `_`), so even the reservation pill can be smaller than the true rendered text.
+Migration:
+- Add `workbench_status text not null default 'processing'` to `public.projects` with a `CHECK (workbench_status IN ('processing','processed'))`.
 
-## Changes
+## 2. Main Projects list (`src/pages/Projects.tsx`)
 
-### 1. `src/components/viewer/OverlayLayer.tsx`
+- Remove **Location** column (header + cell + `formatLocation` helper if unused).
+- Add **Status** column after **Credit Cost**. Render a Badge derived from `project.workbench_status`:
+  - `processing` → "Processing" (amber)
+  - `processed` → "Processed" (emerald)
+- Include `workbench_status` in the `projects` select.
+- Row click routing:
+  - If `useAccountType().isWMSV` → `navigate(\`/internal/workbench/project/${id}\`)` (the WorkbenchProjectDetail route).
+  - Otherwise keep current `navigate(\`/project/${id}\`)`.
 
-Add a small Canvas-based text measurement utility and use it whenever `syncPlacement` is on (export path). Async on-screen path can also opt in cheaply since it's memoized.
+## 3. WorkbenchProjectDetail access + back-button (`src/pages/WorkbenchProjectDetail.tsx`)
 
-- New helper `measureLabelWidthPx(text, fontPx)`:
-  - Lazily create a shared `<canvas>` and `CanvasRenderingContext2D`.
-  - Set `ctx.font = 'bold ${fontPx}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'` — the *same* string used by the rasterizer.
-  - Return `ctx.measureText(text).width`, plus a small safety epsilon (1px).
-  - For multi-line labels, measure each line and return the max.
-- In `buildPlacementInput()`, instead of passing a single `charPx` heuristic, precompute a per-circle `measuredWidthPx` for each labeled circle and pass those to the placement input. Fall back to the current `charPx` heuristic only when measurement isn't available (SSR/worker).
-- Remove the `overflow: hidden` / `textOverflow: "ellipsis"` on the placed label `<div>` render path when `syncPlacement` is true. The main placed-labels branch already uses `whiteSpace: "pre"` and no maxWidth — audit and make sure nothing clips.
-- For `RectOverlay`'s top-left docked label: when `syncPlacement` is on, drop `maxWidth: r.w`, `overflow: hidden`, and `textOverflow: "ellipsis"` so the full label renders. Keep `whiteSpace: "nowrap"`.
-- Change `borderRadius: (3 / s) * exportScale` → `0` on the placed label pill so the exported bbox label is a sharp-cornered rectangle. (Applies to the docked rect label as well.)
+- Change the access guard: allow entry when `isInternal || isWMSV` (currently redirects any non-internal user to `/projects`). Query `useAccountType` for WMSV detection.
+- Back arrow (line 3305) target:
+  - Internal users → `/internal/workbench` (unchanged).
+  - WMSV users → `/projects`.
+- Compute `canManage = isInternal` (used below for gating).
 
-### 2. `src/components/viewer/overlayPlacement.ts`
+## 4. Non-internal (WMSV) UI restrictions
 
-- Extend `CircleInput` (and internal reservation logic) with an optional `measuredWidthPx?: number`. When present, use it verbatim as the label's reserved width (plus `padX * 2`) instead of `label.length * charPx + padX * 2`.
-- Keep the existing `charPx` field as a fallback so nothing breaks for callers that don't provide measurements.
+In `WorkbenchProjectDetail.tsx`:
+- Wrap **Scout** and **Risk Radar** buttons: when `!canManage`, force `disabled` and wrap in a Tooltip with content "No permission".
+- Hide **Upload Report** button block (around line 4304) when `!canManage`.
+- Hide **Send to WMG Project** button (line 7172) when `!canManage`.
 
-### 3. `src/lib/overlayOnlyCapture.ts`
+In `src/components/workbench/SpatialArchitectModal.tsx`:
+- Accept a new `canBuild: boolean` prop (passed from parent as `isInternal`).
+- The "Build Spatial Model" button (line 442): when `!canBuild`, disable and wrap in a Tooltip "No permission". Modal itself still opens; existing hierarchy remains viewable/editable per current logic.
 
-Guarantee custom fonts are loaded before rendering the offscreen overlay layer:
+## 5. Status control in WorkbenchProjectDetail header
 
-- Before `root.render(...)`, `await document.fonts.ready` (guarded with a short timeout so we never hang exports).
-- Optionally, prime the specific font by calling `document.fonts.load('bold 13px ui-sans-serif')` (and any other sizes we actually render) before rendering.
-- Attach an inline `<style>` node to the offscreen container that pins `font-family` on `[data-export-kind="label"]` to the exact same stack the canvas uses, so the DOM measurement (`getBoundingClientRect`) and canvas measurement agree.
+Right after the `<h1>` project name in the sub-header (~line 3312):
+- Add a compact "Status:" label followed by:
+  - Internal users → shadcn `Select` with options Processing / Processed, wired to a mutation that updates `projects.workbench_status` and invalidates the project query. Optimistic UI + toast.
+  - Non-internal (WMSV) users → a static Badge with the same styling as the Projects list.
+- Replace the existing `activePhase` outline badge? **No** — keep it; new Status sits next to the title on the left side, activePhase stays on the right.
 
-### 4. `src/lib/threatReportPageCapture.ts`
+## 6. Workbench project list column (`src/pages/InternalWorkbench.tsx`)
 
-- In `rasterizeViewerSurface`, before drawing labels: `await document.fonts.load(\`bold ${fontPx}px ui-sans-serif\`)` for each unique fontPx used (guarded).
-- When drawing the pill:
-  - Use the same font string the DOM label is styled with.
-  - Measure `octx.measureText(line).width` and, if it exceeds the DOM `w`, expand the offscreen canvas width (and shift the composite `tl.x` left by the extra half) so the text is never clipped. This is the safety net if fonts still disagree.
-  - Replace the rounded-rect path with a plain `octx.fillRect(0, 0, w, h)` + `octx.strokeRect(...)` (sharp corners) to match the on-screen bbox label.
+- Include `workbench_status` in the projects query.
+- Add a new "Status" column (Processing/Processed badge) alongside existing analysis status.
+- Register it in `WB_COLUMN_PREFS_KEY` column-toggle config so internal users can show/hide it.
+- Sort/filter parity with existing columns (basic sortable; filter optional — reuse existing status filter is not required since these are two-state).
 
-### 5. `capturePageToPng` (same file)
+## Technical notes
 
-- Also `await document.fonts.ready` (with short timeout) before `waitForViewerReady` returns success, so labels measured by the mounted `OverlayLayer` inside the offscreen container use the real fonts.
+- Reuse `useAccountType()` hook (already present) to detect WMSV; `isInternal` continues to derive from `@riskclock.com` email suffix.
+- No changes to `analysis_requests.status` — `workbench_status` is fully independent.
+- RLS on `projects` already allows admins/creators/internal to update; adding column requires no new policy.
+- Type regeneration will happen after the migration is approved; only then wire the new column in code.
 
-## Non-goals
+## Out of scope
 
-- No changes to the on-screen viewer's ring distances or leader-snapping logic (already fixed in a prior turn).
-- No visual change to circles, leaders, or the underlying PDF raster.
-
-## Verification
-
-- Rebuild the threat report for a page containing wide-glyph labels (`MRM001@Floor_1`, `MRM002@Floor_10`) and confirm the exported PDF pill shows the full text with sharp corners.
-- Confirm on-screen viewer labels are unchanged (still rounded on-screen? — user asked only about the *bbox* label being sharp; if they want on-screen sharp too, we can flip that flag).
-
-## Question for you
-
-You said "the bbox label should be using sharp cornered rectangle." Do you mean:
-- (a) only in the exported PDF (rect docked label + circle pills sharp on export), or
-- (b) everywhere including the on-screen viewer?
-
-I'll default to (b) — sharp corners everywhere — unless you say otherwise.
+- Auto-transitioning `workbench_status` from analysis pipeline events (user explicitly picked "New column" only).
+- Permission changes for standard (non-WMSV, non-internal) users — they continue to use ProjectWizard.

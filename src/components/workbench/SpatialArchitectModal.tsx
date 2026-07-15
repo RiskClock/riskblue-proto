@@ -79,6 +79,7 @@ export function SpatialArchitectModal({
   fileGroups,
   onBuild,
   onSaved,
+  canBuild = true,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -91,6 +92,7 @@ export function SpatialArchitectModal({
   fileGroups: Array<{ file: FileLike; sheets: SheetLike[] }>;
   onBuild: () => Promise<void> | void;
   onSaved: () => void;
+  canBuild?: boolean;
 }) {
   const { toast } = useToast();
   const [levels, setLevels] = useState<LevelDraft[]>([]);
@@ -444,7 +446,8 @@ export function SpatialArchitectModal({
             size="sm"
             variant="secondary"
             onClick={handleBuild}
-            disabled={!requestId || running}
+            disabled={!requestId || running || !canBuild}
+            title={!canBuild ? "No permission" : undefined}
           >
             {running ? (
               <>

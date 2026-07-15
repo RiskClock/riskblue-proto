@@ -14,6 +14,7 @@ import { Trash2, X, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CreateProjectModal } from "@/components/CreateProjectModal";
+import { useAccountType } from "@/hooks/useAccountType";
 
 interface Project {
   id: string;
@@ -29,6 +30,7 @@ interface Project {
   credits_consumed?: number | null;
   report_file_path?: string | null;
   report_file_name?: string | null;
+  workbench_status?: string | null;
 }
 
 interface ProjectWithCreator extends Project {
@@ -72,6 +74,7 @@ const Projects = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { isWMSV } = useAccountType();
   useHeapIdentify();
   const { logActivity } = useActivityLogger();
   const [projects, setProjects] = useState<ProjectWithCreator[]>([]);
@@ -340,8 +343,8 @@ const Projects = () => {
               <thead className="bg-muted/50">
                 <tr className="text-left">
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Project Name</th>
-                  <th className="px-6 py-3 text-sm font-medium text-foreground">Location</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Credit Cost</th>
+                  <th className="px-6 py-3 text-sm font-medium text-foreground">Status</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Created By</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Created On</th>
                   <th className="px-6 py-3 w-[120px]"></th>
@@ -352,14 +355,34 @@ const Projects = () => {
                   <tr
                     key={project.id}
                     className="border-t hover:bg-muted/30 cursor-pointer"
-                    onClick={() => navigate(`/project/${project.id}`)}
+                    onClick={() =>
+                      navigate(
+                        isWMSV
+                          ? `/internal/workbench/project/${project.id}`
+                          : `/project/${project.id}`,
+                      )
+                    }
                   >
                     <td className="px-6 py-4">
                       <span className="text-foreground">{project.name}</span>
                     </td>
-                    <td className="px-6 py-4 text-muted-foreground">{formatLocation(project.city, project.country)}</td>
                     <td className="px-6 py-4 text-muted-foreground tabular-nums">
                       {typeof project.credits_consumed === "number" ? project.credits_consumed : "-"}
+                    </td>
+                    <td className="px-6 py-4">
+                      {(() => {
+                        const s = (project.workbench_status || "processing") as "processing" | "processed";
+                        const cls =
+                          s === "processed"
+                            ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                            : "bg-amber-100 text-amber-800 border-amber-300";
+                        const label = s === "processed" ? "Processed" : "Processing";
+                        return (
+                          <Badge variant="outline" className={cls}>
+                            {label}
+                          </Badge>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">
                       {project.creator_email ? (
