@@ -657,9 +657,10 @@ export const OverlayLayer = ({
           optimizer's chosen rect so labels stay put across zoom levels. */}
       {placedLabels.map((p) => {
         const s = Math.max(0.0001, viewScale);
-        const renderFont = (LABEL_FONT_PX_SCREEN / s) * exportScale;
-        const renderPadX = (LABEL_PAD_X_SCREEN / s) * exportScale;
-        const renderPadY = (2 / s) * exportScale;
+        const sizing = labelSizingForZoom(viewScale);
+        const renderFont = (sizing.font / s) * exportScale;
+        const renderPadX = (sizing.padX / s) * exportScale;
+        const renderPadY = (sizing.padY / s) * exportScale;
         const centerX = p.x + p.w / 2;
         const centerY = p.y + p.h / 2;
         return (
