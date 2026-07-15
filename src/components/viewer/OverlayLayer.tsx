@@ -609,6 +609,7 @@ export const OverlayLayer = ({
 
   return (
     <div
+      ref={overlayRootRef}
       data-overlay-root
       className="pointer-events-none absolute inset-0"
       style={{ width: pageSize.width, height: pageSize.height }}
