@@ -250,6 +250,31 @@ export function BulkDrawingDownloadModal({
         }
       }
 
+      // Fetch per-file page rotations set by users in the drawing modal so
+      // each exported page respects the same orientation. Missing/invalid
+      // entries default to 0.
+      const rotationsByFile = new Map<string, Record<string, number>>();
+      try {
+        const ids = chosen.map((f) => f.fileId);
+        if (ids.length > 0) {
+          const { data: rotRows } = await supabase
+            .from("analysis_request_files")
+            .select("id, page_rotations")
+            .in("id", ids);
+          for (const r of (rotRows as any[]) || []) {
+            const raw = (r?.page_rotations ?? {}) as Record<string, number>;
+            rotationsByFile.set(String(r.id), raw || {});
+          }
+        }
+      } catch {
+        /* non-blocking — default to 0 rotation */
+      }
+      const rotationFor = (fileId: string, pageIdx0: number): 0 | 90 | 180 | 270 => {
+        const map = rotationsByFile.get(fileId) || {};
+        const v = ((Number(map[String(pageIdx0)]) || 0) % 360 + 360) % 360;
+        return (v === 90 || v === 180 || v === 270 ? v : 0) as 0 | 90 | 180 | 270;
+      };
+
       // Download source PDFs and determine page counts. Uses the same
       // shared source resolver as the single-page download in the drawing
       // modal, so private buckets / drive-hosted files behave identically.
@@ -258,42 +283,7 @@ export function BulkDrawingDownloadModal({
       );
       const entries: PdfExportEntry[] = [];
       for (const f of chosen) {
-        const descriptor = {
-          kind: "supabase-storage" as const,
-          bucket: f.bucket,
-          path: f.storagePath!,
-          mimeType: f.mimeType || "application/pdf",
-          version: f.sizeBytes ?? undefined,
-        };
-        let bytes: Uint8Array;
-        try {
-          const { blob, mime } = await resolveDocumentSource(descriptor);
-          if (!mime.toLowerCase().includes("pdf")) {
-            toast({
-              title: "Skipped",
-              description: `${f.fileName} is not a PDF.`,
-              variant: "destructive",
-            });
-            continue;
-          }
-          bytes = new Uint8Array(await blob.arrayBuffer());
-        } catch (err: any) {
-          toast({
-            title: "Download failed",
-            description: `Could not fetch ${f.fileName}: ${err?.message || "unknown error"}`,
-            variant: "destructive",
-          });
-          continue;
-        }
-        let count = pageCounts.get(f.fileId);
-        if (!count) {
-          try {
-            count = await readPdfPageCount(bytes);
-            setPageCounts((prev) => new Map(prev).set(f.fileId, count!));
-          } catch {
-            count = 1;
-          }
-        }
+...
         const pages: PageOverlaySpec[] = [];
         for (let p = 1; p <= count; p++) {
           const key = `${f.fileId}::${p - 1}`;
@@ -301,7 +291,11 @@ export function BulkDrawingDownloadModal({
           const extraOverlays = includeOverlays
             ? (extraOverlaysByFilePage?.get(key) ?? [])
             : [];
-          pages.push({ page: p, overlays: [...circleOverlays, ...extraOverlays] });
+          pages.push({
+            page: p,
+            overlays: [...circleOverlays, ...extraOverlays],
+            userRotation: rotationFor(f.fileId, p - 1),
+          });
         }
         entries.push({
           fileName: f.fileName,
