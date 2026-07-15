@@ -480,7 +480,7 @@ function optimizePlacements(
   let best = runOnce(seedShort);
 
   const N = candidatesPerLabel.length;
-  const extraSeeds = N > 60 ? 0 : N > 30 ? 1 : 3;
+  const extraSeeds = Math.max(2, N > 60 ? 2 : N > 30 ? 2 : 3);
   for (let r = 0; r < extraSeeds; r++) {
     if (Date.now() - startedAt > timeBudgetMs) break;
     const seed = candidatesPerLabel.map(
