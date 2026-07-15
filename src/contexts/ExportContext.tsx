@@ -73,7 +73,23 @@ const ExportContext = createContext<ExportContextValue | null>(null);
 
 export function useExportManager(): ExportContextValue {
   const ctx = useContext(ExportContext);
-  if (!ctx) throw new Error("useExportManager must be used inside ExportProvider");
+  if (!ctx) {
+    // HMR can transiently render children before the provider re-mounts.
+    // Return a no-op stub instead of throwing so we don't blank the screen.
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.warn("useExportManager called without ExportProvider (likely HMR); returning stub.");
+    }
+    return {
+      exports: [],
+      isActiveForRequest: () => false,
+      isRequestSuppressed: () => false,
+      startExport: async () => undefined,
+      cancelExport: () => undefined,
+      cancelExportForRequest: () => undefined,
+      dismissExport: () => undefined,
+    };
+  }
   return ctx;
 }
 
