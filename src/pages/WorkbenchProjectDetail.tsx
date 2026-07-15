@@ -4539,6 +4539,7 @@ export default function WorkbenchProjectDetail() {
             expandedClasses={sidebarExpandedClasses}
             onExpandedClassesChange={setSidebarExpandedClasses}
             preselectClass={preselectClass}
+            readOnly={processingLock}
           />
         )}
 
