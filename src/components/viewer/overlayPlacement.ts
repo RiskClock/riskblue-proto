@@ -166,12 +166,13 @@ function generateCircleCandidates(
   bounds: { width: number; height: number },
 ): LabelCandidate[] {
   const directions = 32;
-  const rings = 3;
   const out: LabelCandidate[] = [];
   const fallback: LabelCandidate[] = [];
-  const ringStep = Math.max(14, labelH * 1.4);
-  for (let ring = 0; ring < rings; ring++) {
-    const dist = c.r + gap + ring * ringStep;
+  // Absolute ring distances (in page CSS px) added to the circle radius.
+  // Wider spacing gives crowded labels physical room to escape.
+  const ringDistances = [40, 80, 130];
+  for (let ring = 0; ring < ringDistances.length; ring++) {
+    const dist = c.r + gap + ringDistances[ring];
     for (let i = 0; i < directions; i++) {
       const angle = -Math.PI / 2 + (i * 2 * Math.PI) / directions;
       const cos = Math.cos(angle);
@@ -302,12 +303,22 @@ function candidateCost(
   const rightPenalty = Math.max(0, dx) * 0.75;
   let cost = cand.leader + horizontalOffset * 0.5 + belowPenalty + rightPenalty;
 
-  const candBBox = bboxOfRect(cand);
+  // Safety buffer: inflate the candidate's footprint by 6px on every side
+  // (12px total) when checking label-to-label overlaps. This forces the
+  // optimizer to leave breathing room between neighbors.
+  const SAFETY = 6;
+  const inflated = {
+    x: cand.x - SAFETY,
+    y: cand.y - SAFETY,
+    w: cand.w + SAFETY * 2,
+    h: cand.h + SAFETY * 2,
+  };
+  const candBBox = bboxOfRect(inflated);
 
   const labelHits = labelIdx.search(candBBox);
   for (const lh of labelHits) {
     if (lh.idx === selfIdx) continue;
-    if (rectsOverlap(cand, positions[lh.idx])) cost += OVERLAP_PENALTY;
+    if (rectsOverlap(inflated, positions[lh.idx])) cost += OVERLAP_PENALTY;
   }
 
   const circleHits = circleIdx.search(candBBox);

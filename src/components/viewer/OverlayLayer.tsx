@@ -557,14 +557,20 @@ export const OverlayLayer = ({
       >
         {placedLabels.filter((p) => p.kind === "circle").map((p, idx) => {
           const s = Math.max(0.0001, viewScale);
-          // The label renders at a constant on-screen size, so in
-          // page-coord space its footprint is `p.w / s` × `p.h / s`.
-          // Use that shrunk footprint when computing where the leader
-          // should terminate so the line always reaches the visible
-          // label edge, not the optimizer's unscaled rect.
-          const labelWPage = p.w / s;
-          const labelHPage = p.h / s;
-          const labelCx = p.x + p.w / 2; // center is anchor-invariant
+          // The rendered label uses zoom-interpolated font/padding, so its
+          // actual on-screen footprint is smaller than the optimizer's
+          // reservation (which uses the MAX font). Recompute the true
+          // on-screen size here so the leader terminates flush against the
+          // visible label edge with no gap.
+          const sizing = labelSizingForZoom(viewScale);
+          const lines = p.text.split("\n");
+          const longest = lines.reduce((m, ln) => Math.max(m, ln.length), 0);
+          const renderWScreen =
+            longest * sizing.font * 0.72 + sizing.padX * 2 + 4;
+          const renderHScreen = lines.length * sizing.font * 1.25 + sizing.padY * 2;
+          const labelWPage = (renderWScreen * exportScale) / s;
+          const labelHPage = (renderHScreen * exportScale) / s;
+          const labelCx = p.x + p.w / 2; // anchor stays at the reservation's center
           const labelCy = p.y + p.h / 2;
           const c = circles.find((c) => c.id === p.id);
           if (!c) return null;
