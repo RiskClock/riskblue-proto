@@ -738,6 +738,7 @@ export const OverlayLayer = ({
         const centerY = p.y + p.h / 2;
         return (
           <div
+            ref={(el) => { if (el) labelRefMap.current.set(p.id, el); }}
             key={`label-${p.id}`}
             data-export-kind="label"
             data-color={p.color}
