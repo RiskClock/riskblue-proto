@@ -166,12 +166,13 @@ function generateCircleCandidates(
   bounds: { width: number; height: number },
 ): LabelCandidate[] {
   const directions = 32;
-  const rings = 3;
   const out: LabelCandidate[] = [];
   const fallback: LabelCandidate[] = [];
-  const ringStep = Math.max(14, labelH * 1.4);
-  for (let ring = 0; ring < rings; ring++) {
-    const dist = c.r + gap + ring * ringStep;
+  // Absolute ring distances (in page CSS px) added to the circle radius.
+  // Wider spacing gives crowded labels physical room to escape.
+  const ringDistances = [40, 80, 130];
+  for (let ring = 0; ring < ringDistances.length; ring++) {
+    const dist = c.r + gap + ringDistances[ring];
     for (let i = 0; i < directions; i++) {
       const angle = -Math.PI / 2 + (i * 2 * Math.PI) / directions;
       const cos = Math.cos(angle);
