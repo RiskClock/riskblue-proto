@@ -455,8 +455,7 @@ export const OverlayLayer = ({
   const [asyncPlaced, setAsyncPlaced] = useState<PlacedLabel[]>([]);
   useEffect(() => {
     if (syncPlacement) return;
-    const hasLabels =
-      circles.some((c) => !!c.label && !c.isDot) || rects.some((r) => !!r.label);
+    const hasLabels = circles.some((c) => !!c.label && !c.isDot);
     if (!hasLabels) {
       setAsyncPlaced([]);
       onPlacingChangeRef.current?.(false);
