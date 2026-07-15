@@ -113,28 +113,83 @@ interface CircleInfo {
 // re-render; the rest are bailed out by `React.memo`'s shallow-equal check.
 
 interface RectOverlayProps {
-  r: { id: string; x: number; y: number; w: number; h: number; color: string };
+  r: { id: string; x: number; y: number; w: number; h: number; color: string; label?: string };
   hovered: boolean;
   exportScale: number;
+  /**
+   * Current viewport zoom scale from react-zoom-pan-pinch. Because the
+   * overlay layer sits *inside* the transformed content, we divide screen
+   * sizes (border width, label font, padding) by this so borders stay a
+   * constant ~2px and labels a constant ~12px on-screen regardless of
+   * zoom. The box itself still scales with the drawing so it keeps
+   * hugging the same physical region.
+   */
+  viewScale: number;
 }
-const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale }: RectOverlayProps) {
+const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewScale }: RectOverlayProps) {
+  const s = Math.max(0.0001, viewScale);
+  const borderPxScreen = hovered ? 3 : 2;
+  const borderCss = (borderPxScreen / s) * exportScale;
+  // Label docks to the top-left corner of the box like a header tab. It
+  // shares the box's top-left origin so it visually "sits on" the border.
+  const label = r.label ?? "";
+  const fontScreen = 12; // constant on-screen font size in CSS px
+  const fontCss = (fontScreen / s) * exportScale;
+  const padXCss = (6 / s) * exportScale;
+  const padYCss = (2 / s) * exportScale;
+  const labelHCss = fontCss * 1.4 + padYCss * 2;
+  const textColor = readableTextOn(r.color);
   return (
-    <div style={{ position: "absolute", left: r.x, top: r.y }}>
+    <div style={{ position: "absolute", left: r.x, top: r.y, pointerEvents: "none" }}>
       <div
         data-export-kind="rect"
         data-color={r.color}
-        data-border-px={hovered ? 3 : 2}
+        data-border-px={borderPxScreen}
         style={{
           width: r.w,
           height: r.h,
           borderColor: withAlpha(r.color, 0.5),
-          borderWidth: (hovered ? 3 : 2) * exportScale,
+          borderWidth: borderCss,
           borderStyle: "solid",
           backgroundColor: "transparent",
           boxSizing: "border-box",
           pointerEvents: "none",
         }}
       />
+      {label ? (
+        <div
+          data-export-kind="label"
+          data-color={r.color}
+          data-text-color={textColor}
+          data-x={r.x}
+          data-y={r.y}
+          data-font-px={fontCss}
+          data-opacity={1}
+          className="absolute font-bold pointer-events-none"
+          style={{
+            left: 0,
+            top: 0,
+            maxWidth: r.w,
+            height: labelHCss,
+            lineHeight: `${fontCss * 1.4}px`,
+            fontSize: fontCss,
+            paddingLeft: padXCss,
+            paddingRight: padXCss,
+            paddingTop: padYCss,
+            paddingBottom: padYCss,
+            boxSizing: "border-box",
+            backgroundColor: r.color,
+            color: textColor,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            borderTopLeftRadius: 0,
+          }}
+          title={label}
+        >
+          {label}
+        </div>
+      ) : null}
     </div>
   );
 });
