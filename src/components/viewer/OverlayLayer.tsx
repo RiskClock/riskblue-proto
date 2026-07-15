@@ -258,10 +258,10 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
         top: c.cy - c.r + dragDy,
         width: c.r * 2,
         height: c.r * 2,
+        // Border is rendered via SVG below with non-scaling-stroke so it
+        // stays a constant pixel size regardless of ancestor CSS zoom
+        // transforms. Keep the fill on the div so hit-testing works.
         borderRadius: "9999px",
-        borderColor: withAlpha(c.color, 0.5),
-        borderWidth: ((hovered ? 3 : CIRCLE_BORDER_PX_SCREEN) / Math.max(0.0001, viewScale)) * exportScale,
-        borderStyle: "solid",
         backgroundColor: withAlpha(c.color, hovered ? 0.35 : 0.2),
         boxSizing: "border-box",
         pointerEvents: clickable || draggable ? "auto" : "none",
@@ -309,6 +309,8 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
     if (clickable) onOverlayClick!(c.id);
   };
 
+  const strokePxScreen = (hovered ? 3 : CIRCLE_BORDER_PX_SCREEN) * exportScale;
+
   return (
     <div
       data-export-kind="circle"
@@ -326,7 +328,25 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
           ? (e) => { e.stopPropagation(); onOverlayClick!(c.id); }
           : (e) => e.stopPropagation()
       }
-    />
+    >
+      {!c.isDot ? (
+        <svg
+          width={c.r * 2}
+          height={c.r * 2}
+          style={{ position: "absolute", inset: 0, overflow: "visible", pointerEvents: "none" }}
+        >
+          <circle
+            cx={c.r}
+            cy={c.r}
+            r={Math.max(0, c.r - 0.5)}
+            fill="none"
+            stroke={withAlpha(c.color, 0.5)}
+            strokeWidth={strokePxScreen}
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+      ) : null}
+    </div>
   );
 });
 
