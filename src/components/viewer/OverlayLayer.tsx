@@ -361,6 +361,7 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
   return (
     <div
       data-export-kind="circle"
+      data-is-dot={c.isDot ? "1" : "0"}
       className={draggable ? "overlay-draggable" : undefined}
       data-color={c.color}
       data-cx={c.cx}
@@ -449,20 +450,12 @@ export const OverlayLayer = ({
         const isDot = o.variant === "dot";
         // Detection annotation circles are intentionally small (30% of the
         // previous size, then bumped 30% larger on request) so they don't
-        // obscure the drawing. Unit-marker dots size proportionally to the
-        // page so they look consistent between the on-screen modal (where
-        // the viewer zoom enlarges them) and the downloaded PDF (which
-        // fits the whole page). `exportScale` bumps everything larger for
-        // downloaded PDFs.
+        // obscure the drawing. Unit-marker dots keep their original size.
+        // `exportScale` bumps everything larger for downloaded PDFs.
         const baseDiameter = isDot
-          ? Math.max(
-              MIN_CIRCLE_DIAMETER_CSS,
-              Math.min(pageSize.width, pageSize.height) * 0.025,
-            )
+          ? Math.max(10, MIN_CIRCLE_DIAMETER_CSS * 0.55)
           : Math.max(MIN_CIRCLE_DIAMETER_CSS, bboxSidePx * 1.5) * 0.195;
-        // Dots already scale with page size, so exportScale is a no-op for
-        // them — otherwise they'd render bigger in the export than on-screen.
-        const diameter = isDot ? baseDiameter : baseDiameter * exportScale;
+        const diameter = baseDiameter * exportScale;
 
         return {
           id: o.id,
