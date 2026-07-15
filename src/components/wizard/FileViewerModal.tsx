@@ -230,6 +230,8 @@ interface FileViewerModalProps {
   annotationAssignments?: Record<string, string>;
   /** @deprecated - assignments are no longer used. Kept for API compat. */
   onAssignAnnotation?: (className: string, planId: string | null) => Promise<void> | void;
+  /** When true, disable placement of detections and any floor-plan editing. */
+  readOnly?: boolean;
 }
 
 
@@ -279,6 +281,7 @@ export const FileViewerModal = ({
   riskElementClasses,
   annotationAssignments,
   onAssignAnnotation,
+  readOnly = false,
 }: FileViewerModalProps) => {
 
   const { toast } = useToast();
@@ -401,7 +404,7 @@ export const FileViewerModal = ({
 
 
   const sidebarEnabled =
-    !!awpClasses && !!analysisRequestId && !!parentFileId;
+    !readOnly && !!awpClasses && !!analysisRequestId && !!parentFileId;
 
   const storageKey = persistKey ? `workbench-awp-class:${persistKey}` : null;
 

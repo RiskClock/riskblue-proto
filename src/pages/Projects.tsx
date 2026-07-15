@@ -343,10 +343,10 @@ const Projects = () => {
               <thead className="bg-muted/50">
                 <tr className="text-left">
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Project Name</th>
-                  <th className="px-6 py-3 text-sm font-medium text-foreground">Credit Cost</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Status</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Created By</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Created On</th>
+                  <th className="px-6 py-3 text-sm font-medium text-foreground">Credit Cost</th>
                   <th className="px-6 py-3 w-[120px]"></th>
                 </tr>
               </thead>
@@ -365,9 +365,6 @@ const Projects = () => {
                   >
                     <td className="px-6 py-4">
                       <span className="text-foreground">{project.name}</span>
-                    </td>
-                    <td className="px-6 py-4 text-muted-foreground tabular-nums">
-                      {typeof project.credits_consumed === "number" ? project.credits_consumed : "-"}
                     </td>
                     <td className="px-6 py-4">
                       {(() => {
@@ -402,6 +399,9 @@ const Projects = () => {
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">
                       {formatDateShort(project.created_at)}
+                    </td>
+                    <td className="px-6 py-4 text-muted-foreground tabular-nums">
+                      {typeof project.credits_consumed === "number" ? project.credits_consumed : "-"}
                     </td>
                     <td className="px-6 py-4">
                       <div className="h-9 flex items-center justify-end gap-1">

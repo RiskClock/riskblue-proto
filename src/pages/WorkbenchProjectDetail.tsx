@@ -346,6 +346,7 @@ export default function WorkbenchProjectDetail() {
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [cleanupChecked, setCleanupChecked] = useState<Set<string>>(new Set());
   const [cleanupRunning, setCleanupRunning] = useState(false);
+  const [cleanupConfirmOpen, setCleanupConfirmOpen] = useState(false);
 
   
   const [manageOpen, setManageOpen] = useState(false);
@@ -885,6 +886,12 @@ export default function WorkbenchProjectDetail() {
       return data;
     },
   });
+
+  // WMSV (non-internal) viewers see a stripped-down, read-only view while the
+  // project is still being processed by internal staff.
+  const workbenchStatus = ((project as any)?.workbench_status as string) || "processing";
+  const processingLock = !canManage && workbenchStatus === "processing";
+  const processingLockTip = "Unavailable while processing";
 
   // Latest analysis_request for this project
   const { data: analysisRequest, isLoading: isLoadingAnalysisRequest } = useQuery({
@@ -1644,7 +1651,7 @@ export default function WorkbenchProjectDetail() {
   const prefId = projectId || PREF_ID;
   const { data: prefs } = useQuery({
     queryKey: ["workbench-column-prefs", prefId],
-    enabled: isInternal && !!prefId,
+    enabled: !!prefId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("workbench_column_preferences")
@@ -3580,8 +3587,7 @@ export default function WorkbenchProjectDetail() {
                     }
                   }}
                   variant="outline"
-                  disabled={!requestId || surveyRunning || !canManage}
-                  title={!canManage ? "No permission" : undefined}
+                  disabled={!requestId || surveyRunning || !canManage || processingLock}
                 >
                   {surveyRunning ? (
                     <>
@@ -3595,8 +3601,7 @@ export default function WorkbenchProjectDetail() {
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={!requestId || surveyRunning || identifyRunning || enabledCols.length === 0 || !canManage}
-                  title={!canManage ? "No permission" : undefined}
+                  disabled={!requestId || surveyRunning || identifyRunning || enabledCols.length === 0 || !canManage || processingLock}
                   onClick={() => openRiskRadarModal()}
                 >
                   {identifyRunning ? (
@@ -3608,22 +3613,37 @@ export default function WorkbenchProjectDetail() {
                     "Risk Radar"
                   )}
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setSpatialArchitectOpen(true)}
-                  disabled={!requestId}
-                  title="View and edit canonical levels; run the Spatial Architect agent."
-                >
-                  {spaceHierarchyRunning ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Spatial Architect…
-                    </>
-                  ) : (
-                    "Spatial Architect"
-                  )}
-                </Button>
+                {(() => {
+                  const disabled = !requestId || processingLock;
+                  const tip = processingLock
+                    ? processingLockTip
+                    : "View and edit canonical levels; run the Spatial Architect agent.";
+                  return (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span tabIndex={0}>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setSpatialArchitectOpen(true)}
+                            disabled={disabled}
+                            className={disabled ? "pointer-events-none" : ""}
+                          >
+                            {spaceHierarchyRunning ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Spatial Architect…
+                              </>
+                            ) : (
+                              "Spatial Architect"
+                            )}
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">{tip}</TooltipContent>
+                    </Tooltip>
+                  );
+                })()}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span tabIndex={0}>
@@ -3631,64 +3651,115 @@ export default function WorkbenchProjectDetail() {
                         type="button"
                         variant="outline"
                         onClick={() => setConsolidateOpen(true)}
-                        disabled={!requestId || !hasRisersSelected}
+                        disabled={!requestId || !hasRisersSelected || processingLock}
+                        className={(!requestId || !hasRisersSelected || processingLock) ? "pointer-events-none" : ""}
                       >
                         Riser Unifier
                       </Button>
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">
-                    {!hasRisersSelected
-                      ? "No riser selected for risk identification"
-                      : "Group riser annotations into multi-space instances"}
+                    {processingLock
+                      ? processingLockTip
+                      : !hasRisersSelected
+                        ? "No riser selected for risk identification"
+                        : "Group riser annotations into multi-space instances"}
                   </TooltipContent>
                 </Tooltip>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setInstancesReportOpen(true)}
-                  disabled={!requestId}
-                  title="Generate per-space threat report"
-                >
-                  Threat Report
-                </Button>
+                {(() => {
+                  const disabled = !requestId || processingLock;
+                  const tip = processingLock ? processingLockTip : "Generate per-space threat report";
+                  return (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span tabIndex={0}>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setInstancesReportOpen(true)}
+                            disabled={disabled}
+                            className={disabled ? "pointer-events-none" : ""}
+                          >
+                            Threat Report
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">{tip}</TooltipContent>
+                    </Tooltip>
+                  );
+                })()}
 
                 <div className="flex-1" />
 
                 {analysisRequest && totalFiles > 0 && enabledCols.length > 0 && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setCleanupChecked(new Set());
-                      setCleanupOpen(true);
-                    }}
-                  >
-                    Renumber IDs
-                  </Button>
+                  (() => {
+                    const disabled = processingLock || !canManage;
+                    const tip = processingLock
+                      ? processingLockTip
+                      : !canManage
+                        ? "No permission"
+                        : "Reassign annotation IDs starting from 1";
+                    return (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span tabIndex={0}>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => {
+                                setCleanupChecked(new Set());
+                                setCleanupOpen(true);
+                              }}
+                              disabled={disabled}
+                              className={disabled ? "pointer-events-none" : ""}
+                            >
+                              Renumber IDs
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">{tip}</TooltipContent>
+                      </Tooltip>
+                    );
+                  })()
                 )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={openClearAllDialog}
-                  disabled={!requestId || phaseRunning}
-                >
-                  Clear All
-                </Button>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setScoutDebugOpen(true)}
-                      aria-label="Agent debug"
-                    >
-                      <Bug className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Agent debug</TooltipContent>
-                </Tooltip>
+                {(() => {
+                  const disabled = !requestId || phaseRunning || processingLock;
+                  const tip = processingLock ? processingLockTip : phaseRunning ? "Analysis is running" : "Clear all workbench results";
+                  return (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span tabIndex={0}>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={openClearAllDialog}
+                            disabled={disabled}
+                            className={disabled ? "pointer-events-none" : ""}
+                          >
+                            Clear All
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">{tip}</TooltipContent>
+                    </Tooltip>
+                  );
+                })()}
+                {canManage && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setScoutDebugOpen(true)}
+                        aria-label="Agent debug"
+                      >
+                        <Bug className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">Agent debug</TooltipContent>
+                  </Tooltip>
+                )}
 
               </div>
 
@@ -4172,6 +4243,13 @@ export default function WorkbenchProjectDetail() {
                                 </div>
                               </TableCell>
                               {enabledCols.map((name) => {
+                                if (processingLock) {
+                                  return (
+                                    <TableCell key={name} className="text-center py-1">
+                                      <span className="text-muted-foreground">-</span>
+                                    </TableCell>
+                                  );
+                                }
                                 const baseCount =
                                   fileCountLookup.get(`${row.id}::${name}`) || 0;
                                 const userCount =
@@ -4217,7 +4295,7 @@ export default function WorkbenchProjectDetail() {
                                         <span className="text-muted-foreground shrink-0">
                                           Page {p}
                                         </span>
-                                        {(() => {
+                                        {!processingLock && (() => {
                                           if (levelPlans.length === 0) return null;
                                           const c = awpClassColor("Level Floor Plan");
                                           const labels = levelPlans.map((lvl) => {
@@ -4243,7 +4321,7 @@ export default function WorkbenchProjectDetail() {
                                             </Badge>
                                           ));
                                         })()}
-                                        {unitPlans.length > 0 && (() => {
+                                        {!processingLock && unitPlans.length > 0 && (() => {
                                           const c = awpClassColor("Unit Floor Plan");
                                           return (
                                             <Badge
@@ -4259,10 +4337,11 @@ export default function WorkbenchProjectDetail() {
                                       </div>
                                     </TableCell>
                                     {enabledCols.map((name) => {
-                                      const cnt =
-                                        pageInstanceCountLookup.get(
-                                          `${row.id}::${p}::${name}`,
-                                        ) || 0;
+                                      const cnt = processingLock
+                                        ? 0
+                                        : pageInstanceCountLookup.get(
+                                            `${row.id}::${p}::${name}`,
+                                          ) || 0;
                                       return (
                                         <TableCell
                                           key={name}
@@ -4425,6 +4504,7 @@ export default function WorkbenchProjectDetail() {
             expandedClasses={sidebarExpandedClasses}
             onExpandedClassesChange={setSidebarExpandedClasses}
             preselectClass={preselectClass}
+            readOnly={processingLock}
           />
         )}
 
@@ -4459,6 +4539,7 @@ export default function WorkbenchProjectDetail() {
             expandedClasses={sidebarExpandedClasses}
             onExpandedClassesChange={setSidebarExpandedClasses}
             preselectClass={preselectClass}
+            readOnly={processingLock}
           />
         )}
 
@@ -4619,6 +4700,7 @@ export default function WorkbenchProjectDetail() {
             onInstancesChanged={() => {
               queryClient.refetchQueries({ queryKey: ["workbench-instances", requestId] });
             }}
+            readOnly={processingLock}
           />
 
         )}
@@ -4938,10 +5020,38 @@ export default function WorkbenchProjectDetail() {
                 Cancel
               </Button>
               <Button
-                onClick={runCleanupIdAssignment}
+                onClick={() => setCleanupConfirmOpen(true)}
                 disabled={cleanupRunning || cleanupChecked.size === 0}
               >
                 {cleanupRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : "Renumber"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Renumber IDs confirmation */}
+        <Dialog open={cleanupConfirmOpen} onOpenChange={(o) => !cleanupRunning && setCleanupConfirmOpen(o)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Renumber IDs?</DialogTitle>
+              <DialogDescription>
+                This will reassign every annotation ID for the selected class{cleanupChecked.size === 1 ? "" : "es"}
+                {" "}({cleanupChecked.size}) starting from 1 across all pages and files in this analysis.
+                Existing IDs cannot be recovered.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCleanupConfirmOpen(false)} disabled={cleanupRunning}>
+                Cancel
+              </Button>
+              <Button
+                onClick={async () => {
+                  setCleanupConfirmOpen(false);
+                  await runCleanupIdAssignment();
+                }}
+                disabled={cleanupRunning}
+              >
+                {cleanupRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm renumber"}
               </Button>
             </DialogFooter>
           </DialogContent>
