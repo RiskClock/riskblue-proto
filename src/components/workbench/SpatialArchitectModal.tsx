@@ -528,6 +528,12 @@ export function SpatialArchitectModal({
                       pages={allPages}
                       existing={l.matched_sources}
                       onAdd={(p) => addPage(l.uid, p)}
+                      onRemove={(p) => {
+                        const idx = l.matched_sources.findIndex(
+                          (m) => m.file_name === p.file_name && m.page_number === p.page_number,
+                        );
+                        if (idx >= 0) removePage(l.uid, idx);
+                      }}
                     />
                   </div>
                   <div className="flex items-center justify-end gap-0.5">
