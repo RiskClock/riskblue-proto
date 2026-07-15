@@ -135,8 +135,7 @@ interface RectOverlayProps {
 }
 const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewScale }: RectOverlayProps) {
   const s = Math.max(0.0001, viewScale);
-  const borderPxScreen = hovered ? 3 : 2;
-  const borderCss = (borderPxScreen / s) * exportScale;
+  const borderPxScreen = (hovered ? 3 : 2) * exportScale;
   // Label docks to the top-left corner of the box like a header tab. It
   // shares the box's top-left origin so it visually "sits on" the border.
   const label = r.label ?? "";
@@ -148,21 +147,27 @@ const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewSca
   const textColor = readableTextOn(r.color);
   return (
     <div style={{ position: "absolute", left: r.x, top: r.y, pointerEvents: "none" }}>
-      <div
-        data-export-kind="rect"
-        data-color={r.color}
-        data-border-px={borderPxScreen}
-        style={{
-          width: r.w,
-          height: r.h,
-          borderColor: withAlpha(r.color, 0.5),
-          borderWidth: borderCss,
-          borderStyle: "solid",
-          backgroundColor: "transparent",
-          boxSizing: "border-box",
-          pointerEvents: "none",
-        }}
-      />
+      {/* SVG border with non-scaling-stroke keeps the stroke a constant
+          number of device pixels regardless of ancestor CSS transforms. */}
+      <svg
+        width={r.w}
+        height={r.h}
+        style={{ position: "absolute", left: 0, top: 0, overflow: "visible", pointerEvents: "none" }}
+      >
+        <rect
+          data-export-kind="rect"
+          data-color={r.color}
+          data-border-px={borderPxScreen}
+          x={borderPxScreen / (2 * s)}
+          y={borderPxScreen / (2 * s)}
+          width={Math.max(0, r.w - borderPxScreen / s)}
+          height={Math.max(0, r.h - borderPxScreen / s)}
+          fill="none"
+          stroke={withAlpha(r.color, 0.5)}
+          strokeWidth={borderPxScreen}
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
       {label ? (
         <div
           data-export-kind="label"
