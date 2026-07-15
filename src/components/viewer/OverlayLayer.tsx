@@ -593,13 +593,16 @@ export const OverlayLayer = ({
       })}
 
 
-      {/* Rectangle overlays - outline only. Labels are placed by the optimizer below. */}
+      {/* Rectangle overlays. Border + docked top-left label render inside
+          RectOverlay; both stay at constant on-screen size by dividing by
+          the current viewport zoom scale. */}
       {rects.map((r) => (
         <RectOverlay
           key={r.id}
           r={r}
           hovered={hoveredId === r.id}
           exportScale={exportScale}
+          viewScale={viewScale}
         />
       ))}
 
