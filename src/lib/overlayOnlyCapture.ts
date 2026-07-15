@@ -130,6 +130,16 @@ export async function captureOverlayOnly(
 
   const root = createRoot(overlayHost);
   try {
+    // Ensure fonts are ready before layout & measurement so DOM pill widths
+    // match Canvas fillText widths in the rasterizer.
+    try {
+      if (typeof document !== "undefined" && (document as any).fonts) {
+        await Promise.race([
+          (document as any).fonts.ready,
+          new Promise((r) => setTimeout(r, 500)),
+        ]);
+      }
+    } catch { /* ignore */ }
     root.render(
       createElement(OverlayLayer, {
         overlays: normalized,
