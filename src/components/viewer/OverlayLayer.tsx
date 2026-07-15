@@ -455,7 +455,7 @@ export const OverlayLayer = ({
         const baseDiameter = isDot
           ? Math.max(10, MIN_CIRCLE_DIAMETER_CSS * 0.55)
           : Math.max(MIN_CIRCLE_DIAMETER_CSS, bboxSidePx * 1.5) * 0.195;
-        const diameter = baseDiameter * exportScale;
+        const diameter = baseDiameter * exportScale * (isDot ? 3 : 1);
 
         return {
           id: o.id,
