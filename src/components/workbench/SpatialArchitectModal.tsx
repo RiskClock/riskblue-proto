@@ -498,31 +498,37 @@ export function SpatialArchitectModal({
                     className="h-8 text-sm text-center"
                     title="Numeric index (P1=-1, Ground=0, L1=1…)"
                   />
-                  <div className="flex flex-wrap items-center gap-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
                     {l.matched_sources.length === 0 && (
                       <span className="text-xs text-muted-foreground italic">
                         None
                       </span>
                     )}
-                    {l.matched_sources.map((m, idx) => (
-                      <Badge
-                        key={`${m.file_name}-${m.page_number}-${idx}`}
-                        variant="secondary"
-                        className="gap-1 font-normal max-w-full"
-                      >
-                        <span className="truncate min-w-0" title={`${m.file_name} · p${m.page_number}`}>
-                          {m.file_name} · p{m.page_number}
-                        </span>
-                        <button
-                          type="button"
-                          className="ml-0.5 rounded hover:bg-muted-foreground/20 p-0.5 shrink-0"
-                          onClick={() => removePage(l.uid, idx)}
-                          aria-label="Remove page"
+                    {(() => {
+                      const byFile = new Map<string, number[]>();
+                      for (const m of l.matched_sources) {
+                        const arr = byFile.get(m.file_name) || [];
+                        arr.push(m.page_number);
+                        byFile.set(m.file_name, arr);
+                      }
+                      return Array.from(byFile.entries()).map(([fileName, pages]) => (
+                        <div
+                          key={fileName}
+                          className="flex items-center gap-1.5 min-w-0 max-w-full text-xs"
                         >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </Badge>
-                    ))}
+                          <span className="font-medium truncate min-w-0" title={fileName}>
+                            {fileName}
+                          </span>
+                          <span className="text-muted-foreground shrink-0">
+                            {pages
+                              .slice()
+                              .sort((a, b) => a - b)
+                              .map((p) => `p${p}`)
+                              .join(", ")}
+                          </span>
+                        </div>
+                      ));
+                    })()}
                     <AddPagePopover
                       pages={allPages}
                       existing={l.matched_sources}
