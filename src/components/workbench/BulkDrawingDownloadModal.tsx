@@ -331,7 +331,7 @@ export function BulkDrawingDownloadModal({
           pages.push({
             page: p,
             overlays: [...circleOverlays, ...extraOverlays],
-            userRotation: rotationFor(f.fileId, p - 1),
+            userRotation: rotationFor(f.fileId, p),
           });
         }
         entries.push({
