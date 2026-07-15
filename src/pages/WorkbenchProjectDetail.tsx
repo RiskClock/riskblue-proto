@@ -4295,7 +4295,7 @@ export default function WorkbenchProjectDetail() {
                                         <span className="text-muted-foreground shrink-0">
                                           Page {p}
                                         </span>
-                                        {(() => {
+                                        {!processingLock && (() => {
                                           if (levelPlans.length === 0) return null;
                                           const c = awpClassColor("Level Floor Plan");
                                           const labels = levelPlans.map((lvl) => {
@@ -4321,7 +4321,7 @@ export default function WorkbenchProjectDetail() {
                                             </Badge>
                                           ));
                                         })()}
-                                        {unitPlans.length > 0 && (() => {
+                                        {!processingLock && unitPlans.length > 0 && (() => {
                                           const c = awpClassColor("Unit Floor Plan");
                                           return (
                                             <Badge
@@ -4337,10 +4337,11 @@ export default function WorkbenchProjectDetail() {
                                       </div>
                                     </TableCell>
                                     {enabledCols.map((name) => {
-                                      const cnt =
-                                        pageInstanceCountLookup.get(
-                                          `${row.id}::${p}::${name}`,
-                                        ) || 0;
+                                      const cnt = processingLock
+                                        ? 0
+                                        : pageInstanceCountLookup.get(
+                                            `${row.id}::${p}::${name}`,
+                                          ) || 0;
                                       return (
                                         <TableCell
                                           key={name}
