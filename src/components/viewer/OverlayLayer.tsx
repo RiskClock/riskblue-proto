@@ -794,7 +794,7 @@ export const OverlayLayer = ({
               paddingTop: renderPadY,
               paddingBottom: renderPadY,
               boxSizing: "border-box",
-              borderRadius: (3 / s) * exportScale,
+              borderRadius: 0,
               backgroundColor: p.color,
               color: readableTextOn(p.color),
               opacity: LABEL_OPACITY,
