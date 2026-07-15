@@ -545,6 +545,8 @@ export const OverlayLayer = ({
     };
   }, []);
 
+  const placedLabels: PlacedLabel[] = syncPlacement ? (syncPlaced ?? []) : asyncPlaced;
+
   // After labels render, measure their actual bounding boxes and snap every
   // leader line endpoint flush to the visible label edge. This guarantees
   // perfect alignment even when font metrics or zoom interpolation change the
@@ -602,8 +604,6 @@ export const OverlayLayer = ({
       }
     });
   }, [placedLabels, circles, viewScale]);
-
-  const placedLabels: PlacedLabel[] = syncPlacement ? (syncPlaced ?? []) : asyncPlaced;
 
 
 
