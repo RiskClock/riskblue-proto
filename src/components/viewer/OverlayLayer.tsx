@@ -455,7 +455,10 @@ export const OverlayLayer = ({
         const baseDiameter = isDot
           ? Math.max(10, MIN_CIRCLE_DIAMETER_CSS * 0.55)
           : Math.max(MIN_CIRCLE_DIAMETER_CSS, bboxSidePx * 1.5) * 0.195;
-        const diameter = baseDiameter * exportScale * (isDot ? 3 : 1);
+        // Unit-marker dots get an extra 3× bump in the export path (where
+        // exportScale > 1) so they read clearly on the full-page PDF raster.
+        const dotExportBoost = isDot && exportScale > 1 ? 3 : 1;
+        const diameter = baseDiameter * exportScale * dotExportBoost;
 
         return {
           id: o.id,
