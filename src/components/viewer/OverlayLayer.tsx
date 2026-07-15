@@ -457,9 +457,10 @@ export const OverlayLayer = ({
   const padX = LABEL_PAD_X * exportScale;
   const labelH = LABEL_H * exportScale;
   const gap = LABEL_GAP * exportScale;
-  // Slightly generous per-character width so clamped labels near the page
-  // edge don't visually spill past their computed rect.
-  const charPx = fontPx * 0.72;
+  // Bold sans-serif at 13px averages ~0.82em per character (wider for
+  // labels containing `@`, `M`, `W`, `U`, digits). The optimizer must
+  // reserve enough width so labels don't visually crowd/clip each other.
+  const charPx = fontPx * 0.82;
 
   // Layout keys omit hover/drag state so the placement worker doesn't
   // recompute (and reshuffle labels) on every hover or pan.
@@ -566,7 +567,7 @@ export const OverlayLayer = ({
           const lines = p.text.split("\n");
           const longest = lines.reduce((m, ln) => Math.max(m, ln.length), 0);
           const renderWScreen =
-            longest * sizing.font * 0.72 + sizing.padX * 2 + 4;
+            longest * sizing.font * 0.82 + sizing.padX * 2 + 4;
           const renderHScreen = lines.length * sizing.font * 1.25 + sizing.padY * 2;
           const labelWPage = (renderWScreen * exportScale) / s;
           const labelHPage = (renderHScreen * exportScale) / s;
