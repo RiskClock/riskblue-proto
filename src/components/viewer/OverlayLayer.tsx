@@ -52,12 +52,19 @@ const MIN_CIRCLE_DIAMETER_CSS = 24;
 
 // Label sizing in unscaled page CSS px. These scale naturally with the page
 // transform, so markers/labels grow when zooming in and shrink when zooming out.
-// Sizes are 30% smaller than the previous baseline (font 11 → 8, pad 6 → 4, h 18 → 13).
-const LABEL_FONT_PX = 8;
+// Layout sizing used by the placement optimizer (in unscaled page CSS px).
+// Rendered labels use a constant ON-SCREEN size (see LABEL_FONT_PX_SCREEN
+// below) by dividing by the current viewport zoom scale.
+const LABEL_FONT_PX = 10;
 const LABEL_PAD_X = 4;
-const LABEL_H = 13;
+const LABEL_H = 15;
 const LABEL_GAP = 0;
-const LABEL_OPACITY = 0.7;
+const LABEL_OPACITY = 0.85;
+// Target constant on-screen sizes (CSS px, independent of zoom).
+const LABEL_FONT_PX_SCREEN = 10;
+const LABEL_PAD_X_SCREEN = 4;
+const CIRCLE_BORDER_PX_SCREEN = 2;
+const LEADER_STROKE_PX_SCREEN = 1.25;
 
 function withAlpha(color: string, alpha: number): string {
   const trimmed = color.trim();
