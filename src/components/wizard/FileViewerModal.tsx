@@ -404,7 +404,7 @@ export const FileViewerModal = ({
 
 
   const sidebarEnabled =
-    !!awpClasses && !!analysisRequestId && !!parentFileId;
+    !readOnly && !!awpClasses && !!analysisRequestId && !!parentFileId;
 
   const storageKey = persistKey ? `workbench-awp-class:${persistKey}` : null;
 
