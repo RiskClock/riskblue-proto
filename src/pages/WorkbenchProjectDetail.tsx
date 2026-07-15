@@ -6203,7 +6203,7 @@ function InstancesReportModal({
                     return (
                       <TableCell
                         key={e.key}
-                        className={`${compactCell} text-center tabular-nums ${val === 0 ? "opacity-50" : ""}`}
+                        className={`${compactCell} text-center tabular-nums ${val === 0 ? "opacity-25" : ""}`}
                       >
                         {val}
                       </TableCell>
