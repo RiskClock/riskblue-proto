@@ -18,6 +18,13 @@ export interface CircleInput {
   color: string;
   label?: string;
   isDot?: boolean;
+  /**
+   * Optional true text width in px (Canvas measureText) for the label at the
+   * MAX font size. When provided, overrides the `charPx * length` estimate so
+   * the reservation matches the actual rendered pill — critical for wide
+   * glyphs (@, M, W, digits) that the heuristic underestimates.
+   */
+  measuredWidthPx?: number;
 }
 
 export interface RectInput {
@@ -28,6 +35,7 @@ export interface RectInput {
   h: number;
   color: string;
   label?: string;
+  measuredWidthPx?: number;
 }
 
 export interface PlacementInput {
