@@ -519,6 +519,28 @@ export const OverlayLayer = ({
   // RectOverlay) and are intentionally excluded from the placement
   // optimizer — they have a fixed anchor and don't compete with circles
   // for space.
+  // Rect labels are docked to their box's top-left corner (not moved by the
+  // optimizer), but circle labels should still avoid obscuring them. Include
+  // each rect as an obstacle plus a synthetic obstacle sized to its docked
+  // label (measured at MAX font so the reservation is stable across zoom).
+  const rectObstacles: {
+    id: string; x: number; y: number; w: number; h: number; color: string; label?: string;
+  }[] = [];
+  for (const r of rects) {
+    rectObstacles.push({ id: r.id, x: r.x, y: r.y, w: r.w, h: r.h, color: r.color });
+    if (r.label) {
+      const measuredW = measureLabelWidthPx(r.label, fontPx);
+      const w = (measuredW ?? r.label.length * charPx) + padX * 2 + 4;
+      rectObstacles.push({
+        id: `${r.id}__label`,
+        x: r.x,
+        y: r.y,
+        w,
+        h: labelH,
+        color: r.color,
+      });
+    }
+  }
   const buildPlacementInput = () => ({
     pageSize,
     circles: circles.map((c) => ({
@@ -527,7 +549,7 @@ export const OverlayLayer = ({
       measuredWidthPx:
         c.label && !c.isDot ? measureLabelWidthPx(c.label, fontPx) : undefined,
     })),
-    rects: [],
+    rects: rectObstacles,
     fontPx, padX, labelH, gap, charPx,
   });
 
@@ -663,7 +685,7 @@ export const OverlayLayer = ({
           const longest = lines.reduce((m, ln) => Math.max(m, ln.length), 0);
           const renderWScreen =
             longest * sizing.font * 0.82 + sizing.padX * 2 + 4;
-          const renderHScreen = lines.length * sizing.font * 1.25 + sizing.padY * 2;
+          const renderHScreen = lines.length * sizing.font * 1.25 + 1 * 2;
           const labelWPage = (renderWScreen * exportScale) / s;
           const labelHPage = (renderHScreen * exportScale) / s;
           const labelCx = p.x + p.w / 2; // anchor stays at the reservation's center
@@ -763,7 +785,7 @@ export const OverlayLayer = ({
         const sizing = labelSizingForZoom(viewScale);
         const renderFont = (sizing.font / s) * exportScale;
         const renderPadX = (sizing.padX / s) * exportScale;
-        const renderPadY = (sizing.padY / s) * exportScale;
+        const renderPadY = (1 / s) * exportScale;
         const centerX = p.x + p.w / 2;
         const centerY = p.y + p.h / 2;
         return (
