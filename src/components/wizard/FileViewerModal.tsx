@@ -24,6 +24,12 @@ import type {
   DocumentSourceDescriptor,
   OverlayInput,
 } from "@/components/viewer";
+import { inverseRotateNormalizedRect } from "@/components/viewer/viewerGeometry";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { X as XIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
