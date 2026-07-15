@@ -3604,6 +3604,16 @@ export default function WorkbenchProjectDetail() {
                     }
                   }}
                   variant="outline"
+                  disabled={!requestId || surveyRunning || !canManage || processingLock}
+                >
+                  {surveyRunning ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Surveying…
+                    </>
+                  ) : (
+                    "Scout"
+                  )}
                 </Button>
                     </span>
                   </TooltipTrigger>
