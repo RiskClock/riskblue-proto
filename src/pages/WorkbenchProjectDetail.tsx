@@ -3410,7 +3410,11 @@ export default function WorkbenchProjectDetail() {
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-start gap-2">
                 <span className="text-sm font-medium text-muted-foreground mr-1">Risk Agents:</span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span tabIndex={0}>
                 <Button
+                  className={(!requestId || surveyRunning || !canManage || processingLock) ? "pointer-events-none" : ""}
                   type="button"
                   onClick={async () => {
                     if (!requestId) return;
