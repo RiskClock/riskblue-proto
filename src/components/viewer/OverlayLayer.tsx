@@ -136,6 +136,7 @@ interface RectOverlayProps {
 const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewScale }: RectOverlayProps) {
   const s = Math.max(0.0001, viewScale);
   const borderPxScreen = (hovered ? 3 : 2) * exportScale;
+  const borderPxPage = borderPxScreen / s;
   // Label docks to the top-left corner of the box like a header tab. It
   // shares the box's top-left origin so it visually "sits on" the border.
   const label = r.label ?? "";
@@ -158,14 +159,15 @@ const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewSca
           data-export-kind="rect"
           data-color={r.color}
           data-border-px={borderPxScreen}
-          x={borderPxScreen / (2 * s)}
-          y={borderPxScreen / (2 * s)}
-          width={Math.max(0, r.w - borderPxScreen / s)}
-          height={Math.max(0, r.h - borderPxScreen / s)}
+          x={borderPxPage / 2}
+          y={borderPxPage / 2}
+          width={Math.max(0, r.w - borderPxPage)}
+          height={Math.max(0, r.h - borderPxPage)}
           fill="none"
           stroke={withAlpha(r.color, 0.5)}
-          strokeWidth={borderPxScreen}
+          strokeWidth={borderPxPage}
           vectorEffect="non-scaling-stroke"
+          style={{ vectorEffect: "non-scaling-stroke", strokeWidth: borderPxPage }}
         />
       </svg>
       {label ? (
@@ -310,6 +312,7 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
   };
 
   const strokePxScreen = (hovered ? 3 : CIRCLE_BORDER_PX_SCREEN) * exportScale;
+  const strokePxPage = strokePxScreen / Math.max(0.0001, viewScale);
 
   return (
     <div
@@ -338,11 +341,12 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
           <circle
             cx={c.r}
             cy={c.r}
-            r={Math.max(0, c.r - 0.5)}
+            r={Math.max(0, c.r - strokePxPage / 2)}
             fill="none"
             stroke={withAlpha(c.color, 0.5)}
-            strokeWidth={strokePxScreen}
+            strokeWidth={strokePxPage}
             vectorEffect="non-scaling-stroke"
+            style={{ vectorEffect: "non-scaling-stroke", strokeWidth: strokePxPage }}
           />
         </svg>
       ) : null}
@@ -579,8 +583,12 @@ export const OverlayLayer = ({
               x2={x2}
               y2={y2}
               stroke={p.color}
-              strokeWidth={LEADER_STROKE_PX_SCREEN * exportScale}
+              strokeWidth={(LEADER_STROKE_PX_SCREEN * exportScale) / Math.max(0.0001, viewScale)}
               vectorEffect="non-scaling-stroke"
+              style={{
+                vectorEffect: "non-scaling-stroke",
+                strokeWidth: (LEADER_STROKE_PX_SCREEN * exportScale) / Math.max(0.0001, viewScale),
+              }}
               opacity={LABEL_OPACITY}
             />
           );
