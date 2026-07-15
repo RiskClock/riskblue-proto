@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Plus, X, ChevronUp, ChevronDown, Trash2 } from "lucide-react";
+import { Loader2, Plus, X, ChevronUp, ChevronDown, Trash2, Copy, Check } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -216,6 +216,23 @@ export function SpatialArchitectModal({
 
   const remove = (uid: string) => {
     setLevels((prev) => prev.filter((l) => l.uid !== uid));
+  };
+
+  const duplicate = (uid: string) => {
+    setLevels((prev) => {
+      const idx = prev.findIndex((l) => l.uid === uid);
+      if (idx < 0) return prev;
+      const src = prev[idx];
+      const copy: LevelDraft = {
+        ...src,
+        uid: `lvl-dup-${Date.now()}`,
+        matched_sources: src.matched_sources.map((m) => ({ ...m })),
+        extra: { ...src.extra },
+      };
+      const next = prev.slice();
+      next.splice(idx + 1, 0, copy);
+      return next;
+    });
   };
 
   // When set, the effect below scrolls that row into view and focuses its
@@ -443,7 +460,7 @@ export function SpatialArchitectModal({
         {/* Levels list */}
         <div className="flex-1 min-h-0 flex flex-col border rounded-md overflow-hidden">
           {/* Header */}
-          <div className="grid grid-cols-[minmax(0,1fr)_70px_minmax(0,1.6fr)_96px] items-center gap-2 px-3 py-2 bg-muted/40 border-b text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="grid grid-cols-[minmax(0,1fr)_70px_minmax(0,1.6fr)_128px] items-center gap-2 px-3 py-2 bg-muted/40 border-b text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             <div>Level name</div>
             <div className="text-center">Index</div>
             <div>Drawings</div>
@@ -461,7 +478,7 @@ export function SpatialArchitectModal({
                 <div
                   key={l.uid}
                   data-level-uid={l.uid}
-                  className="grid grid-cols-[minmax(0,1fr)_70px_minmax(0,1.6fr)_96px] items-start gap-2 px-3 py-2"
+                  className="grid grid-cols-[minmax(0,1fr)_70px_minmax(0,1.6fr)_128px] items-start gap-2 px-3 py-2"
                 >
                   <Input
                     value={l.name}
@@ -511,6 +528,12 @@ export function SpatialArchitectModal({
                       pages={allPages}
                       existing={l.matched_sources}
                       onAdd={(p) => addPage(l.uid, p)}
+                      onRemove={(p) => {
+                        const idx = l.matched_sources.findIndex(
+                          (m) => m.file_name === p.file_name && m.page_number === p.page_number,
+                        );
+                        if (idx >= 0) removePage(l.uid, idx);
+                      }}
                     />
                   </div>
                   <div className="flex items-center justify-end gap-0.5">
@@ -538,8 +561,19 @@ export function SpatialArchitectModal({
                       type="button"
                       size="icon"
                       variant="ghost"
+                      className="h-7 w-7"
+                      onClick={() => duplicate(l.uid)}
+                      title="Duplicate level"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
                       className="h-7 w-7 text-destructive"
                       onClick={() => remove(l.uid)}
+                      title="Delete level"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -584,20 +618,21 @@ function AddPagePopover({
   pages,
   existing,
   onAdd,
+  onRemove,
 }: {
   pages: Array<{ file_name: string; page_number: number; label: string }>;
   existing: Array<{ file_name: string; page_number: number }>;
   onAdd: (p: { file_name: string; page_number: number }) => void;
+  onRemove: (p: { file_name: string; page_number: number }) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const existingKey = new Set(existing.map((e) => `${e.file_name}::${e.page_number}`));
   const filtered = pages.filter(
     (p) =>
-      !existingKey.has(`${p.file_name}::${p.page_number}`) &&
-      (q.trim() === "" ||
-        p.file_name.toLowerCase().includes(q.toLowerCase()) ||
-        p.label.toLowerCase().includes(q.toLowerCase())),
+      q.trim() === "" ||
+      p.file_name.toLowerCase().includes(q.toLowerCase()) ||
+      p.label.toLowerCase().includes(q.toLowerCase()),
   );
   const byFile = new Map<string, typeof filtered>();
   for (const p of filtered) {
@@ -612,8 +647,8 @@ function AddPagePopover({
           <Plus className="h-3 w-3 mr-1" /> Add pages
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-96 p-0" align="start">
-        <div className="p-2 border-b">
+      <PopoverContent className="w-96 p-0 flex flex-col max-h-[24rem]" align="start">
+        <div className="p-2 border-b shrink-0">
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -621,7 +656,10 @@ function AddPagePopover({
             className="h-8 text-xs"
           />
         </div>
-        <div className="max-h-80 overflow-auto">
+        <div
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
+          onWheel={(e) => e.stopPropagation()}
+        >
           {byFile.size === 0 && (
             <div className="p-3 text-xs text-muted-foreground text-center">
               No pages match.
@@ -632,18 +670,34 @@ function AddPagePopover({
               <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground truncate">
                 {fname}
               </div>
-              {arr.map((p) => (
-                <button
-                  key={`${p.file_name}-${p.page_number}`}
-                  type="button"
-                  className="w-full text-left px-3 py-1 text-xs hover:bg-muted truncate"
-                  onClick={() => {
-                    onAdd({ file_name: p.file_name, page_number: p.page_number });
-                  }}
-                >
-                  {p.label}
-                </button>
-              ))}
+              {arr.map((p) => {
+                const isSelected = existingKey.has(`${p.file_name}::${p.page_number}`);
+                return (
+                  <button
+                    key={`${p.file_name}-${p.page_number}`}
+                    type="button"
+                    className="w-full text-left px-3 py-1 text-xs hover:bg-muted flex items-center gap-2"
+                    onClick={() => {
+                      if (isSelected) {
+                        onRemove({ file_name: p.file_name, page_number: p.page_number });
+                      } else {
+                        onAdd({ file_name: p.file_name, page_number: p.page_number });
+                      }
+                    }}
+                  >
+                    <span
+                      className={`inline-flex items-center justify-center h-4 w-4 shrink-0 rounded border ${
+                        isSelected
+                          ? "bg-primary border-primary text-primary-foreground"
+                          : "border-input bg-background"
+                      }`}
+                    >
+                      {isSelected && <Check className="h-3 w-3" />}
+                    </span>
+                    <span className="truncate">{p.label}</span>
+                  </button>
+                );
+              })}
             </div>
           ))}
         </div>
