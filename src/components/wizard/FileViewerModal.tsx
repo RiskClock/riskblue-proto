@@ -1074,8 +1074,26 @@ export const FileViewerModal = ({
     const iy0 = y0 + margin;
     const ix1 = Math.max(ix0, x1 - margin);
     const iy1 = Math.max(iy0, y1 - margin);
-    const cx = (ix0 + ix1) / 2;
-    const cy = (iy0 + iy1) / 2;
+    // Prefer the current viewport center as the starting anchor, clamped to
+    // the inner bbox. Falls back to the bbox center if the viewer API is
+    // unavailable. Viewport rect is in rotated display space; invert-rotate
+    // to source page space so the anchor lines up with what the user sees.
+    let cx = (ix0 + ix1) / 2;
+    let cy = (iy0 + iy1) / 2;
+    const visibleDisplay = viewerApiRef.current?.getVisibleRect?.() as
+      | { nx: number; ny: number; nw: number; nh: number }
+      | null
+      | undefined;
+    if (visibleDisplay && Number.isFinite(visibleDisplay.nw) && Number.isFinite(visibleDisplay.nh)) {
+      const rot = (rotationByPage[currentPage] ?? 0) as 0 | 90 | 180 | 270;
+      const visible = rot === 0
+        ? visibleDisplay
+        : inverseRotateNormalizedRect(visibleDisplay, rot);
+      const vcx = visible.nx + visible.nw / 2;
+      const vcy = visible.ny + visible.nh / 2;
+      cx = Math.max(ix0, Math.min(ix1, vcx));
+      cy = Math.max(iy0, Math.min(iy1, vcy));
+    }
     const existing = instances.filter(
       (i) =>
         i.awp_class_name === UNIT_MARKER_CLASS &&
