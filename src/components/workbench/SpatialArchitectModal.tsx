@@ -649,7 +649,7 @@ function AddPagePopover({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button type="button" size="sm" variant="outline" className="h-6 text-xs">
-          <Plus className="h-3 w-3 mr-1" /> Add pages
+          <Plus className="h-3 w-3 mr-1" /> Manage Pages
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-96 p-0 flex flex-col max-h-[24rem]" align="start">
