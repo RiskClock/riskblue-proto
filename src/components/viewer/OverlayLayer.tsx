@@ -255,7 +255,7 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
         height: c.r * 2,
         borderRadius: "9999px",
         borderColor: withAlpha(c.color, 0.5),
-        borderWidth: (hovered ? 3.5 : 2.5) * exportScale,
+        borderWidth: ((hovered ? 3 : CIRCLE_BORDER_PX_SCREEN) / Math.max(0.0001, viewScale)) * exportScale,
         borderStyle: "solid",
         backgroundColor: withAlpha(c.color, hovered ? 0.35 : 0.2),
         boxSizing: "border-box",
