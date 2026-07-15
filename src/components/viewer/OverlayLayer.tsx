@@ -567,7 +567,7 @@ export const OverlayLayer = ({
           const lines = p.text.split("\n");
           const longest = lines.reduce((m, ln) => Math.max(m, ln.length), 0);
           const renderWScreen =
-            longest * sizing.font * 0.72 + sizing.padX * 2 + 4;
+            longest * sizing.font * 0.82 + sizing.padX * 2 + 4;
           const renderHScreen = lines.length * sizing.font * 1.25 + sizing.padY * 2;
           const labelWPage = (renderWScreen * exportScale) / s;
           const labelHPage = (renderHScreen * exportScale) / s;
