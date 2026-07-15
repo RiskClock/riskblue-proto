@@ -50,21 +50,37 @@ interface OverlayLayerProps {
 
 const MIN_CIRCLE_DIAMETER_CSS = 24;
 
-// Label sizing in unscaled page CSS px. These scale naturally with the page
-// transform, so markers/labels grow when zooming in and shrink when zooming out.
-// Layout sizing used by the placement optimizer (in unscaled page CSS px).
-// Rendered labels use a constant ON-SCREEN size (see LABEL_FONT_PX_SCREEN
-// below) by dividing by the current viewport zoom scale.
-const LABEL_FONT_PX = 10;
+// Label sizing.
+// The placement optimizer always uses the MAX label footprint (font=13, pad=4)
+// so its collision layout stays stable regardless of the current viewport
+// zoom. At render time, the actual font/padding are interpolated between a
+// min (8px @ scale ≤ 1.2) and max (13px @ scale ≥ 3.0) so labels stay
+// legible when zoomed out and grow smoothly when zoomed in — without ever
+// exceeding the footprint the optimizer already reserved for them.
+const LABEL_FONT_PX = 13; // MAX — used by optimizer for collision reservation
 const LABEL_PAD_X = 4;
-const LABEL_H = 15;
+const LABEL_H = 19;
 const LABEL_GAP = 0;
 const LABEL_OPACITY = 0.85;
-// Target constant on-screen sizes (CSS px, independent of zoom).
-const LABEL_FONT_PX_SCREEN = 10;
-const LABEL_PAD_X_SCREEN = 4;
+
+const LABEL_FONT_MIN_SCREEN = 8;
+const LABEL_FONT_MAX_SCREEN = 13;
+const LABEL_ZOOM_MIN = 1.2;
+const LABEL_ZOOM_MAX = 3.0;
 const CIRCLE_BORDER_PX_SCREEN = 2;
 const LEADER_STROKE_PX_SCREEN = 1.25;
+
+/** Interpolate label sizing based on the current viewport zoom scale. */
+function labelSizingForZoom(viewScale: number) {
+  const s = Math.max(0.0001, viewScale);
+  const t = Math.max(0, Math.min(1, (s - LABEL_ZOOM_MIN) / (LABEL_ZOOM_MAX - LABEL_ZOOM_MIN)));
+  const font = LABEL_FONT_MIN_SCREEN + t * (LABEL_FONT_MAX_SCREEN - LABEL_FONT_MIN_SCREEN);
+  // Padding scales with the font so the pill hugs the text tightly at
+  // small sizes and breathes at larger ones.
+  const padX = 1 + t * 3; // 1 → 4
+  const padY = 0.5 + t * 1.5; // 0.5 → 2
+  return { font, padX, padY, t };
+}
 
 function withAlpha(color: string, alpha: number): string {
   const trimmed = color.trim();
