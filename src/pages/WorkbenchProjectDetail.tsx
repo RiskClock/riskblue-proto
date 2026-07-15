@@ -886,6 +886,12 @@ export default function WorkbenchProjectDetail() {
     },
   });
 
+  // WMSV (non-internal) viewers see a stripped-down, read-only view while the
+  // project is still being processed by internal staff.
+  const workbenchStatus = ((project as any)?.workbench_status as string) || "processing";
+  const processingLock = !canManage && workbenchStatus === "processing";
+  const processingLockTip = "Unavailable while processing";
+
   // Latest analysis_request for this project
   const { data: analysisRequest, isLoading: isLoadingAnalysisRequest } = useQuery({
     queryKey: ["workbench-analysis-request", projectId],
