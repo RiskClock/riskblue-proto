@@ -4243,6 +4243,13 @@ export default function WorkbenchProjectDetail() {
                                 </div>
                               </TableCell>
                               {enabledCols.map((name) => {
+                                if (processingLock) {
+                                  return (
+                                    <TableCell key={name} className="text-center py-1">
+                                      <span className="text-muted-foreground">-</span>
+                                    </TableCell>
+                                  );
+                                }
                                 const baseCount =
                                   fileCountLookup.get(`${row.id}::${name}`) || 0;
                                 const userCount =
