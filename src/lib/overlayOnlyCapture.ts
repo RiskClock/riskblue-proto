@@ -107,6 +107,14 @@ export async function captureOverlayOnly(
     `width:${pageSize.width}px`,
     `height:${pageSize.height}px`,
   ].join(";");
+  // Pin the label font-family to the exact stack the rasterizer's Canvas
+  // fillText uses. Without this the offscreen container can inherit an app
+  // custom font that differs from the canvas fallback, causing centered
+  // text to be clipped in the exported pill.
+  const fontStyle = document.createElement("style");
+  fontStyle.textContent =
+    '[data-export-kind="label"]{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif !important;}';
+  container.appendChild(fontStyle);
   const surface = document.createElement("div");
   surface.style.cssText = `position:relative;width:${pageSize.width}px;height:${pageSize.height}px;`;
   const anchorImg = document.createElement("img");
