@@ -5097,6 +5097,35 @@ export default function WorkbenchProjectDetail() {
           </DialogContent>
         </Dialog>
 
+        {/* Columns-impact confirmation - end user adding classes while the
+            project is Processing should be warned that it may affect timing. */}
+        <Dialog open={colsImpactConfirmOpen} onOpenChange={(o) => !savingPrefs && setColsImpactConfirmOpen(o)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Adding classes may extend processing time</DialogTitle>
+              <DialogDescription>
+                This project is currently being processed. Adding one or more
+                new classes to the analysis may increase the time it takes to
+                complete. Continue and save your column selection?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setColsImpactConfirmOpen(false)} disabled={savingPrefs}>
+                Cancel
+              </Button>
+              <Button
+                onClick={async () => {
+                  setColsImpactConfirmOpen(false);
+                  await doSaveColumns();
+                }}
+                disabled={savingPrefs}
+              >
+                {savingPrefs ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save anyway"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Scout re-run confirmation - protects existing survey_raw_response
             from silent overwrite. */}
         <Dialog
