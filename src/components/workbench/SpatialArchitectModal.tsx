@@ -555,8 +555,19 @@ export function SpatialArchitectModal({
                       type="button"
                       size="icon"
                       variant="ghost"
+                      className="h-7 w-7"
+                      onClick={() => duplicate(l.uid)}
+                      title="Duplicate level"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
                       className="h-7 w-7 text-destructive"
                       onClick={() => remove(l.uid)}
+                      title="Delete level"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
