@@ -218,6 +218,23 @@ export function SpatialArchitectModal({
     setLevels((prev) => prev.filter((l) => l.uid !== uid));
   };
 
+  const duplicate = (uid: string) => {
+    setLevels((prev) => {
+      const idx = prev.findIndex((l) => l.uid === uid);
+      if (idx < 0) return prev;
+      const src = prev[idx];
+      const copy: LevelDraft = {
+        ...src,
+        uid: `lvl-dup-${Date.now()}`,
+        matched_sources: src.matched_sources.map((m) => ({ ...m })),
+        extra: { ...src.extra },
+      };
+      const next = prev.slice();
+      next.splice(idx + 1, 0, copy);
+      return next;
+    });
+  };
+
   // When set, the effect below scrolls that row into view and focuses its
   // Level Name input on the next render. Cleared after use.
   const pendingFocusUidRef = useRef<string | null>(null);
