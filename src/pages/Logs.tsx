@@ -483,7 +483,7 @@ export default function Logs() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredLogs.map((log) => {
+                  {pagedLogs.map((log) => {
                     const m = log.metadata || {};
                     // User column = the account that performed the action.
                     // For admin events, prefer actor_email; otherwise the row's user_id is the actor.
