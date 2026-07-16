@@ -5364,6 +5364,7 @@ export default function WorkbenchProjectDetail() {
             // readPdfPageCount(bytes) so every source page is included.
 
           }))}
+          enabledClassNames={enabledCols}
           classPrefixByName={(() => {
             const m = new Map<string, string | null>();
             for (const [name, opt] of optionByName.entries()) {
