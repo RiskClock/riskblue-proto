@@ -5385,6 +5385,7 @@ export default function WorkbenchProjectDetail() {
           open={bulkDownloadOpen}
           onOpenChange={setBulkDownloadOpen}
           analysisRequestId={requestId ?? null}
+          projectId={projectId ?? null}
           projectName={project?.name || "Project"}
           files={fileGroups.map((g) => ({
             fileId: g.file.id,
