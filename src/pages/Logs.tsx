@@ -421,6 +421,12 @@ export default function Logs() {
             </div>
           </>
         )}
+          </TabsContent>
+
+          <TabsContent value="audit">
+            <ProjectAuditPanel />
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );
