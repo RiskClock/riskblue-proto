@@ -15,6 +15,7 @@ import {
   Square,
   Upload,
   Bug,
+  History,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
