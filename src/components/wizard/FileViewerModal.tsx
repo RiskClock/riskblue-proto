@@ -1388,6 +1388,7 @@ export const FileViewerModal = ({
   // Unit-plan indicator dots inside a level bbox. Not tied to any specific
   // unit reference. Filled dot, no border, no label. Click to delete.
   const unitMarkerOverlays: OverlayInput[] = useMemo(() => {
+    if (readOnly) return [];
     const uc = awpClassColor("Unit Floor Plan");
     return instances
       .filter(
