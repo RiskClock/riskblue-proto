@@ -48,6 +48,7 @@ export interface BulkDrawingDownloadModalProps {
   onOpenChange: (v: boolean) => void;
   files: BulkFileEntry[];
   analysisRequestId: string | null;
+  projectId?: string | null;
   projectName: string;
   /**
    * Optional pre-computed bounding-box overlays keyed by `${fileId}::${pageIndex0}`.
