@@ -3231,6 +3231,9 @@ export default function WorkbenchProjectDetail() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       toast({ title: "Export ready", description: "Your .docx has been downloaded." });
+      void logActivity("workbench_export_docx", projectId ?? undefined, {
+        project_name: project?.name,
+      });
     } catch (error: any) {
       toast({
         variant: "destructive",
