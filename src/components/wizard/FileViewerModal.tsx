@@ -1405,7 +1405,7 @@ export const FileViewerModal = ({
         color: uc,
         variant: "dot" as const,
       }));
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, readOnly]);
 
   const overlays = [
     ...detectionOverlays,
