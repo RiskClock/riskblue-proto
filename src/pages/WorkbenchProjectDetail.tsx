@@ -3748,10 +3748,10 @@ export default function WorkbenchProjectDetail() {
                 {analysisRequest && totalFiles > 0 && enabledCols.length > 0 && (
                   (() => {
                     const disabled = processingLock || !canManage;
-                    const tip = processingLock
-                      ? processingLockTip
-                      : !canManage
-                        ? "No permission"
+                    const tip = !canManage
+                      ? "No permission"
+                      : processingLock
+                        ? processingLockTip
                         : "Reassign annotation IDs starting from 1";
                     return (
                       <Tooltip>
