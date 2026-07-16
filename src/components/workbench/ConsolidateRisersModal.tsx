@@ -221,11 +221,10 @@ export function ConsolidateRisersModal({
     <Dialog open={open} onOpenChange={(o) => !saving && onOpenChange(o)}>
       <DialogContent className="max-w-4xl">
         <DialogHeader>
-          <DialogTitle>Consolidate multi-space annotations</DialogTitle>
+          <DialogTitle>Riser Unifier</DialogTitle>
           <DialogDescription>
-            For classes that can span multiple spaces (e.g. risers), group the annotations on different pages
-            that represent the same physical instance. Each group becomes one row in the instances report,
-            spanning every space its members are placed in.
+            For systems that run through multiple floors or rooms, group their annotations together. This
+            combines them into a single row in your report, showing every space they pass through.
           </DialogDescription>
         </DialogHeader>
 

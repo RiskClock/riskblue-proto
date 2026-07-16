@@ -419,9 +419,8 @@ export function SpatialArchitectModal({
         <DialogHeader>
           <DialogTitle>Spatial Architect</DialogTitle>
           <DialogDescription>
-            Canonical list of physical levels for this project. Connect each
-            level to the drawing pages that depict it. Used by the Threat
-            Report to group annotations.
+            Manage the physical levels for this project. Link each level to its
+            drawing pages to organize your annotations in the Threat Report.
           </DialogDescription>
         </DialogHeader>
 
@@ -450,7 +449,7 @@ export function SpatialArchitectModal({
           <TooltipProvider delayDuration={150}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <span tabIndex={0}>
+                <span tabIndex={(!requestId || running || !canBuild) ? -1 : 0}>
                   <Button
                     type="button"
                     size="sm"

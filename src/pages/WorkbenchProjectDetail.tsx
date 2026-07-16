@@ -3671,11 +3671,11 @@ export default function WorkbenchProjectDetail() {
                   const disabled = !requestId || processingLock;
                   const tip = processingLock
                     ? processingLockTip
-                    : "View and edit canonical levels; run the Spatial Architect agent.";
+                    : "Create and edit spatial levels.";
                   return (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span tabIndex={0}>
+                        <span tabIndex={disabled ? -1 : 0}>
                           <Button
                             type="button"
                             variant="outline"
@@ -3700,7 +3700,7 @@ export default function WorkbenchProjectDetail() {
                 })()}
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span tabIndex={0}>
+                    <span tabIndex={(!requestId || !hasRisersSelected || processingLock) ? -1 : 0}>
                       <Button
                         type="button"
                         variant="outline"
@@ -3717,7 +3717,7 @@ export default function WorkbenchProjectDetail() {
                       ? processingLockTip
                       : !hasRisersSelected
                         ? "No riser selected for risk identification"
-                        : "Group riser annotations into multi-space instances"}
+                        : "Combine riser annotations into single systems."}
                   </TooltipContent>
                 </Tooltip>
                 {(() => {
