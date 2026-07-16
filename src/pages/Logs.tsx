@@ -281,12 +281,21 @@ export default function Logs() {
       <AppHeader />
 
       <main className="container mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-6">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-foreground">Activity Logs</h1>
+          <p className="text-muted-foreground">View user activity and project audit trail</p>
+        </div>
+
+        <Tabs defaultValue="activity" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="activity">User Activity</TabsTrigger>
+            <TabsTrigger value="audit">Project Audit</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="activity" className="space-y-4">
+        <div className="flex items-center justify-end gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Activity Logs</h1>
-            <p className="text-muted-foreground">View user activity across all projects</p>
-          </div>
-          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4">
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" size="sm" disabled={isClearing}>
