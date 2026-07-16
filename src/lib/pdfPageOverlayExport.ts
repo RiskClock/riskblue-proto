@@ -58,17 +58,26 @@ function normalizedRotation(angle: number): 0 | 90 | 180 | 270 {
 }
 
 function overlayDrawOptionsForCopiedPage(opts: {
-  mediaWidth: number;
-  mediaHeight: number;
+  cropX: number;
+  cropY: number;
+  cropWidth: number;
+  cropHeight: number;
   displayWidth: number;
   displayHeight: number;
   rotation: 0 | 90 | 180 | 270;
 }) {
-  const { mediaWidth, mediaHeight, displayWidth, displayHeight, rotation } = opts;
+  const { cropX, cropY, cropWidth, cropHeight, displayWidth, displayHeight, rotation } = opts;
+  // Anchor overlay within the visible CropBox rather than the raw MediaBox.
+  // Using MediaBox caused a consistent offset on pages whose CropBox differs
+  // from MediaBox (typical for drawings with print bleeds / trim marks).
+  const left = cropX;
+  const bottom = cropY;
+  const right = cropX + cropWidth;
+  const top = cropY + cropHeight;
   if (rotation === 90) {
     return {
-      x: mediaWidth,
-      y: 0,
+      x: right,
+      y: bottom,
       width: displayWidth,
       height: displayHeight,
       rotate: degrees(90),
@@ -76,8 +85,8 @@ function overlayDrawOptionsForCopiedPage(opts: {
   }
   if (rotation === 180) {
     return {
-      x: mediaWidth,
-      y: mediaHeight,
+      x: right,
+      y: top,
       width: displayWidth,
       height: displayHeight,
       rotate: degrees(180),
@@ -85,16 +94,16 @@ function overlayDrawOptionsForCopiedPage(opts: {
   }
   if (rotation === 270) {
     return {
-      x: 0,
-      y: mediaHeight,
+      x: left,
+      y: top,
       width: displayWidth,
       height: displayHeight,
       rotate: degrees(270),
     };
   }
   return {
-    x: 0,
-    y: 0,
+    x: left,
+    y: bottom,
     width: displayWidth,
     height: displayHeight,
   };
