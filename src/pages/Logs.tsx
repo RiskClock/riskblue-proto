@@ -13,8 +13,6 @@ import { ShieldAlert, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ProjectAuditPanel } from "@/components/logs/ProjectAuditPanel";
 
 interface ActivityLog {
   id: string;
@@ -281,69 +279,62 @@ export default function Logs() {
       <AppHeader />
 
       <main className="container mx-auto px-6 py-8">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-foreground">Activity Logs</h1>
-          <p className="text-muted-foreground">View user activity and project audit trail</p>
-        </div>
-
-        <Tabs defaultValue="activity" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="activity">User Activity</TabsTrigger>
-            <TabsTrigger value="audit">Project Audit</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="activity" className="space-y-4">
-            <div className="flex flex-wrap items-center justify-end gap-4">
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="sm" disabled={isClearing}>
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Clear Logs
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Clear all activity logs?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This action cannot be undone. All activity logs will be permanently deleted.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleClearLogs} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                      Clear All Logs
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="hide-internal"
-                  checked={hideInternalUsers}
-                  onCheckedChange={(checked) => {
-                    setHideInternalUsers(checked === true);
-                    setPage(0);
-                  }}
-                />
-                <label htmlFor="hide-internal" className="text-sm text-muted-foreground cursor-pointer">
-                  Hide internal users
-                </label>
-              </div>
-              <Select value={selectedUserId} onValueChange={(value) => { setSelectedUserId(value); setPage(0); }}>
-                <SelectTrigger className="w-[250px]">
-                  <SelectValue placeholder="Filter by user" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Users</SelectItem>
-                  {uniqueUsers.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.name} {u.email && `(${u.email})`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Activity Logs</h1>
+            <p className="text-muted-foreground">View user activity across all projects</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm" disabled={isClearing}>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear Logs
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Clear all activity logs?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. All activity logs will be permanently deleted.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearLogs} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Clear All Logs
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="hide-internal"
+                checked={hideInternalUsers}
+                onCheckedChange={(checked) => {
+                  setHideInternalUsers(checked === true);
+                  setPage(0);
+                }}
+              />
+              <label htmlFor="hide-internal" className="text-sm text-muted-foreground cursor-pointer">
+                Hide internal users
+              </label>
             </div>
-
+            <Select value={selectedUserId} onValueChange={(value) => { setSelectedUserId(value); setPage(0); }}>
+              <SelectTrigger className="w-[250px]">
+                <SelectValue placeholder="Filter by user" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Users</SelectItem>
+                {uniqueUsers.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.name} {u.email && `(${u.email})`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
 
         {logsLoading ? (
           <div className="text-center py-12 text-muted-foreground">Loading logs...</div>
@@ -421,12 +412,6 @@ export default function Logs() {
             </div>
           </>
         )}
-          </TabsContent>
-
-          <TabsContent value="audit">
-            <ProjectAuditPanel />
-          </TabsContent>
-        </Tabs>
       </main>
     </div>
   );

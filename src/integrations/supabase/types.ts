@@ -1813,56 +1813,6 @@ export type Database = {
           },
         ]
       }
-      project_audit_events: {
-        Row: {
-          action: string
-          actor_email: string | null
-          actor_name: string | null
-          actor_user_id: string | null
-          created_at: string
-          details: Json
-          entity_id: string | null
-          entity_type: string
-          id: string
-          project_id: string | null
-          summary: string
-        }
-        Insert: {
-          action: string
-          actor_email?: string | null
-          actor_name?: string | null
-          actor_user_id?: string | null
-          created_at?: string
-          details?: Json
-          entity_id?: string | null
-          entity_type: string
-          id?: string
-          project_id?: string | null
-          summary: string
-        }
-        Update: {
-          action?: string
-          actor_email?: string | null
-          actor_name?: string | null
-          actor_user_id?: string | null
-          created_at?: string
-          details?: Json
-          entity_id?: string | null
-          entity_type?: string
-          id?: string
-          project_id?: string | null
-          summary?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_audit_events_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       project_class_aliases: {
         Row: {
           alias: string
