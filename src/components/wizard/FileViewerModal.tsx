@@ -1351,6 +1351,7 @@ export const FileViewerModal = ({
   // OverlayLayer multiplies by the rendered page size so the browser's native
   // layout keeps the boxes in sync on any resize or zoom level.
   const floorPlanOverlays: OverlayInput[] = useMemo(() => {
+    if (readOnly) return [];
     if (!floorPlans || floorPlans.length === 0) return [];
     const out: OverlayInput[] = [];
     for (const fp of floorPlans) {
