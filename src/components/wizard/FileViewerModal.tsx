@@ -1322,6 +1322,7 @@ export const FileViewerModal = ({
   //  - sheetId (and !singlePageOnly) = per-sheet single-page raster → always 1
   //  - otherwise (full multi-page navigation) → instance's page_index
   const instanceOverlays: OverlayInput[] = useMemo(() => {
+    if (readOnly) return [];
     const allowed = awpClasses ? new Set(awpClasses.map((c) => c.name)) : null;
     return instances
       .filter(
