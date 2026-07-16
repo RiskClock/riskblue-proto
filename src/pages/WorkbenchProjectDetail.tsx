@@ -492,6 +492,12 @@ export default function WorkbenchProjectDetail() {
   const hoverPrefetchTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map(),
   );
+  // Log workbench project open once per mount (per projectId).
+  useEffect(() => {
+    if (!projectId) return;
+    void logActivity("workbench_opened", projectId);
+  }, [projectId, logActivity]);
+
   useEffect(() => {
     const timers = hoverPrefetchTimers.current;
     return () => {
