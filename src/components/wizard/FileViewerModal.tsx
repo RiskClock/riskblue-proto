@@ -1382,7 +1382,7 @@ export const FileViewerModal = ({
       });
     }
     return out;
-  }, [floorPlans, floorPlanOverrides, currentPage, editingPlan]);
+  }, [floorPlans, floorPlanOverrides, currentPage, editingPlan, readOnly]);
 
 
   // Unit-plan indicator dots inside a level bbox. Not tied to any specific
