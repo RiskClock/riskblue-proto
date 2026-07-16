@@ -58,17 +58,26 @@ function normalizedRotation(angle: number): 0 | 90 | 180 | 270 {
 }
 
 function overlayDrawOptionsForCopiedPage(opts: {
-  mediaWidth: number;
-  mediaHeight: number;
+  cropX: number;
+  cropY: number;
+  cropWidth: number;
+  cropHeight: number;
   displayWidth: number;
   displayHeight: number;
   rotation: 0 | 90 | 180 | 270;
 }) {
-  const { mediaWidth, mediaHeight, displayWidth, displayHeight, rotation } = opts;
+  const { cropX, cropY, cropWidth, cropHeight, displayWidth, displayHeight, rotation } = opts;
+  // Anchor overlay within the visible CropBox rather than the raw MediaBox.
+  // Using MediaBox caused a consistent offset on pages whose CropBox differs
+  // from MediaBox (typical for drawings with print bleeds / trim marks).
+  const left = cropX;
+  const bottom = cropY;
+  const right = cropX + cropWidth;
+  const top = cropY + cropHeight;
   if (rotation === 90) {
     return {
-      x: mediaWidth,
-      y: 0,
+      x: right,
+      y: bottom,
       width: displayWidth,
       height: displayHeight,
       rotate: degrees(90),
@@ -76,8 +85,8 @@ function overlayDrawOptionsForCopiedPage(opts: {
   }
   if (rotation === 180) {
     return {
-      x: mediaWidth,
-      y: mediaHeight,
+      x: right,
+      y: top,
       width: displayWidth,
       height: displayHeight,
       rotate: degrees(180),
@@ -85,16 +94,16 @@ function overlayDrawOptionsForCopiedPage(opts: {
   }
   if (rotation === 270) {
     return {
-      x: 0,
-      y: mediaHeight,
+      x: left,
+      y: top,
       width: displayWidth,
       height: displayHeight,
       rotate: degrees(270),
     };
   }
   return {
-    x: 0,
-    y: 0,
+    x: left,
+    y: bottom,
     width: displayWidth,
     height: displayHeight,
   };
@@ -134,13 +143,22 @@ export async function buildAnnotatedPdf(
 
       const srcPage = src.getPage(idx);
       const rotation = normalizedRotation(srcPage.getRotation().angle);
-      const { width: mediaWidth, height: mediaHeight } = srcPage.getSize();
+      // Use CropBox (the visible area of the page) rather than MediaBox to
+      // anchor overlays. PDF viewers clip to CropBox, so overlay coordinates
+      // computed against the visible page must be positioned within it — using
+      // MediaBox caused a consistent x/y offset on drawings whose CropBox is
+      // inset from the MediaBox.
+      const cropBox = srcPage.getCropBox();
+      const cropWidth = cropBox.width;
+      const cropHeight = cropBox.height;
+      const cropX = cropBox.x;
+      const cropY = cropBox.y;
       const userRot = spec.userRotation ?? 0;
       const totalRot = (((rotation + userRot) % 360) + 360) % 360 as 0 | 90 | 180 | 270;
 
       // Dimensions the overlay PNG must match — the fully-rotated display view.
-      const totalDisplayWidth = totalRot % 180 === 0 ? mediaWidth : mediaHeight;
-      const totalDisplayHeight = totalRot % 180 === 0 ? mediaHeight : mediaWidth;
+      const totalDisplayWidth = totalRot % 180 === 0 ? cropWidth : cropHeight;
+      const totalDisplayHeight = totalRot % 180 === 0 ? cropHeight : cropWidth;
 
       // Preserve the original vector page. Re-drawing rotated pages as XObjects
       // caused blank output for real drawings whose MediaBox and /Rotate differ.
@@ -153,8 +171,8 @@ export async function buildAnnotatedPdf(
           // space overlays are stored in). captureOverlayOnly will swap dims
           // internally when userRotationDeg is 90/270.
           pageSize: {
-            width: rotation % 180 === 0 ? mediaWidth : mediaHeight,
-            height: rotation % 180 === 0 ? mediaHeight : mediaWidth,
+            width: rotation % 180 === 0 ? cropWidth : cropHeight,
+            height: rotation % 180 === 0 ? cropHeight : cropWidth,
           },
           overlays: spec.overlays,
           outScale: 3,
@@ -168,8 +186,10 @@ export async function buildAnnotatedPdf(
           newPage.drawImage(
             png,
             overlayDrawOptionsForCopiedPage({
-              mediaWidth,
-              mediaHeight,
+              cropX,
+              cropY,
+              cropWidth,
+              cropHeight,
               displayWidth: totalDisplayWidth,
               displayHeight: totalDisplayHeight,
               rotation: totalRot,
@@ -187,6 +207,10 @@ export async function buildAnnotatedPdf(
 
       done += 1;
       opts.onProgress?.(done, totalPages);
+
+      // Yield to the browser between pages so the UI stays responsive on
+      // large multi-page exports (prevents the "page unresponsive" prompt).
+      await new Promise<void>((r) => setTimeout(r, 0));
     }
   }
 

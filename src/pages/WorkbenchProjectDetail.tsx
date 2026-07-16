@@ -3632,7 +3632,7 @@ export default function WorkbenchProjectDetail() {
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">
-                    {processingLock ? processingLockTip : !canManage ? "No permission" : "Run the Scout survey agent"}
+                    {!canManage ? "No permission" : processingLock ? processingLockTip : "Run the Scout survey agent"}
                   </TooltipContent>
                 </Tooltip>
                 <Tooltip>
@@ -3657,10 +3657,10 @@ export default function WorkbenchProjectDetail() {
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">
-                    {processingLock
-                      ? processingLockTip
-                      : !canManage
-                        ? "No permission"
+                    {!canManage
+                      ? "No permission"
+                      : processingLock
+                        ? processingLockTip
                         : enabledCols.length === 0
                           ? "Select at least one class"
                           : "Identify risk elements across enabled classes"}
@@ -3748,10 +3748,10 @@ export default function WorkbenchProjectDetail() {
                 {analysisRequest && totalFiles > 0 && enabledCols.length > 0 && (
                   (() => {
                     const disabled = processingLock || !canManage;
-                    const tip = processingLock
-                      ? processingLockTip
-                      : !canManage
-                        ? "No permission"
+                    const tip = !canManage
+                      ? "No permission"
+                      : processingLock
+                        ? processingLockTip
                         : "Reassign annotation IDs starting from 1";
                     return (
                       <Tooltip>
@@ -5364,6 +5364,7 @@ export default function WorkbenchProjectDetail() {
             // readPdfPageCount(bytes) so every source page is included.
 
           }))}
+          enabledClassNames={enabledCols}
           classPrefixByName={(() => {
             const m = new Map<string, string | null>();
             for (const [name, opt] of optionByName.entries()) {

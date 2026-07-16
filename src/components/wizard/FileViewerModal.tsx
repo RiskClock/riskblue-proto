@@ -1322,6 +1322,7 @@ export const FileViewerModal = ({
   //  - sheetId (and !singlePageOnly) = per-sheet single-page raster → always 1
   //  - otherwise (full multi-page navigation) → instance's page_index
   const instanceOverlays: OverlayInput[] = useMemo(() => {
+    if (readOnly) return [];
     const allowed = awpClasses ? new Set(awpClasses.map((c) => c.name)) : null;
     return instances
       .filter(
@@ -1342,7 +1343,7 @@ export const FileViewerModal = ({
           label: instanceLabel(i),
         };
       });
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly]);
 
   // Floor-plan bbox overlays. Survey agent returns `xy_width_height_pct` as
   // [left, top, width, height] percentages (0..100) of the visible page.
@@ -1350,6 +1351,7 @@ export const FileViewerModal = ({
   // OverlayLayer multiplies by the rendered page size so the browser's native
   // layout keeps the boxes in sync on any resize or zoom level.
   const floorPlanOverlays: OverlayInput[] = useMemo(() => {
+    if (readOnly) return [];
     if (!floorPlans || floorPlans.length === 0) return [];
     const out: OverlayInput[] = [];
     for (const fp of floorPlans) {
@@ -1380,12 +1382,13 @@ export const FileViewerModal = ({
       });
     }
     return out;
-  }, [floorPlans, floorPlanOverrides, currentPage, editingPlan]);
+  }, [floorPlans, floorPlanOverrides, currentPage, editingPlan, readOnly]);
 
 
   // Unit-plan indicator dots inside a level bbox. Not tied to any specific
   // unit reference. Filled dot, no border, no label. Click to delete.
   const unitMarkerOverlays: OverlayInput[] = useMemo(() => {
+    if (readOnly) return [];
     const uc = awpClassColor("Unit Floor Plan");
     return instances
       .filter(
@@ -1402,7 +1405,7 @@ export const FileViewerModal = ({
         color: uc,
         variant: "dot" as const,
       }));
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, readOnly]);
 
   const overlays = [
     ...detectionOverlays,

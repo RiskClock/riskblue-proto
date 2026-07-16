@@ -61,6 +61,12 @@ export interface BulkDrawingDownloadModalProps {
    * on-screen viewer. Missing entries fall back to first 3 letters of class.
    */
   classPrefixByName?: Map<string, string | null>;
+  /**
+   * Class names currently visible/enabled in the workbench grid. When
+   * provided, drawing_instance annotations for classes outside this set are
+   * excluded from the export so it mirrors what the user sees on-screen.
+   */
+  enabledClassNames?: string[];
 }
 
 function isPdfFile(f: BulkFileEntry): boolean {
@@ -77,6 +83,7 @@ export function BulkDrawingDownloadModal({
   projectName,
   extraOverlaysByFilePage,
   classPrefixByName,
+  enabledClassNames,
 }: BulkDrawingDownloadModalProps) {
   const { toast } = useToast();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -155,9 +162,18 @@ export function BulkDrawingDownloadModal({
           )
           .eq("analysis_request_id", analysisRequestId);
         if (error) throw error;
-        const rows = ((data as any[]) || []).filter(
-          (r) => Number.isFinite(Number(r.nx)) && Number.isFinite(Number(r.ny)),
-        );
+        const enabledSet =
+          enabledClassNames && enabledClassNames.length > 0
+            ? new Set(enabledClassNames)
+            : null;
+        const rows = ((data as any[]) || []).filter((r) => {
+          if (!Number.isFinite(Number(r.nx)) || !Number.isFinite(Number(r.ny))) return false;
+          // Unit markers piggyback on unit floor plans; keep them so unit
+          // floor-plan overlays still render dots inside their level.
+          if (r.awp_class_name === "__unit_marker__") return true;
+          if (enabledSet && !enabledSet.has(r.awp_class_name)) return false;
+          return true;
+        });
 
         // Build per-(file, class) instance numbering that mirrors the viewer
         // modal: prefer persisted instance_number, otherwise assign 1..N by
