@@ -3657,10 +3657,10 @@ export default function WorkbenchProjectDetail() {
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">
-                    {processingLock
-                      ? processingLockTip
-                      : !canManage
-                        ? "No permission"
+                    {!canManage
+                      ? "No permission"
+                      : processingLock
+                        ? processingLockTip
                         : enabledCols.length === 0
                           ? "Select at least one class"
                           : "Identify risk elements across enabled classes"}
