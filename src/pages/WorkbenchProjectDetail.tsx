@@ -3802,20 +3802,36 @@ export default function WorkbenchProjectDetail() {
                   );
                 })()}
                 {canManage && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={() => setScoutDebugOpen(true)}
-                        aria-label="Agent debug"
-                      >
-                        <Bug className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">Agent debug</TooltipContent>
-                  </Tooltip>
+                  <>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => setHistoryOpen(true)}
+                          aria-label="Activity history"
+                        >
+                          <History className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">Activity history</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => setScoutDebugOpen(true)}
+                          aria-label="Agent debug"
+                        >
+                          <Bug className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">Agent debug</TooltipContent>
+                    </Tooltip>
+                  </>
                 )}
 
               </div>
