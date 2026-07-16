@@ -33,6 +33,7 @@ import { SpaceEditModal } from "@/components/workbench/SpaceEditModal";
 import { ConsolidateRisersModal } from "@/components/workbench/ConsolidateRisersModal";
 import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectModal";
 import { BulkDrawingDownloadModal } from "@/components/workbench/BulkDrawingDownloadModal";
+import { ActivityHistoryPanel } from "@/components/workbench/ActivityHistoryPanel";
 import { normalizeScoutResponse } from "@/lib/scoutResponseNormalizer";
 import {
   runThreatReportExport,
