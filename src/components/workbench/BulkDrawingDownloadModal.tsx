@@ -61,6 +61,12 @@ export interface BulkDrawingDownloadModalProps {
    * on-screen viewer. Missing entries fall back to first 3 letters of class.
    */
   classPrefixByName?: Map<string, string | null>;
+  /**
+   * Class names currently visible/enabled in the workbench grid. When
+   * provided, drawing_instance annotations for classes outside this set are
+   * excluded from the export so it mirrors what the user sees on-screen.
+   */
+  enabledClassNames?: string[];
 }
 
 function isPdfFile(f: BulkFileEntry): boolean {
