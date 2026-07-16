@@ -5365,6 +5365,14 @@ export default function WorkbenchProjectDetail() {
           }}
         />
 
+        {canManage && projectId && (
+          <ActivityHistoryPanel
+            open={historyOpen}
+            onOpenChange={setHistoryOpen}
+            projectId={projectId}
+          />
+        )}
+
         <BulkDrawingDownloadModal
           open={bulkDownloadOpen}
           onOpenChange={setBulkDownloadOpen}
