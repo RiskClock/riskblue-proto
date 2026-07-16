@@ -22,6 +22,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
+import { useActivityLogger } from "@/hooks/useActivityLogger";
 import { supabase } from "@/integrations/supabase/client";
 import { awpClassColor, awpClassColorForType } from "@/lib/awpColor";
 import {
@@ -48,6 +49,7 @@ export interface BulkDrawingDownloadModalProps {
   onOpenChange: (v: boolean) => void;
   files: BulkFileEntry[];
   analysisRequestId: string | null;
+  projectId?: string | null;
   projectName: string;
   /**
    * Optional pre-computed bounding-box overlays keyed by `${fileId}::${pageIndex0}`.
@@ -80,12 +82,14 @@ export function BulkDrawingDownloadModal({
   onOpenChange,
   files,
   analysisRequestId,
+  projectId,
   projectName,
   extraOverlaysByFilePage,
   classPrefixByName,
   enabledClassNames,
 }: BulkDrawingDownloadModalProps) {
   const { toast } = useToast();
+  const { logActivity } = useActivityLogger();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [includeOverlays, setIncludeOverlays] = useState(true);
   const [pageCounts, setPageCounts] = useState<Map<string, number>>(new Map());
@@ -373,6 +377,12 @@ export function BulkDrawingDownloadModal({
       });
 
       triggerPdfDownload(merged, outputFilename);
+      void logActivity("workbench_download_annotated_pdf", projectId ?? undefined, {
+        project_name: projectName,
+        files_included: entries.length,
+        pages: totalPages,
+        include_overlays: includeOverlays,
+      });
       toast({
         title: "Download ready",
         description: `${entries.length} file${entries.length === 1 ? "" : "s"}, ${totalPages} page${totalPages === 1 ? "" : "s"}.`,

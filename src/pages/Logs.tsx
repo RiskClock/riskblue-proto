@@ -38,7 +38,14 @@ const ACTION_LABEL_MAP: Record<string, string> = {
   admin_password_reset_sent: "Sent Password Reset",
   credits_purchase_initiated: "Credits Checkout Started",
   credits_purchased: "Credits Purchased",
+  workbench_download_drawings_zip: "Downloaded Drawings (ZIP)",
+  workbench_download_annotated_pdf: "Downloaded Annotated PDF",
+  workbench_download_threat_report: "Downloaded Threat Report",
+  workbench_export_docx: "Exported DOCX",
+  annotation_session: "Annotations Edited",
 };
+
+const SESSION_GAP_MS = 30 * 60 * 1000; // 30 minutes
 
 const formatAction = (action: string) => {
   if (ACTION_LABEL_MAP[action]) return ACTION_LABEL_MAP[action];
@@ -71,22 +78,41 @@ export default function Logs() {
 
   const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com");
 
-  const { data: logsData, isLoading: logsLoading } = useQuery({
-    queryKey: ["activity-logs", selectedUserId, page],
+  const { data: allLogs = [], isLoading: logsLoading } = useQuery({
+    queryKey: ["activity-logs-all"],
     queryFn: async () => {
-      let query = supabase
+      const { data, error } = await supabase
         .from("user_activity_logs")
-        .select("*", { count: "exact" })
+        .select("*")
         .order("created_at", { ascending: false })
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
-      if (selectedUserId !== "all") {
-        query = query.eq("user_id", selectedUserId);
-      }
-
-      const { data, error, count } = await query;
+        .limit(5000);
       if (error) throw error;
-      return { logs: data as ActivityLog[], totalCount: count || 0 };
+      return data as ActivityLog[];
+    },
+    enabled: isInternalUser,
+  });
+
+  const { data: auditEvents = [] } = useQuery({
+    queryKey: ["activity-logs-audit-events"],
+    queryFn: async () => {
+      const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await supabase
+        .from("project_audit_events")
+        .select("id, actor_user_id, actor_email, project_id, entity_type, action, created_at")
+        .gte("created_at", since)
+        .in("entity_type", ["annotation", "floor_plan_override"])
+        .order("created_at", { ascending: false })
+        .limit(20000);
+      if (error) throw error;
+      return (data ?? []) as Array<{
+        id: string;
+        actor_user_id: string | null;
+        actor_email: string | null;
+        project_id: string | null;
+        entity_type: string;
+        action: string;
+        created_at: string;
+      }>;
     },
     enabled: isInternalUser,
   });
@@ -159,17 +185,100 @@ export default function Logs() {
     return Array.from(users.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [profiles, userEmails]);
 
-  const filteredLogs = useMemo(() => {
-    if (!hideInternalUsers) return logsData?.logs || [];
-    return (logsData?.logs || []).filter((log) => {
-      const m = log.metadata || {};
-      const actorEmail = (m.actor_email as string) || userEmails.get(log.user_id) || "";
-      return !actorEmail.toLowerCase().endsWith("@riskclock.com");
-    });
-  }, [logsData?.logs, hideInternalUsers, userEmails]);
+  // Build synthetic per-session rows from annotation audit events.
+  // Group by (actor_user_id, project_id), then split into sessions using a
+  // 30-minute inactivity gap. Each session becomes one merged row.
+  const sessionRows = useMemo<ActivityLog[]>(() => {
+    if (!auditEvents.length) return [];
+    const groups = new Map<
+      string,
+      Array<(typeof auditEvents)[number]>
+    >();
+    for (const ev of auditEvents) {
+      if (!ev.actor_user_id) continue;
+      const key = `${ev.actor_user_id}::${ev.project_id ?? "_"}`;
+      const arr = groups.get(key) ?? [];
+      arr.push(ev);
+      groups.set(key, arr);
+    }
+    const rows: ActivityLog[] = [];
+    for (const [key, events] of groups) {
+      // Sort ascending to walk chronologically.
+      events.sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      );
+      const [userId, projectId] = key.split("::");
+      let session: typeof events = [];
+      const flush = () => {
+        if (!session.length) return;
+        let added = 0, edited = 0, deleted = 0;
+        for (const e of session) {
+          if (e.action === "created" || e.action === "bbox_added") added++;
+          else if (e.action === "deleted" || e.action === "bbox_removed") deleted++;
+          else edited++; // field_changed, moved, bbox_updated
+        }
+        const start = session[0].created_at;
+        const end = session[session.length - 1].created_at;
+        rows.push({
+          id: `session-${userId}-${projectId}-${start}`,
+          user_id: userId,
+          action: "annotation_session",
+          project_id: projectId === "_" ? null : projectId,
+          metadata: {
+            added,
+            edited,
+            deleted,
+            event_count: session.length,
+            session_start: start,
+            session_end: end,
+            actor_email: session[0].actor_email,
+          },
+          created_at: end,
+        });
+        session = [];
+      };
+      for (const ev of events) {
+        if (!session.length) {
+          session.push(ev);
+          continue;
+        }
+        const last = new Date(session[session.length - 1].created_at).getTime();
+        const cur = new Date(ev.created_at).getTime();
+        if (cur - last > SESSION_GAP_MS) flush();
+        session.push(ev);
+      }
+      flush();
+    }
+    return rows;
+  }, [auditEvents]);
 
-  const totalCount = logsData?.totalCount || 0;
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const mergedLogs = useMemo<ActivityLog[]>(() => {
+    const merged = [...allLogs, ...sessionRows];
+    merged.sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+    return merged;
+  }, [allLogs, sessionRows]);
+
+  const filteredLogs = useMemo(() => {
+    return mergedLogs.filter((log) => {
+      if (selectedUserId !== "all" && log.user_id !== selectedUserId) return false;
+      if (hideInternalUsers) {
+        const m = log.metadata || {};
+        const actorEmail =
+          (m.actor_email as string) || userEmails.get(log.user_id) || "";
+        if (actorEmail.toLowerCase().endsWith("@riskclock.com")) return false;
+      }
+      return true;
+    });
+  }, [mergedLogs, selectedUserId, hideInternalUsers, userEmails]);
+
+  const totalCount = filteredLogs.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const pagedLogs = useMemo(
+    () => filteredLogs.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    [filteredLogs, page],
+  );
 
   const handleClearLogs = async () => {
     setIsClearing(true);
@@ -179,7 +288,7 @@ export default function Logs() {
       });
       if (error) throw error;
       toast.success("All activity logs cleared");
-      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs-all"] });
     } catch (error) {
       console.error("Failed to clear logs:", error);
       toast.error("Failed to clear logs");
@@ -231,6 +340,27 @@ export default function Logs() {
       if (m.environment) bits.push(`env: ${m.environment}`);
       if (m.already_processed) bits.push("(duplicate webhook)");
       lines.push({ value: bits.join(" • ") || "Purchase completed" });
+    } else if (log.action === "annotation_session") {
+      const bits: string[] = [];
+      if (m.added) bits.push(`${m.added} added`);
+      if (m.edited) bits.push(`${m.edited} edited`);
+      if (m.deleted) bits.push(`${m.deleted} deleted`);
+      lines.push({ value: bits.length ? bits.join(" • ") : "No changes" });
+      if (m.session_start && m.session_end && m.session_start !== m.session_end) {
+        const start = format(new Date(m.session_start as string), "h:mm a");
+        const end = format(new Date(m.session_end as string), "h:mm a");
+        lines.push({ value: `Session: ${start} – ${end}`, label: "meta" });
+      }
+    } else if (
+      log.action === "workbench_download_drawings_zip" ||
+      log.action === "workbench_download_annotated_pdf"
+    ) {
+      const bits: string[] = [];
+      if (m.files_included) bits.push(`${m.files_included} file${m.files_included === 1 ? "" : "s"}`);
+      if (m.pages) bits.push(`${m.pages} page${m.pages === 1 ? "" : "s"}`);
+      if (m.files_failed) bits.push(`${m.files_failed} failed`);
+      if (m.include_overlays === false) bits.push("no overlays");
+      if (bits.length) lines.push({ value: bits.join(" • ") });
     }
 
     // Project line
@@ -353,7 +483,7 @@ export default function Logs() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredLogs.map((log) => {
+                  {pagedLogs.map((log) => {
                     const m = log.metadata || {};
                     // User column = the account that performed the action.
                     // For admin events, prefer actor_email; otherwise the row's user_id is the actor.

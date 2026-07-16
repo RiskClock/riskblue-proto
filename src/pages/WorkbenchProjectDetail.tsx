@@ -1909,6 +1909,11 @@ export default function WorkbenchProjectDetail() {
             ? `${added} file${added === 1 ? "" : "s"} downloaded; ${failures.length} failed.`
             : `${added} file${added === 1 ? "" : "s"} downloaded.`,
       });
+      void logActivity("workbench_download_drawings_zip", projectId ?? undefined, {
+        project_name: project?.name,
+        files_included: added,
+        files_failed: failures.length,
+      });
     } catch (e: any) {
       toast({ title: "Download failed", description: (e as any)?.message || "Unknown error", variant: "destructive" });
     } finally {
@@ -3226,6 +3231,9 @@ export default function WorkbenchProjectDetail() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       toast({ title: "Export ready", description: "Your .docx has been downloaded." });
+      void logActivity("workbench_export_docx", projectId ?? undefined, {
+        project_name: project?.name,
+      });
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -5377,6 +5385,7 @@ export default function WorkbenchProjectDetail() {
           open={bulkDownloadOpen}
           onOpenChange={setBulkDownloadOpen}
           analysisRequestId={requestId ?? null}
+          projectId={projectId ?? null}
           projectName={project?.name || "Project"}
           files={fileGroups.map((g) => ({
             fileId: g.file.id,
@@ -5795,6 +5804,7 @@ function InstancesReportModal({
       name.slice(0, 3).toUpperCase(),
     [aliasPrefixMap, optionByName],
   );
+  const { logActivity } = useActivityLogger();
 
 
 
@@ -7364,6 +7374,9 @@ function InstancesReportModal({
       toast({
         title: "Report ready",
         description: "Sent an email with a link to download the report.",
+      });
+      void logActivity("workbench_download_threat_report", projectId ?? undefined, {
+        project_name: projectName,
       });
 
     } catch (err: any) {
