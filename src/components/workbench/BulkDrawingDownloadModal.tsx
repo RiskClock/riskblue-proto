@@ -377,6 +377,12 @@ export function BulkDrawingDownloadModal({
       });
 
       triggerPdfDownload(merged, outputFilename);
+      void logActivity("workbench_download_annotated_pdf", projectId ?? undefined, {
+        project_name: projectName,
+        files_included: entries.length,
+        pages: totalPages,
+        include_overlays: includeOverlays,
+      });
       toast({
         title: "Download ready",
         description: `${entries.length} file${entries.length === 1 ? "" : "s"}, ${totalPages} page${totalPages === 1 ? "" : "s"}.`,
