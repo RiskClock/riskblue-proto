@@ -17,7 +17,11 @@ type ActivityAction =
   // internal @riskclock.com users) so we can trace data loss after the fact.
   | "workbench_clear_all"
   | "workbench_scout_rerun"
-  | "workbench_scout_rerun_confirmed_overwrite";
+  | "workbench_scout_rerun_confirmed_overwrite"
+  | "workbench_download_drawings_zip"
+  | "workbench_download_annotated_pdf"
+  | "workbench_download_threat_report"
+  | "workbench_export_docx";
 
 export const useActivityLogger = () => {
   const logActivity = useCallback(async (
