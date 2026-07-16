@@ -1912,6 +1912,10 @@ export default function WorkbenchProjectDetail() {
             ? `${added} file${added === 1 ? "" : "s"} downloaded; ${failures.length} failed.`
             : `${added} file${added === 1 ? "" : "s"} downloaded.`,
       });
+      void logActivity("workbench_download_drawings_zip", projectId ?? undefined, {
+        file_count: added,
+        failed_count: failures.length,
+      });
     } catch (e: any) {
       toast({ title: "Download failed", description: (e as any)?.message || "Unknown error", variant: "destructive" });
     } finally {
