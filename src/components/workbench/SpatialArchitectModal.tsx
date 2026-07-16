@@ -447,22 +447,33 @@ export function SpatialArchitectModal({
               </span>
             )}
           </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            onClick={handleBuild}
-            disabled={!requestId || running || !canBuild}
-            title={!canBuild ? "No permission" : undefined}
-          >
-            {running ? (
-              <>
-                <Loader2 className="h-3 w-3 mr-2 animate-spin" /> Building…
-              </>
-            ) : (
-              "Build Spatial Model"
-            )}
-          </Button>
+          <TooltipProvider delayDuration={150}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span tabIndex={0}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={handleBuild}
+                    disabled={!requestId || running || !canBuild}
+                    className={(!requestId || running || !canBuild) ? "pointer-events-none" : ""}
+                  >
+                    {running ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-2 animate-spin" /> Building…
+                      </>
+                    ) : (
+                      "Build Spatial Model"
+                    )}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {!canBuild ? "No permission" : running ? "Building…" : "Analyze drawings to build the spatial model"}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         {/* Levels list */}
