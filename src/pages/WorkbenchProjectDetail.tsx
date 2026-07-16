@@ -3632,7 +3632,7 @@ export default function WorkbenchProjectDetail() {
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">
-                    {processingLock ? processingLockTip : !canManage ? "No permission" : "Run the Scout survey agent"}
+                    {!canManage ? "No permission" : processingLock ? processingLockTip : "Run the Scout survey agent"}
                   </TooltipContent>
                 </Tooltip>
                 <Tooltip>
