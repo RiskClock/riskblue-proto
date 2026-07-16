@@ -4496,6 +4496,9 @@ export default function WorkbenchProjectDetail() {
                       return;
                     }
                     window.open(data.signedUrl, "_blank");
+                    void logActivity("workbench_download_report_file", projectId ?? undefined, {
+                      file_name: (project as any)?.report_file_name,
+                    });
                   }}
                 >
                   {(project as any).report_file_name}
