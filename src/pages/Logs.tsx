@@ -288,7 +288,7 @@ export default function Logs() {
       });
       if (error) throw error;
       toast.success("All activity logs cleared");
-      queryClient.invalidateQueries({ queryKey: ["activity-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-logs-all"] });
     } catch (error) {
       console.error("Failed to clear logs:", error);
       toast.error("Failed to clear logs");
