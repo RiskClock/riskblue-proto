@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "rm -rf node_modules/.vite && vite build",
-    "build:dev": "rm -rf node_modules/.vite && vite build --mode development",
+    "build": "rm -rf dist .vite node_modules/.vite && vite build",
+    "build:dev": "rm -rf dist .vite node_modules/.vite && vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview"
   },
