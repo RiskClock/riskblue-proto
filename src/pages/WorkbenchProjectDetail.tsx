@@ -7373,6 +7373,9 @@ function InstancesReportModal({
         title: "Report ready",
         description: "Sent an email with a link to download the report.",
       });
+      void logActivity("workbench_download_threat_report", projectId ?? undefined, {
+        project_name: projectName,
+      });
 
     } catch (err: any) {
       console.error("[threat-report-export]", err);
