@@ -340,6 +340,27 @@ export default function Logs() {
       if (m.environment) bits.push(`env: ${m.environment}`);
       if (m.already_processed) bits.push("(duplicate webhook)");
       lines.push({ value: bits.join(" • ") || "Purchase completed" });
+    } else if (log.action === "annotation_session") {
+      const bits: string[] = [];
+      if (m.added) bits.push(`${m.added} added`);
+      if (m.edited) bits.push(`${m.edited} edited`);
+      if (m.deleted) bits.push(`${m.deleted} deleted`);
+      lines.push({ value: bits.length ? bits.join(" • ") : "No changes" });
+      if (m.session_start && m.session_end && m.session_start !== m.session_end) {
+        const start = format(new Date(m.session_start as string), "h:mm a");
+        const end = format(new Date(m.session_end as string), "h:mm a");
+        lines.push({ value: `Session: ${start} – ${end}`, label: "meta" });
+      }
+    } else if (
+      log.action === "workbench_download_drawings_zip" ||
+      log.action === "workbench_download_annotated_pdf"
+    ) {
+      const bits: string[] = [];
+      if (m.files_included) bits.push(`${m.files_included} file${m.files_included === 1 ? "" : "s"}`);
+      if (m.pages) bits.push(`${m.pages} page${m.pages === 1 ? "" : "s"}`);
+      if (m.files_failed) bits.push(`${m.files_failed} failed`);
+      if (m.include_overlays === false) bits.push("no overlays");
+      if (bits.length) lines.push({ value: bits.join(" • ") });
     }
 
     // Project line
