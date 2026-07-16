@@ -24,6 +24,7 @@ import UserManagement from "./pages/UserManagement";
 import Controls from "./pages/Controls";
 
 import InternalViewerTest from "./pages/InternalViewerTest";
+import InternalActivity from "./pages/InternalActivity";
 import CheckoutReturn from "./pages/CheckoutReturn";
 import ThreatReportDownload from "./pages/ThreatReportDownload";
 import NotFound from "./pages/NotFound";
