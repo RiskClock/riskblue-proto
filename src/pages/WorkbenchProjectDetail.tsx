@@ -15,6 +15,7 @@ import {
   Square,
   Upload,
   Bug,
+  History,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -32,6 +33,7 @@ import { SpaceEditModal } from "@/components/workbench/SpaceEditModal";
 import { ConsolidateRisersModal } from "@/components/workbench/ConsolidateRisersModal";
 import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectModal";
 import { BulkDrawingDownloadModal } from "@/components/workbench/BulkDrawingDownloadModal";
+import { ActivityHistoryPanel } from "@/components/workbench/ActivityHistoryPanel";
 import { normalizeScoutResponse } from "@/lib/scoutResponseNormalizer";
 import {
   runThreatReportExport,
@@ -402,6 +404,7 @@ export default function WorkbenchProjectDetail() {
   const [surveyRecoveredRun, setSurveyRecoveredRun] = useState(false);
   const [surveyResponseModal, setSurveyResponseModal] = useState<{ fileName: string; raw: string; label?: string } | null>(null);
   const [scoutDebugOpen, setScoutDebugOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const [spaceModalOpen, setSpaceModalOpen] = useState(false);
   const [buildingSpace, setBuildingSpace] = useState(false);
@@ -3799,20 +3802,36 @@ export default function WorkbenchProjectDetail() {
                   );
                 })()}
                 {canManage && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={() => setScoutDebugOpen(true)}
-                        aria-label="Agent debug"
-                      >
-                        <Bug className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">Agent debug</TooltipContent>
-                  </Tooltip>
+                  <>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => setHistoryOpen(true)}
+                          aria-label="Activity history"
+                        >
+                          <History className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">Activity history</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => setScoutDebugOpen(true)}
+                          aria-label="Agent debug"
+                        >
+                          <Bug className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">Agent debug</TooltipContent>
+                    </Tooltip>
+                  </>
                 )}
 
               </div>
@@ -5345,6 +5364,14 @@ export default function WorkbenchProjectDetail() {
             queryClient.invalidateQueries({ queryKey: ["workbench-consolidations", requestId] });
           }}
         />
+
+        {canManage && projectId && (
+          <ActivityHistoryPanel
+            open={historyOpen}
+            onOpenChange={setHistoryOpen}
+            projectId={projectId}
+          />
+        )}
 
         <BulkDrawingDownloadModal
           open={bulkDownloadOpen}
