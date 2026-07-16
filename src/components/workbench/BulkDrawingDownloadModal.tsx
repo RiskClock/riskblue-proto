@@ -81,12 +81,14 @@ export function BulkDrawingDownloadModal({
   onOpenChange,
   files,
   analysisRequestId,
+  projectId,
   projectName,
   extraOverlaysByFilePage,
   classPrefixByName,
   enabledClassNames,
 }: BulkDrawingDownloadModalProps) {
   const { toast } = useToast();
+  const { logActivity } = useActivityLogger();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [includeOverlays, setIncludeOverlays] = useState(true);
   const [pageCounts, setPageCounts] = useState<Map<string, number>>(new Map());
