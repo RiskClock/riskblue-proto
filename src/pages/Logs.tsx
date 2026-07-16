@@ -185,17 +185,100 @@ export default function Logs() {
     return Array.from(users.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [profiles, userEmails]);
 
-  const filteredLogs = useMemo(() => {
-    if (!hideInternalUsers) return logsData?.logs || [];
-    return (logsData?.logs || []).filter((log) => {
-      const m = log.metadata || {};
-      const actorEmail = (m.actor_email as string) || userEmails.get(log.user_id) || "";
-      return !actorEmail.toLowerCase().endsWith("@riskclock.com");
-    });
-  }, [logsData?.logs, hideInternalUsers, userEmails]);
+  // Build synthetic per-session rows from annotation audit events.
+  // Group by (actor_user_id, project_id), then split into sessions using a
+  // 30-minute inactivity gap. Each session becomes one merged row.
+  const sessionRows = useMemo<ActivityLog[]>(() => {
+    if (!auditEvents.length) return [];
+    const groups = new Map<
+      string,
+      Array<(typeof auditEvents)[number]>
+    >();
+    for (const ev of auditEvents) {
+      if (!ev.actor_user_id) continue;
+      const key = `${ev.actor_user_id}::${ev.project_id ?? "_"}`;
+      const arr = groups.get(key) ?? [];
+      arr.push(ev);
+      groups.set(key, arr);
+    }
+    const rows: ActivityLog[] = [];
+    for (const [key, events] of groups) {
+      // Sort ascending to walk chronologically.
+      events.sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      );
+      const [userId, projectId] = key.split("::");
+      let session: typeof events = [];
+      const flush = () => {
+        if (!session.length) return;
+        let added = 0, edited = 0, deleted = 0;
+        for (const e of session) {
+          if (e.action === "created" || e.action === "bbox_added") added++;
+          else if (e.action === "deleted" || e.action === "bbox_removed") deleted++;
+          else edited++; // field_changed, moved, bbox_updated
+        }
+        const start = session[0].created_at;
+        const end = session[session.length - 1].created_at;
+        rows.push({
+          id: `session-${userId}-${projectId}-${start}`,
+          user_id: userId,
+          action: "annotation_session",
+          project_id: projectId === "_" ? null : projectId,
+          metadata: {
+            added,
+            edited,
+            deleted,
+            event_count: session.length,
+            session_start: start,
+            session_end: end,
+            actor_email: session[0].actor_email,
+          },
+          created_at: end,
+        });
+        session = [];
+      };
+      for (const ev of events) {
+        if (!session.length) {
+          session.push(ev);
+          continue;
+        }
+        const last = new Date(session[session.length - 1].created_at).getTime();
+        const cur = new Date(ev.created_at).getTime();
+        if (cur - last > SESSION_GAP_MS) flush();
+        session.push(ev);
+      }
+      flush();
+    }
+    return rows;
+  }, [auditEvents]);
 
-  const totalCount = logsData?.totalCount || 0;
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const mergedLogs = useMemo<ActivityLog[]>(() => {
+    const merged = [...allLogs, ...sessionRows];
+    merged.sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+    return merged;
+  }, [allLogs, sessionRows]);
+
+  const filteredLogs = useMemo(() => {
+    return mergedLogs.filter((log) => {
+      if (selectedUserId !== "all" && log.user_id !== selectedUserId) return false;
+      if (hideInternalUsers) {
+        const m = log.metadata || {};
+        const actorEmail =
+          (m.actor_email as string) || userEmails.get(log.user_id) || "";
+        if (actorEmail.toLowerCase().endsWith("@riskclock.com")) return false;
+      }
+      return true;
+    });
+  }, [mergedLogs, selectedUserId, hideInternalUsers, userEmails]);
+
+  const totalCount = filteredLogs.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const pagedLogs = useMemo(
+    () => filteredLogs.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    [filteredLogs, page],
+  );
 
   const handleClearLogs = async () => {
     setIsClearing(true);
