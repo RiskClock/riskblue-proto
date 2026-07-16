@@ -5803,6 +5803,7 @@ function InstancesReportModal({
       name.slice(0, 3).toUpperCase(),
     [aliasPrefixMap, optionByName],
   );
+  const { logActivity } = useActivityLogger();
 
 
 
