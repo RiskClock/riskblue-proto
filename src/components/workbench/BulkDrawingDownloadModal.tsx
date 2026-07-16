@@ -162,9 +162,18 @@ export function BulkDrawingDownloadModal({
           )
           .eq("analysis_request_id", analysisRequestId);
         if (error) throw error;
-        const rows = ((data as any[]) || []).filter(
-          (r) => Number.isFinite(Number(r.nx)) && Number.isFinite(Number(r.ny)),
-        );
+        const enabledSet =
+          enabledClassNames && enabledClassNames.length > 0
+            ? new Set(enabledClassNames)
+            : null;
+        const rows = ((data as any[]) || []).filter((r) => {
+          if (!Number.isFinite(Number(r.nx)) || !Number.isFinite(Number(r.ny))) return false;
+          // Unit markers piggyback on unit floor plans; keep them so unit
+          // floor-plan overlays still render dots inside their level.
+          if (r.awp_class_name === "__unit_marker__") return true;
+          if (enabledSet && !enabledSet.has(r.awp_class_name)) return false;
+          return true;
+        });
 
         // Build per-(file, class) instance numbering that mirrors the viewer
         // modal: prefer persisted instance_number, otherwise assign 1..N by
