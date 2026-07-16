@@ -78,22 +78,41 @@ export default function Logs() {
 
   const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com");
 
-  const { data: logsData, isLoading: logsLoading } = useQuery({
-    queryKey: ["activity-logs", selectedUserId, page],
+  const { data: allLogs = [], isLoading: logsLoading } = useQuery({
+    queryKey: ["activity-logs-all"],
     queryFn: async () => {
-      let query = supabase
+      const { data, error } = await supabase
         .from("user_activity_logs")
-        .select("*", { count: "exact" })
+        .select("*")
         .order("created_at", { ascending: false })
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
-      if (selectedUserId !== "all") {
-        query = query.eq("user_id", selectedUserId);
-      }
-
-      const { data, error, count } = await query;
+        .limit(5000);
       if (error) throw error;
-      return { logs: data as ActivityLog[], totalCount: count || 0 };
+      return data as ActivityLog[];
+    },
+    enabled: isInternalUser,
+  });
+
+  const { data: auditEvents = [] } = useQuery({
+    queryKey: ["activity-logs-audit-events"],
+    queryFn: async () => {
+      const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await supabase
+        .from("project_audit_events")
+        .select("id, actor_user_id, actor_email, project_id, entity_type, action, created_at")
+        .gte("created_at", since)
+        .in("entity_type", ["annotation", "floor_plan_override"])
+        .order("created_at", { ascending: false })
+        .limit(20000);
+      if (error) throw error;
+      return (data ?? []) as Array<{
+        id: string;
+        actor_user_id: string | null;
+        actor_email: string | null;
+        project_id: string | null;
+        entity_type: string;
+        action: string;
+        created_at: string;
+      }>;
     },
     enabled: isInternalUser,
   });
