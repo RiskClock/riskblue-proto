@@ -108,8 +108,8 @@
 
   /* Force colors to print */
   * {
+    color-adjust: exact;
     -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
   }
 
   /* Ensure backgrounds print */

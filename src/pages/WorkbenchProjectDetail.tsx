@@ -492,12 +492,6 @@ export default function WorkbenchProjectDetail() {
   const hoverPrefetchTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map(),
   );
-  // Log workbench project open once per mount (per projectId).
-  useEffect(() => {
-    if (!projectId) return;
-    void logActivity("workbench_opened", projectId);
-  }, [projectId, logActivity]);
-
   useEffect(() => {
     const timers = hoverPrefetchTimers.current;
     return () => {
@@ -1912,10 +1906,6 @@ export default function WorkbenchProjectDetail() {
             ? `${added} file${added === 1 ? "" : "s"} downloaded; ${failures.length} failed.`
             : `${added} file${added === 1 ? "" : "s"} downloaded.`,
       });
-      void logActivity("workbench_download_drawings_zip", projectId ?? undefined, {
-        file_count: added,
-        failed_count: failures.length,
-      });
     } catch (e: any) {
       toast({ title: "Download failed", description: (e as any)?.message || "Unknown error", variant: "destructive" });
     } finally {
@@ -3233,9 +3223,6 @@ export default function WorkbenchProjectDetail() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       toast({ title: "Export ready", description: "Your .docx has been downloaded." });
-      void logActivity("workbench_export_docx", projectId ?? undefined, {
-        project_name: projectName,
-      });
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -4496,9 +4483,6 @@ export default function WorkbenchProjectDetail() {
                       return;
                     }
                     window.open(data.signedUrl, "_blank");
-                    void logActivity("workbench_download_report_file", projectId ?? undefined, {
-                      file_name: (project as any)?.report_file_name,
-                    });
                   }}
                 >
                   {(project as any).report_file_name}
