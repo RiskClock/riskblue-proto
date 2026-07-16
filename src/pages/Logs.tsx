@@ -38,7 +38,14 @@ const ACTION_LABEL_MAP: Record<string, string> = {
   admin_password_reset_sent: "Sent Password Reset",
   credits_purchase_initiated: "Credits Checkout Started",
   credits_purchased: "Credits Purchased",
+  workbench_download_drawings_zip: "Downloaded Drawings (ZIP)",
+  workbench_download_annotated_pdf: "Downloaded Annotated PDF",
+  workbench_download_threat_report: "Downloaded Threat Report",
+  workbench_export_docx: "Exported DOCX",
+  annotation_session: "Annotations Edited",
 };
+
+const SESSION_GAP_MS = 30 * 60 * 1000; // 30 minutes
 
 const formatAction = (action: string) => {
   if (ACTION_LABEL_MAP[action]) return ACTION_LABEL_MAP[action];
