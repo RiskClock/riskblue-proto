@@ -404,6 +404,7 @@ export default function WorkbenchProjectDetail() {
   const [surveyRecoveredRun, setSurveyRecoveredRun] = useState(false);
   const [surveyResponseModal, setSurveyResponseModal] = useState<{ fileName: string; raw: string; label?: string } | null>(null);
   const [scoutDebugOpen, setScoutDebugOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const [spaceModalOpen, setSpaceModalOpen] = useState(false);
   const [buildingSpace, setBuildingSpace] = useState(false);
