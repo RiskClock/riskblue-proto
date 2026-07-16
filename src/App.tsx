@@ -79,6 +79,7 @@ const App = () => (
 
             <Route path="/internal/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
             <Route path="/internal/viewer-test" element={<ProtectedRoute><InternalViewerTest /></ProtectedRoute>} />
+            <Route path="/internal/activity" element={<ProtectedRoute><InternalActivity /></ProtectedRoute>} />
             <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="/oauth/callback" element={<OAuthCallback />} />
             <Route path="/connect/google-drive" element={<GoogleDriveConnect />} />
