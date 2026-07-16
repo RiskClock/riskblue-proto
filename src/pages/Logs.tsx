@@ -13,6 +13,8 @@ import { ShieldAlert, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ProjectAuditPanel } from "@/components/logs/ProjectAuditPanel";
 
 interface ActivityLog {
   id: string;
