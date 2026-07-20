@@ -150,6 +150,16 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
       <BuyCreditsModal open={buyOpen} onOpenChange={setBuyOpen} />
       <ChangePasswordModal open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
       <EditProfileModal open={editProfileOpen} onOpenChange={setEditProfileOpen} />
+      {infoContent && (
+        <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{infoTitle ?? "About"}</DialogTitle>
+            </DialogHeader>
+            <div className="text-sm text-muted-foreground space-y-2">{infoContent}</div>
+          </DialogContent>
+        </Dialog>
+      )}
     </header>
   );
 };
