@@ -476,12 +476,14 @@ export default function InternalWorkbench() {
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
-      <AppHeader title="Risk Identification Workbench" />
+      <AppHeader
+        title="Risk Identification Workbench"
+        infoTitle="About the Workbench"
+        infoContent={<p>All projects across every user. Internal access only.</p>}
+      />
       <main className="container mx-auto px-6 py-8 flex-1 overflow-auto">
-        <div className="mb-6 flex items-center justify-between gap-3">
-          <p className="text-sm text-muted-foreground">
-            All projects across every user. Internal access only.
-          </p>
+        <div className="mb-6 flex items-center justify-end gap-3">
+
 
           <Popover>
             <PopoverTrigger asChild>

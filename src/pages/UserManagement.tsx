@@ -534,12 +534,14 @@ const UserManagement = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader title="User Management" />
+      <AppHeader
+        title="User Management"
+        infoTitle="About User Management"
+        infoContent={<p>Manage internal and external user accounts, companies, tags, credit balances, and access status across the platform.</p>}
+      />
       <div className="container mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <p className="text-muted-foreground">
-            {filteredSorted.length} of {users.length} user{users.length === 1 ? "" : "s"}
-          </p>
+        <div className="flex items-center justify-end mb-6">
+
 
           <div className="flex items-center gap-2">
             <div className="relative">
@@ -639,7 +641,11 @@ const UserManagement = () => {
                       case "user":
                         return (
                           <TableHead key={colId} className="cursor-pointer select-none" onClick={() => toggleSort("email")}>
-                            User <SortIcon k="email" />
+                            User{" "}
+                            <span className="text-muted-foreground font-normal">
+                              ({filteredSorted.length !== users.length ? `${filteredSorted.length} of ${users.length}` : users.length})
+                            </span>{" "}
+                            <SortIcon k="email" />
                           </TableHead>
                         );
                       case "company":
