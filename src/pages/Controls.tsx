@@ -655,9 +655,9 @@ export default function Controls() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader />
+      <AppHeader title={company ? `${company}'s Marketplace Control Listing` : "Marketplace Control Listing"} />
       <main className="container mx-auto px-6 py-8">
-        {/* Header: logo + title */}
+        {/* Logo uploader */}
         <div className="flex items-center gap-4 mb-4">
           <div
             className="group relative rounded-lg border border-dashed border-border bg-muted/30 hover:border-primary/60 hover:bg-muted/50 overflow-hidden transition-colors"
@@ -705,10 +705,8 @@ export default function Controls() {
             className="hidden"
             onChange={handleLogoChange}
           />
-          <h1 className="text-3xl font-bold text-foreground">
-            {company ? `${company}'s Marketplace Control Listing` : "Marketplace Control Listing"}
-          </h1>
         </div>
+
 
         {/* Explanation - styled like the welcome banner on Projects */}
         {showDescription && (
