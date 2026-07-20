@@ -464,7 +464,7 @@ export default function InternalWorkbench() {
   if (!user || !isInternal) {
     return (
       <div className="h-screen flex flex-col bg-background overflow-hidden">
-        <AppHeader />
+        <AppHeader title="Risk Identification Workbench" />
         <main className="container mx-auto px-6 py-12 flex-1 overflow-auto">
           <div className="flex items-center gap-2 text-muted-foreground">
             <ShieldAlert className="h-4 w-4" /> Internal users only.
