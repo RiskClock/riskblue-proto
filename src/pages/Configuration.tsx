@@ -514,30 +514,29 @@ export default function Configuration() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[180px]">AWP Class</TableHead>
-                  <TableHead className="w-[180px]">Default Mitigation Controls</TableHead>
+                  <TableHead className="w-[180px]">Default Controls</TableHead>
                   <TableHead className="w-[160px]">Can Span Multiple Spaces</TableHead>
-                  <TableHead className="w-[350px]">Triaging Prompt</TableHead>
                   <TableHead className="w-[350px]">Full Prompt</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableCell colSpan={5} className="font-semibold text-sm py-2">Critical Assets</TableCell>
+                  <TableCell colSpan={4} className="font-semibold text-sm py-2">Critical Assets</TableCell>
                 </TableRow>
                 {groupedAWPs.critical_assets.map((awp) => (
-                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} triagePromptCell={renderTriagePromptCell(awp)} promptCell={renderPromptCell(awp)} />
+                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} promptCell={renderPromptCell(awp)} />
                 ))}
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableCell colSpan={5} className="font-semibold text-sm py-2">Water Systems</TableCell>
+                  <TableCell colSpan={4} className="font-semibold text-sm py-2">Water Systems</TableCell>
                 </TableRow>
                 {groupedAWPs.water_systems.map((awp) => (
-                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} triagePromptCell={renderTriagePromptCell(awp)} promptCell={renderPromptCell(awp)} />
+                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} promptCell={renderPromptCell(awp)} />
                 ))}
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableCell colSpan={5} className="font-semibold text-sm py-2">Processes</TableCell>
+                  <TableCell colSpan={4} className="font-semibold text-sm py-2">Processes</TableCell>
                 </TableRow>
                 {groupedAWPs.processes.map((awp) => (
-                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} triagePromptCell={renderTriagePromptCell(awp)} promptCell={renderPromptCell(awp)} />
+                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} promptCell={renderPromptCell(awp)} />
                 ))}
               </TableBody>
             </Table>
@@ -610,11 +609,10 @@ interface AWPRowProps {
   hasChanges: boolean;
   onEditControls: () => void;
   onToggleSpan: (next: boolean) => void;
-  triagePromptCell: React.ReactNode;
   promptCell: React.ReactNode;
 }
 
-function AWPRow({ awp, controls, currentIds, hasChanges, onEditControls, onToggleSpan, triagePromptCell, promptCell }: AWPRowProps) {
+function AWPRow({ awp, controls, currentIds, hasChanges, onEditControls, onToggleSpan, promptCell }: AWPRowProps) {
   const count = currentIds.length;
   return (
     <TableRow className={hasChanges ? "bg-yellow-50/50" : ""}>
@@ -632,7 +630,6 @@ function AWPRow({ awp, controls, currentIds, hasChanges, onEditControls, onToggl
           aria-label="Can span multiple spaces"
         />
       </TableCell>
-      <TableCell className="py-2">{triagePromptCell}</TableCell>
       <TableCell className="py-2">{promptCell}</TableCell>
     </TableRow>
   );
@@ -695,7 +692,7 @@ function AddControlPopover({ awp, controls, currentIds, onAdd }: AddControlPopov
       <PopoverContent className="w-80 p-0" align="start">
         <Command>
           <CommandInput placeholder="Search controls..." />
-          <CommandList>
+          <CommandList className="max-h-64 overflow-y-auto">
             <CommandEmpty>No controls found.</CommandEmpty>
             <CommandGroup>
               {availableControls.map((control) => (

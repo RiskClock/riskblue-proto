@@ -169,7 +169,7 @@ export default function InternalActivity() {
                             <button
                               className="hover:underline"
                               onClick={() =>
-                                navigate(`/internal/workbench/project/${ev.project_id}`)
+                                navigate(`/workbench/project/${ev.project_id}`)
                               }
                             >
                               {projectName}

@@ -6,10 +6,10 @@ import {
   ChevronRight,
   Download,
   Maximize2,
-  RotateCw,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
+import { RotateOrientIcon } from "@/assets/icons/RotateOrient";
 
 export interface ViewerToolbarProps {
   scale: number;
@@ -150,7 +150,7 @@ export const ViewerToolbar = ({
               : undefined
           }
         >
-          <RotateCw className="w-4 h-4" style={rotation ? { color: "#ffffff" } : undefined} />
+          <RotateOrientIcon width={16} height={16} style={rotation ? { color: "#ffffff" } : undefined} />
         </Button>
       )}
       {onDownload ? (
