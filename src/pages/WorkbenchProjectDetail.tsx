@@ -3357,11 +3357,9 @@ export default function WorkbenchProjectDetail() {
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
-              <h1 className="text-xl font-bold text-foreground truncate">
-                {project?.name || "Project"}
-              </h1>
               <div className="flex items-center gap-2 ml-3">
                 <span className="text-xs font-medium text-muted-foreground">Status:</span>
+
                 {canManage ? (
                   <Select
                     value={((project as any)?.workbench_status as string) || "processing"}
