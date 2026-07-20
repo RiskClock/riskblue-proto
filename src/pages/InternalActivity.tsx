@@ -97,12 +97,14 @@ export default function InternalActivity() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader title="Global Activity" />
+      <AppHeader
+        title="Global Activity"
+        infoTitle="About Global Activity"
+        infoContent={<p>All project audit events across the platform.</p>}
+      />
       <main className="container mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <p className="text-muted-foreground">
-            All project audit events across the platform.
-          </p>
+        <div className="flex items-center justify-end mb-6">
+
 
           <Select
             value={projectId}

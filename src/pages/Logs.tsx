@@ -406,11 +406,15 @@ export default function Logs() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader title="Activity Logs" />
+      <AppHeader
+        title="Activity Logs"
+        infoTitle="About Activity Logs"
+        infoContent={<p>View aggregated user activity across all projects, including annotation edits, downloads, and workbench events.</p>}
+      />
 
       <main className="container mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <p className="text-muted-foreground">View user activity across all projects</p>
+        <div className="flex items-center justify-end mb-6">
+
 
           <div className="flex items-center gap-4">
             <AlertDialog>
