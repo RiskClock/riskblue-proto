@@ -3289,7 +3289,8 @@ export default function WorkbenchProjectDetail() {
   if (!user || !canAccess) {
     return (
       <div className="h-screen flex flex-col bg-background overflow-hidden">
-        <AppHeader />
+        <AppHeader title={project?.name || "Project"} />
+
         <main className="container mx-auto px-6 py-12 flex-1 overflow-auto">
           <div className="flex items-center gap-2 text-muted-foreground">
             <ShieldAlert className="h-4 w-4" /> You don't have access to this page.
