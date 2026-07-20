@@ -150,7 +150,7 @@ export const ViewerToolbar = ({
               : undefined
           }
         >
-          <RotateCw className="w-4 h-4" style={rotation ? { color: "#ffffff" } : undefined} />
+          <RotateOrientIcon width={16} height={16} style={rotation ? { color: "#ffffff" } : undefined} />
         </Button>
       )}
       {onDownload ? (
