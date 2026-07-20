@@ -533,14 +533,15 @@ const UserManagement = () => {
     (filterCompanies.length > 0 ? 1 : 0) + (filterStatuses.length > 0 ? 1 : 0) + (filterTags.length > 0 ? 1 : 0);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
       <AppHeader
         title="User Management"
         infoTitle="About User Management"
         infoContent={<p>Manage internal and external user accounts, companies, tags, credit balances, and access status across the platform.</p>}
       />
-      <div className="container mx-auto px-6 py-8">
-        <div className="flex items-center justify-end mb-6">
+      <main className="container mx-auto px-6 py-8 flex-1 overflow-auto flex flex-col min-h-0">
+        <div className="flex items-center justify-end mb-6 shrink-0">
+
 
 
           <div className="flex items-center gap-2">
