@@ -593,7 +593,7 @@ export default function InternalWorkbench() {
                     <TableRow
                       key={p.id}
                       className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => navigate(`/internal/workbench/project/${p.id}`)}
+                      onClick={() => navigate(`/workbench/project/${p.id}`)}
                     >
                       <TableCell className="font-medium">{p.name}</TableCell>
                       {columnPrefs.workbench_status && (

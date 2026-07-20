@@ -105,7 +105,7 @@ export default function ThreatReportDownload() {
                 </a>
               </Button>
 
-              <Button variant="outline" onClick={() => navigate(`/internal/workbench/project/${projectId}`)}>
+              <Button variant="outline" onClick={() => navigate(`/workbench/project/${projectId}`)}>
                 Open project
               </Button>
             </div>
@@ -118,7 +118,7 @@ export default function ThreatReportDownload() {
           <>
             <AlertCircle className="h-6 w-6 mx-auto text-destructive" />
             <p className="text-sm text-destructive">{state.message}</p>
-            <Button variant="outline" onClick={() => navigate(`/internal/workbench/project/${projectId}`)}>
+            <Button variant="outline" onClick={() => navigate(`/workbench/project/${projectId}`)}>
               Open project
             </Button>
           </>

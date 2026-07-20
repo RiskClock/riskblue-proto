@@ -105,7 +105,7 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
                     <Settings className="h-4 w-4 mr-2" />
                     App Configuration
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate("/internal/workbench")} className="cursor-pointer">
+                  <DropdownMenuItem onClick={() => navigate("/workbench")} className="cursor-pointer">
                     <LayoutGrid className="h-4 w-4 mr-2" />
                     Workbench
                   </DropdownMenuItem>

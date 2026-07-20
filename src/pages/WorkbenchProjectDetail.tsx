@@ -3351,7 +3351,7 @@ export default function WorkbenchProjectDetail() {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => navigate(canManage ? "/internal/workbench" : "/projects")}
+                onClick={() => navigate(canManage ? "/workbench" : "/projects")}
                 aria-label="Back"
               >
                 <ArrowLeft className="h-4 w-4" />

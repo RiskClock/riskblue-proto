@@ -358,7 +358,7 @@ const Projects = () => {
                     onClick={() =>
                       navigate(
                         isWMSV
-                          ? `/internal/workbench/project/${project.id}`
+                          ? `/workbench/project/${project.id}`
                           : `/project/${project.id}`,
                       )
                     }
