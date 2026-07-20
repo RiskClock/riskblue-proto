@@ -534,15 +534,13 @@ const UserManagement = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader />
+      <AppHeader title="User Management" />
       <div className="container mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">User Management</h1>
-            <p className="text-muted-foreground mt-1">
-              {filteredSorted.length} of {users.length} user{users.length === 1 ? "" : "s"}
-            </p>
-          </div>
+          <p className="text-muted-foreground">
+            {filteredSorted.length} of {users.length} user{users.length === 1 ? "" : "s"}
+          </p>
+
           <div className="flex items-center gap-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
