@@ -294,13 +294,22 @@ const Projects = () => {
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
-      <AppHeader />
+      <AppHeader
+        title={`Projects${projects.length > 3 ? ` (${projects.length})` : ""}`}
+        actions={<Button size="sm" onClick={handleNewProject}>Add New Project</Button>}
+        infoTitle="About Projects"
+        infoContent={
+          <p>
+            RiskBlue helps builders identify project-specific water risks, determine the right mitigation strategies, and translate them into structured plans and coordinated execution.
+          </p>
+        }
+      />
 
       <main className="container mx-auto px-6 py-8 flex-1 overflow-auto">
         <div className="mb-8">
           {showWelcome && (
             <div className="bg-muted/50 p-6 rounded-lg mb-6 relative">
-              <button 
+              <button
                 onClick={handleDismissWelcome}
                 className="absolute top-3 right-3 text-muted-foreground hover:text-foreground"
                 aria-label="Dismiss welcome message"
@@ -315,18 +324,8 @@ const Projects = () => {
               </p>
             </div>
           )}
-
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">
-                Projects{projects.length > 3 && ` (${projects.length})`}
-              </h1>
-            </div>
-            <div className="flex gap-3">
-              <Button onClick={handleNewProject}>Add New Project</Button>
-            </div>
-          </div>
         </div>
+
 
         {loading || !user ? (
           <div className="text-center py-12">

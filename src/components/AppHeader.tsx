@@ -10,28 +10,34 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, BarChart3, Shield, Coins, Users, KeyRound, UserCog, LayoutGrid } from "lucide-react";
+import { LogOut, Settings, BarChart3, Shield, Coins, Users, KeyRound, UserCog, LayoutGrid, Info } from "lucide-react";
 import riskBlueLogo from "@/assets/logo-riskblue.png";
 
 import { useCredits } from "@/hooks/useCredits";
 import { BuyCreditsModal } from "@/components/BuyCreditsModal";
 import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 import { EditProfileModal } from "@/components/EditProfileModal";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface AppHeaderProps {
   leftContent?: React.ReactNode;
+  title?: React.ReactNode;
+  actions?: React.ReactNode;
+  infoTitle?: string;
+  infoContent?: React.ReactNode;
 }
 
-export const AppHeader = ({ leftContent }: AppHeaderProps) => {
+export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent }: AppHeaderProps) => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { getInitial, avatarUrl, displayName } = useUserDisplayName();
-  
+
   const { balance: credits } = useCredits();
   const [buyOpen, setBuyOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
 
   const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
 
@@ -39,17 +45,34 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
 
   return (
     <header className="sticky top-0 z-20 border-b bg-card no-print">
-      <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="container mx-auto px-6 py-4 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4 min-w-0">
           <img
             src={riskBlueLogo}
             alt="RiskBlue"
-            className="h-8 cursor-pointer"
+            className="h-8 cursor-pointer shrink-0"
             onClick={() => navigate("/projects")}
           />
+          {title && (
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="h-6 w-px bg-border shrink-0" aria-hidden />
+              <div className="text-lg font-semibold text-foreground truncate">{title}</div>
+              {infoContent && (
+                <button
+                  type="button"
+                  onClick={() => setInfoOpen(true)}
+                  className="text-muted-foreground hover:text-foreground shrink-0"
+                  aria-label="More information"
+                >
+                  <Info className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          )}
           {leftContent}
         </div>
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-6 shrink-0">
+          {actions}
           <button
             onClick={() => navigate("/projects")}
             className={`hover:text-primary ${isActive("/projects") ? "text-primary font-medium" : "text-foreground"}`}
@@ -127,6 +150,16 @@ export const AppHeader = ({ leftContent }: AppHeaderProps) => {
       <BuyCreditsModal open={buyOpen} onOpenChange={setBuyOpen} />
       <ChangePasswordModal open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
       <EditProfileModal open={editProfileOpen} onOpenChange={setEditProfileOpen} />
+      {infoContent && (
+        <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{infoTitle ?? "About"}</DialogTitle>
+            </DialogHeader>
+            <div className="text-sm text-muted-foreground space-y-2">{infoContent}</div>
+          </DialogContent>
+        </Dialog>
+      )}
     </header>
   );
 };
