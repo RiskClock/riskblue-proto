@@ -609,11 +609,10 @@ interface AWPRowProps {
   hasChanges: boolean;
   onEditControls: () => void;
   onToggleSpan: (next: boolean) => void;
-  triagePromptCell: React.ReactNode;
   promptCell: React.ReactNode;
 }
 
-function AWPRow({ awp, controls, currentIds, hasChanges, onEditControls, onToggleSpan, triagePromptCell, promptCell }: AWPRowProps) {
+function AWPRow({ awp, controls, currentIds, hasChanges, onEditControls, onToggleSpan, promptCell }: AWPRowProps) {
   const count = currentIds.length;
   return (
     <TableRow className={hasChanges ? "bg-yellow-50/50" : ""}>
@@ -631,7 +630,6 @@ function AWPRow({ awp, controls, currentIds, hasChanges, onEditControls, onToggl
           aria-label="Can span multiple spaces"
         />
       </TableCell>
-      <TableCell className="py-2">{triagePromptCell}</TableCell>
       <TableCell className="py-2">{promptCell}</TableCell>
     </TableRow>
   );
