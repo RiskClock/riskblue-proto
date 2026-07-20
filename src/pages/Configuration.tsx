@@ -692,7 +692,7 @@ function AddControlPopover({ awp, controls, currentIds, onAdd }: AddControlPopov
       <PopoverContent className="w-80 p-0" align="start">
         <Command>
           <CommandInput placeholder="Search controls..." />
-          <CommandList>
+          <CommandList className="max-h-64 overflow-y-auto">
             <CommandEmpty>No controls found.</CommandEmpty>
             <CommandGroup>
               {availableControls.map((control) => (
