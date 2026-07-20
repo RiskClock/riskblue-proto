@@ -97,15 +97,13 @@ export default function InternalActivity() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader />
+      <AppHeader title="Global Activity" />
       <main className="container mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">Global Activity</h1>
-            <p className="text-muted-foreground">
-              All project audit events across the platform.
-            </p>
-          </div>
+          <p className="text-muted-foreground">
+            All project audit events across the platform.
+          </p>
+
           <Select
             value={projectId}
             onValueChange={(v) => {
