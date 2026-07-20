@@ -488,14 +488,12 @@ export default function Configuration() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader />
+      <AppHeader title="App Configuration" />
 
       <main className="container mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">App Configuration</h1>
-            <p className="text-muted-foreground">Manage default mitigation controls, prompts, and agent settings</p>
-          </div>
+          <p className="text-muted-foreground">Manage default mitigation controls, prompts, and agent settings</p>
+
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setShowRevertDialog(true)} disabled={!hasUnsavedChanges}>
               <RotateCcw className="h-4 w-4 mr-2" />Revert Changes
