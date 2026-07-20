@@ -3342,7 +3342,7 @@ export default function WorkbenchProjectDetail() {
   return (
     <TooltipProvider delayDuration={150}>
       <div className="h-screen flex flex-col bg-background overflow-hidden">
-        <AppHeader />
+        <AppHeader title={project?.name || "Project"} />
 
         {/* Sub-header (no longer sticky) */}
         <div className="border-b bg-background">
