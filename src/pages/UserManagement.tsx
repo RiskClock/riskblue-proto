@@ -632,7 +632,7 @@ const UserManagement = () => {
         )}
 
         {!isLoading && !error && (
-          <div className="rounded-md border bg-card [&>div]:max-h-[calc(100vh-260px)]">
+          <div className="rounded-md border bg-card flex-1 min-h-0 overflow-auto [&>div]:h-full">
             <Table className="[&_td]:py-2 [&_th]:py-2 [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-card [&_thead_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
 
               <TableHeader>
@@ -854,7 +854,7 @@ const UserManagement = () => {
             </Table>
           </div>
         )}
-      </div>
+      </main>
 
       <CreateUserDialog
         open={createOpen}
