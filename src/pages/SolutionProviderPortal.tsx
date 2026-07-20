@@ -191,7 +191,13 @@ export default function SolutionProviderPortal() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader />
+      <AppHeader
+        title={
+          selectedCollaborator
+            ? `Projects for ${selectedCollaborator.company}`
+            : "Solution Provider Portal"
+        }
+      />
 
       <main className="container mx-auto px-6 py-8">
         {selectedProject && selectedCollaborator ? (
@@ -211,14 +217,10 @@ export default function SolutionProviderPortal() {
           </div>
         ) : selectedCollaborator && projects.length > 0 ? (
           <div className="max-w-4xl mx-auto space-y-6">
-            <div>
-              <h1 className="text-3xl font-bold mb-2">
-                Projects for {selectedCollaborator.company}
-              </h1>
-              <p className="text-muted-foreground">
-                Viewing as: {selectedCollaborator.name} ({selectedCollaborator.email})
-              </p>
-            </div>
+            <p className="text-muted-foreground">
+              Viewing as: {selectedCollaborator.name} ({selectedCollaborator.email})
+            </p>
+
 
             <div className="grid gap-4">
               {projects.map((project) => (
