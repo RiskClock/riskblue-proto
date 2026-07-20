@@ -296,7 +296,6 @@ const Projects = () => {
     <div className="h-screen flex flex-col bg-background overflow-hidden">
       <AppHeader
         title={`Projects${projects.length > 3 ? ` (${projects.length})` : ""}`}
-        actions={<Button size="sm" onClick={handleNewProject}>Add New Project</Button>}
         infoTitle="About Projects"
         infoContent={
           <p>
@@ -304,6 +303,7 @@ const Projects = () => {
           </p>
         }
       />
+
 
       <main className="container mx-auto px-6 py-8 flex-1 overflow-auto">
         <div className="mb-8">
@@ -459,7 +459,14 @@ const Projects = () => {
             </table>
           </div>
         )}
+
+        {!loading && user && projects.length > 0 && (
+          <div className="flex justify-center mt-6">
+            <Button onClick={handleNewProject}>Add New Project</Button>
+          </div>
+        )}
       </main>
+
 
 
       <CreateProjectModal

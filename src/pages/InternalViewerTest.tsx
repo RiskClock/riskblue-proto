@@ -97,7 +97,7 @@ export default function InternalViewerTest() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader />
+      <AppHeader title="Viewer Test" />
 
       <div className="container mx-auto py-8 max-w-3xl">
         <h1 className="text-2xl font-semibold mb-1">Drawing Viewer - QA Harness</h1>

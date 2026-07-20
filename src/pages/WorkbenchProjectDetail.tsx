@@ -3289,7 +3289,8 @@ export default function WorkbenchProjectDetail() {
   if (!user || !canAccess) {
     return (
       <div className="h-screen flex flex-col bg-background overflow-hidden">
-        <AppHeader />
+        <AppHeader title={project?.name || "Project"} />
+
         <main className="container mx-auto px-6 py-12 flex-1 overflow-auto">
           <div className="flex items-center gap-2 text-muted-foreground">
             <ShieldAlert className="h-4 w-4" /> You don't have access to this page.
@@ -3341,7 +3342,7 @@ export default function WorkbenchProjectDetail() {
   return (
     <TooltipProvider delayDuration={150}>
       <div className="h-screen flex flex-col bg-background overflow-hidden">
-        <AppHeader />
+        <AppHeader title={project?.name || "Project"} />
 
         {/* Sub-header (no longer sticky) */}
         <div className="border-b bg-background">
@@ -3356,11 +3357,9 @@ export default function WorkbenchProjectDetail() {
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
-              <h1 className="text-xl font-bold text-foreground truncate">
-                {project?.name || "Project"}
-              </h1>
               <div className="flex items-center gap-2 ml-3">
                 <span className="text-xs font-medium text-muted-foreground">Status:</span>
+
                 {canManage ? (
                   <Select
                     value={((project as any)?.workbench_status as string) || "processing"}

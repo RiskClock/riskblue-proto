@@ -466,7 +466,7 @@ export default function Controls() {
   if (accountLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <AppHeader />
+        <AppHeader title="Marketplace Control Listing" />
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
         </div>
@@ -477,7 +477,7 @@ export default function Controls() {
   if (!isWMSV) {
     return (
       <div className="min-h-screen bg-background">
-        <AppHeader />
+        <AppHeader title="Marketplace Control Listing" />
         <div className="flex items-center justify-center py-20">
           <p className="text-muted-foreground">You don't have access to this page.</p>
         </div>
@@ -488,7 +488,7 @@ export default function Controls() {
   if (showAccessGate) {
     return (
       <div className="min-h-screen bg-background">
-        <AppHeader />
+        <AppHeader title="Marketplace Control Listing" />
         <Dialog open={true} onOpenChange={() => { /* non-dismissable */ }}>
           <DialogContent className="sm:max-w-lg" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
             <DialogHeader>
@@ -536,7 +536,7 @@ export default function Controls() {
   if (awpLoading || controlsLoading || selectionsLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <AppHeader />
+        <AppHeader title="Marketplace Control Listing" />
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
         </div>
@@ -655,9 +655,9 @@ export default function Controls() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader />
+      <AppHeader title={company ? `${company}'s Marketplace Control Listing` : "Marketplace Control Listing"} />
       <main className="container mx-auto px-6 py-8">
-        {/* Header: logo + title */}
+        {/* Logo uploader */}
         <div className="flex items-center gap-4 mb-4">
           <div
             className="group relative rounded-lg border border-dashed border-border bg-muted/30 hover:border-primary/60 hover:bg-muted/50 overflow-hidden transition-colors"
@@ -705,10 +705,8 @@ export default function Controls() {
             className="hidden"
             onChange={handleLogoChange}
           />
-          <h1 className="text-3xl font-bold text-foreground">
-            {company ? `${company}'s Marketplace Control Listing` : "Marketplace Control Listing"}
-          </h1>
         </div>
+
 
         {/* Explanation - styled like the welcome banner on Projects */}
         {showDescription && (
