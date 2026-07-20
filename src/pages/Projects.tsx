@@ -459,7 +459,14 @@ const Projects = () => {
             </table>
           </div>
         )}
+
+        {!loading && user && projects.length > 0 && (
+          <div className="flex justify-center mt-6">
+            <Button onClick={handleNewProject}>Add New Project</Button>
+          </div>
+        )}
       </main>
+
 
 
       <CreateProjectModal
