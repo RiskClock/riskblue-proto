@@ -6,10 +6,10 @@ import {
   ChevronRight,
   Download,
   Maximize2,
-  RotateCw,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
+import { RotateOrientIcon } from "@/assets/icons/RotateOrient";
 
 export interface ViewerToolbarProps {
   scale: number;
