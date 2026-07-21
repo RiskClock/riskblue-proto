@@ -469,6 +469,63 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
                       </div>
                       <div className="space-y-2">
                         {opts.map((opt) => {
+                          if (opt.name === COLD_WATER_NAME) {
+                            return (
+                              <div key={opt.id} className="space-y-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setCwExpanded((v) => !v)}
+                                  className="flex items-center gap-2 text-sm w-full text-left"
+                                >
+                                  {cwExpanded ? (
+                                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                                  ) : (
+                                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                                  )}
+                                  {opt.idPrefix && (
+                                    <span className="font-mono text-xs text-muted-foreground">
+                                      {opt.idPrefix}
+                                    </span>
+                                  )}
+                                  <span>{opt.name}</span>
+                                  {cwSubtypes.size > 0 && (
+                                    <span className="ml-1 text-xs text-muted-foreground">
+                                      ({cwSubtypes.size} selected)
+                                    </span>
+                                  )}
+                                </button>
+                                {cwExpanded && (
+                                  <div className="pl-6 space-y-1.5">
+                                    {COLD_WATER_SUBTYPES.map((sub) => {
+                                      const checked = cwSubtypes.has(sub.abbr);
+                                      return (
+                                        <label
+                                          key={sub.abbr}
+                                          className="flex items-center gap-2 text-sm cursor-pointer"
+                                        >
+                                          <Checkbox
+                                            checked={checked}
+                                            onCheckedChange={() => {
+                                              setCwSubtypes((prev) => {
+                                                const next = new Set(prev);
+                                                if (next.has(sub.abbr)) next.delete(sub.abbr);
+                                                else next.add(sub.abbr);
+                                                return next;
+                                              });
+                                            }}
+                                          />
+                                          <span className="font-mono text-xs text-muted-foreground">
+                                            {sub.abbr}
+                                          </span>
+                                          <span>{sub.label}</span>
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
                           const checked = selectedClassNames.has(opt.name);
                           return (
                             <label
