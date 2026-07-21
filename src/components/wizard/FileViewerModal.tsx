@@ -1784,16 +1784,21 @@ export const FileViewerModal = ({
           const fields = defs.map((d) => {
             const cur =
               typeof meta[d.key] === "string" ? (meta[d.key] as string).trim() : "";
+            const preseed =
+              d.key === "pipe_type" && preseededTypesByClass
+                ? preseededTypesByClass[inst.awp_class_name] || []
+                : [];
             const suggestions = Array.from(
               new Set(
-                sameClass
-                  .map((i) => {
+                [
+                  ...preseed,
+                  ...sameClass.map((i) => {
                     const m = (i.metadata as any) || {};
                     return typeof m[d.key] === "string"
                       ? (m[d.key] as string).trim()
                       : "";
-                  })
-                  .filter(Boolean),
+                  }),
+                ].filter(Boolean),
               ),
             );
             return {
