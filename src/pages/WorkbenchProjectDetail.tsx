@@ -1691,6 +1691,22 @@ export default function WorkbenchProjectDetail() {
     return [...canonical, ...others];
   }, [project]);
 
+  // Preseeded "Type" suggestions per class from project creation (e.g. Cold
+  // Water → MCE, PB, ZE, SRE, SE). Passed into FileViewerModal so those
+  // abbreviations show up as suggestions on new annotations.
+  const preseededTypesByClass = useMemo<Record<string, string[]>>(() => {
+    const raw = (project as any)?.selected_awp_subtypes;
+    if (!raw || typeof raw !== "object") return {};
+    const out: Record<string, string[]> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (Array.isArray(v)) {
+        const arr = v.filter((x): x is string => typeof x === "string" && !!x.trim());
+        if (arr.length) out[k] = arr;
+      }
+    }
+    return out;
+  }, [project]);
+
   // Custom (user-typed) classes at creation time that are NOT in the canonical
   // AWP options list. These should not become workbench columns automatically,
   // but their presence flags the Manage Columns button so internal users know
