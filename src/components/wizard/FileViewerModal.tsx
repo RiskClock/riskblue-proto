@@ -232,6 +232,10 @@ interface FileViewerModalProps {
   onAssignAnnotation?: (className: string, planId: string | null) => Promise<void> | void;
   /** When true, disable placement of detections and any floor-plan editing. */
   readOnly?: boolean;
+  /** Optional preseeded suggestions for the "Type" (pipe_type) attribute,
+   *  keyed by AWP class name (e.g. { "Cold Water": ["MCE","PB"] }). Values
+   *  are merged into the popover suggestion list before existing values. */
+  preseededTypesByClass?: Record<string, string[]>;
 }
 
 
@@ -282,6 +286,7 @@ export const FileViewerModal = ({
   annotationAssignments,
   onAssignAnnotation,
   readOnly = false,
+  preseededTypesByClass,
 }: FileViewerModalProps) => {
 
   const { toast } = useToast();
@@ -1779,16 +1784,21 @@ export const FileViewerModal = ({
           const fields = defs.map((d) => {
             const cur =
               typeof meta[d.key] === "string" ? (meta[d.key] as string).trim() : "";
+            const preseed =
+              d.key === "pipe_type" && preseededTypesByClass
+                ? preseededTypesByClass[inst.awp_class_name] || []
+                : [];
             const suggestions = Array.from(
               new Set(
-                sameClass
-                  .map((i) => {
+                [
+                  ...preseed,
+                  ...sameClass.map((i) => {
                     const m = (i.metadata as any) || {};
                     return typeof m[d.key] === "string"
                       ? (m[d.key] as string).trim()
                       : "";
-                  })
-                  .filter(Boolean),
+                  }),
+                ].filter(Boolean),
               ),
             );
             return {

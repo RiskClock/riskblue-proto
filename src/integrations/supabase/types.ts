@@ -2045,6 +2045,7 @@ export type Database = {
           report_file_name: string | null
           report_file_path: string | null
           selected_awp_class_names: string[]
+          selected_awp_subtypes: Json
           selected_other_classes: string[]
           state: string | null
           status: string | null
@@ -2084,6 +2085,7 @@ export type Database = {
           report_file_name?: string | null
           report_file_path?: string | null
           selected_awp_class_names?: string[]
+          selected_awp_subtypes?: Json
           selected_other_classes?: string[]
           state?: string | null
           status?: string | null
@@ -2123,6 +2125,7 @@ export type Database = {
           report_file_name?: string | null
           report_file_path?: string | null
           selected_awp_class_names?: string[]
+          selected_awp_subtypes?: Json
           selected_other_classes?: string[]
           state?: string | null
           status?: string | null

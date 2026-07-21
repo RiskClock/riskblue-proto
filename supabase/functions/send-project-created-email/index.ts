@@ -45,7 +45,7 @@ serve(async (req) => {
 
     const { data: project } = await admin
       .from("projects")
-      .select("id, name, user_id, created_at, selected_awp_class_names, selected_other_classes")
+      .select("id, name, user_id, created_at, selected_awp_class_names, selected_other_classes, selected_awp_subtypes")
       .eq("id", projectId)
       .single();
 
@@ -111,6 +111,37 @@ serve(async (req) => {
       .map((k) => renderGroup(k, groups[k]))
       .join("");
 
+    // Subtypes (e.g. Cold Water → MCE, PB, ...)
+    const subtypesMap = ((project as any).selected_awp_subtypes || {}) as Record<
+      string,
+      string[]
+    >;
+    const subtypeLabelByAbbr: Record<string, string> = {
+      MCE: "Main City Entry",
+      PB: "Post-Booster",
+      ZE: "Zone Entry",
+      SRE: "Suite Riser Entry",
+      SE: "Suite Entry",
+    };
+    const subtypeEntries = Object.entries(subtypesMap).filter(
+      ([, abbrs]) => Array.isArray(abbrs) && abbrs.length > 0,
+    );
+    const subtypesHtml =
+      subtypeEntries.length === 0
+        ? ""
+        : subtypeEntries
+            .map(
+              ([cls, abbrs]) => `
+              <h3 style="margin:18px 0 6px;font-size:14px;">${escapeHtml(cls)} subtypes (${abbrs.length})</h3>
+              <ul style="margin:0;padding-left:20px;">${abbrs
+                .map((a) => {
+                  const lbl = subtypeLabelByAbbr[a] || a;
+                  return `<li>${escapeHtml(lbl)} <span style="color:#666;font-family:monospace;">(${escapeHtml(a)})</span></li>`;
+                })
+                .join("")}</ul>`,
+            )
+            .join("");
+
     const subject = `New project created: ${project.name}`;
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 560px; padding: 20px;">
@@ -120,6 +151,7 @@ serve(async (req) => {
         <p><strong>Project ID:</strong> ${project.id}</p>
         <p><strong>Created at:</strong> ${new Date(project.created_at).toISOString()}</p>
         ${selectionsHtml || '<p style="color:#666;">No assets, water systems, or processes selected.</p>'}
+        ${subtypesHtml}
       </div>
     `;
 

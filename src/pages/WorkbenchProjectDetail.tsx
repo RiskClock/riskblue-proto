@@ -883,7 +883,7 @@ export default function WorkbenchProjectDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("projects")
-        .select("id, name, user_id, selected_awp_class_names, selected_other_classes, report_file_path, report_file_name, workbench_status")
+        .select("id, name, user_id, selected_awp_class_names, selected_other_classes, selected_awp_subtypes, report_file_path, report_file_name, workbench_status")
         .eq("id", projectId!)
         .maybeSingle();
       if (error) throw error;
@@ -1689,6 +1689,22 @@ export default function WorkbenchProjectDetail() {
     const canonical = ((project as any)?.selected_awp_class_names as string[] | null) || [];
     const others = ((project as any)?.selected_other_classes as string[] | null) || [];
     return [...canonical, ...others];
+  }, [project]);
+
+  // Preseeded "Type" suggestions per class from project creation (e.g. Cold
+  // Water → MCE, PB, ZE, SRE, SE). Passed into FileViewerModal so those
+  // abbreviations show up as suggestions on new annotations.
+  const preseededTypesByClass = useMemo<Record<string, string[]>>(() => {
+    const raw = (project as any)?.selected_awp_subtypes;
+    if (!raw || typeof raw !== "object") return {};
+    const out: Record<string, string[]> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (Array.isArray(v)) {
+        const arr = v.filter((x): x is string => typeof x === "string" && !!x.trim());
+        if (arr.length) out[k] = arr;
+      }
+    }
+    return out;
   }, [project]);
 
   // Custom (user-typed) classes at creation time that are NOT in the canonical
@@ -4589,6 +4605,7 @@ export default function WorkbenchProjectDetail() {
             onExpandedClassesChange={setSidebarExpandedClasses}
             preselectClass={preselectClass}
             readOnly={processingLock}
+            preseededTypesByClass={preseededTypesByClass}
           />
         )}
 
@@ -4624,6 +4641,7 @@ export default function WorkbenchProjectDetail() {
             onExpandedClassesChange={setSidebarExpandedClasses}
             preselectClass={preselectClass}
             readOnly={processingLock}
+            preseededTypesByClass={preseededTypesByClass}
           />
         )}
 
@@ -4785,6 +4803,7 @@ export default function WorkbenchProjectDetail() {
               queryClient.refetchQueries({ queryKey: ["workbench-instances", requestId] });
             }}
             readOnly={processingLock}
+            preseededTypesByClass={preseededTypesByClass}
           />
 
         )}
