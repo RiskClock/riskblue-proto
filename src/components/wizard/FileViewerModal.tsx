@@ -286,6 +286,7 @@ export const FileViewerModal = ({
   annotationAssignments,
   onAssignAnnotation,
   readOnly = false,
+  preseededTypesByClass,
 }: FileViewerModalProps) => {
 
   const { toast } = useToast();
