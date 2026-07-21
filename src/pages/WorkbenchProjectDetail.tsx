@@ -4803,6 +4803,7 @@ export default function WorkbenchProjectDetail() {
               queryClient.refetchQueries({ queryKey: ["workbench-instances", requestId] });
             }}
             readOnly={processingLock}
+            preseededTypesByClass={preseededTypesByClass}
           />
 
         )}
