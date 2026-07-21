@@ -1,0 +1,1 @@
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS selected_awp_subtypes jsonb NOT NULL DEFAULT '{}'::jsonb;
