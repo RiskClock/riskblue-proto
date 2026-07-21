@@ -45,7 +45,7 @@ serve(async (req) => {
 
     const { data: project } = await admin
       .from("projects")
-      .select("id, name, user_id, created_at, selected_awp_class_names, selected_other_classes")
+      .select("id, name, user_id, created_at, selected_awp_class_names, selected_other_classes, selected_awp_subtypes")
       .eq("id", projectId)
       .single();
 
