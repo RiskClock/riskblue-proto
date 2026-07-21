@@ -217,8 +217,9 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
           status: "draft",
           estimated_units: units,
           credits_consumed: cost,
-          selected_awp_class_names: Array.from(selectedClassNames),
+          selected_awp_class_names: finalSelectedClassNames,
           selected_other_classes: otherList,
+          selected_awp_subtypes: selectedSubtypesMap,
         } as any)
         .select("id")
         .single();
