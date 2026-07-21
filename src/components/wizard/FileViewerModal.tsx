@@ -232,6 +232,10 @@ interface FileViewerModalProps {
   onAssignAnnotation?: (className: string, planId: string | null) => Promise<void> | void;
   /** When true, disable placement of detections and any floor-plan editing. */
   readOnly?: boolean;
+  /** Optional preseeded suggestions for the "Type" (pipe_type) attribute,
+   *  keyed by AWP class name (e.g. { "Cold Water": ["MCE","PB"] }). Values
+   *  are merged into the popover suggestion list before existing values. */
+  preseededTypesByClass?: Record<string, string[]>;
 }
 
 
