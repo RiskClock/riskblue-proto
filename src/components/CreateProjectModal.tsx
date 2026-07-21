@@ -56,6 +56,17 @@ export function computeCreditCost(units: number | null): {
   return { cost: 100, contact: false };
 }
 
+// Cold Water subtypes captured during project creation. Each abbreviation is
+// preseeded as a "Type" suggestion on Cold Water annotations for the project.
+export const COLD_WATER_SUBTYPES: { label: string; abbr: string }[] = [
+  { label: "Main City Entry", abbr: "MCE" },
+  { label: "Post-Booster", abbr: "PB" },
+  { label: "Zone Entry", abbr: "ZE" },
+  { label: "Suite Riser Entry", abbr: "SRE" },
+  { label: "Suite Entry", abbr: "SE" },
+];
+const COLD_WATER_NAME = "Cold Water";
+
 const formatBytes = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
