@@ -151,6 +151,7 @@ serve(async (req) => {
         <p><strong>Project ID:</strong> ${project.id}</p>
         <p><strong>Created at:</strong> ${new Date(project.created_at).toISOString()}</p>
         ${selectionsHtml || '<p style="color:#666;">No assets, water systems, or processes selected.</p>'}
+        ${subtypesHtml}
       </div>
     `;
 
