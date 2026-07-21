@@ -4340,6 +4340,7 @@ export default function WorkbenchProjectDetail() {
                                       {count} pages
                                     </span>
                                   )}
+                                  {singlePage && !processingLock && renderSpaceBadge(row.name, 1)}
                                 </div>
                               </TableCell>
                               {enabledCols.map((name) => {
