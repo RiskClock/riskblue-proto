@@ -130,7 +130,25 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
   );
 
   const hasAnyClass =
-    selectedClassNames.size > 0 || (otherEnabled && otherList.length > 0);
+    selectedClassNames.size > 0 ||
+    cwSubtypes.size > 0 ||
+    (otherEnabled && otherList.length > 0);
+
+  const finalSelectedClassNames = useMemo(() => {
+    const s = new Set(selectedClassNames);
+    if (cwSubtypes.size > 0) s.add(COLD_WATER_NAME);
+    else s.delete(COLD_WATER_NAME);
+    return Array.from(s);
+  }, [selectedClassNames, cwSubtypes]);
+
+  const selectedSubtypesMap = useMemo(() => {
+    if (cwSubtypes.size === 0) return {} as Record<string, string[]>;
+    // Preserve canonical order from COLD_WATER_SUBTYPES
+    const ordered = COLD_WATER_SUBTYPES.filter((s) => cwSubtypes.has(s.abbr)).map(
+      (s) => s.abbr,
+    );
+    return { [COLD_WATER_NAME]: ordered };
+  }, [cwSubtypes]);
 
   const canSave =
     !!user &&
