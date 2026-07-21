@@ -90,6 +90,8 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [showBuyCredits, setShowBuyCredits] = useState(false);
+  const [cwExpanded, setCwExpanded] = useState(false);
+  const [cwSubtypes, setCwSubtypes] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (open) {
@@ -100,6 +102,8 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
       setOtherText("");
       setFiles([]);
       setSubmitting(false);
+      setCwExpanded(false);
+      setCwSubtypes(new Set());
       setTimeout(() => nameRef.current?.focus(), 100);
     }
   }, [open]);
