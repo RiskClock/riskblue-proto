@@ -2333,21 +2333,32 @@ export default function WorkbenchProjectDetail() {
   // actually contains.
   const mergedPageSpaceMap = useMemo(() => {
     const out = new Map<string, string[]>();
-    const addAll = (key: string, levels: Iterable<string>) => {
+    const addAll = (key: string, levels: Iterable<string>, skipValidity = false) => {
       const arr = out.get(key) || [];
       for (const lvl of levels) {
-        if (!isSpaceValidOnPage(key, lvl)) continue;
+        if (!skipValidity && !isSpaceValidOnPage(key, lvl)) continue;
         if (!arr.includes(lvl)) arr.push(lvl);
       }
       out.set(key, arr);
     };
-    for (const [key, levels] of surveyDerivedMaps.levelMap.entries()) addAll(key, levels);
+    // Prefer raw display names from user-placed / survey bboxes so the badge
+    // matches the label shown inside the drawing modal (e.g. "L06" not
+    // "SIXTH FLOOR"). Fall back to canonicalized levelMap only when a page
+    // has no display-name entry (rare — bbox exists but produced no name).
+    for (const [key, names] of surveyDerivedMaps.pageLevelDisplayNames.entries()) {
+      addAll(key, names, true);
+    }
+    for (const [key, levels] of surveyDerivedMaps.levelMap.entries()) {
+      if (surveyDerivedMaps.pageLevelDisplayNames.has(key)) continue;
+      addAll(key, levels);
+    }
     for (const [key, levels] of pageSpaceMap.entries()) {
-      if (surveyDerivedMaps.levelMap.has(key)) continue;
+      if (surveyDerivedMaps.levelMap.has(key) || surveyDerivedMaps.pageLevelDisplayNames.has(key)) continue;
       addAll(key, levels);
     }
     return out;
   }, [surveyDerivedMaps, pageSpaceMap, pageSpaceValidNames]);
+
 
 
   const mergedPageSpaceUnitMap = useMemo(() => {
