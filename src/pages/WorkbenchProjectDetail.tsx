@@ -2265,6 +2265,15 @@ export default function WorkbenchProjectDetail() {
           const e = effective(fp, f.id);
           if (e.type === "level_floor_plan" || e.type === "schematic_level_row") {
             const canonicalLevels = e.floors.flatMap((l) => canonicalizeLevels(l)).filter(Boolean);
+            // Raw display names for the file-list badge (match modal labels).
+            const displayFloors = (e.floors && e.floors.length > 0)
+              ? e.floors.filter(Boolean)
+              : (e.name ? [e.name] : []);
+            if (displayFloors.length > 0) {
+              const arr = pageLevelDisplayNames.get(key) || [];
+              for (const n of displayFloors) if (!arr.includes(n)) arr.push(n);
+              pageLevelDisplayNames.set(key, arr);
+            }
             if (e.type === "level_floor_plan") {
               const lpArr = pageLevelPlans.get(key) || [];
               lpArr.push({ levels: canonicalLevels, bbox: e.bbox });
@@ -2280,6 +2289,7 @@ export default function WorkbenchProjectDetail() {
               if (!pairs.some((p) => p.level === lvl && !p.unit)) pairs.push({ level: lvl });
             }
             unitMap.set(key, pairs);
+
           } else if (e.type === "unit_floor_plan") {
             const unitLabel = e.name;
             const refKey = e.name.trim().toLowerCase();
