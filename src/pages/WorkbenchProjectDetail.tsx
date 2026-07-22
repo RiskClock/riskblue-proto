@@ -2266,9 +2266,13 @@ export default function WorkbenchProjectDetail() {
           if (e.type === "level_floor_plan" || e.type === "schematic_level_row") {
             const canonicalLevels = e.floors.flatMap((l) => canonicalizeLevels(l)).filter(Boolean);
             // Raw display names for the file-list badge (match modal labels).
-            const displayFloors = (e.floors && e.floors.length > 0)
-              ? e.floors.filter(Boolean)
-              : (e.name ? [e.name] : []);
+            // The modal shows the effective bbox label (override.name →
+            // reference_id), while Scout's floors[] may contain a canonical
+            // alias such as "L07". Prefer the visible bbox label here and keep
+            // canonicalized floors only for attribution below.
+            const displayFloors = e.name
+              ? [e.name]
+              : ((e.floors && e.floors.length > 0) ? e.floors.filter(Boolean) : []);
             if (displayFloors.length > 0) {
               const arr = pageLevelDisplayNames.get(key) || [];
               for (const n of displayFloors) if (!arr.includes(n)) arr.push(n);
@@ -2457,7 +2461,7 @@ export default function WorkbenchProjectDetail() {
     }
   };
 
-  /** Render a clickable space badge. Returns null if no badge should display. */
+  /** Render a floor-plan space badge. Returns null if no badge should display. */
   const renderSpaceBadge = (
     fileName: string,
     pageNumber: number,
@@ -2498,12 +2502,8 @@ export default function WorkbenchProjectDetail() {
     const badge = (
       <Badge
         variant="outline"
-        className={`min-w-0 max-w-full leading-none cursor-pointer hover:opacity-80 ${sizeCls} ${planColor ? "" : fallbackCls}`}
+        className={`min-w-0 max-w-full leading-none ${sizeCls} ${planColor ? "" : fallbackCls}`}
         style={style}
-        onClick={(e) => {
-          e.stopPropagation();
-          openSpaceEdit(fileName, pageNumber);
-        }}
       >
         <span className="truncate block">{label}</span>
       </Badge>
