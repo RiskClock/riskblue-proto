@@ -2166,6 +2166,11 @@ export default function WorkbenchProjectDetail() {
   const surveyDerivedMaps = useMemo(() => {
     const levelMap = new Map<string, Set<string>>();
     const unitMap = new Map<string, Array<{ level: string; unit?: string }>>();
+    // Display names for level/schematic bboxes on a page (raw bbox label,
+    // e.g. "L06" or "SEVENTH FLOOR"). Used only for the file-list badge so
+    // it matches the label the user sees in the drawing modal. Annotation
+    // attribution still uses the canonicalized `levelMap` below.
+    const pageLevelDisplayNames = new Map<string, string[]>();
     // Per-page unit floor plans (with bbox + parent levels + per-level counts)
     // for per-annotation bbox-containment attribution in the threat report.
     // A unit listed N times under a level expands to N pairs in the rollup.
@@ -2189,7 +2194,8 @@ export default function WorkbenchProjectDetail() {
     >();
     const files = rows?.files ?? [];
     const sheets = rows?.sheets ?? [];
-    if (files.length === 0) return { levelMap, unitMap, pageUnitPlans, pageLevelPlans };
+    if (files.length === 0) return { levelMap, unitMap, pageUnitPlans, pageLevelPlans, pageLevelDisplayNames };
+
 
     const overridesByFilePage = new Map<string, Record<string, any>>();
     for (const s of sheets) {
@@ -2259,6 +2265,15 @@ export default function WorkbenchProjectDetail() {
           const e = effective(fp, f.id);
           if (e.type === "level_floor_plan" || e.type === "schematic_level_row") {
             const canonicalLevels = e.floors.flatMap((l) => canonicalizeLevels(l)).filter(Boolean);
+            // Raw display names for the file-list badge (match modal labels).
+            const displayFloors = (e.floors && e.floors.length > 0)
+              ? e.floors.filter(Boolean)
+              : (e.name ? [e.name] : []);
+            if (displayFloors.length > 0) {
+              const arr = pageLevelDisplayNames.get(key) || [];
+              for (const n of displayFloors) if (!arr.includes(n)) arr.push(n);
+              pageLevelDisplayNames.set(key, arr);
+            }
             if (e.type === "level_floor_plan") {
               const lpArr = pageLevelPlans.get(key) || [];
               lpArr.push({ levels: canonicalLevels, bbox: e.bbox });
@@ -2274,6 +2289,7 @@ export default function WorkbenchProjectDetail() {
               if (!pairs.some((p) => p.level === lvl && !p.unit)) pairs.push({ level: lvl });
             }
             unitMap.set(key, pairs);
+
           } else if (e.type === "unit_floor_plan") {
             const unitLabel = e.name;
             const refKey = e.name.trim().toLowerCase();
@@ -2303,7 +2319,7 @@ export default function WorkbenchProjectDetail() {
       }
     }
 
-    return { levelMap, unitMap, pageUnitPlans, pageLevelPlans };
+    return { levelMap, unitMap, pageUnitPlans, pageLevelPlans, pageLevelDisplayNames };
   }, [rows?.files, rows?.sheets, floorPlansByFile, canonicalLevelNames]);
 
   const pageUnitPlansMap = surveyDerivedMaps.pageUnitPlans;
@@ -2317,21 +2333,32 @@ export default function WorkbenchProjectDetail() {
   // actually contains.
   const mergedPageSpaceMap = useMemo(() => {
     const out = new Map<string, string[]>();
-    const addAll = (key: string, levels: Iterable<string>) => {
+    const addAll = (key: string, levels: Iterable<string>, skipValidity = false) => {
       const arr = out.get(key) || [];
       for (const lvl of levels) {
-        if (!isSpaceValidOnPage(key, lvl)) continue;
+        if (!skipValidity && !isSpaceValidOnPage(key, lvl)) continue;
         if (!arr.includes(lvl)) arr.push(lvl);
       }
       out.set(key, arr);
     };
-    for (const [key, levels] of surveyDerivedMaps.levelMap.entries()) addAll(key, levels);
+    // Prefer raw display names from user-placed / survey bboxes so the badge
+    // matches the label shown inside the drawing modal (e.g. "L06" not
+    // "SIXTH FLOOR"). Fall back to canonicalized levelMap only when a page
+    // has no display-name entry (rare — bbox exists but produced no name).
+    for (const [key, names] of surveyDerivedMaps.pageLevelDisplayNames.entries()) {
+      addAll(key, names, true);
+    }
+    for (const [key, levels] of surveyDerivedMaps.levelMap.entries()) {
+      if (surveyDerivedMaps.pageLevelDisplayNames.has(key)) continue;
+      addAll(key, levels);
+    }
     for (const [key, levels] of pageSpaceMap.entries()) {
-      if (surveyDerivedMaps.levelMap.has(key)) continue;
+      if (surveyDerivedMaps.levelMap.has(key) || surveyDerivedMaps.pageLevelDisplayNames.has(key)) continue;
       addAll(key, levels);
     }
     return out;
   }, [surveyDerivedMaps, pageSpaceMap, pageSpaceValidNames]);
+
 
 
   const mergedPageSpaceUnitMap = useMemo(() => {

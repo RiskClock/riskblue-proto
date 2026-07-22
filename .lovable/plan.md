@@ -1,34 +1,37 @@
-## Diagnosis
+## Root cause
 
-The backend data exists for both files:
-- `A0.03-ASSEMBLIES-Rev.19.1.pdf` has a page 1 manual floor-plan bbox named `New Floor Plan 1`, with the effective type changed to `schematic_level_row`.
-- `A0.04-ASSEMBLIES-Rev.4.1.pdf` has a page 1 manual floor-plan bbox named `New Floor Plan 1`, type `level_floor_plan`.
+The drawing modal shows the raw effective name of the level bbox (`L06`, `SEVENTH FLOOR` — from Scout's `reference_id` or the user-typed override `name`).
 
-The modal shows the bboxes because it reads `floor_plan_overrides` directly.
+The file-list badge instead comes from `mergedPageSpaceMap`, which is built from `surveyDerivedMaps.levelMap`. That map does **not** store the bbox's raw name — it stores the result of `canonicalizeLevels(rawFloor)` (WorkbenchProjectDetail.tsx around lines 2243, 2261, 2268).
 
-The file-list badge is suppressed later by `pageSpaceValidNames` in `src/pages/WorkbenchProjectDetail.tsx`:
-- Any sheet with manual additions is marked as “overridden”.
-- The valid-name set is built from `floors[]` for `level_floor_plan` entries.
-- Manually added plans currently have `floors: []`, while their display name is stored as `name` / `reference_id`.
-- So the valid-name set becomes empty, and `mergedPageSpaceMap` filters out `New Floor Plan 1` even though `surveyDerivedMaps` produced it.
+`canonicalizeLevels` walks the spatial-architect's canonical level list (`canonicalLevelNames`) and replaces the raw string with whichever architect entry matches after token normalization:
 
-## Implementation plan
+- `L06` → normalized token `"l 6"`; architect canonical `"SIXTH FLOOR"` normalizes to `"6"`; the `split(" ").includes(...)` clause at line 2156 matches → badge becomes `SIXTH FLOOR`.
+- `SEVENTH FLOOR` → token `"7"`; architect canonical `"L07"` normalizes to `"l 7"`; same clause matches → badge becomes `L07`.
 
-1. **Fix the validity filter**
-   - Update `pageSpaceValidNames` so manually added `level_floor_plan` and `schematic_level_row` entries use the same effective label fallback as the survey-derived map:
-     - prefer override `floors[]` when present
-     - otherwise use override/name/reference label (`New Floor Plan 1`)
-   - Include `schematic_level_row` alongside `level_floor_plan` in this filter.
+So whichever alias the spatial architect happened to pick wins for the badge, even when the bbox is user-placed and clearly named something else. That's why the modal and the badge disagree.
 
-2. **Use materialized floor-plan data consistently**
-   - When building the valid-name set, materialize added/manual plans with their per-plan overrides before checking type/name.
-   - This handles cases like A0.03 where the `__added_unit_plans` entry says `level_floor_plan` but the per-plan override changes it to `schematic_level_row`.
+Canonicalization is still needed for annotation-to-space attribution (rolling annotations up to the architect's space list). It should not, however, override the label that gets shown to the user for a user-placed level bbox.
 
-3. **Keep the scope narrow**
-   - Do not change how bboxes are stored.
-   - Do not alter Scout/spatial hierarchy behavior.
-   - Only fix the file-list badge suppression path.
+## Fix
 
-4. **Verify after implementation**
-   - Confirm from source that `pageSpaceValidNames` now admits `New Floor Plan 1` for both added plan types.
-   - Check the live workbench page for the two files and verify the badge appears on the single-page file rows.
+In `surveyDerivedMaps` (WorkbenchProjectDetail.tsx ~2166–2306), track the display name alongside the canonical name for each level/schematic bbox:
+
+1. For every `level_floor_plan` / `schematic_level_row` effective entry, compute `displayFloors`:
+   - If `e.floors` came from Scout with real values, use those raw strings.
+   - Otherwise fall back to `e.name` (the user-typed override / `reference_id`).
+2. Add a new `pageLevelDisplayNames: Map<string, string[]>` populated with those `displayFloors` (deduped, in insertion order).
+3. Keep the existing canonicalized `levelMap` / `unitMap` untouched so annotation attribution and the threat report continue to roll up to the architect's spaces.
+4. In `mergedPageSpaceMap` (~2318), when a page has any survey-derived level entry, prefer the new `pageLevelDisplayNames` for that page instead of `levelMap`. Only fall back to the canonical/architect names for pages that have no user-placed bbox.
+5. Leave `spacesForSheet` / `renderSpaceBadge` unchanged — they'll automatically read the display names via `mergedPageSpaceMap`.
+
+## Result
+
+- Modal shows `L06` → file-list badge shows `L06`.
+- Modal shows `SEVENTH FLOOR` → badge shows `SEVENTH FLOOR`.
+- Pages with no user bbox still fall back to the spatial-architect names, so scout-only files keep their current behavior.
+- Annotation rollup / threat report attribution is unchanged because the canonical `levelMap` used for that path is untouched.
+
+## Files
+
+- `src/pages/WorkbenchProjectDetail.tsx` — extend `surveyDerivedMaps` return shape, plumb display names into `mergedPageSpaceMap`.
