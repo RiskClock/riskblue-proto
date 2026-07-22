@@ -2166,6 +2166,11 @@ export default function WorkbenchProjectDetail() {
   const surveyDerivedMaps = useMemo(() => {
     const levelMap = new Map<string, Set<string>>();
     const unitMap = new Map<string, Array<{ level: string; unit?: string }>>();
+    // Display names for level/schematic bboxes on a page (raw bbox label,
+    // e.g. "L06" or "SEVENTH FLOOR"). Used only for the file-list badge so
+    // it matches the label the user sees in the drawing modal. Annotation
+    // attribution still uses the canonicalized `levelMap` below.
+    const pageLevelDisplayNames = new Map<string, string[]>();
     // Per-page unit floor plans (with bbox + parent levels + per-level counts)
     // for per-annotation bbox-containment attribution in the threat report.
     // A unit listed N times under a level expands to N pairs in the rollup.
@@ -2189,7 +2194,8 @@ export default function WorkbenchProjectDetail() {
     >();
     const files = rows?.files ?? [];
     const sheets = rows?.sheets ?? [];
-    if (files.length === 0) return { levelMap, unitMap, pageUnitPlans, pageLevelPlans };
+    if (files.length === 0) return { levelMap, unitMap, pageUnitPlans, pageLevelPlans, pageLevelDisplayNames };
+
 
     const overridesByFilePage = new Map<string, Record<string, any>>();
     for (const s of sheets) {
