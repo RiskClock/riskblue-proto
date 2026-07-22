@@ -309,10 +309,17 @@ const ProjectWizardContent = () => {
         analysis_request_id: analysisRequest.id,
       });
 
-      if (addedCount === 0 && skippedCount > 0) {
+      const failedCount = failed.length;
+      if (addedCount === 0 && skippedCount > 0 && failedCount === 0) {
         toast({
           title: "No new files added",
           description: `${skippedCount} file${skippedCount === 1 ? "" : "s"} already uploaded.`,
+        });
+      } else if (failedCount > 0) {
+        toast({
+          title: `${addedCount} of ${addedCount + failedCount} uploaded`,
+          description: `${failedCount} file${failedCount === 1 ? "" : "s"} failed: ${failed.slice(0, 3).map(f => f.name).join(", ")}${failedCount > 3 ? "…" : ""}. Retry to upload the rest.`,
+          variant: "destructive",
         });
       } else {
         toast({
