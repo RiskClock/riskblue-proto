@@ -2200,7 +2200,7 @@ export default function WorkbenchProjectDetail() {
       // annotations under the right level instead of Unassigned.
       const effFloors = (floors && floors.length > 0)
         ? floors
-        : (type === "level_floor_plan" && name ? [name] : []);
+        : ((type === "level_floor_plan" || type === "schematic_level_row") && name ? [name] : []);
       return { type, floors: effFloors, units: units || [], bbox, name };
     };
 
