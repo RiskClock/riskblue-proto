@@ -2236,11 +2236,13 @@ export default function WorkbenchProjectDetail() {
         const key = `${f.name}::${page}`;
         for (const fp of plans) {
           const e = effective(fp, f.id);
-          if (e.type === "level_floor_plan") {
+          if (e.type === "level_floor_plan" || e.type === "schematic_level_row") {
             const canonicalLevels = e.floors.flatMap((l) => canonicalizeLevels(l)).filter(Boolean);
-            const lpArr = pageLevelPlans.get(key) || [];
-            lpArr.push({ levels: canonicalLevels, bbox: e.bbox });
-            pageLevelPlans.set(key, lpArr);
+            if (e.type === "level_floor_plan") {
+              const lpArr = pageLevelPlans.get(key) || [];
+              lpArr.push({ levels: canonicalLevels, bbox: e.bbox });
+              pageLevelPlans.set(key, lpArr);
+            }
 
             const ls = levelMap.get(key) || new Set<string>();
             for (const lvl of canonicalLevels) if (lvl) ls.add(lvl);
