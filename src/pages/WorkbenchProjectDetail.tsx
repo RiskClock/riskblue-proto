@@ -1985,16 +1985,37 @@ export default function WorkbenchProjectDetail() {
         const ovr = sheet.floor_plan_overrides;
         if (!ovr) continue;
         const deleted = getDeletedPlanIds(ovr);
-        const added = getAddedUnitPlans(ovr, sheet.page_index).map(addedUnitPlanToParsed);
-        if (deleted.size === 0 && added.length === 0) continue;
-        const base = parsed.get(sheet.page_index) || [];
-        const kept = [...base.filter((p) => !deleted.has(p.plan_id)), ...added];
+        const base = (parsed.get(sheet.page_index) || []).filter((p) => !deleted.has(p.plan_id));
+        const addedRaw = getAddedUnitPlans(ovr, sheet.page_index).filter(
+          (p) => !deleted.has(p.plan_id),
+        );
+        const added = addedRaw.map(addedUnitPlanToParsed);
+        const knownIds = new Set<string>([
+          ...base.map((p) => p.plan_id),
+          ...addedRaw.map((p) => p.plan_id),
+        ]);
+        const manual = overrideOnlyFloorPlans(ovr, sheet.page_index, knownIds, deleted);
+        if (deleted.size === 0 && added.length === 0 && manual.length === 0) continue;
+        const kept = [...base, ...added, ...manual].map((p) => materializeFloorPlan(p, ovr));
         const key = `${f.name}::${sheet.page_index}`;
         overridden.add(key);
         const valid = new Set<string>();
         for (const p of kept) {
-          if (p.type === "level_floor_plan") {
-            for (const fl of p.floors) valid.add(fl.toLowerCase());
+          if (p.type === "level_floor_plan" || p.type === "schematic_level_row") {
+            const planOverride = (ovr as Record<string, any>)?.[p.plan_id] ?? {};
+            const overrideFloors = Array.isArray(planOverride?.floors)
+              ? planOverride.floors.filter((fl: any): fl is string => typeof fl === "string" && fl.trim().length > 0)
+              : [];
+            const fallbackName =
+              typeof (p as any).__overrideName === "string" && (p as any).__overrideName.trim()
+                ? (p as any).__overrideName.trim()
+                : (p.reference_id || floorPlanDisplayLabel(p));
+            const names = overrideFloors.length > 0
+              ? overrideFloors
+              : (p.floors.length > 0 ? p.floors : [fallbackName]);
+            for (const fl of names) {
+              if (fl && fl.trim()) valid.add(fl.trim().toLowerCase());
+            }
           } else if (p.type === "unit_floor_plan" && p.reference_id) {
             valid.add(p.reference_id.toLowerCase());
           }
