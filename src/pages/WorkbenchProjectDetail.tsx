@@ -2427,17 +2427,35 @@ export default function WorkbenchProjectDetail() {
     const hasSpaces = sps.length > 0;
     if (!hasSpaces && !hierarchyBuilt) return null;
     const label = hasSpaces ? formatSpaceBadge(sps) : "No Space";
-    const cls = hasSpaces
-      ? "bg-sky-500/10 text-sky-700 border-sky-500/30"
-      : "bg-slate-400/15 text-slate-600 border-slate-400/40 opacity-80";
+    const key = `${fileName}::${pageNumber}`;
+    const hasLevel = (pageLevelPlansMap.get(key)?.length ?? 0) > 0;
+    const hasUnit = (pageUnitPlansMap.get(key)?.length ?? 0) > 0;
+    const planColor = hasSpaces
+      ? hasLevel
+        ? awpClassColor("Level Floor Plan")
+        : hasUnit
+          ? awpClassColor("Unit Floor Plan")
+          : null
+      : null;
     const sizeCls =
       opts?.size === "md"
         ? "h-5 px-2 text-[11px]"
         : "h-4 px-1.5 text-[10px]";
+    const style: React.CSSProperties = planColor
+      ? {
+          backgroundColor: `${planColor}1A`,
+          color: planColor,
+          borderColor: `${planColor}4D`,
+        }
+      : {};
+    const fallbackCls = hasSpaces
+      ? "bg-sky-500/10 text-sky-700 border-sky-500/30"
+      : "bg-slate-400/15 text-slate-600 border-slate-400/40 opacity-80";
     const badge = (
       <Badge
         variant="outline"
-        className={`min-w-0 max-w-full leading-none cursor-pointer hover:opacity-80 ${sizeCls} ${cls}`}
+        className={`min-w-0 max-w-full leading-none cursor-pointer hover:opacity-80 ${sizeCls} ${planColor ? "" : fallbackCls}`}
+        style={style}
         onClick={(e) => {
           e.stopPropagation();
           openSpaceEdit(fileName, pageNumber);
