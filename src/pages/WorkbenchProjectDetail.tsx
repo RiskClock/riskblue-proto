@@ -2319,7 +2319,7 @@ export default function WorkbenchProjectDetail() {
       }
     }
 
-    return { levelMap, unitMap, pageUnitPlans, pageLevelPlans };
+    return { levelMap, unitMap, pageUnitPlans, pageLevelPlans, pageLevelDisplayNames };
   }, [rows?.files, rows?.sheets, floorPlansByFile, canonicalLevelNames]);
 
   const pageUnitPlansMap = surveyDerivedMaps.pageUnitPlans;
