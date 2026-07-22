@@ -2423,6 +2423,10 @@ export default function WorkbenchProjectDetail() {
     pageNumber: number,
     opts?: { size?: "sm" | "md" },
   ) => {
+    // Avoid flicker: don't render until file/sheet rows are loaded, otherwise
+    // spatial-architect names briefly show before survey-derived bbox names
+    // (which override them) become available on the next render.
+    if (!rows) return null;
     const sps = spacesForSheet(fileName, pageNumber);
     const hasSpaces = sps.length > 0;
     if (!hasSpaces && !hierarchyBuilt) return null;
