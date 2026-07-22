@@ -2359,6 +2359,8 @@ const FloorPlansPanel = ({
                   >
                     <option value="level_floor_plan">Level floor plan</option>
                     <option value="unit_floor_plan">Unit floor plan</option>
+                    <option value="schematic_level_row">Schematic level row</option>
+                    <option value="typical_detail_block">Typical detail block</option>
                   </select>
                 ) : (
                   <span className="text-[10px] uppercase tracking-wide text-muted-foreground shrink-0">

@@ -224,45 +224,69 @@ const ProjectWizardContent = () => {
         .eq("analysis_request_id", analysisRequest.id);
       const existingNames = new Set((existingFiles || []).map((f: any) => f.name));
 
-      // 2. Upload each new file to 'uploaded-drawings' bucket
+      // 2. Upload each new file to 'uploaded-drawings' bucket.
+      // Bounded concurrency + per-file try/catch so one failure doesn't
+      // abort the rest of the batch (previously an unhandled throw dropped
+      // 60 files down to ~29 uploaded).
       let addedBytes = 0;
       let addedCount = 0;
       let skippedCount = 0;
-      for (const file of Array.from(files)) {
-        if (existingNames.has(file.name)) {
-          skippedCount += 1;
-          continue;
-        }
-        const filePath = `${id}/${analysisRequest.id}/${file.name}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from("uploaded-drawings")
-          .upload(filePath, file);
-
-        if (uploadError) throw uploadError;
-        addedBytes += file.size;
-        addedCount += 1;
-
-        // Extract page count client-side so the workbench list renders
-        // instantly without a lazy pdf.js download on first visit.
-        const isPdf = (file.type || "").includes("pdf") || file.name.toLowerCase().endsWith(".pdf");
-        const pageCount = isPdf
-          ? await (await import("@/lib/pdfProcessor")).extractPdfPageCount(file)
-          : null;
-
-        // 3. Create analysis_request_files record for each new file
-        await supabase.from("analysis_request_files").insert({
-          analysis_request_id: analysisRequest.id,
-          drive_file_id: `manual_${Date.now()}_${file.name}`,
-          name: file.name,
-          mime_type: file.type || "application/octet-stream",
-          size_bytes: file.size,
-          relative_path: file.name,
-          storage_path: filePath,
-          copy_status: "copied",
-          expected_page_count: pageCount ?? null,
-        } as any);
+      const failed: { name: string; reason: string }[] = [];
+      const fileArr = Array.from(files);
+      const toUpload: File[] = [];
+      for (const f of fileArr) {
+        if (existingNames.has(f.name)) skippedCount += 1;
+        else toUpload.push(f);
       }
+
+      const { extractPdfPageCount } = await import("@/lib/pdfProcessor");
+
+      const uploadOne = async (file: File, idx: number) => {
+        const filePath = `${id}/${analysisRequest.id}/${file.name}`;
+        try {
+          const { error: uploadError } = await supabase.storage
+            .from("uploaded-drawings")
+            .upload(filePath, file, { upsert: false });
+          if (uploadError) throw uploadError;
+
+          const isPdf = (file.type || "").includes("pdf") || file.name.toLowerCase().endsWith(".pdf");
+          let pageCount: number | null = null;
+          if (isPdf) {
+            try { pageCount = await extractPdfPageCount(file); } catch { pageCount = null; }
+          }
+
+          const { error: insertErr } = await supabase.from("analysis_request_files").insert({
+            analysis_request_id: analysisRequest.id,
+            drive_file_id: `manual_${Date.now()}_${idx}_${file.name}`,
+            name: file.name,
+            mime_type: file.type || "application/octet-stream",
+            size_bytes: file.size,
+            relative_path: file.name,
+            storage_path: filePath,
+            copy_status: "copied",
+            expected_page_count: pageCount ?? null,
+          } as any);
+          if (insertErr) throw insertErr;
+
+          addedBytes += file.size;
+          addedCount += 1;
+        } catch (e: any) {
+          console.error(`Upload failed for ${file.name}:`, e);
+          failed.push({ name: file.name, reason: e?.message || "unknown error" });
+        }
+      };
+
+      const CONCURRENCY = 4;
+      let cursor = 0;
+      await Promise.all(
+        Array.from({ length: Math.min(CONCURRENCY, toUpload.length) || 0 }, async () => {
+          while (true) {
+            const i = cursor++;
+            if (i >= toUpload.length) return;
+            await uploadOne(toUpload[i], i);
+          }
+        }),
+      );
 
       // 4. Update analysis_request with accumulated counts/size and status
       await supabase
@@ -285,10 +309,17 @@ const ProjectWizardContent = () => {
         analysis_request_id: analysisRequest.id,
       });
 
-      if (addedCount === 0 && skippedCount > 0) {
+      const failedCount = failed.length;
+      if (addedCount === 0 && skippedCount > 0 && failedCount === 0) {
         toast({
           title: "No new files added",
           description: `${skippedCount} file${skippedCount === 1 ? "" : "s"} already uploaded.`,
+        });
+      } else if (failedCount > 0) {
+        toast({
+          title: `${addedCount} of ${addedCount + failedCount} uploaded`,
+          description: `${failedCount} file${failedCount === 1 ? "" : "s"} failed: ${failed.slice(0, 3).map(f => f.name).join(", ")}${failedCount > 3 ? "…" : ""}. Retry to upload the rest.`,
+          variant: "destructive",
         });
       } else {
         toast({
