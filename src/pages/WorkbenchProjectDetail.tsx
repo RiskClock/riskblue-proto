@@ -2310,6 +2310,11 @@ export default function WorkbenchProjectDetail() {
   const pageLevelPlansMap = surveyDerivedMaps.pageLevelPlans;
 
   // Merge survey (primary) with spatial-architect maps (supplemental fallback).
+  // If survey already attributed the page to any level (user-placed bbox), do
+  // NOT supplement with spatial-architect names — the architect often lists
+  // multiple aliases (e.g. "L07" + "SEVENTH FLOOR") for the same physical
+  // level, which would surface extra badge names beyond what the drawing
+  // actually contains.
   const mergedPageSpaceMap = useMemo(() => {
     const out = new Map<string, string[]>();
     const addAll = (key: string, levels: Iterable<string>) => {
@@ -2321,9 +2326,13 @@ export default function WorkbenchProjectDetail() {
       out.set(key, arr);
     };
     for (const [key, levels] of surveyDerivedMaps.levelMap.entries()) addAll(key, levels);
-    for (const [key, levels] of pageSpaceMap.entries()) addAll(key, levels);
+    for (const [key, levels] of pageSpaceMap.entries()) {
+      if (surveyDerivedMaps.levelMap.has(key)) continue;
+      addAll(key, levels);
+    }
     return out;
   }, [surveyDerivedMaps, pageSpaceMap, pageSpaceValidNames]);
+
 
   const mergedPageSpaceUnitMap = useMemo(() => {
     const out = new Map<string, Array<{ level: string; unit?: string }>>();
@@ -2334,9 +2343,13 @@ export default function WorkbenchProjectDetail() {
       out.set(key, arr);
     };
     for (const [key, pairs] of surveyDerivedMaps.unitMap.entries()) for (const p of pairs) push(key, p);
-    for (const [key, pairs] of pageSpaceUnitMap.entries()) for (const p of pairs) push(key, p);
+    for (const [key, pairs] of pageSpaceUnitMap.entries()) {
+      if (surveyDerivedMaps.unitMap.has(key)) continue;
+      for (const p of pairs) push(key, p);
+    }
     return out;
   }, [surveyDerivedMaps, pageSpaceUnitMap, pageSpaceValidNames]);
+
 
   const spacesForSheet = (fileName: string, pageIndex: number): string[] => {
     return mergedPageSpaceMap.get(`${fileName}::${pageIndex}`) || [];
