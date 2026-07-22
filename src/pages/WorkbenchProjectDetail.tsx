@@ -2343,9 +2343,13 @@ export default function WorkbenchProjectDetail() {
       out.set(key, arr);
     };
     for (const [key, pairs] of surveyDerivedMaps.unitMap.entries()) for (const p of pairs) push(key, p);
-    for (const [key, pairs] of pageSpaceUnitMap.entries()) for (const p of pairs) push(key, p);
+    for (const [key, pairs] of pageSpaceUnitMap.entries()) {
+      if (surveyDerivedMaps.unitMap.has(key)) continue;
+      for (const p of pairs) push(key, p);
+    }
     return out;
   }, [surveyDerivedMaps, pageSpaceUnitMap, pageSpaceValidNames]);
+
 
   const spacesForSheet = (fileName: string, pageIndex: number): string[] => {
     return mergedPageSpaceMap.get(`${fileName}::${pageIndex}`) || [];
