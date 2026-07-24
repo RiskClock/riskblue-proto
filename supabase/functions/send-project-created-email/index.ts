@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 const FROM_ADDRESS = "RiskBlue Notifications <notifications@riskclock.com>";
-const TO_ADDRESS = "qbo@riskclock.com";
+const TO_ADDRESSES = ["qbo@riskclock.com", "diogo.beltran@riskclock.com"];
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -164,7 +164,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         from: FROM_ADDRESS,
-        to: [TO_ADDRESS],
+        to: TO_ADDRESSES,
         subject,
         html,
       }),
