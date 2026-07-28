@@ -298,7 +298,7 @@ export const CollaboratorsModal = ({
 
         if (addError) {
           console.error("Error adding collaborators:", addError);
-          throw addError;
+          throw await normalizeFunctionError(addError);
         }
 
         console.log("Add collaborators result:", addResult);
