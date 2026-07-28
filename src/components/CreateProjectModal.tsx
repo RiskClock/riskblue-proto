@@ -245,7 +245,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
           let copied = 0;
           let totalBytes = 0;
           for (const f of filesToUpload) {
-            const path = `${project.id}/${req.id}/${f.name}`;
+            const path = `${project.id}/${req.id}/${toStorageSafeFileName(f.name)}`;
             const { error: upErr } = await supabase.storage
               .from("uploaded-drawings")
               .upload(path, f, { upsert: true });
