@@ -77,6 +77,8 @@ interface ProjectData {
 // Inner component that uses the ProjectContext
 const ProjectWizardContent = () => {
   const { id } = useParams();
+  const { logoUrl: brandLogoUrl } = useBrandLogo();
+
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
