@@ -33,7 +33,8 @@ const ProcoreConnect = () => {
 
         if (invokeError) {
           console.error("Edge function error:", invokeError);
-          setError(invokeError.message || "Failed to get authentication URL");
+          const normalized = await normalizeFunctionError(invokeError);
+          setError(normalized.message || "Failed to get authentication URL");
           return;
         }
 
