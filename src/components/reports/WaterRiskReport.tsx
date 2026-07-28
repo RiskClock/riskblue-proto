@@ -9,6 +9,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsToolti
 
 import riskBlueLogo from "@/assets/logo-riskblue.png";
 import riskBlueLogoWhite from "@/assets/logo-riskblue-white.png";
+import { useBrandLogo } from "@/hooks/useBrandLogo";
 import coverPageBg from "@/assets/img_coverpage.jpg";
 import residentialImg from "@/assets/type1-residential.avif";
 import mixedUseImg from "@/assets/type2-mixeduse.avif";
@@ -166,7 +167,9 @@ interface WaterRiskReportProps {
 }
 
 export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [], executiveSummaryText, preparedBy, createdBy, riskTimelineData }: WaterRiskReportProps) => {
+  const { logoUrl, isCompanyLogo } = useBrandLogo();
   const timelinePhases = getTimelinePhases(data);
+
   
   // Build timeline data for duration calculation
   const timelineData: TimelineData = {
@@ -701,7 +704,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
           
           {/* Center block: Logo + Title + Project Info */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'center' }}>
-            <img src={riskBlueLogoWhite} alt="RiskBlue Logo" style={{ height: '64px', display: 'inline-block', marginBottom: '24px', alignSelf: 'center' }} />
+            <img src={isCompanyLogo ? logoUrl : riskBlueLogoWhite} alt="RiskBlue Logo" style={{ height: '64px', display: 'inline-block', marginBottom: '24px', alignSelf: 'center' }} />
             <p style={{ fontSize: '28px', fontWeight: '600', color: 'white', marginBottom: '20px', letterSpacing: '1px' }}>
               Water Mitigation Guideline
             </p>
@@ -755,7 +758,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-500">Built in</span>
-          <img src={riskBlueLogo} alt="RiskBlue Logo" style={{ height: '32px', display: 'inline-block' }} />
+          <img src={logoUrl} alt="RiskBlue Logo" style={{ height: '32px', display: 'inline-block' }} />
         </div>
       </div>
 

@@ -17,7 +17,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { readableTextOn } from "@/lib/awpColor";
-import riskblueLogoUrl from "@/assets/logo-riskblue.png";
+import { resolveBrandLogoUrl } from "@/lib/brandLogo";
 import { resolveDocumentSource } from "@/components/viewer/hooks/useDocumentSource";
 import { captureOverlayOnly } from "@/lib/overlayOnlyCapture";
 import * as pdfjsLib from "pdfjs-dist";
@@ -433,9 +433,33 @@ export async function runThreatReportExport(
   // ── Cover page ─────────────────────────────────────────────────────────
   // Fetch the RiskBlue logo as PNG bytes for ImageRun.
   let logoBytes: ArrayBuffer | null = null;
+  let logoType: "png" | "jpg" | "gif" | "bmp" = "png";
+  let logoWidth = 240;
+  let logoHeight = 71;
   try {
-    const res = await fetch(riskblueLogoUrl);
-    if (res.ok) logoBytes = await res.arrayBuffer();
+    const brandLogoUrl = await resolveBrandLogoUrl();
+    const res = await fetch(brandLogoUrl);
+    if (res.ok) {
+      const blob = await res.blob();
+      logoBytes = await blob.arrayBuffer();
+      const mime = (blob.type || "").toLowerCase();
+      if (mime.includes("jpeg") || mime.includes("jpg")) logoType = "jpg";
+      else if (mime.includes("gif")) logoType = "gif";
+      else if (mime.includes("bmp")) logoType = "bmp";
+      else if (!mime.includes("png")) logoBytes = null; // unsupported (e.g. svg/webp)
+      // Preserve the logo's aspect ratio, capped to 240x90 px on the cover.
+      if (logoBytes) {
+        try {
+          const bitmap = await createImageBitmap(blob);
+          const ratio = Math.min(240 / bitmap.width, 90 / bitmap.height);
+          logoWidth = Math.round(bitmap.width * ratio);
+          logoHeight = Math.round(bitmap.height * ratio);
+          bitmap.close?.();
+        } catch {
+          /* keep defaults */
+        }
+      }
+    }
   } catch {
     logoBytes = null;
   }
@@ -461,13 +485,13 @@ export async function runThreatReportExport(
       para(
         [
           new ImageRun({
-            type: "png",
+            type: logoType,
             data: logoBytes,
-            transformation: { width: 240, height: 71 },
+            transformation: { width: logoWidth, height: logoHeight },
             altText: {
-              title: "RiskBlue",
-              description: "RiskBlue logo",
-              name: "riskblue-logo",
+              title: "Logo",
+              description: "Report logo",
+              name: "report-logo",
             },
           }),
         ],

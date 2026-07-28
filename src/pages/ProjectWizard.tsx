@@ -9,6 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import { AppHeader } from "@/components/AppHeader";
 import riskBlueLogo from "@/assets/logo-riskblue.png";
+import { resolveBrandLogoUrl } from "@/lib/brandLogo";
+import { useBrandLogo } from "@/hooks/useBrandLogo";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import * as AccordionPrimitive from "@radix-ui/react-accordion";
@@ -75,6 +77,8 @@ interface ProjectData {
 // Inner component that uses the ProjectContext
 const ProjectWizardContent = () => {
   const { id } = useParams();
+  const { logoUrl: brandLogoUrl } = useBrandLogo();
+
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -1419,7 +1423,7 @@ const ProjectWizardContent = () => {
     <div className="min-h-screen bg-background">
       {/* Print-only header */}
       <div className="print-header">
-        <img src={riskBlueLogo} alt="RiskBlue" />
+        <img src={brandLogoUrl} alt="Report logo" />
       </div>
       
       <AppHeader
@@ -1838,7 +1842,7 @@ const ProjectWizardContent = () => {
                     await new Promise(resolve => setTimeout(resolve, 2000));
                     
                     const { generatePdfFromElement, getImageBase64 } = await import('@/lib/pdfExporter');
-                    const logoBase64 = await getImageBase64(riskBlueLogo);
+                    const logoBase64 = await getImageBase64(await resolveBrandLogoUrl());
                     
                     const coverEl = reportContainer.querySelector('#cover-page') as HTMLElement | null;
                     const bodyEl = reportContainer.querySelector('#report-body') as HTMLElement || reportContainer;
@@ -1935,7 +1939,7 @@ const ProjectWizardContent = () => {
                     await new Promise(resolve => setTimeout(resolve, 2000));
                     
                     const { generatePdfFromElement, getImageBase64 } = await import('@/lib/pdfExporter');
-                    const logoBase64 = await getImageBase64(riskBlueLogo);
+                    const logoBase64 = await getImageBase64(await resolveBrandLogoUrl());
                     
                     const coverElProcore = reportContainer.querySelector('#cover-page') as HTMLElement | null;
                     const bodyElProcore = reportContainer.querySelector('#report-body') as HTMLElement || reportContainer;
@@ -2036,7 +2040,7 @@ const ProjectWizardContent = () => {
                       await new Promise(resolve => setTimeout(resolve, 2000));
                       
                       const { generatePdfFromElement, getImageBase64 } = await import('@/lib/pdfExporter');
-                      const logoBase64 = await getImageBase64(riskBlueLogo);
+                      const logoBase64 = await getImageBase64(await resolveBrandLogoUrl());
                       
                       const coverElEpic = reportContainer.querySelector('#cover-page') as HTMLElement | null;
                       const bodyElEpic = reportContainer.querySelector('#report-body') as HTMLElement || reportContainer;
