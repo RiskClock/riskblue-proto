@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2, CheckCircle2, Upload, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeFunctionError } from "@/lib/functionsError";
 import epicIcon from "@/assets/logo_appliedepic.png";
 
 interface EpicFolder {
@@ -54,7 +55,7 @@ export const AppliedEpicExportDialog = ({
       const { data, error: fnError } = await supabase.functions.invoke("applied-epic-api", {
         body: { action: "list-folders" },
       });
-      if (fnError) throw new Error(fnError.message);
+      if (fnError) throw await normalizeFunctionError(fnError);
       if (data?.error) throw new Error(data.error);
       const rawFolders = data?.folders;
       const normalizedFolders = Array.isArray(rawFolders)
@@ -115,7 +116,7 @@ export const AppliedEpicExportDialog = ({
         }
       );
 
-      if (fnError) throw new Error(fnError.message);
+      if (fnError) throw await normalizeFunctionError(fnError);
       if (data?.error) throw new Error(data.error);
 
       setSuccess(true);

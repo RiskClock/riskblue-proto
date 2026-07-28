@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeFunction } from "@/lib/functionsError";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
@@ -313,12 +314,12 @@ const UserManagement = () => {
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin-users"],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("admin-users", {
-        body: { action: "list" },
-      });
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || "Failed to load users");
-      return data as { users: UserRow[]; companies: string[]; tags: TagOption[]; all_projects: ProjectOption[] };
+      return await invokeFunction<{
+        users: UserRow[];
+        companies: string[];
+        tags: TagOption[];
+        all_projects: ProjectOption[];
+      }>("admin-users", { body: { action: "list" } });
     },
     enabled: isInternal,
   });
@@ -483,12 +484,7 @@ const UserManagement = () => {
   } | null>(null);
 
   // ---- mutations ----
-  const invokeAction = async (body: any) => {
-    const { data, error } = await supabase.functions.invoke("admin-users", { body });
-    if (error) throw error;
-    if (!data?.success) throw new Error(data?.error || "Action failed");
-    return data;
-  };
+  const invokeAction = async (body: any) => invokeFunction("admin-users", { body });
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin-users"] });
 
@@ -499,7 +495,12 @@ const UserManagement = () => {
       setCreateOpen(false);
       refresh();
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: any) =>
+      toast({
+        title: e?.status === 409 ? "Email already in use" : "Couldn't create user",
+        description: e?.message,
+        variant: "destructive",
+      }),
   });
   const updateMutation = useMutation({
     mutationFn: invokeAction,
@@ -508,7 +509,8 @@ const UserManagement = () => {
       setEditing(null);
       refresh();
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: any) =>
+      toast({ title: "Couldn't update user", description: e?.message, variant: "destructive" }),
   });
   const actionMutation = useMutation({
     mutationFn: invokeAction,
@@ -523,7 +525,8 @@ const UserManagement = () => {
       setConfirmAction(null);
       refresh();
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: any) =>
+      toast({ title: "Action failed", description: e?.message, variant: "destructive" }),
   });
 
   if (!user) return null;

@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeFunctionError } from "@/lib/functionsError";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -239,7 +240,7 @@ export default function Configuration() {
       const { data, error } = await supabase.functions.invoke("resolve-drive-doc", {
         body: { fileUrl: url, exportContent: true },
       });
-      if (error) throw error;
+      if (error) throw await normalizeFunctionError(error);
       if (data?.error) throw new Error(data.error);
 
       const existing = promptsByName.get(awpName);
@@ -289,7 +290,7 @@ export default function Configuration() {
       const { data, error } = await supabase.functions.invoke("resolve-drive-doc", {
         body: { fileUrl: prompt.drive_file_id, exportContent: true },
       });
-      if (error) throw error;
+      if (error) throw await normalizeFunctionError(error);
       if (data?.error) throw new Error(data.error);
 
       await supabase.from("awp_class_prompts").update({
@@ -318,7 +319,7 @@ export default function Configuration() {
       const { data, error } = await supabase.functions.invoke("resolve-drive-doc", {
         body: { fileUrl: url, exportContent: true },
       });
-      if (error) throw error;
+      if (error) throw await normalizeFunctionError(error);
       if (data?.error) throw new Error(data.error);
 
       const existing = promptsByName.get(awpName);
@@ -368,7 +369,7 @@ export default function Configuration() {
       const { data, error } = await supabase.functions.invoke("resolve-drive-doc", {
         body: { fileUrl: prompt.triage_drive_file_id, exportContent: true },
       });
-      if (error) throw error;
+      if (error) throw await normalizeFunctionError(error);
       if (data?.error) throw new Error(data.error);
 
       await supabase.from("awp_class_prompts").update({

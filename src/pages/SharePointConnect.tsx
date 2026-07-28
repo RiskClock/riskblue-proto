@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeFunctionError } from "@/lib/functionsError";
 import { Loader2 } from "lucide-react";
 
 /**
@@ -26,7 +27,8 @@ const SharePointConnect = () => {
         });
 
         if (invokeError) {
-          setError(invokeError.message || "Failed to get authentication URL");
+          const normalized = await normalizeFunctionError(invokeError);
+          setError(normalized.message || "Failed to get authentication URL");
           return;
         }
         if (data?.error) { setError(data.error); return; }

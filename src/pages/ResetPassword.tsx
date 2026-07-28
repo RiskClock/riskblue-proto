@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeFunctionError } from "@/lib/functionsError";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,7 +67,7 @@ const ResetPassword = () => {
         body: { token, newPassword: password }
       });
 
-      if (error) throw error;
+      if (error) throw await normalizeFunctionError(error);
       if (data && !data.success) throw new Error(data.error || 'Failed to reset password');
 
       toast({

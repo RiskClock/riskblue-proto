@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Trash2, Plus, Loader2, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeFunctionError } from "@/lib/functionsError";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
@@ -84,17 +85,17 @@ export const CollaboratorsModal = ({
         { method: "GET" }
       );
 
-      if (fetchError) throw fetchError;
+      if (fetchError) throw await normalizeFunctionError(fetchError);
       if (!result?.success) throw new Error(result?.error || "Failed to fetch collaborators");
 
       const allCollaborators: Collaborator[] = result.collaborators || [];
       setCollaborators(allCollaborators);
       setOriginalCollaborators(allCollaborators);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching collaborators:", error);
       toast({
-        title: "Error",
-        description: "Failed to load collaborators",
+        title: "Couldn't load collaborators",
+        description: error?.message || "Failed to load collaborators",
         variant: "destructive",
       });
     } finally {
@@ -297,7 +298,7 @@ export const CollaboratorsModal = ({
 
         if (addError) {
           console.error("Error adding collaborators:", addError);
-          throw addError;
+          throw await normalizeFunctionError(addError);
         }
 
         console.log("Add collaborators result:", addResult);
