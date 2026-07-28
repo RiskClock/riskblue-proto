@@ -240,7 +240,7 @@ export default function Configuration() {
       const { data, error } = await supabase.functions.invoke("resolve-drive-doc", {
         body: { fileUrl: url, exportContent: true },
       });
-      if (error) throw error;
+      if (error) throw await normalizeFunctionError(error);
       if (data?.error) throw new Error(data.error);
 
       const existing = promptsByName.get(awpName);
@@ -290,7 +290,7 @@ export default function Configuration() {
       const { data, error } = await supabase.functions.invoke("resolve-drive-doc", {
         body: { fileUrl: prompt.drive_file_id, exportContent: true },
       });
-      if (error) throw error;
+      if (error) throw await normalizeFunctionError(error);
       if (data?.error) throw new Error(data.error);
 
       await supabase.from("awp_class_prompts").update({
@@ -319,7 +319,7 @@ export default function Configuration() {
       const { data, error } = await supabase.functions.invoke("resolve-drive-doc", {
         body: { fileUrl: url, exportContent: true },
       });
-      if (error) throw error;
+      if (error) throw await normalizeFunctionError(error);
       if (data?.error) throw new Error(data.error);
 
       const existing = promptsByName.get(awpName);
@@ -369,7 +369,7 @@ export default function Configuration() {
       const { data, error } = await supabase.functions.invoke("resolve-drive-doc", {
         body: { fileUrl: prompt.triage_drive_file_id, exportContent: true },
       });
-      if (error) throw error;
+      if (error) throw await normalizeFunctionError(error);
       if (data?.error) throw new Error(data.error);
 
       await supabase.from("awp_class_prompts").update({

@@ -2727,7 +2727,7 @@ export default function WorkbenchProjectDetail() {
       const { error } = await supabase.functions.invoke("run-analysis-pipeline", {
         body,
       });
-      if (error) throw error;
+      if (error) throw await normalizeFunctionError(error);
       if (phase === "triage") toast({ title: "Triage started" });
       else if (phase === "analyze") toast({ title: "Analyze started" });
       else if (isResumeExtract) toast({ title: "Resuming Extract Context" });
@@ -3118,7 +3118,7 @@ export default function WorkbenchProjectDetail() {
           scopedSheetIds: [sheetId],
         },
       });
-      if (error) throw error;
+      if (error) throw await normalizeFunctionError(error);
       toast({ title: phase === "triage" ? "Triage started for cell" : "Analyze started for cell" });
       queryClient.invalidateQueries({ queryKey: ["workbench-triage", requestId] });
       queryClient.invalidateQueries({ queryKey: ["workbench-analyze", requestId] });
@@ -3194,7 +3194,7 @@ export default function WorkbenchProjectDetail() {
         body: { analysisRequestId: requestId },
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (error) throw error;
+      if (error) throw await normalizeFunctionError(error);
       if ((data as any)?.error) throw new Error((data as any).error);
       toast({ title: "Spatial Architect complete" });
       queryClient.invalidateQueries({
@@ -3651,7 +3651,7 @@ export default function WorkbenchProjectDetail() {
                         const { data, error } = await supabase.functions.invoke("survey-pages", {
                           body: { analysisRequestId: requestId, fileId: f.id },
                         });
-                        if (error) throw error;
+                        if (error) throw await normalizeFunctionError(error);
                         if ((data as any)?.error) throw new Error((data as any).error);
 
                         // Poll for completion (background job writes

@@ -55,7 +55,7 @@ const AcceptInvite = () => {
         });
 
         if (invokeError) {
-          throw new Error(invokeError.message);
+          throw await normalizeFunctionError(invokeError);
         }
 
         if (!data.success && data.error) {

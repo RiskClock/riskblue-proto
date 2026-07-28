@@ -97,7 +97,7 @@ const Auth = () => {
         body: { email }
       });
 
-      if (error) throw error;
+      if (error) throw await normalizeFunctionError(error);
       if (data && !data.success) throw new Error(data.error || 'Failed to send reset email');
       
       setResetEmailSent(true);

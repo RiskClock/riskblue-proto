@@ -67,7 +67,7 @@ const ResetPassword = () => {
         body: { token, newPassword: password }
       });
 
-      if (error) throw error;
+      if (error) throw await normalizeFunctionError(error);
       if (data && !data.success) throw new Error(data.error || 'Failed to reset password');
 
       toast({

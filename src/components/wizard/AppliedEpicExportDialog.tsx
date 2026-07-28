@@ -55,7 +55,7 @@ export const AppliedEpicExportDialog = ({
       const { data, error: fnError } = await supabase.functions.invoke("applied-epic-api", {
         body: { action: "list-folders" },
       });
-      if (fnError) throw new Error(fnError.message);
+      if (fnError) throw await normalizeFunctionError(fnError);
       if (data?.error) throw new Error(data.error);
       const rawFolders = data?.folders;
       const normalizedFolders = Array.isArray(rawFolders)
@@ -116,7 +116,7 @@ export const AppliedEpicExportDialog = ({
         }
       );
 
-      if (fnError) throw new Error(fnError.message);
+      if (fnError) throw await normalizeFunctionError(fnError);
       if (data?.error) throw new Error(data.error);
 
       setSuccess(true);
