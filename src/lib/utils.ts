@@ -45,3 +45,19 @@ export function normalizeControlName(nameOrId: string): string {
   // Otherwise return as-is (already a proper name)
   return nameOrId;
 }
+
+/**
+ * Supabase Storage rejects object keys containing characters outside a narrow
+ * safe set (e.g. `~`, `#`, `?`, `%`, control chars) with an "Invalid key"
+ * error. Sanitize the file name used for the storage path while keeping the
+ * original name for display in the database.
+ */
+export function toStorageSafeFileName(name: string): string {
+  const cleaned = (name || "file")
+    .normalize("NFKD")
+    .replace(/[^A-Za-z0-9!\-_.*'() ]/g, "_")
+    .replace(/_{2,}/g, "_")
+    .replace(/^[._]+/, "")
+    .trim();
+  return cleaned.length ? cleaned.slice(-180) : `file_${Date.now()}`;
+}

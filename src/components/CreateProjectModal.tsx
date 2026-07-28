@@ -1,3 +1,4 @@
+import { toStorageSafeFileName } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -245,7 +246,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
           let copied = 0;
           let totalBytes = 0;
           for (const f of filesToUpload) {
-            const path = `${project.id}/${req.id}/${f.name}`;
+            const path = `${project.id}/${req.id}/${toStorageSafeFileName(f.name)}`;
             const { error: upErr } = await supabase.storage
               .from("uploaded-drawings")
               .upload(path, f, { upsert: true });

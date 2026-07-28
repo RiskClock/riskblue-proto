@@ -1,3 +1,4 @@
+import { toStorageSafeFileName } from "@/lib/utils";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -246,7 +247,7 @@ const ProjectWizardContent = () => {
       const { extractPdfPageCount } = await import("@/lib/pdfProcessor");
 
       const uploadOne = async (file: File, idx: number) => {
-        const filePath = `${id}/${analysisRequest.id}/${file.name}`;
+        const filePath = `${id}/${analysisRequest.id}/${toStorageSafeFileName(file.name)}`;
         try {
           const { error: uploadError } = await supabase.storage
             .from("uploaded-drawings")
