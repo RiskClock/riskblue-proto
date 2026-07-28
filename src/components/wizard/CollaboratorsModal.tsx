@@ -85,17 +85,17 @@ export const CollaboratorsModal = ({
         { method: "GET" }
       );
 
-      if (fetchError) throw fetchError;
+      if (fetchError) throw await normalizeFunctionError(fetchError);
       if (!result?.success) throw new Error(result?.error || "Failed to fetch collaborators");
 
       const allCollaborators: Collaborator[] = result.collaborators || [];
       setCollaborators(allCollaborators);
       setOriginalCollaborators(allCollaborators);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching collaborators:", error);
       toast({
-        title: "Error",
-        description: "Failed to load collaborators",
+        title: "Couldn't load collaborators",
+        description: error?.message || "Failed to load collaborators",
         variant: "destructive",
       });
     } finally {
