@@ -525,7 +525,8 @@ const UserManagement = () => {
       setConfirmAction(null);
       refresh();
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: any) =>
+      toast({ title: "Action failed", description: e?.message, variant: "destructive" }),
   });
 
   if (!user) return null;
