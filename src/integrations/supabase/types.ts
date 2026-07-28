@@ -998,18 +998,27 @@ export type Database = {
       company_logos: {
         Row: {
           company: string
+          created_at: string
+          id: string
+          is_current: boolean
           storage_path: string
           updated_at: string
           updated_by: string | null
         }
         Insert: {
           company: string
+          created_at?: string
+          id?: string
+          is_current?: boolean
           storage_path: string
           updated_at?: string
           updated_by?: string | null
         }
         Update: {
           company?: string
+          created_at?: string
+          id?: string
+          is_current?: boolean
           storage_path?: string
           updated_at?: string
           updated_by?: string | null
