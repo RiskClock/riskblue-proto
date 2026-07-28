@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { LogOut, Settings, BarChart3, Shield, Coins, Users, KeyRound, UserCog, LayoutGrid, Info } from "lucide-react";
-import riskBlueLogo from "@/assets/logo-riskblue.png";
+import { useBrandLogo } from "@/hooks/useBrandLogo";
 
 import { useCredits } from "@/hooks/useCredits";
 import { BuyCreditsModal } from "@/components/BuyCreditsModal";
@@ -32,6 +32,7 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
   const navigate = useNavigate();
   const location = useLocation();
   const { getInitial, avatarUrl, displayName } = useUserDisplayName();
+  const { logoUrl, isCompanyLogo, companyName } = useBrandLogo();
 
   const { balance: credits } = useCredits();
   const [buyOpen, setBuyOpen] = useState(false);
@@ -48,8 +49,8 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
       <div className="container mx-auto px-6 py-4 flex items-center justify-between gap-4">
         <div className="flex items-center gap-4 min-w-0">
           <img
-            src={riskBlueLogo}
-            alt="RiskBlue"
+            src={logoUrl}
+            alt={isCompanyLogo ? `${companyName ?? "Company"} logo` : "RiskBlue"}
             className="h-8 cursor-pointer shrink-0"
             onClick={() => navigate("/projects")}
           />
