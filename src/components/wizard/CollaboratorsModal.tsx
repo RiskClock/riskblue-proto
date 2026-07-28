@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Trash2, Plus, Loader2, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeFunctionError } from "@/lib/functionsError";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
