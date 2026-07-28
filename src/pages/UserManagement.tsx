@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CompanyLogoField } from "@/components/users/CompanyLogoField";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -1399,6 +1400,10 @@ function EditUserDialog({
           <div>
             <Label>Company</Label>
             <CompanyCombobox value={company} onChange={setCompany} companies={companies} />
+            <div className="mt-3">
+              <Label className="text-xs text-muted-foreground">Company logo (optional)</Label>
+              <CompanyLogoField company={company} />
+            </div>
           </div>
           <div>
             <Label>Tags</Label>
