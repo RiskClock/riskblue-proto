@@ -484,12 +484,7 @@ const UserManagement = () => {
   } | null>(null);
 
   // ---- mutations ----
-  const invokeAction = async (body: any) => {
-    const { data, error } = await supabase.functions.invoke("admin-users", { body });
-    if (error) throw error;
-    if (!data?.success) throw new Error(data?.error || "Action failed");
-    return data;
-  };
+  const invokeAction = async (body: any) => invokeFunction("admin-users", { body });
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin-users"] });
 
@@ -500,7 +495,12 @@ const UserManagement = () => {
       setCreateOpen(false);
       refresh();
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: any) =>
+      toast({
+        title: e?.status === 409 ? "Email already in use" : "Couldn't create user",
+        description: e?.message,
+        variant: "destructive",
+      }),
   });
   const updateMutation = useMutation({
     mutationFn: invokeAction,
