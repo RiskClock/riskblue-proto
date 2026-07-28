@@ -12,6 +12,7 @@ import { generatePdfFromElement, getImageBase64, waitForImages, proxyImageToData
 import { ProcoreExportDialog } from "@/components/wizard/ProcoreExportDialog";
 import { AppliedEpicExportDialog } from "@/components/wizard/AppliedEpicExportDialog";
 import riskBlueLogo from "@/assets/logo-riskblue.png";
+import { resolveBrandLogoUrl } from "@/lib/brandLogo";
 import procoreIcon from "@/assets/icon_procore.png";
 import epicIcon from "@/assets/logo_appliedepic.png";
 import ams360Icon from "@/assets/logo_ams360.png";
@@ -276,7 +277,7 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
       }
 
       // Get the logo as base64 for footer
-      const logoBase64 = await getImageBase64(riskBlueLogo);
+      const logoBase64 = await getImageBase64(await resolveBrandLogoUrl());
       
       try {
         // Find the cover page element for separate capture
@@ -372,7 +373,7 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
     await new Promise(requestAnimationFrame);
     await new Promise(requestAnimationFrame);
     await waitForImages(reportContainer);
-    const logoBase64 = await getImageBase64(riskBlueLogo);
+    const logoBase64 = await getImageBase64(await resolveBrandLogoUrl());
 
     try {
       const coverEl = reportContainer.querySelector('#cover-page') as HTMLElement | null;
