@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2, CheckCircle2, Upload, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeFunctionError } from "@/lib/functionsError";
 import epicIcon from "@/assets/logo_appliedepic.png";
 
 interface EpicFolder {

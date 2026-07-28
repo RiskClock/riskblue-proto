@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeFunctionError } from "@/lib/functionsError";
 import { Loader2 } from "lucide-react";
 
 /**

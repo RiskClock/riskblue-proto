@@ -98,7 +98,7 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
       const { data, error } = await supabase.functions.invoke("get-stripe-policies", {
         body: { environment: stripeEnvironment },
       });
-      if (error) throw error;
+      if (error) throw await normalizeFunctionError(error);
       if (data?.error) throw new Error(data.error);
       if (!data?.tos || !data?.privacy) throw new Error("Policies missing from response");
       setTos(data.tos);
@@ -139,7 +139,7 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
           privacyVersion: privacy?.version,
         },
       });
-      if (error) throw error;
+      if (error) throw await normalizeFunctionError(error);
       if (!data?.clientSecret) throw new Error("No clientSecret returned");
       setClientSecret(data.clientSecret);
     } catch (e) {
