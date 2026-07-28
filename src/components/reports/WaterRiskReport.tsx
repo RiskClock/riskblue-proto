@@ -167,7 +167,9 @@ interface WaterRiskReportProps {
 }
 
 export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [], executiveSummaryText, preparedBy, createdBy, riskTimelineData }: WaterRiskReportProps) => {
+  const { logoUrl, isCompanyLogo } = useBrandLogo();
   const timelinePhases = getTimelinePhases(data);
+
   
   // Build timeline data for duration calculation
   const timelineData: TimelineData = {
