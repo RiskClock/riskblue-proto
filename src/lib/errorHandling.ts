@@ -1,8 +1,13 @@
+import { FunctionInvokeError } from "./functionsError";
+
 /**
  * Maps database/API errors to user-friendly messages
  * Prevents exposure of internal implementation details
  */
 export const getUserFriendlyError = (error: any): string => {
+  // Errors raised by our own edge functions are already user-safe and specific.
+  if (error instanceof FunctionInvokeError && error.message) return error.message;
+
   // Handle Supabase/PostgreSQL error codes
   if (error.code) {
     switch (error.code) {
