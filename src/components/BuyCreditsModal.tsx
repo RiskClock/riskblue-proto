@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Coins, Loader2, Lock, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeFunctionError } from "@/lib/functionsError";
 import { useToast } from "@/hooks/use-toast";
 import { useCredits } from "@/hooks/useCredits";
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
