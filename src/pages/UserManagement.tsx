@@ -314,12 +314,12 @@ const UserManagement = () => {
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin-users"],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("admin-users", {
-        body: { action: "list" },
-      });
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || "Failed to load users");
-      return data as { users: UserRow[]; companies: string[]; tags: TagOption[]; all_projects: ProjectOption[] };
+      return await invokeFunction<{
+        users: UserRow[];
+        companies: string[];
+        tags: TagOption[];
+        all_projects: ProjectOption[];
+      }>("admin-users", { body: { action: "list" } });
     },
     enabled: isInternal,
   });
