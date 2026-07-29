@@ -4708,14 +4708,6 @@ export default function WorkbenchProjectDetail() {
                             {/* Per-page sub-rows (only when multi-page AND expanded) - matches first table */}
                             {!singlePage && isExpanded && count > 0 &&
                               Array.from({ length: count }, (_, i) => i + 1).map((p) => {
-                                const pagePlans =
-                                  floorPlansByFile.get(row.id)?.get(p) ?? [];
-                                const levelPlans = pagePlans.filter(
-                                  (p) => p.type === "level_floor_plan",
-                                );
-                                const unitPlans = pagePlans.filter(
-                                  (p) => p.type === "unit_floor_plan",
-                                );
                                 return (
                                   <TableRow
                                     key={`${row.id}:${p}`}
@@ -4732,54 +4724,7 @@ export default function WorkbenchProjectDetail() {
                                         <span className="text-muted-foreground shrink-0">
                                           Page {p}
                                         </span>
-                                        {!processingLock && (() => {
-                                          if (levelPlans.length === 0) return null;
-                                          const c = awpClassColor("Level Floor Plan");
-                                          const labels = levelPlans.map((lvl) => {
-                                            // Badge must mirror the bbox label
-                                            // shown in the drawing modal:
-                                            // user override → reference_id →
-                                            // (last resort) Scout floors.
-                                            const overrideName = (lvl as any).__overrideName as
-                                              | string
-                                              | undefined;
-                                            if (overrideName?.trim()) return overrideName.trim();
-                                            if (lvl.reference_id?.trim()) return lvl.reference_id.trim();
-                                            return (
-                                              (lvl.floors && lvl.floors.length > 0
-                                                ? formatLevelSetLabel(lvl.floors)
-                                                : "") || floorPlanDisplayLabel(lvl)
-                                            );
-                                          });
-                                          const consolidated = consolidateLevelLabels(labels);
-                                          return consolidated.map((label, i) => (
-                                            <Badge
-                                              key={`lvl-${i}-${label}`}
-                                              variant="outline"
-                                              className="h-5 px-1.5 text-[10px]"
-                                              style={{ backgroundColor: softBgFrom(c), color: c, borderColor: softBgFrom(c, 0.5) }}
-                                            >
-                                              {label}
-                                            </Badge>
-                                          ));
-                                        })()}
-                                        {!processingLock && unitPlans.length > 0 && (() => {
-                                          const c = awpClassColor("Unit Floor Plan");
-                                          return (
-                                            <Badge
-                                              variant="outline"
-                                              className="h-5 px-1.5 text-[10px]"
-                                              style={{ backgroundColor: softBgFrom(c), color: c, borderColor: softBgFrom(c, 0.5) }}
-                                            >
-                                              {unitPlans.length} unit plan{unitPlans.length === 1 ? "" : "s"}
-                                            </Badge>
-                                          );
-                                        })()}
-                                        {!processingLock &&
-                                          renderOtherPlanBadges(row.id, p, [
-                                            "schematic_level_row",
-                                            "typical_detail_block",
-                                          ])}
+                                        {!processingLock && renderPlanBadges(row.id, p)}
 
                                       </div>
                                     </TableCell>
