@@ -2535,6 +2535,45 @@ export default function WorkbenchProjectDetail() {
     );
   };
 
+  /** Human label for a floor plan, mirroring the bbox label in the modal. */
+  const planBadgeLabel = (fp: ParsedFloorPlan): string => {
+    const overrideName = (fp as any).__overrideName as string | undefined;
+    if (overrideName?.trim()) return overrideName.trim();
+    if (fp.reference_id?.trim()) return fp.reference_id.trim();
+    return floorPlanDisplayLabel(fp);
+  };
+
+  /**
+   * Badges for floor-plan types that aren't covered by the level/unit badges
+   * (schematic level rows, typical detail blocks). Colors match the bbox
+   * colors used inside the drawing modal (hashed from the raw type string).
+   */
+  const renderOtherPlanBadges = (
+    fileId: string,
+    page: number,
+    types: string[],
+  ) => {
+    const plans = (floorPlansByFile.get(fileId)?.get(page) ?? []).filter((p) =>
+      types.includes(p.type),
+    );
+    if (plans.length === 0) return null;
+    return plans.map((fp, i) => {
+      const c = awpClassColor(fp.type);
+      return (
+        <Badge
+          key={`${fp.type}-${i}-${fp.plan_id}`}
+          variant="outline"
+          className="h-5 px-1.5 text-[10px] max-w-[220px]"
+          style={{ backgroundColor: softBgFrom(c), color: c, borderColor: softBgFrom(c, 0.5) }}
+        >
+          <span className="truncate block">{planBadgeLabel(fp)}</span>
+        </Badge>
+      );
+    });
+  };
+
+
+
 
   const openManage = () => {
     setDraftCols(enabledCols);
@@ -4570,6 +4609,8 @@ export default function WorkbenchProjectDetail() {
                                     </span>
                                   )}
                                   {singlePage && !processingLock && renderSpaceBadge(row.name, 1)}
+                                  {singlePage && !processingLock &&
+                                    renderOtherPlanBadges(row.id, 1, ["typical_detail_block"])}
                                 </div>
                               </TableCell>
                               {enabledCols.map((name) => {
@@ -4668,6 +4709,11 @@ export default function WorkbenchProjectDetail() {
                                             </Badge>
                                           );
                                         })()}
+                                        {!processingLock &&
+                                          renderOtherPlanBadges(row.id, p, [
+                                            "schematic_level_row",
+                                            "typical_detail_block",
+                                          ])}
 
                                       </div>
                                     </TableCell>
