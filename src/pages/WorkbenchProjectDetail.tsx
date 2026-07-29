@@ -4709,6 +4709,11 @@ export default function WorkbenchProjectDetail() {
                                             </Badge>
                                           );
                                         })()}
+                                        {!processingLock &&
+                                          renderOtherPlanBadges(row.id, p, [
+                                            "schematic_level_row",
+                                            "typical_detail_block",
+                                          ])}
 
                                       </div>
                                     </TableCell>
