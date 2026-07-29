@@ -3036,6 +3036,25 @@ export default function WorkbenchProjectDetail() {
     return m;
   }, [floorPlansByFile]);
 
+  // Currently running agent for this project (single-slot lock).
+  const { data: activeAgentRun, refetch: refetchActiveAgentRun } = useQuery({
+    queryKey: ["project-agent-run", projectId],
+    enabled: !!projectId,
+    refetchInterval: 15000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("project_agent_runs" as any)
+        .select("id, agent, triggered_by_email, started_at, heartbeat_at")
+        .eq("project_id", projectId!)
+        .eq("status", "running")
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return (data as any) ?? null;
+    },
+  });
+
+
   const runRiskRadar = useCallback(async () => {
     if (!requestId || !projectId || !rows?.files?.length) return;
     const selected = Array.from(riskRadarSelection).filter((n) =>
