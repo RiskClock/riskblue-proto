@@ -1150,7 +1150,7 @@ export default function WorkbenchProjectDetail() {
       }
     })();
     return () => { cancelled = true; };
-  }, [projectId]);
+  }, [projectId, filesVersion]);
 
 
 
