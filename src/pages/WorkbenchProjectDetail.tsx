@@ -2547,23 +2547,23 @@ export default function WorkbenchProjectDetail() {
   const PLAN_TYPE_META: Record<string, { color: string; singular: string; plural: string }> = {
     level_floor_plan: {
       color: awpClassColor("Level Floor Plan"),
-      singular: "level plan",
-      plural: "level plans",
+      singular: "level floor plan",
+      plural: "level floor plans",
     },
     unit_floor_plan: {
       color: awpClassColor("Unit Floor Plan"),
-      singular: "unit plan",
-      plural: "unit plans",
+      singular: "unit floor plan",
+      plural: "unit floor plans",
     },
     schematic_level_row: {
       color: awpClassColor("schematic_level_row"),
-      singular: "schematic row",
-      plural: "schematic rows",
+      singular: "schematic level row",
+      plural: "schematic level rows",
     },
     typical_detail_block: {
       color: awpClassColor("typical_detail_block"),
-      singular: "detail block",
-      plural: "detail blocks",
+      singular: "typical detail block",
+      plural: "typical detail blocks",
     },
   };
 
