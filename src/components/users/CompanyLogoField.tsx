@@ -21,28 +21,39 @@ export function CompanyLogoField({ company }: { company: string | null }) {
   const [rows, setRows] = useState<CompanyLogoRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Guards against out-of-order responses when the company changes quickly.
+  const requestRef = useRef(0);
 
   const trimmed = (company || "").trim();
 
   const load = async () => {
+    const token = ++requestRef.current;
     if (!trimmed) {
       setRows([]);
+      setLoading(false);
       return;
     }
     setLoading(true);
     try {
-      setRows(await fetchCompanyLogos(trimmed));
+      const next = await fetchCompanyLogos(trimmed);
+      if (requestRef.current !== token) return;
+      setRows(next);
     } catch (e: any) {
+      if (requestRef.current !== token) return;
+      setRows([]);
       toast({ title: "Couldn't load logos", description: (e as any)?.message, variant: "destructive" });
     } finally {
-      setLoading(false);
+      if (requestRef.current === token) setLoading(false);
     }
   };
 
   useEffect(() => {
+    // Drop previous company's logos immediately so nothing stale is suggested.
+    setRows([]);
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trimmed]);
+
 
   const makeCurrent = async (row: CompanyLogoRow) => {
     setBusy(true);
