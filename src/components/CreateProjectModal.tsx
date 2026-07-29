@@ -57,8 +57,8 @@ export function computeCreditCost(units: number | null): {
   return { cost: 100, contact: false };
 }
 
-// Cold Water subtypes captured during project creation. Each abbreviation is
-// preseeded as a "Type" suggestion on Cold Water annotations for the project.
+// Classes that expose subtypes during project creation. Each selected
+// abbreviation is preseeded as a "Type" suggestion on that class' annotations.
 export const COLD_WATER_SUBTYPES: { label: string; abbr: string }[] = [
   { label: "Main City Entry", abbr: "MCE" },
   { label: "Post-Booster", abbr: "PB" },
@@ -66,7 +66,19 @@ export const COLD_WATER_SUBTYPES: { label: string; abbr: string }[] = [
   { label: "Suite Riser Entry", abbr: "SRE" },
   { label: "Suite Entry", abbr: "SE" },
 ];
+export const RISER_SUBTYPES: { label: string; abbr: string }[] = [
+  { label: "Main Mechanical", abbr: "MMCH" },
+  { label: "Domestic Cold/Hot Water", abbr: "DCHW" },
+  { label: "Chilled Water Return/Supply", abbr: "CWRS" },
+  { label: "Electrical", abbr: "ELCT" },
+];
 const COLD_WATER_NAME = "Cold Water";
+const RISER_NAME = "Riser";
+export const SUBTYPED_CLASSES: Record<string, { label: string; abbr: string }[]> = {
+  [COLD_WATER_NAME]: COLD_WATER_SUBTYPES,
+  [RISER_NAME]: RISER_SUBTYPES,
+};
+
 
 const formatBytes = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`;
@@ -91,8 +103,8 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [showBuyCredits, setShowBuyCredits] = useState(false);
-  const [cwExpanded, setCwExpanded] = useState(false);
-  const [cwSubtypes, setCwSubtypes] = useState<Set<string>>(new Set());
+  const [expandedClasses, setExpandedClasses] = useState<Set<string>>(new Set());
+  const [subtypesByClass, setSubtypesByClass] = useState<Record<string, Set<string>>>({});
 
   useEffect(() => {
     if (open) {
@@ -103,8 +115,8 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
       setOtherText("");
       setFiles([]);
       setSubmitting(false);
-      setCwExpanded(false);
-      setCwSubtypes(new Set());
+      setExpandedClasses(new Set());
+      setSubtypesByClass({});
       setTimeout(() => nameRef.current?.focus(), 100);
     }
   }, [open]);
@@ -130,26 +142,45 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
     [otherEnabled, otherText],
   );
 
+  const anySubtypeSelected = useMemo(
+    () => Object.values(subtypesByClass).some((s) => s.size > 0),
+    [subtypesByClass],
+  );
+
   const hasAnyClass =
     selectedClassNames.size > 0 ||
-    cwSubtypes.size > 0 ||
+    anySubtypeSelected ||
     (otherEnabled && otherList.length > 0);
 
   const finalSelectedClassNames = useMemo(() => {
     const s = new Set(selectedClassNames);
-    if (cwSubtypes.size > 0) s.add(COLD_WATER_NAME);
-    else s.delete(COLD_WATER_NAME);
+    for (const className of Object.keys(SUBTYPED_CLASSES)) {
+      if ((subtypesByClass[className]?.size ?? 0) > 0) s.add(className);
+      else s.delete(className);
+    }
     return Array.from(s);
-  }, [selectedClassNames, cwSubtypes]);
+  }, [selectedClassNames, subtypesByClass]);
 
   const selectedSubtypesMap = useMemo(() => {
-    if (cwSubtypes.size === 0) return {} as Record<string, string[]>;
-    // Preserve canonical order from COLD_WATER_SUBTYPES
-    const ordered = COLD_WATER_SUBTYPES.filter((s) => cwSubtypes.has(s.abbr)).map(
-      (s) => s.abbr,
-    );
-    return { [COLD_WATER_NAME]: ordered };
-  }, [cwSubtypes]);
+    const out: Record<string, string[]> = {};
+    for (const [className, defs] of Object.entries(SUBTYPED_CLASSES)) {
+      const picked = subtypesByClass[className];
+      if (!picked || picked.size === 0) continue;
+      // Preserve canonical order from the subtype definition
+      out[className] = defs.filter((s) => picked.has(s.abbr)).map((s) => s.abbr);
+    }
+    return out;
+  }, [subtypesByClass]);
+
+  const toggleSubtype = (className: string, abbr: string) => {
+    setSubtypesByClass((prev) => {
+      const next = new Set(prev[className] || []);
+      if (next.has(abbr)) next.delete(abbr);
+      else next.add(abbr);
+      return { ...prev, [className]: next };
+    });
+  };
+
 
   const canSave =
     !!user &&
@@ -470,15 +501,25 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
                       </div>
                       <div className="space-y-2">
                         {opts.map((opt) => {
-                          if (opt.name === COLD_WATER_NAME) {
+                          const subtypeDefs = SUBTYPED_CLASSES[opt.name];
+                          if (subtypeDefs) {
+                            const expanded = expandedClasses.has(opt.name);
+                            const picked = subtypesByClass[opt.name] || new Set<string>();
                             return (
                               <div key={opt.id} className="space-y-1.5">
                                 <button
                                   type="button"
-                                  onClick={() => setCwExpanded((v) => !v)}
+                                  onClick={() =>
+                                    setExpandedClasses((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(opt.name)) next.delete(opt.name);
+                                      else next.add(opt.name);
+                                      return next;
+                                    })
+                                  }
                                   className="flex items-center gap-2 text-sm w-full text-left"
                                 >
-                                  {cwExpanded ? (
+                                  {expanded ? (
                                     <ChevronDown className="w-4 h-4 text-muted-foreground" />
                                   ) : (
                                     <ChevronRight className="w-4 h-4 text-muted-foreground" />
@@ -489,44 +530,35 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
                                     </span>
                                   )}
                                   <span>{opt.name}</span>
-                                  {cwSubtypes.size > 0 && (
+                                  {picked.size > 0 && (
                                     <span className="ml-1 text-xs text-muted-foreground">
-                                      ({cwSubtypes.size} selected)
+                                      ({picked.size} selected)
                                     </span>
                                   )}
                                 </button>
-                                {cwExpanded && (
+                                {expanded && (
                                   <div className="pl-6 space-y-1.5">
-                                    {COLD_WATER_SUBTYPES.map((sub) => {
-                                      const checked = cwSubtypes.has(sub.abbr);
-                                      return (
-                                        <label
-                                          key={sub.abbr}
-                                          className="flex items-center gap-2 text-sm cursor-pointer"
-                                        >
-                                          <Checkbox
-                                            checked={checked}
-                                            onCheckedChange={() => {
-                                              setCwSubtypes((prev) => {
-                                                const next = new Set(prev);
-                                                if (next.has(sub.abbr)) next.delete(sub.abbr);
-                                                else next.add(sub.abbr);
-                                                return next;
-                                              });
-                                            }}
-                                          />
-                                          <span className="font-mono text-xs text-muted-foreground">
-                                            {sub.abbr}
-                                          </span>
-                                          <span>{sub.label}</span>
-                                        </label>
-                                      );
-                                    })}
+                                    {subtypeDefs.map((sub) => (
+                                      <label
+                                        key={sub.abbr}
+                                        className="flex items-center gap-2 text-sm cursor-pointer"
+                                      >
+                                        <Checkbox
+                                          checked={picked.has(sub.abbr)}
+                                          onCheckedChange={() => toggleSubtype(opt.name, sub.abbr)}
+                                        />
+                                        <span className="font-mono text-xs text-muted-foreground">
+                                          {sub.abbr}
+                                        </span>
+                                        <span>{sub.label}</span>
+                                      </label>
+                                    ))}
                                   </div>
                                 )}
                               </div>
                             );
                           }
+
                           const checked = selectedClassNames.has(opt.name);
                           return (
                             <label

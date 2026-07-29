@@ -16,6 +16,7 @@ import {
   Upload,
   Bug,
   History,
+  FolderOpen,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -34,6 +35,7 @@ import { SpaceEditModal } from "@/components/workbench/SpaceEditModal";
 import { ConsolidateRisersModal } from "@/components/workbench/ConsolidateRisersModal";
 import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectModal";
 import { BulkDrawingDownloadModal } from "@/components/workbench/BulkDrawingDownloadModal";
+import { ManageFilesModal } from "@/components/workbench/ManageFilesModal";
 import { ActivityHistoryPanel } from "@/components/workbench/ActivityHistoryPanel";
 import { normalizeScoutResponse } from "@/lib/scoutResponseNormalizer";
 import {
@@ -452,6 +454,9 @@ export default function WorkbenchProjectDetail() {
   const pageInfoExpandStorageKey = projectId
     ? `workbench:pageInfoExpanded:${projectId}`
     : null;
+  const [manageFilesOpen, setManageFilesOpen] = useState(false);
+  /** Bumped after add/delete so the Page Info loader re-runs. */
+  const [filesVersion, setFilesVersion] = useState(0);
   const [pageInfoExpanded, setPageInfoExpanded] = useState<Set<string>>(() => {
     if (typeof window === "undefined" || !projectId) return new Set();
     try {
@@ -1150,7 +1155,7 @@ export default function WorkbenchProjectDetail() {
       }
     })();
     return () => { cancelled = true; };
-  }, [projectId]);
+  }, [projectId, filesVersion]);
 
 
 
@@ -4494,6 +4499,21 @@ export default function WorkbenchProjectDetail() {
                                 Download drawings (PDF)
                               </TooltipContent>
                             </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  onClick={() => setManageFilesOpen(true)}
+                                  className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50"
+                                  aria-label="Manage files"
+                                >
+                                  <FolderOpen className="h-3.5 w-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom">
+                                Manage files
+                              </TooltipContent>
+                            </Tooltip>
                           </div>
                         </TableHead>
                         {enabledCols.map((name) => {
@@ -5691,6 +5711,35 @@ export default function WorkbenchProjectDetail() {
             projectId={projectId}
           />
         )}
+
+        <ManageFilesModal
+          open={manageFilesOpen}
+          onOpenChange={setManageFilesOpen}
+          projectId={projectId ?? undefined}
+          requestId={requestId ?? undefined}
+          canManage={canManage}
+          files={pageInfoRows.map((r) => ({
+            id: r.id,
+            name: r.name,
+            source_type: r.source_type,
+            storage_path: r.storage_path,
+            mime_type: r.mime_type,
+            size_bytes: r.size_bytes ?? null,
+            expected_page_count: r.page_count ?? null,
+            copy_status: null,
+            pageCount: r.page_count ?? 0,
+          }))}
+          onChanged={() => {
+            try {
+              window.localStorage.removeItem(
+                `riskblue:workbench-page-info:project:${projectId}`,
+              );
+            } catch { /* ignore */ }
+            setFilesVersion((v) => v + 1);
+            queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
+            queryClient.invalidateQueries({ queryKey: ["workbench-analysis-request", projectId] });
+          }}
+        />
 
         <BulkDrawingDownloadModal
           open={bulkDownloadOpen}
