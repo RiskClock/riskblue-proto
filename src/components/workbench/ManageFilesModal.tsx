@@ -228,7 +228,7 @@ export function ManageFilesModal({
                   <TableHead>File</TableHead>
                   <TableHead className="w-20 text-right">Pages</TableHead>
                   <TableHead className="w-24 text-right">Size</TableHead>
-                  <TableHead className="w-28">Status</TableHead>
+                  <TableHead className="w-32">Source</TableHead>
                   {canManage && <TableHead className="w-12" />}
                 </TableRow>
               </TableHeader>
@@ -259,7 +259,17 @@ export function ManageFilesModal({
                           variant={f.copy_status === "failed" ? "destructive" : "outline"}
                           className="text-[10px]"
                         >
-                          {f.copy_status || "unknown"}
+                          {f.copy_status === "failed"
+                            ? "failed"
+                            : f.source_type === "manual_upload"
+                              ? "Upload"
+                              : f.source_type === "google_drive"
+                                ? "Google Drive"
+                                : f.source_type === "procore"
+                                  ? "Procore"
+                                  : f.source_type === "sharepoint"
+                                    ? "SharePoint"
+                                    : f.source_type || "—"}
                         </Badge>
                       </TableCell>
                       {canManage && (
