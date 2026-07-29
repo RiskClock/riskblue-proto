@@ -2577,7 +2577,7 @@ export default function WorkbenchProjectDetail() {
   /**
    * Floor-plan badges for a page. Per type: show individual bbox-name badges
    * when there are 1-2 of that type, otherwise collapse to a single count
-   * badge ("5 unit plans"). Colors match the bbox colors in the drawing modal.
+   * badge ("5 level floor plans"). Colors match the bbox colors in the drawing modal.
    */
   const renderPlanBadges = (
     fileId: string,
