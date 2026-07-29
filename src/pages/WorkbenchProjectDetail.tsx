@@ -4497,6 +4497,21 @@ export default function WorkbenchProjectDetail() {
                                 Download drawings (PDF)
                               </TooltipContent>
                             </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  onClick={() => setManageFilesOpen(true)}
+                                  className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50"
+                                  aria-label="Manage files"
+                                >
+                                  <FolderOpen className="h-3.5 w-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom">
+                                Manage files
+                              </TooltipContent>
+                            </Tooltip>
                           </div>
                         </TableHead>
                         {enabledCols.map((name) => {
