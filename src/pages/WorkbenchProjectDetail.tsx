@@ -3015,12 +3015,35 @@ export default function WorkbenchProjectDetail() {
     setRiskRadarModalOpen(true);
   }, [requestId, enabledCols, riskRadarStorageKey]);
 
+  // Pages that carry at least one floor-plan bounding box, keyed by file id.
+  // Risk Radar is scoped to these pages (files with none are skipped).
+  const bboxPagesByFile = useMemo(() => {
+    const m = new Map<string, number[]>();
+    for (const [fileId, byPage] of floorPlansByFile.entries()) {
+      const pages: number[] = [];
+      for (const [page, plans] of byPage.entries()) {
+        if (plans.some((p) => Array.isArray(p.xy_width_height_pct))) pages.push(page);
+      }
+      if (pages.length > 0) m.set(fileId, pages.sort((a, b) => a - b));
+    }
+    return m;
+  }, [floorPlansByFile]);
+
   const runRiskRadar = useCallback(async () => {
-    if (!requestId || !rows?.files?.length) return;
+    if (!requestId || !projectId || !rows?.files?.length) return;
     const selected = Array.from(riskRadarSelection).filter((n) =>
       enabledCols.includes(n),
     );
     if (selected.length === 0) return;
+    const targets = rows.files.filter((f) => (bboxPagesByFile.get(f.id)?.length ?? 0) > 0);
+    if (targets.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "No bounding boxes",
+        description: "Risk Radar only scans pages with a floor-plan bounding box. Add or run Scout first.",
+      });
+      return;
+    }
     if (riskRadarStorageKey) {
       try {
         window.sessionStorage.setItem(
@@ -3031,16 +3054,28 @@ export default function WorkbenchProjectDetail() {
         /* ignore */
       }
     }
+    const lock = await acquireAgentLock(projectId, "Risk Radar", requestId);
+    if (!lock.ok) {
+      toast({
+        variant: "destructive",
+        title: lock.busy ? "Another agent is running" : "Risk Radar unavailable",
+        description: lock.message,
+      });
+      setRiskRadarModalOpen(false);
+      return;
+    }
+    const stopHeartbeat = startAgentHeartbeat(lock.runId);
     setRiskRadarModalOpen(false);
     setIdentifyRunning(true);
     try {
       const results = await Promise.allSettled(
-        rows.files.map((f) =>
+        targets.map((f) =>
           supabase.functions.invoke("identify-risk-elements", {
             body: {
               analysisRequestId: requestId,
               fileId: f.id,
               awpClassNames: selected,
+              pageNumbers: bboxPagesByFile.get(f.id) ?? [],
             },
           }),
         ),
@@ -3049,21 +3084,41 @@ export default function WorkbenchProjectDetail() {
         (r) => r.status === "fulfilled" && !(r.value as any)?.error,
       ).length;
       const failed = results.length - ok;
+      const skipped = rows.files.length - targets.length;
       toast({
         title: "Risk Radar dispatched",
-        description: `${ok} file${ok === 1 ? "" : "s"} started${failed ? `, ${failed} failed` : ""} · ${selected.length} class${selected.length === 1 ? "" : "es"}.`,
+        description: `${ok} file${ok === 1 ? "" : "s"} started${failed ? `, ${failed} failed` : ""}${skipped ? `, ${skipped} skipped (no bounding boxes)` : ""} · ${selected.length} class${selected.length === 1 ? "" : "es"}.`,
         variant: failed ? "destructive" : "default",
       });
+      // Hold the project agent lock until the background scans finish so no
+      // other agent can be triggered mid-run (max ~10 minutes).
+      const deadline = Date.now() + 10 * 60 * 1000;
+      const pending = new Set(targets.map((f) => f.id));
+      while (pending.size > 0 && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 5000));
+        const { data: pollRows } = await supabase
+          .from("analysis_request_files")
+          .select("id, risk_element_results")
+          .in("id", Array.from(pending));
+        for (const row of (pollRows ?? []) as any[]) {
+          const res = (row.risk_element_results ?? {}) as Record<string, any>;
+          if (selected.every((c) => res[c])) pending.delete(row.id);
+        }
+      }
+      await releaseAgentLock(lock.runId, "completed");
     } catch (err: any) {
+      await releaseAgentLock(lock.runId, "failed", err?.message ?? "Unknown error");
       toast({
         variant: "destructive",
         title: "Risk Radar failed",
         description: err?.message ?? "Unknown error",
       });
     } finally {
+      stopHeartbeat();
       setIdentifyRunning(false);
     }
-  }, [requestId, rows?.files, riskRadarSelection, enabledCols, riskRadarStorageKey, toast]);
+  }, [requestId, projectId, rows?.files, riskRadarSelection, enabledCols, riskRadarStorageKey, bboxPagesByFile, toast]);
+
 
 
 
