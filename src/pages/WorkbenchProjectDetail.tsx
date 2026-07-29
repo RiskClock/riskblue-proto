@@ -4673,9 +4673,10 @@ export default function WorkbenchProjectDetail() {
                                       {count} pages
                                     </span>
                                   )}
-                                  {singlePage && !processingLock && renderSpaceBadge(row.name, 1)}
                                   {singlePage && !processingLock &&
-                                    renderOtherPlanBadges(row.id, 1, ["typical_detail_block"])}
+                                    (pageHasPlanBadges(row.id, 1)
+                                      ? renderPlanBadges(row.id, 1)
+                                      : renderSpaceBadge(row.name, 1))}
                                 </div>
                               </TableCell>
                               {enabledCols.map((name) => {
