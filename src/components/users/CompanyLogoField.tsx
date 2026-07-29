@@ -117,7 +117,7 @@ export function CompanyLogoField({ company }: { company: string | null }) {
       } as any);
       if (insErr) throw insErr;
       await load();
-      toast({ title: "Logo uploaded" });
+      toast({ title: "Logo uploaded", description: "Click the logo to use it for this company." });
     } catch (e: any) {
       toast({ title: "Upload failed", description: (e as any)?.message, variant: "destructive" });
     } finally {
