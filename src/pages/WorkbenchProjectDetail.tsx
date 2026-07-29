@@ -3803,6 +3803,7 @@ export default function WorkbenchProjectDetail() {
                         phase: "done",
                       });
                       window.sessionStorage.removeItem(surveyProgressStorageKey(requestId));
+                      await releaseAgentLock(lock.runId, "completed");
                       toast({
                         title: "Survey Pages complete",
                         description: `${withResult} of ${totalSheets} pages received a result across ${files.length} file${files.length === 1 ? "" : "s"}.`,
@@ -3810,14 +3811,17 @@ export default function WorkbenchProjectDetail() {
                     } catch (err: unknown) {
                       window.sessionStorage.removeItem(surveyProgressStorageKey(requestId));
                       const message = err instanceof Error ? err.message : "Unknown error";
+                      await releaseAgentLock(lock.runId, "failed", message);
                       toast({
                         variant: "destructive",
                         title: "Survey Pages failed",
                         description: message,
                       });
                     } finally {
+                      stopHeartbeat();
                       setSurveyRunning(false);
                     }
+
                   }}
                   variant="outline"
                   disabled={!requestId || surveyRunning || !canManage || processingLock}
