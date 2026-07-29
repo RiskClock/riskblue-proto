@@ -57,8 +57,8 @@ export function computeCreditCost(units: number | null): {
   return { cost: 100, contact: false };
 }
 
-// Cold Water subtypes captured during project creation. Each abbreviation is
-// preseeded as a "Type" suggestion on Cold Water annotations for the project.
+// Classes that expose subtypes during project creation. Each selected
+// abbreviation is preseeded as a "Type" suggestion on that class' annotations.
 export const COLD_WATER_SUBTYPES: { label: string; abbr: string }[] = [
   { label: "Main City Entry", abbr: "MCE" },
   { label: "Post-Booster", abbr: "PB" },
@@ -66,7 +66,19 @@ export const COLD_WATER_SUBTYPES: { label: string; abbr: string }[] = [
   { label: "Suite Riser Entry", abbr: "SRE" },
   { label: "Suite Entry", abbr: "SE" },
 ];
+export const RISER_SUBTYPES: { label: string; abbr: string }[] = [
+  { label: "Main Mechanical", abbr: "MMCH" },
+  { label: "Domestic Cold/Hot Water", abbr: "DCHW" },
+  { label: "Chilled Water Return/Supply", abbr: "CWRS" },
+  { label: "Electrical", abbr: "ELCT" },
+];
 const COLD_WATER_NAME = "Cold Water";
+const RISER_NAME = "Riser";
+export const SUBTYPED_CLASSES: Record<string, { label: string; abbr: string }[]> = {
+  [COLD_WATER_NAME]: COLD_WATER_SUBTYPES,
+  [RISER_NAME]: RISER_SUBTYPES,
+};
+
 
 const formatBytes = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`;
