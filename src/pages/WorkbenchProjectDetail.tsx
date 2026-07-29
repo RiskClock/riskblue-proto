@@ -3269,12 +3269,14 @@ export default function WorkbenchProjectDetail() {
       });
       if (error) throw await normalizeFunctionError(error);
       if ((data as any)?.error) throw new Error((data as any).error);
+      await releaseAgentLock(lock.runId, "completed");
       toast({ title: "Spatial Architect complete" });
       queryClient.invalidateQueries({
         queryKey: ["workbench-analysis-request", projectId],
       });
     } catch (error: any) {
       const message = getUserFriendlyError(error);
+      await releaseAgentLock(lock.runId, "failed", message);
       // Reconcile the DB row - if the edge function crashed or timed out before
       // it could mark itself failed, the row would stay `running` forever and
       // the modal would keep spinning. Force it to `failed` here so the UI
@@ -3301,8 +3303,10 @@ export default function WorkbenchProjectDetail() {
         description: message,
       });
     } finally {
+      stopHeartbeat();
       setBuildingSpace(false);
     }
+
   };
 
 
