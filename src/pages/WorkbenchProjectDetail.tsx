@@ -4629,10 +4629,15 @@ export default function WorkbenchProjectDetail() {
                                           if (levelPlans.length === 0) return null;
                                           const c = awpClassColor("Level Floor Plan");
                                           const labels = levelPlans.map((lvl) => {
+                                            // Badge must mirror the bbox label
+                                            // shown in the drawing modal:
+                                            // user override → reference_id →
+                                            // (last resort) Scout floors.
                                             const overrideName = (lvl as any).__overrideName as
                                               | string
                                               | undefined;
-                                            if (overrideName) return overrideName;
+                                            if (overrideName?.trim()) return overrideName.trim();
+                                            if (lvl.reference_id?.trim()) return lvl.reference_id.trim();
                                             return (
                                               (lvl.floors && lvl.floors.length > 0
                                                 ? formatLevelSetLabel(lvl.floors)
