@@ -3228,13 +3228,24 @@ export default function WorkbenchProjectDetail() {
 
   // ---- Spatial Architect (replaces Build Space Hierarchy) ---------------
   const buildSpaceHierarchy = async () => {
-    if (!requestId) return;
+    if (!requestId || !projectId) return;
     if (spaceHierarchyHasResult) {
       if (!window.confirm("Spatial Architect has already run for this project. Re-run and overwrite existing results?")) {
         return;
       }
     }
+    const lock = await acquireAgentLock(projectId, "Spatial Architect", requestId);
+    if (!lock.ok) {
+      toast({
+        variant: "destructive",
+        title: lock.busy ? "Another agent is running" : "Spatial Architect unavailable",
+        description: lock.message,
+      });
+      return;
+    }
+    const stopHeartbeat = startAgentHeartbeat(lock.runId);
     setBuildingSpace(true);
+
     try {
       const token = session?.access_token;
       if (!token) throw new Error("Your session expired. Please sign in again.");
