@@ -1738,6 +1738,48 @@ export type Database = {
         }
         Relationships: []
       }
+      project_agent_runs: {
+        Row: {
+          agent: string
+          analysis_request_id: string | null
+          completed_at: string | null
+          error_message: string | null
+          heartbeat_at: string
+          id: string
+          project_id: string
+          started_at: string
+          status: string
+          triggered_by: string | null
+          triggered_by_email: string | null
+        }
+        Insert: {
+          agent: string
+          analysis_request_id?: string | null
+          completed_at?: string | null
+          error_message?: string | null
+          heartbeat_at?: string
+          id?: string
+          project_id: string
+          started_at?: string
+          status?: string
+          triggered_by?: string | null
+          triggered_by_email?: string | null
+        }
+        Update: {
+          agent?: string
+          analysis_request_id?: string | null
+          completed_at?: string | null
+          error_message?: string | null
+          heartbeat_at?: string
+          id?: string
+          project_id?: string
+          started_at?: string
+          status?: string
+          triggered_by?: string | null
+          triggered_by_email?: string | null
+        }
+        Relationships: []
+      }
       project_analysis_items: {
         Row: {
           additional_parameters: Json | null
@@ -2832,6 +2874,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      acquire_agent_run: {
+        Args: {
+          p_agent: string
+          p_analysis_request_id?: string
+          p_project_id: string
+        }
+        Returns: Json
+      }
       admin_adjust_credits: {
         Args: {
           p_actor_user_id: string
@@ -2908,6 +2958,10 @@ export type Database = {
         }
       }
       cleanup_expired_reset_tokens: { Args: never; Returns: undefined }
+      complete_agent_run: {
+        Args: { p_error?: string; p_run_id: string; p_status?: string }
+        Returns: boolean
+      }
       consume_credit: {
         Args: { p_analysis_request_id?: string; p_user_id: string }
         Returns: Json
@@ -2927,6 +2981,10 @@ export type Database = {
           name: string
           size: number
         }[]
+      }
+      force_release_agent_runs: {
+        Args: { p_project_id: string }
+        Returns: number
       }
       get_control_vendor_offerings: {
         Args: never
@@ -2963,6 +3021,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      heartbeat_agent_run: { Args: { p_run_id: string }; Returns: boolean }
       is_internal_user: { Args: { _user_id: string }; Returns: boolean }
       is_project_member: {
         Args: { _project_id: string; _user_id: string }

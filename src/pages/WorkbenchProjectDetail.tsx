@@ -99,6 +99,13 @@ import {
 } from "@/components/viewer/hooks/useDocumentSource";
 import { useAWPOptions, groupAWPOptionsByCategory } from "@/hooks/useAWPOptions";
 import { getUserFriendlyError } from "@/lib/errorHandling";
+import {
+  acquireAgentLock,
+  startAgentHeartbeat,
+  releaseAgentLock,
+  forceReleaseAgentLocks,
+} from "@/lib/agentLock";
+
 import { awpClassColor, readableTextOn, softBgFrom } from "@/lib/awpColor";
 
 const PREF_ID = "global";
@@ -3015,12 +3022,54 @@ export default function WorkbenchProjectDetail() {
     setRiskRadarModalOpen(true);
   }, [requestId, enabledCols, riskRadarStorageKey]);
 
+  // Pages that carry at least one floor-plan bounding box, keyed by file id.
+  // Risk Radar is scoped to these pages (files with none are skipped).
+  const bboxPagesByFile = useMemo(() => {
+    const m = new Map<string, number[]>();
+    for (const [fileId, byPage] of floorPlansByFile.entries()) {
+      const pages: number[] = [];
+      for (const [page, plans] of byPage.entries()) {
+        if (plans.some((p) => Array.isArray(p.xy_width_height_pct))) pages.push(page);
+      }
+      if (pages.length > 0) m.set(fileId, pages.sort((a, b) => a - b));
+    }
+    return m;
+  }, [floorPlansByFile]);
+
+  // Currently running agent for this project (single-slot lock).
+  const { data: activeAgentRun, refetch: refetchActiveAgentRun } = useQuery({
+    queryKey: ["project-agent-run", projectId],
+    enabled: !!projectId,
+    refetchInterval: 15000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("project_agent_runs" as any)
+        .select("id, agent, triggered_by_email, started_at, heartbeat_at")
+        .eq("project_id", projectId!)
+        .eq("status", "running")
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return (data as any) ?? null;
+    },
+  });
+
+
   const runRiskRadar = useCallback(async () => {
-    if (!requestId || !rows?.files?.length) return;
+    if (!requestId || !projectId || !rows?.files?.length) return;
     const selected = Array.from(riskRadarSelection).filter((n) =>
       enabledCols.includes(n),
     );
     if (selected.length === 0) return;
+    const targets = rows.files.filter((f) => (bboxPagesByFile.get(f.id)?.length ?? 0) > 0);
+    if (targets.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "No bounding boxes",
+        description: "Risk Radar only scans pages with a floor-plan bounding box. Add or run Scout first.",
+      });
+      return;
+    }
     if (riskRadarStorageKey) {
       try {
         window.sessionStorage.setItem(
@@ -3031,16 +3080,28 @@ export default function WorkbenchProjectDetail() {
         /* ignore */
       }
     }
+    const lock = await acquireAgentLock(projectId, "Risk Radar", requestId);
+    if (!lock.ok) {
+      toast({
+        variant: "destructive",
+        title: lock.busy ? "Another agent is running" : "Risk Radar unavailable",
+        description: lock.message,
+      });
+      setRiskRadarModalOpen(false);
+      return;
+    }
+    const stopHeartbeat = startAgentHeartbeat(lock.runId);
     setRiskRadarModalOpen(false);
     setIdentifyRunning(true);
     try {
       const results = await Promise.allSettled(
-        rows.files.map((f) =>
+        targets.map((f) =>
           supabase.functions.invoke("identify-risk-elements", {
             body: {
               analysisRequestId: requestId,
               fileId: f.id,
               awpClassNames: selected,
+              pageNumbers: bboxPagesByFile.get(f.id) ?? [],
             },
           }),
         ),
@@ -3049,21 +3110,41 @@ export default function WorkbenchProjectDetail() {
         (r) => r.status === "fulfilled" && !(r.value as any)?.error,
       ).length;
       const failed = results.length - ok;
+      const skipped = rows.files.length - targets.length;
       toast({
         title: "Risk Radar dispatched",
-        description: `${ok} file${ok === 1 ? "" : "s"} started${failed ? `, ${failed} failed` : ""} · ${selected.length} class${selected.length === 1 ? "" : "es"}.`,
+        description: `${ok} file${ok === 1 ? "" : "s"} started${failed ? `, ${failed} failed` : ""}${skipped ? `, ${skipped} skipped (no bounding boxes)` : ""} · ${selected.length} class${selected.length === 1 ? "" : "es"}.`,
         variant: failed ? "destructive" : "default",
       });
+      // Hold the project agent lock until the background scans finish so no
+      // other agent can be triggered mid-run (max ~10 minutes).
+      const deadline = Date.now() + 10 * 60 * 1000;
+      const pending = new Set(targets.map((f) => f.id));
+      while (pending.size > 0 && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 5000));
+        const { data: pollRows } = await supabase
+          .from("analysis_request_files")
+          .select("id, risk_element_results")
+          .in("id", Array.from(pending));
+        for (const row of (pollRows ?? []) as any[]) {
+          const res = (row.risk_element_results ?? {}) as Record<string, any>;
+          if (selected.every((c) => res[c])) pending.delete(row.id);
+        }
+      }
+      await releaseAgentLock(lock.runId, "completed");
     } catch (err: any) {
+      await releaseAgentLock(lock.runId, "failed", err?.message ?? "Unknown error");
       toast({
         variant: "destructive",
         title: "Risk Radar failed",
         description: err?.message ?? "Unknown error",
       });
     } finally {
+      stopHeartbeat();
       setIdentifyRunning(false);
     }
-  }, [requestId, rows?.files, riskRadarSelection, enabledCols, riskRadarStorageKey, toast]);
+  }, [requestId, projectId, rows?.files, riskRadarSelection, enabledCols, riskRadarStorageKey, bboxPagesByFile, toast]);
+
 
 
 
@@ -3166,13 +3247,24 @@ export default function WorkbenchProjectDetail() {
 
   // ---- Spatial Architect (replaces Build Space Hierarchy) ---------------
   const buildSpaceHierarchy = async () => {
-    if (!requestId) return;
+    if (!requestId || !projectId) return;
     if (spaceHierarchyHasResult) {
       if (!window.confirm("Spatial Architect has already run for this project. Re-run and overwrite existing results?")) {
         return;
       }
     }
+    const lock = await acquireAgentLock(projectId, "Spatial Architect", requestId);
+    if (!lock.ok) {
+      toast({
+        variant: "destructive",
+        title: lock.busy ? "Another agent is running" : "Spatial Architect unavailable",
+        description: lock.message,
+      });
+      return;
+    }
+    const stopHeartbeat = startAgentHeartbeat(lock.runId);
     setBuildingSpace(true);
+
     try {
       const token = session?.access_token;
       if (!token) throw new Error("Your session expired. Please sign in again.");
@@ -3196,12 +3288,14 @@ export default function WorkbenchProjectDetail() {
       });
       if (error) throw await normalizeFunctionError(error);
       if ((data as any)?.error) throw new Error((data as any).error);
+      await releaseAgentLock(lock.runId, "completed");
       toast({ title: "Spatial Architect complete" });
       queryClient.invalidateQueries({
         queryKey: ["workbench-analysis-request", projectId],
       });
     } catch (error: any) {
       const message = getUserFriendlyError(error);
+      await releaseAgentLock(lock.runId, "failed", message);
       // Reconcile the DB row - if the edge function crashed or timed out before
       // it could mark itself failed, the row would stay `running` forever and
       // the modal would keep spinning. Force it to `failed` here so the UI
@@ -3228,8 +3322,10 @@ export default function WorkbenchProjectDetail() {
         description: message,
       });
     } finally {
+      stopHeartbeat();
       setBuildingSpace(false);
     }
+
   };
 
 
@@ -3602,10 +3698,23 @@ export default function WorkbenchProjectDetail() {
                       return;
                     }
 
+                    if (!projectId) return;
+                    const lock = await acquireAgentLock(projectId, "Scout", requestId);
+                    if (!lock.ok) {
+                      toast({
+                        variant: "destructive",
+                        title: lock.busy ? "Another agent is running" : "Scout unavailable",
+                        description: lock.message,
+                      });
+                      return;
+                    }
+                    const stopHeartbeat = startAgentHeartbeat(lock.runId);
+
                     setSurveyRunning(true);
                     setSurveyRecoveredRun(false);
                     setSurveyResults([]);
                     setSurveyRawText("");
+
                     
 
                     const aggregated: typeof surveyResults = [];
@@ -3713,6 +3822,7 @@ export default function WorkbenchProjectDetail() {
                         phase: "done",
                       });
                       window.sessionStorage.removeItem(surveyProgressStorageKey(requestId));
+                      await releaseAgentLock(lock.runId, "completed");
                       toast({
                         title: "Survey Pages complete",
                         description: `${withResult} of ${totalSheets} pages received a result across ${files.length} file${files.length === 1 ? "" : "s"}.`,
@@ -3720,14 +3830,17 @@ export default function WorkbenchProjectDetail() {
                     } catch (err: unknown) {
                       window.sessionStorage.removeItem(surveyProgressStorageKey(requestId));
                       const message = err instanceof Error ? err.message : "Unknown error";
+                      await releaseAgentLock(lock.runId, "failed", message);
                       toast({
                         variant: "destructive",
                         title: "Survey Pages failed",
                         description: message,
                       });
                     } finally {
+                      stopHeartbeat();
                       setSurveyRunning(false);
                     }
+
                   }}
                   variant="outline"
                   disabled={!requestId || surveyRunning || !canManage || processingLock}
@@ -3778,6 +3891,36 @@ export default function WorkbenchProjectDetail() {
                           : "Identify risk elements across enabled classes"}
                   </TooltipContent>
                 </Tooltip>
+
+                {isInternal && activeAgentRun && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="text-destructive"
+                        onClick={async () => {
+                          if (!projectId) return;
+                          if (!window.confirm(`Force release the "${activeAgentRun.agent}" run started by ${activeAgentRun.triggered_by_email ?? "unknown"}?`)) return;
+                          try {
+                            await forceReleaseAgentLocks(projectId);
+                            await refetchActiveAgentRun();
+                            toast({ title: "Agent lock released" });
+                          } catch (e: any) {
+                            toast({ variant: "destructive", title: "Could not release lock", description: getUserFriendlyError(e) });
+                          }
+                        }}
+                      >
+                        Release {activeAgentRun.agent} lock
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      {`${activeAgentRun.agent} is running · triggered by ${activeAgentRun.triggered_by_email ?? "unknown"}`}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+
+
 
                 {(() => {
                   const disabled = !requestId || processingLock;
