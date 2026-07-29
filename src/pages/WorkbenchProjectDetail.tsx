@@ -2540,6 +2540,7 @@ export default function WorkbenchProjectDetail() {
     const overrideName = (fp as any).__overrideName as string | undefined;
     if (overrideName?.trim()) return overrideName.trim();
     if (fp.reference_id?.trim()) return fp.reference_id.trim();
+    if (fp.floors && fp.floors.length > 0) return formatLevelSetLabel(fp.floors);
     return floorPlanDisplayLabel(fp);
   };
 
