@@ -141,44 +141,59 @@ export function CompanyLogoField({ company }: { company: string | null }) {
           <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading logos…
         </div>
       ) : rows.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          {rows.map((r) => (
-            <div
-              key={r.id}
-              className={cn(
-                "group relative h-14 w-24 rounded border bg-muted/30 p-1 flex items-center justify-center",
-                r.is_current ? "border-primary ring-1 ring-primary" : "border-border",
-              )}
-            >
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => makeCurrent(r)}
-                title={r.is_current ? "Current logo" : "Use this logo"}
-                className="h-full w-full flex items-center justify-center"
-              >
-                <img src={r.url} alt="Company logo" className="max-h-full max-w-full object-contain" />
-              </button>
-              {r.is_current && (
-                <span className="absolute -top-1.5 -left-1.5 rounded-full bg-primary text-primary-foreground p-0.5">
-                  <Check className="h-3 w-3" />
-                </span>
-              )}
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => remove(r)}
-                title="Remove logo"
-                className="absolute -top-1.5 -right-1.5 rounded-full bg-destructive text-destructive-foreground p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <Trash2 className="h-3 w-3" />
-              </button>
-            </div>
-          ))}
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap gap-2">
+            {rows.map((r) => (
+              <div key={r.id} className="space-y-1">
+                <div
+                  className={cn(
+                    "group relative h-14 w-24 rounded border bg-muted/30 p-1 flex items-center justify-center",
+                    r.is_current ? "border-primary ring-1 ring-primary" : "border-dashed border-border",
+                  )}
+                >
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => makeCurrent(r)}
+                    title={r.is_current ? "Current logo" : "Click to use this logo"}
+                    className={cn(
+                      "h-full w-full flex items-center justify-center",
+                      r.is_current ? "" : "opacity-70 hover:opacity-100 transition-opacity",
+                    )}
+                  >
+                    <img src={r.url} alt="Company logo" className="max-h-full max-w-full object-contain" />
+                  </button>
+                  {r.is_current && (
+                    <span className="absolute -top-1.5 -left-1.5 rounded-full bg-primary text-primary-foreground p-0.5">
+                      <Check className="h-3 w-3" />
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => remove(r)}
+                    title="Remove logo"
+                    className="absolute -top-1.5 -right-1.5 rounded-full bg-destructive text-destructive-foreground p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+                <p className="text-[10px] text-center text-muted-foreground">
+                  {r.is_current ? "Selected" : "Suggested"}
+                </p>
+              </div>
+            ))}
+          </div>
+          {!rows.some((r) => r.is_current) && (
+            <p className="text-[11px] text-muted-foreground">
+              No logo selected yet — click a suggestion to use it for {trimmed}.
+            </p>
+          )}
         </div>
       ) : (
         <p className="text-xs text-muted-foreground">No logo uploaded for {trimmed} yet.</p>
       )}
+
 
       <input
         ref={inputRef}
