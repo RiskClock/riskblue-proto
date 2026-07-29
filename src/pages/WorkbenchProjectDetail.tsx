@@ -3679,10 +3679,23 @@ export default function WorkbenchProjectDetail() {
                       return;
                     }
 
+                    if (!projectId) return;
+                    const lock = await acquireAgentLock(projectId, "Scout", requestId);
+                    if (!lock.ok) {
+                      toast({
+                        variant: "destructive",
+                        title: lock.busy ? "Another agent is running" : "Scout unavailable",
+                        description: lock.message,
+                      });
+                      return;
+                    }
+                    const stopHeartbeat = startAgentHeartbeat(lock.runId);
+
                     setSurveyRunning(true);
                     setSurveyRecoveredRun(false);
                     setSurveyResults([]);
                     setSurveyRawText("");
+
                     
 
                     const aggregated: typeof surveyResults = [];
