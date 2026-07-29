@@ -233,10 +233,18 @@ Deno.serve(async (req) => {
                   role: "user",
                   parts: [
                     { text: `Instructions:\n${prompt}` },
+                    ...(pageNumbers.length > 0
+                      ? [{
+                        text:
+                          `Scope: Only analyze these pages of the document (1-based page numbers): ${pageNumbers.join(", ")}. ` +
+                          `Completely ignore every other page. Do not report any element found outside these pages.`,
+                      }]
+                      : []),
                     { text: analyzePrefix },
                   ],
                 },
               ],
+
               config: { cachedContent: cacheRef },
             });
           };
