@@ -4609,6 +4609,8 @@ export default function WorkbenchProjectDetail() {
                                     </span>
                                   )}
                                   {singlePage && !processingLock && renderSpaceBadge(row.name, 1)}
+                                  {singlePage && !processingLock &&
+                                    renderOtherPlanBadges(row.id, 1, ["typical_detail_block"])}
                                 </div>
                               </TableCell>
                               {enabledCols.map((name) => {
