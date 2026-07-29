@@ -51,7 +51,7 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
           <img
             src={logoUrl}
             alt={isCompanyLogo ? `${companyName ?? "Company"} logo` : "RiskBlue"}
-            className="h-8 cursor-pointer shrink-0"
+            className="h-10 w-auto max-w-none cursor-pointer shrink-0 object-contain object-left"
             onClick={() => navigate("/projects")}
           />
           {title && (

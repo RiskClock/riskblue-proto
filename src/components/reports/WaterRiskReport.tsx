@@ -704,7 +704,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
           
           {/* Center block: Logo + Title + Project Info */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'center' }}>
-            <img src={isCompanyLogo ? logoUrl : riskBlueLogoWhite} alt="RiskBlue Logo" style={{ height: '64px', display: 'inline-block', marginBottom: '24px', alignSelf: 'center' }} />
+            <img src={isCompanyLogo ? logoUrl : riskBlueLogoWhite} alt="RiskBlue Logo" style={{ height: '64px', width: 'auto', maxWidth: 'none', display: 'inline-block', marginBottom: '24px', alignSelf: 'center' }} />
             <p style={{ fontSize: '28px', fontWeight: '600', color: 'white', marginBottom: '20px', letterSpacing: '1px' }}>
               Water Mitigation Guideline
             </p>
@@ -758,7 +758,7 @@ export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [],
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-500">Built in</span>
-          <img src={logoUrl} alt="RiskBlue Logo" style={{ height: '32px', display: 'inline-block' }} />
+          <img src={logoUrl} alt="RiskBlue Logo" style={{ height: '32px', width: 'auto', maxWidth: 'none', display: 'inline-block' }} />
         </div>
       </div>
 
