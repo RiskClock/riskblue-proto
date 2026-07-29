@@ -99,6 +99,13 @@ import {
 } from "@/components/viewer/hooks/useDocumentSource";
 import { useAWPOptions, groupAWPOptionsByCategory } from "@/hooks/useAWPOptions";
 import { getUserFriendlyError } from "@/lib/errorHandling";
+import {
+  acquireAgentLock,
+  startAgentHeartbeat,
+  releaseAgentLock,
+  forceReleaseAgentLocks,
+} from "@/lib/agentLock";
+
 import { awpClassColor, readableTextOn, softBgFrom } from "@/lib/awpColor";
 
 const PREF_ID = "global";
