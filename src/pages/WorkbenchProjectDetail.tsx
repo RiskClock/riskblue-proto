@@ -5712,6 +5712,35 @@ export default function WorkbenchProjectDetail() {
           />
         )}
 
+        <ManageFilesModal
+          open={manageFilesOpen}
+          onOpenChange={setManageFilesOpen}
+          projectId={projectId ?? undefined}
+          requestId={requestId ?? undefined}
+          canManage={canManage}
+          files={pageInfoRows.map((r) => ({
+            id: r.id,
+            name: r.name,
+            source_type: r.source_type,
+            storage_path: r.storage_path,
+            mime_type: r.mime_type,
+            size_bytes: r.size_bytes ?? null,
+            expected_page_count: r.page_count ?? null,
+            copy_status: null,
+            pageCount: r.page_count ?? 0,
+          }))}
+          onChanged={() => {
+            try {
+              window.localStorage.removeItem(
+                `riskblue:workbench-page-info:project:${projectId}`,
+              );
+            } catch { /* ignore */ }
+            setFilesVersion((v) => v + 1);
+            queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
+            queryClient.invalidateQueries({ queryKey: ["workbench-analysis-request", projectId] });
+          }}
+        />
+
         <BulkDrawingDownloadModal
           open={bulkDownloadOpen}
           onOpenChange={setBulkDownloadOpen}
