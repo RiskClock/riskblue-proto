@@ -107,11 +107,12 @@ export function CompanyLogoField({ company }: { company: string | null }) {
       if (upErr) throw upErr;
 
       const { data: userRes } = await supabase.auth.getUser();
-      await supabase.from("company_logos").update({ is_current: false }).ilike("company", trimmed);
+      // Newly uploaded logos are only *suggested* — the user must click one to
+      // make it the company's current logo.
       const { error: insErr } = await supabase.from("company_logos").insert({
         company: trimmed,
         storage_path: path,
-        is_current: true,
+        is_current: false,
         updated_by: userRes?.user?.id ?? null,
       } as any);
       if (insErr) throw insErr;
