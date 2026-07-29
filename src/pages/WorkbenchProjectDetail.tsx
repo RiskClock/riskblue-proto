@@ -2540,37 +2540,103 @@ export default function WorkbenchProjectDetail() {
     const overrideName = (fp as any).__overrideName as string | undefined;
     if (overrideName?.trim()) return overrideName.trim();
     if (fp.reference_id?.trim()) return fp.reference_id.trim();
+    if (fp.floors && fp.floors.length > 0) return formatLevelSetLabel(fp.floors);
     return floorPlanDisplayLabel(fp);
   };
 
+  const PLAN_TYPE_META: Record<string, { color: string; singular: string; plural: string }> = {
+    level_floor_plan: {
+      color: awpClassColor("Level Floor Plan"),
+      singular: "level plan",
+      plural: "level plans",
+    },
+    unit_floor_plan: {
+      color: awpClassColor("Unit Floor Plan"),
+      singular: "unit plan",
+      plural: "unit plans",
+    },
+    schematic_level_row: {
+      color: awpClassColor("schematic_level_row"),
+      singular: "schematic row",
+      plural: "schematic rows",
+    },
+    typical_detail_block: {
+      color: awpClassColor("typical_detail_block"),
+      singular: "detail block",
+      plural: "detail blocks",
+    },
+  };
+
+  const PLAN_BADGE_TYPES = [
+    "level_floor_plan",
+    "unit_floor_plan",
+    "schematic_level_row",
+    "typical_detail_block",
+  ];
+
   /**
-   * Badges for floor-plan types that aren't covered by the level/unit badges
-   * (schematic level rows, typical detail blocks). Colors match the bbox
-   * colors used inside the drawing modal (hashed from the raw type string).
+   * Floor-plan badges for a page. Per type: show individual bbox-name badges
+   * when there are 1-2 of that type, otherwise collapse to a single count
+   * badge ("5 unit plans"). Colors match the bbox colors in the drawing modal.
    */
-  const renderOtherPlanBadges = (
+  const renderPlanBadges = (
     fileId: string,
     page: number,
-    types: string[],
+    types: string[] = PLAN_BADGE_TYPES,
   ) => {
-    const plans = (floorPlansByFile.get(fileId)?.get(page) ?? []).filter((p) =>
-      types.includes(p.type),
-    );
-    if (plans.length === 0) return null;
-    return plans.map((fp, i) => {
-      const c = awpClassColor(fp.type);
-      return (
-        <Badge
-          key={`${fp.type}-${i}-${fp.plan_id}`}
-          variant="outline"
-          className="h-5 px-1.5 text-[10px] max-w-[220px]"
-          style={{ backgroundColor: softBgFrom(c), color: c, borderColor: softBgFrom(c, 0.5) }}
-        >
-          <span className="truncate block">{planBadgeLabel(fp)}</span>
-        </Badge>
-      );
-    });
+    const all = floorPlansByFile.get(fileId)?.get(page) ?? [];
+    const out: React.ReactNode[] = [];
+    for (const type of types) {
+      const plans = all.filter((p) => p.type === type);
+      if (plans.length === 0) continue;
+      const meta = PLAN_TYPE_META[type] ?? {
+        color: awpClassColor(type),
+        singular: type,
+        plural: type,
+      };
+      const c = meta.color;
+      const style = {
+        backgroundColor: softBgFrom(c),
+        color: c,
+        borderColor: softBgFrom(c, 0.5),
+      };
+      if (plans.length > 2) {
+        out.push(
+          <Badge
+            key={`${type}-count`}
+            variant="outline"
+            className="h-5 px-1.5 text-[10px]"
+            style={style}
+          >
+            {plans.length} {meta.plural}
+          </Badge>,
+        );
+        continue;
+      }
+      const labels =
+        type === "level_floor_plan"
+          ? consolidateLevelLabels(plans.map((fp) => planBadgeLabel(fp)))
+          : plans.map((fp) => planBadgeLabel(fp));
+      labels.forEach((label, i) => {
+        out.push(
+          <Badge
+            key={`${type}-${i}-${label}`}
+            variant="outline"
+            className="h-5 px-1.5 text-[10px] max-w-[220px]"
+            style={style}
+          >
+            <span className="truncate block">{label}</span>
+          </Badge>,
+        );
+      });
+    }
+    return out.length > 0 ? out : null;
   };
+
+  const pageHasPlanBadges = (fileId: string, page: number): boolean =>
+    (floorPlansByFile.get(fileId)?.get(page) ?? []).some((p) =>
+      PLAN_BADGE_TYPES.includes(p.type),
+    );
 
 
 
@@ -4608,9 +4674,10 @@ export default function WorkbenchProjectDetail() {
                                       {count} pages
                                     </span>
                                   )}
-                                  {singlePage && !processingLock && renderSpaceBadge(row.name, 1)}
                                   {singlePage && !processingLock &&
-                                    renderOtherPlanBadges(row.id, 1, ["typical_detail_block"])}
+                                    (pageHasPlanBadges(row.id, 1)
+                                      ? renderPlanBadges(row.id, 1)
+                                      : renderSpaceBadge(row.name, 1))}
                                 </div>
                               </TableCell>
                               {enabledCols.map((name) => {
@@ -4642,14 +4709,6 @@ export default function WorkbenchProjectDetail() {
                             {/* Per-page sub-rows (only when multi-page AND expanded) - matches first table */}
                             {!singlePage && isExpanded && count > 0 &&
                               Array.from({ length: count }, (_, i) => i + 1).map((p) => {
-                                const pagePlans =
-                                  floorPlansByFile.get(row.id)?.get(p) ?? [];
-                                const levelPlans = pagePlans.filter(
-                                  (p) => p.type === "level_floor_plan",
-                                );
-                                const unitPlans = pagePlans.filter(
-                                  (p) => p.type === "unit_floor_plan",
-                                );
                                 return (
                                   <TableRow
                                     key={`${row.id}:${p}`}
@@ -4666,54 +4725,7 @@ export default function WorkbenchProjectDetail() {
                                         <span className="text-muted-foreground shrink-0">
                                           Page {p}
                                         </span>
-                                        {!processingLock && (() => {
-                                          if (levelPlans.length === 0) return null;
-                                          const c = awpClassColor("Level Floor Plan");
-                                          const labels = levelPlans.map((lvl) => {
-                                            // Badge must mirror the bbox label
-                                            // shown in the drawing modal:
-                                            // user override → reference_id →
-                                            // (last resort) Scout floors.
-                                            const overrideName = (lvl as any).__overrideName as
-                                              | string
-                                              | undefined;
-                                            if (overrideName?.trim()) return overrideName.trim();
-                                            if (lvl.reference_id?.trim()) return lvl.reference_id.trim();
-                                            return (
-                                              (lvl.floors && lvl.floors.length > 0
-                                                ? formatLevelSetLabel(lvl.floors)
-                                                : "") || floorPlanDisplayLabel(lvl)
-                                            );
-                                          });
-                                          const consolidated = consolidateLevelLabels(labels);
-                                          return consolidated.map((label, i) => (
-                                            <Badge
-                                              key={`lvl-${i}-${label}`}
-                                              variant="outline"
-                                              className="h-5 px-1.5 text-[10px]"
-                                              style={{ backgroundColor: softBgFrom(c), color: c, borderColor: softBgFrom(c, 0.5) }}
-                                            >
-                                              {label}
-                                            </Badge>
-                                          ));
-                                        })()}
-                                        {!processingLock && unitPlans.length > 0 && (() => {
-                                          const c = awpClassColor("Unit Floor Plan");
-                                          return (
-                                            <Badge
-                                              variant="outline"
-                                              className="h-5 px-1.5 text-[10px]"
-                                              style={{ backgroundColor: softBgFrom(c), color: c, borderColor: softBgFrom(c, 0.5) }}
-                                            >
-                                              {unitPlans.length} unit plan{unitPlans.length === 1 ? "" : "s"}
-                                            </Badge>
-                                          );
-                                        })()}
-                                        {!processingLock &&
-                                          renderOtherPlanBadges(row.id, p, [
-                                            "schematic_level_row",
-                                            "typical_detail_block",
-                                          ])}
+                                        {!processingLock && renderPlanBadges(row.id, p)}
 
                                       </div>
                                     </TableCell>
