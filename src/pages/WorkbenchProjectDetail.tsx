@@ -452,6 +452,9 @@ export default function WorkbenchProjectDetail() {
   const pageInfoExpandStorageKey = projectId
     ? `workbench:pageInfoExpanded:${projectId}`
     : null;
+  const [manageFilesOpen, setManageFilesOpen] = useState(false);
+  /** Bumped after add/delete so the Page Info loader re-runs. */
+  const [filesVersion, setFilesVersion] = useState(0);
   const [pageInfoExpanded, setPageInfoExpanded] = useState<Set<string>>(() => {
     if (typeof window === "undefined" || !projectId) return new Set();
     try {
