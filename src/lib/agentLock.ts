@@ -3,8 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 export type AgentName = "Scout" | "Risk Radar" | "Spatial Architect";
 
 export type AcquireAgentLockResult =
-  | { ok: true; runId: string }
-  | { ok: false; busy: boolean; agent?: string; email?: string; message: string };
+  | { ok: true; runId: string; busy?: false; agent?: string; email?: string; message?: string }
+  | { ok: false; runId?: undefined; busy: boolean; agent?: string; email?: string; message: string };
+
 
 /**
  * Try to claim the single per-project agent slot. Only one agent (Scout,
