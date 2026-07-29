@@ -3873,6 +3873,36 @@ export default function WorkbenchProjectDetail() {
                   </TooltipContent>
                 </Tooltip>
 
+                {isInternal && activeAgentRun && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="text-destructive"
+                        onClick={async () => {
+                          if (!projectId) return;
+                          if (!window.confirm(`Force release the "${activeAgentRun.agent}" run started by ${activeAgentRun.triggered_by_email ?? "unknown"}?`)) return;
+                          try {
+                            await forceReleaseAgentLocks(projectId);
+                            await refetchActiveAgentRun();
+                            toast({ title: "Agent lock released" });
+                          } catch (e: any) {
+                            toast({ variant: "destructive", title: "Could not release lock", description: getUserFriendlyError(e) });
+                          }
+                        }}
+                      >
+                        Release {activeAgentRun.agent} lock
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      {`${activeAgentRun.agent} is running · triggered by ${activeAgentRun.triggered_by_email ?? "unknown"}`}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+
+
+
                 {(() => {
                   const disabled = !requestId || processingLock;
                   const tip = processingLock
