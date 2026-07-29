@@ -447,13 +447,12 @@ export async function runThreatReportExport(
       else if (mime.includes("gif")) logoType = "gif";
       else if (mime.includes("bmp")) logoType = "bmp";
       else if (!mime.includes("png")) logoBytes = null; // unsupported (e.g. svg/webp)
-      // Preserve the logo's aspect ratio, capped to 240x90 px on the cover.
+      // Fixed logo height on the cover; width scales freely with the aspect ratio.
       if (logoBytes) {
         try {
           const bitmap = await createImageBitmap(blob);
-          const ratio = Math.min(240 / bitmap.width, 90 / bitmap.height);
-          logoWidth = Math.round(bitmap.width * ratio);
-          logoHeight = Math.round(bitmap.height * ratio);
+          logoHeight = 90;
+          logoWidth = Math.max(1, Math.round(bitmap.width * (90 / bitmap.height)));
           bitmap.close?.();
         } catch {
           /* keep defaults */

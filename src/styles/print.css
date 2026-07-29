@@ -82,6 +82,8 @@
   .print-header img {
     height: 32px;
     max-height: 32px;
+    width: auto;
+    max-width: none;
   }
 
   /* Footer is now added programmatically via jsPDF */
