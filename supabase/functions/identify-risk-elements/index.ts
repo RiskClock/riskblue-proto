@@ -126,12 +126,24 @@ Deno.serve(async (req) => {
     const awpClassNames: string[] = Array.isArray(body?.awpClassNames)
       ? body.awpClassNames.filter((s: unknown) => typeof s === "string" && s)
       : [];
+    // Optional 1-based page numbers to scope the scan to (pages carrying a
+    // floor-plan bounding box). Empty/absent = scan the whole file.
+    const pageNumbers: number[] = Array.isArray(body?.pageNumbers)
+      ? Array.from(
+          new Set(
+            body.pageNumbers
+              .map((n: unknown) => Number(n))
+              .filter((n: number) => Number.isFinite(n) && n > 0),
+          ),
+        ).sort((a: number, b: number) => a - b)
+      : [];
     if (!analysisRequestId || !fileId) {
       return json({ error: "analysisRequestId and fileId are required" }, 400);
     }
     if (awpClassNames.length === 0) {
       return json({ error: "awpClassNames must be a non-empty array" }, 400);
     }
+
 
     const { data: reqRow, error: reqErr } = await admin
       .from("analysis_requests")
