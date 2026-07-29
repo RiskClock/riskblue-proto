@@ -20,15 +20,18 @@ export interface CompanyLogoRow {
 export async function fetchCompanyLogos(company: string): Promise<CompanyLogoRow[]> {
   const trimmed = (company || "").trim();
   if (!trimmed) return [];
+  // Escape LIKE wildcards so names like "A_B" or "50% Co" match exactly (case-insensitive).
+  const pattern = trimmed.replace(/([%_\\])/g, "\\$1");
   const { data, error } = await supabase
     .from("company_logos")
     .select("id, company, storage_path, is_current, created_at")
-    .ilike("company", trimmed)
+    .ilike("company", pattern)
     .order("is_current", { ascending: false })
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data || []).map((r: any) => ({ ...r, url: companyLogoPublicUrl(r.storage_path) }));
 }
+
 
 /** Active logo URL for a company, or null. */
 export async function fetchCompanyLogoUrl(company: string | null | undefined): Promise<string | null> {
