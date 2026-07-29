@@ -103,8 +103,8 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [showBuyCredits, setShowBuyCredits] = useState(false);
-  const [cwExpanded, setCwExpanded] = useState(false);
-  const [cwSubtypes, setCwSubtypes] = useState<Set<string>>(new Set());
+  const [expandedClasses, setExpandedClasses] = useState<Set<string>>(new Set());
+  const [subtypesByClass, setSubtypesByClass] = useState<Record<string, Set<string>>>({});
 
   useEffect(() => {
     if (open) {
@@ -115,8 +115,8 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
       setOtherText("");
       setFiles([]);
       setSubmitting(false);
-      setCwExpanded(false);
-      setCwSubtypes(new Set());
+      setExpandedClasses(new Set());
+      setSubtypesByClass({});
       setTimeout(() => nameRef.current?.focus(), 100);
     }
   }, [open]);
@@ -142,26 +142,45 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
     [otherEnabled, otherText],
   );
 
+  const anySubtypeSelected = useMemo(
+    () => Object.values(subtypesByClass).some((s) => s.size > 0),
+    [subtypesByClass],
+  );
+
   const hasAnyClass =
     selectedClassNames.size > 0 ||
-    cwSubtypes.size > 0 ||
+    anySubtypeSelected ||
     (otherEnabled && otherList.length > 0);
 
   const finalSelectedClassNames = useMemo(() => {
     const s = new Set(selectedClassNames);
-    if (cwSubtypes.size > 0) s.add(COLD_WATER_NAME);
-    else s.delete(COLD_WATER_NAME);
+    for (const className of Object.keys(SUBTYPED_CLASSES)) {
+      if ((subtypesByClass[className]?.size ?? 0) > 0) s.add(className);
+      else s.delete(className);
+    }
     return Array.from(s);
-  }, [selectedClassNames, cwSubtypes]);
+  }, [selectedClassNames, subtypesByClass]);
 
   const selectedSubtypesMap = useMemo(() => {
-    if (cwSubtypes.size === 0) return {} as Record<string, string[]>;
-    // Preserve canonical order from COLD_WATER_SUBTYPES
-    const ordered = COLD_WATER_SUBTYPES.filter((s) => cwSubtypes.has(s.abbr)).map(
-      (s) => s.abbr,
-    );
-    return { [COLD_WATER_NAME]: ordered };
-  }, [cwSubtypes]);
+    const out: Record<string, string[]> = {};
+    for (const [className, defs] of Object.entries(SUBTYPED_CLASSES)) {
+      const picked = subtypesByClass[className];
+      if (!picked || picked.size === 0) continue;
+      // Preserve canonical order from the subtype definition
+      out[className] = defs.filter((s) => picked.has(s.abbr)).map((s) => s.abbr);
+    }
+    return out;
+  }, [subtypesByClass]);
+
+  const toggleSubtype = (className: string, abbr: string) => {
+    setSubtypesByClass((prev) => {
+      const next = new Set(prev[className] || []);
+      if (next.has(abbr)) next.delete(abbr);
+      else next.add(abbr);
+      return { ...prev, [className]: next };
+    });
+  };
+
 
   const canSave =
     !!user &&
