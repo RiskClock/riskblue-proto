@@ -2708,8 +2708,23 @@ export default function WorkbenchProjectDetail() {
         await saveClassAlias(name, nextAlias, nextPrefix);
       }
 
+      // Persist subtype selections (used as "Type" suggestions on annotations).
+      const nextSubtypes: Record<string, string[]> = {};
+      for (const [name, abbrs] of Object.entries(draftSubtypes)) {
+        if (abbrs && abbrs.length) nextSubtypes[name] = abbrs;
+      }
+      if (projectId) {
+        const { error: subErr } = await supabase
+          .from("projects")
+          .update({ selected_awp_subtypes: nextSubtypes as any })
+          .eq("id", projectId);
+        if (subErr) throw subErr;
+        queryClient.invalidateQueries({ queryKey: ["workbench-project", projectId] });
+      }
+
       queryClient.invalidateQueries({ queryKey: ["workbench-column-prefs", prefId] });
       setManageOpen(false);
+
 
     } catch (error: any) {
       toast({
