@@ -669,6 +669,7 @@ export function SpatialArchitectModal({
                     <SelectBboxPopover
                       catalog={bboxCatalog}
                       selected={bboxByLevel[l.uid] || []}
+                      suffixes={dupSuffix}
                       onToggle={(k) => toggleBbox(l.uid, k)}
                     />
                   </div>
