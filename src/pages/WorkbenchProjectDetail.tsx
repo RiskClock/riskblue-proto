@@ -36,6 +36,7 @@ import { ConsolidateRisersModal } from "@/components/workbench/ConsolidateRisers
 import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectModal";
 import { BulkDrawingDownloadModal } from "@/components/workbench/BulkDrawingDownloadModal";
 import { ManageFilesModal } from "@/components/workbench/ManageFilesModal";
+import { SUBTYPED_CLASSES } from "@/components/CreateProjectModal";
 import { ActivityHistoryPanel } from "@/components/workbench/ActivityHistoryPanel";
 import { normalizeScoutResponse } from "@/lib/scoutResponseNormalizer";
 import {
@@ -366,6 +367,8 @@ export default function WorkbenchProjectDetail() {
   const [draftCols, setDraftCols] = useState<string[]>([]);
   const [draftAliases, setDraftAliases] = useState<Record<string, string>>({});
   const [draftAliasPrefixes, setDraftAliasPrefixes] = useState<Record<string, string>>({});
+  const [draftSubtypes, setDraftSubtypes] = useState<Record<string, string[]>>({});
+  const [expandedSubtypeClasses, setExpandedSubtypeClasses] = useState<Set<string>>(new Set());
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [textFileId, setTextFileId] = useState<string | null>(null);
   const [textSheet, setTextSheet] = useState<{ id: string; label: string } | null>(null);
@@ -2650,8 +2653,28 @@ export default function WorkbenchProjectDetail() {
     setDraftCols(enabledCols);
     setDraftAliases({ ...aliasMap });
     setDraftAliasPrefixes({ ...aliasPrefixMap });
+    setDraftSubtypes(
+      Object.fromEntries(
+        Object.entries(preseededTypesByClass).map(([k, v]) => [k, [...v]]),
+      ),
+    );
+    setExpandedSubtypeClasses(new Set());
     setManageOpen(true);
   };
+
+  const toggleDraftSubtype = (className: string, abbr: string) => {
+    setDraftSubtypes((prev) => {
+      const cur = prev[className] || [];
+      const next = cur.includes(abbr)
+        ? cur.filter((a) => a !== abbr)
+        : [...cur, abbr];
+      // keep canonical order from the subtype definition
+      const defs = SUBTYPED_CLASSES[className] || [];
+      const ordered = defs.filter((d) => next.includes(d.abbr)).map((d) => d.abbr);
+      return { ...prev, [className]: ordered };
+    });
+  };
+
 
   const toggleDraft = (name: string) => {
     setDraftCols((prev) =>
@@ -2686,8 +2709,23 @@ export default function WorkbenchProjectDetail() {
         await saveClassAlias(name, nextAlias, nextPrefix);
       }
 
+      // Persist subtype selections (used as "Type" suggestions on annotations).
+      const nextSubtypes: Record<string, string[]> = {};
+      for (const [name, abbrs] of Object.entries(draftSubtypes)) {
+        if (abbrs && abbrs.length) nextSubtypes[name] = abbrs;
+      }
+      if (projectId) {
+        const { error: subErr } = await supabase
+          .from("projects")
+          .update({ selected_awp_subtypes: nextSubtypes as any })
+          .eq("id", projectId);
+        if (subErr) throw subErr;
+        queryClient.invalidateQueries({ queryKey: ["workbench-project", projectId] });
+      }
+
       queryClient.invalidateQueries({ queryKey: ["workbench-column-prefs", prefId] });
       setManageOpen(false);
+
 
     } catch (error: any) {
       toast({
@@ -5217,8 +5255,13 @@ export default function WorkbenchProjectDetail() {
                         const checked = draftCols.includes(opt.name);
                         const aliasVal = draftAliases[opt.name] ?? "";
                         const prefixVal = draftAliasPrefixes[opt.name] ?? "";
+                        const subtypeDefs = SUBTYPED_CLASSES[opt.name];
+                        const pickedSubtypes = draftSubtypes[opt.name] || [];
+                        const subtypeExpanded = expandedSubtypeClasses.has(opt.name);
                         return (
-                          <TableRow key={opt.id}>
+                          <Fragment key={opt.id}>
+                          <TableRow>
+
                             <TableCell className="py-1.5">
                               <Checkbox
                                 checked={checked}
@@ -5270,7 +5313,59 @@ export default function WorkbenchProjectDetail() {
                               </Tooltip>
                             </TableCell>
                           </TableRow>
+                          {subtypeDefs && (
+                            <TableRow className="hover:bg-transparent border-0">
+                              <TableCell />
+                              <TableCell colSpan={3} className="py-0 pb-2">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedSubtypeClasses((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(opt.name)) next.delete(opt.name);
+                                      else next.add(opt.name);
+                                      return next;
+                                    })
+                                  }
+                                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                                >
+                                  {subtypeExpanded ? (
+                                    <ChevronDown className="h-3.5 w-3.5" />
+                                  ) : (
+                                    <ChevronRight className="h-3.5 w-3.5" />
+                                  )}
+                                  <span>Subtypes</span>
+                                  {pickedSubtypes.length > 0 && (
+                                    <span>({pickedSubtypes.length} selected)</span>
+                                  )}
+                                </button>
+                                {subtypeExpanded && (
+                                  <div className="pl-5 pt-1.5 space-y-1.5">
+                                    {subtypeDefs.map((sub) => (
+                                      <label
+                                        key={sub.abbr}
+                                        className="flex items-center gap-2 text-sm cursor-pointer"
+                                      >
+                                        <Checkbox
+                                          checked={pickedSubtypes.includes(sub.abbr)}
+                                          onCheckedChange={() =>
+                                            toggleDraftSubtype(opt.name, sub.abbr)
+                                          }
+                                        />
+                                        <span className="font-mono text-xs text-muted-foreground">
+                                          {sub.abbr}
+                                        </span>
+                                        <span>{sub.label}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          )}
+                          </Fragment>
                         );
+
                       })}
                     </TableBody>
                   </Table>

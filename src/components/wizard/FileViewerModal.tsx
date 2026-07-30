@@ -99,10 +99,10 @@ const isDiameterEnabledClass = (name: string): boolean => {
   return DIAMETER_ENABLED_MATCHERS.some((m) => n.includes(m));
 };
 
-// Type is optional for Cold Water and Hot Water only.
+// Type is optional for Cold Water, Hot Water and Riser.
 const isTypeEnabledClass = (name: string): boolean => {
   const n = (name || "").toLowerCase();
-  return n.includes("cold water") || n.includes("hot water");
+  return n.includes("cold water") || n.includes("hot water") || n.includes("riser");
 };
 
 // Metadata field descriptors surfaced in the annotation popover, keyed by
