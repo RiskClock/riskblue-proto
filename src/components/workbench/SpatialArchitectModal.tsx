@@ -239,6 +239,25 @@ export function SpatialArchitectModal({
     [bboxCatalog],
   );
 
+  // Several distinct bboxes on one page can carry the same label (e.g. four
+  // "LEVEL P5" schematic rows, one per riser column). Give each a "(n of m)"
+  // suffix so identical-looking chips stay tellable apart.
+  const dupSuffix = useMemo(() => {
+    const groups = new Map<string, string[]>();
+    for (const b of bboxCatalog) {
+      const g = `${b.fileName}\u0000${b.page}\u0000${b.label.trim().toLowerCase()}`;
+      const arr = groups.get(g) || [];
+      arr.push(b.key);
+      groups.set(g, arr);
+    }
+    const out = new Map<string, string>();
+    for (const arr of groups.values()) {
+      if (arr.length < 2) continue;
+      arr.forEach((k, i) => out.set(k, ` (${i + 1} of ${arr.length})`));
+    }
+    return out;
+  }, [bboxCatalog]);
+
   const attachedKeys = useMemo(() => {
     const s = new Set<string>();
     for (const arr of Object.values(bboxByLevel)) for (const k of arr) s.add(k);
@@ -249,6 +268,27 @@ export function SpatialArchitectModal({
     () => bboxCatalog.filter((b) => !attachedKeys.has(b.key)),
     [bboxCatalog, attachedKeys],
   );
+
+  // Group the unmapped audit list by file + label so hundreds of rows collapse
+  // into a scannable list of real gaps.
+  const unmappedGroups = useMemo(() => {
+    const map = new Map<
+      string,
+      { fileName: string; label: string; type: string; pages: number[] }
+    >();
+    for (const b of unmappedBboxes) {
+      const k = `${b.fileName}\u0000${b.label.trim().toLowerCase()}\u0000${b.type}`;
+      const g = map.get(k) || { fileName: b.fileName, label: b.label, type: b.type, pages: [] };
+      g.pages.push(b.page);
+      map.set(k, g);
+    }
+    return Array.from(map.values())
+      .map((g) => ({ ...g, pages: Array.from(new Set(g.pages)).sort((a, b) => a - b) }))
+      .sort(
+        (a, b) => a.fileName.localeCompare(b.fileName) || a.label.localeCompare(b.label),
+      );
+  }, [unmappedBboxes]);
+
 
   const toggleBbox = (uid: string, key: string) => {
     setBboxByLevel((prev) => {
