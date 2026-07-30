@@ -427,25 +427,30 @@ export function SpatialArchitectModal({
         {/* Status row */}
         <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2 text-xs">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="font-semibold">Status:</span>
             {running ? (
-              <span className="flex items-center gap-1 text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" /> Running…
-              </span>
+              <>
+                <span className="font-semibold">Status:</span>
+                <span className="flex items-center gap-1 text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Running…
+                </span>
+              </>
             ) : status === "failed" ? (
-              <span className="text-destructive truncate" title={error ?? undefined}>
-                Failed - {error ?? "unknown error"} (previous results preserved)
-              </span>
+              <>
+                <span className="font-semibold">Status:</span>
+                <span className="text-destructive truncate" title={error ?? undefined}>
+                  Failed - {error ?? "unknown error"} (previous results preserved)
+                </span>
+              </>
             ) : status === "complete" ? (
-              <span className="text-muted-foreground">
-                Complete{updatedAt ? ` · ${new Date(updatedAt).toLocaleString()}` : ""}
-              </span>
-            ) : (
-              <span className="text-muted-foreground">
-                Not run yet - click Build Spatial Model to analyze drawings.
-              </span>
-            )}
+              <>
+                <span className="font-semibold">Status:</span>
+                <span className="text-muted-foreground">
+                  Complete{updatedAt ? ` · ${new Date(updatedAt).toLocaleString()}` : ""}
+                </span>
+              </>
+            ) : null}
           </div>
+
           <TooltipProvider delayDuration={150}>
             <Tooltip>
               <TooltipTrigger asChild>
