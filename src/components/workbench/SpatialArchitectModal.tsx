@@ -560,7 +560,7 @@ export function SpatialArchitectModal({
           <div className="grid grid-cols-[minmax(0,1fr)_70px_minmax(0,1.6fr)_128px] items-center gap-2 px-3 py-2 bg-muted/40 border-b text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             <div>Level name</div>
             <div className="text-center">Index</div>
-            <div>Drawings</div>
+            <div>Floor plans / schematic rows</div>
             <div className="text-right">Actions</div>
           </div>
 
