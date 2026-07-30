@@ -5308,7 +5308,59 @@ export default function WorkbenchProjectDetail() {
                               </Tooltip>
                             </TableCell>
                           </TableRow>
+                          {subtypeDefs && (
+                            <TableRow className="hover:bg-transparent border-0">
+                              <TableCell />
+                              <TableCell colSpan={3} className="py-0 pb-2">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedSubtypeClasses((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(opt.name)) next.delete(opt.name);
+                                      else next.add(opt.name);
+                                      return next;
+                                    })
+                                  }
+                                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                                >
+                                  {subtypeExpanded ? (
+                                    <ChevronDown className="h-3.5 w-3.5" />
+                                  ) : (
+                                    <ChevronRight className="h-3.5 w-3.5" />
+                                  )}
+                                  <span>Subtypes</span>
+                                  {pickedSubtypes.length > 0 && (
+                                    <span>({pickedSubtypes.length} selected)</span>
+                                  )}
+                                </button>
+                                {subtypeExpanded && (
+                                  <div className="pl-5 pt-1.5 space-y-1.5">
+                                    {subtypeDefs.map((sub) => (
+                                      <label
+                                        key={sub.abbr}
+                                        className="flex items-center gap-2 text-sm cursor-pointer"
+                                      >
+                                        <Checkbox
+                                          checked={pickedSubtypes.includes(sub.abbr)}
+                                          onCheckedChange={() =>
+                                            toggleDraftSubtype(opt.name, sub.abbr)
+                                          }
+                                        />
+                                        <span className="font-mono text-xs text-muted-foreground">
+                                          {sub.abbr}
+                                        </span>
+                                        <span>{sub.label}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          )}
+                          </Fragment>
                         );
+
                       })}
                     </TableBody>
                   </Table>
