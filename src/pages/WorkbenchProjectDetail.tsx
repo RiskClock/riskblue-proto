@@ -2652,8 +2652,28 @@ export default function WorkbenchProjectDetail() {
     setDraftCols(enabledCols);
     setDraftAliases({ ...aliasMap });
     setDraftAliasPrefixes({ ...aliasPrefixMap });
+    setDraftSubtypes(
+      Object.fromEntries(
+        Object.entries(preseededTypesByClass).map(([k, v]) => [k, [...v]]),
+      ),
+    );
+    setExpandedSubtypeClasses(new Set());
     setManageOpen(true);
   };
+
+  const toggleDraftSubtype = (className: string, abbr: string) => {
+    setDraftSubtypes((prev) => {
+      const cur = prev[className] || [];
+      const next = cur.includes(abbr)
+        ? cur.filter((a) => a !== abbr)
+        : [...cur, abbr];
+      // keep canonical order from the subtype definition
+      const defs = SUBTYPED_CLASSES[className] || [];
+      const ordered = defs.filter((d) => next.includes(d.abbr)).map((d) => d.abbr);
+      return { ...prev, [className]: ordered };
+    });
+  };
+
 
   const toggleDraft = (name: string) => {
     setDraftCols((prev) =>
