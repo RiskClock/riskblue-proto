@@ -731,18 +731,25 @@ export function SpatialArchitectModal({
               className="max-h-32 overflow-y-auto overscroll-contain divide-y divide-amber-200/60"
               onWheel={(e) => e.stopPropagation()}
             >
-              {unmappedBboxes.map((b) => (
+              {unmappedGroups.map((g) => (
                 <div
-                  key={b.key}
+                  key={`${g.fileName}::${g.label}::${g.type}`}
                   className="px-3 py-1 text-xs flex items-center gap-2 min-w-0"
                 >
-                  <span className="truncate font-medium" title={b.fileName}>
-                    {b.fileName}
+                  <span className="truncate font-medium" title={g.fileName}>
+                    {g.fileName}
                   </span>
-                  <span className="text-muted-foreground shrink-0">p{b.page}</span>
-                  <span className="truncate text-muted-foreground">{b.label}</span>
+                  <span className="truncate text-muted-foreground">{g.label}</span>
+                  <span
+                    className="text-muted-foreground shrink-0"
+                    title={`Pages: ${g.pages.join(", ")}`}
+                  >
+                    {g.pages.length > 3
+                      ? `${g.pages.length} pages`
+                      : g.pages.map((p) => `p${p}`).join(", ")}
+                  </span>
                   <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
-                    {b.type === "schematic_level_row" ? "schematic row" : "level plan"}
+                    {g.type === "schematic_level_row" ? "schematic row" : "level plan"}
                   </span>
                 </div>
               ))}
