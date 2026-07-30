@@ -37,7 +37,7 @@ import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectMo
 import { BulkDrawingDownloadModal } from "@/components/workbench/BulkDrawingDownloadModal";
 import { ManageFilesModal } from "@/components/workbench/ManageFilesModal";
 import { SUBTYPED_CLASSES } from "@/components/CreateProjectModal";
-import { expandSubtypeLabel, isSubtypeSplitClass } from "@/lib/awpSubtypeLabels";
+import { expandSubtypeLabel, isSubtypeSplitClass, subtypeAbbr } from "@/lib/awpSubtypeLabels";
 
 import { ActivityHistoryPanel } from "@/components/workbench/ActivityHistoryPanel";
 import { normalizeScoutResponse } from "@/lib/scoutResponseNormalizer";
