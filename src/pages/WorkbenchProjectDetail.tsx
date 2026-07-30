@@ -1751,7 +1751,7 @@ export default function WorkbenchProjectDetail() {
   const enabledCols = prefs ?? defaultEnabledCols;
 
   const hasRisersSelected = useMemo(() => {
-    return enabledCols.some((col) => col === "Electrical Riser" || col === "Mechanical Riser");
+    return enabledCols.some((col) => /riser/i.test(col));
   }, [enabledCols]);
 
 
