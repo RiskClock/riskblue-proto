@@ -37,6 +37,8 @@ import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectMo
 import { BulkDrawingDownloadModal } from "@/components/workbench/BulkDrawingDownloadModal";
 import { ManageFilesModal } from "@/components/workbench/ManageFilesModal";
 import { SUBTYPED_CLASSES } from "@/components/CreateProjectModal";
+import { expandSubtypeLabel, isSubtypeSplitClass } from "@/lib/awpSubtypeLabels";
+
 import { ActivityHistoryPanel } from "@/components/workbench/ActivityHistoryPanel";
 import { normalizeScoutResponse } from "@/lib/scoutResponseNormalizer";
 import {
@@ -6704,10 +6706,8 @@ function InstancesReportModal({
     displayPrefix: string;
     typeGroup: string | null;
   };
-  const isTypedClassName = useCallback(
-    (n: string) => /(^|\s)(cold|hot)\s*water(\s|$)/i.test(n),
-    [],
-  );
+  const isTypedClassName = useCallback((n: string) => isSubtypeSplitClass(n), []);
+
   const overviewEntries = useMemo<OverviewEntry[]>(() => {
     const typeOf = (r: (typeof expanded)[number]) =>
       r.pipeType && r.pipeType.trim() ? r.pipeType.trim() : "(untyped)";
