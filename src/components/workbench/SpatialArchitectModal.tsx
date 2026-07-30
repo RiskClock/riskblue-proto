@@ -596,47 +596,38 @@ export function SpatialArchitectModal({
                     className="h-8 text-sm text-center"
                     title="Numeric index (P1=-1, Ground=0, L1=1…)"
                   />
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
-                    {l.matched_sources.length === 0 && (
-                      <span className="text-xs text-muted-foreground italic">
-                        None
-                      </span>
+                  <div className="flex flex-wrap items-center gap-1 min-w-0">
+                    {(bboxByLevel[l.uid] || []).length === 0 && (
+                      <span className="text-xs text-muted-foreground italic">None</span>
                     )}
-                    {(() => {
-                      const byFile = new Map<string, number[]>();
-                      for (const m of l.matched_sources) {
-                        const arr = byFile.get(m.file_name) || [];
-                        arr.push(m.page_number);
-                        byFile.set(m.file_name, arr);
-                      }
-                      return Array.from(byFile.entries()).map(([fileName, pages]) => (
-                        <div
-                          key={fileName}
-                          className="flex items-center gap-1.5 min-w-0 max-w-full text-xs"
+                    {(bboxByLevel[l.uid] || []).map((k) => {
+                      const b = bboxByKey.get(k);
+                      if (!b) return null;
+                      return (
+                        <Badge
+                          key={k}
+                          variant="secondary"
+                          className="text-[11px] font-normal max-w-full"
+                          title={`${b.fileName} · p${b.page} · ${b.label}`}
                         >
-                          <span className="font-medium truncate min-w-0" title={fileName}>
-                            {fileName}
+                          <span className="truncate">
+                            {b.label} · p{b.page}
                           </span>
-                          <span className="text-muted-foreground shrink-0">
-                            {pages
-                              .slice()
-                              .sort((a, b) => a - b)
-                              .map((p) => `p${p}`)
-                              .join(", ")}
-                          </span>
-                        </div>
-                      ));
-                    })()}
-                    <AddPagePopover
-                      pages={allPages}
-                      existing={l.matched_sources}
-                      onAdd={(p) => addPage(l.uid, p)}
-                      onRemove={(p) => {
-                        const idx = l.matched_sources.findIndex(
-                          (m) => m.file_name === p.file_name && m.page_number === p.page_number,
-                        );
-                        if (idx >= 0) removePage(l.uid, idx);
-                      }}
+                          <button
+                            type="button"
+                            className="ml-1 text-muted-foreground hover:text-destructive"
+                            onClick={() => toggleBbox(l.uid, k)}
+                            aria-label="Remove bbox"
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                    <SelectBboxPopover
+                      catalog={bboxCatalog}
+                      selected={bboxByLevel[l.uid] || []}
+                      onToggle={(k) => toggleBbox(l.uid, k)}
                     />
                   </div>
                   <div className="flex items-center justify-end gap-0.5">
