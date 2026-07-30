@@ -49,6 +49,7 @@ Spatial Architect keeps producing the canonical level list, and additionally pro
 
 - Storage: per-bbox levels persist in `analysis_request_sheets.floor_plan_overrides[plan_id].floors` (the override key already read by `effective()` in `WorkbenchProjectDetail.tsx`), plus a sibling flag `levels_source: "agent" | "user"` for the do-not-overwrite rule.
 - `surveyDerivedMaps`: include `schematic_level_row` in `pageLevelPlans`; stop contributing level/schematic pages to `levelMap` / `unitMap` fan-out.
-- `pairsForPage`: drop the `pageSpaceUnitMap` / `pageSpaceMap` fallback for pages that contain any level/schematic bbox; return `[]` (Unassigned) on no containment and record the miss for the warning panel.
-- `SpatialArchitectModal.tsx`: new bbox mapping table fed by `floorPlansByFile` + sheet overrides; writes overrides back via the existing per-plan override update path.
+- `pairsForPage`: drop the `pageSpaceUnitMap` / `pageSpaceMap` fallback for pages that contain any level/schematic bbox; return `[]` (Unassigned) on no containment.
+- `SpatialArchitectModal.tsx`: keep the level-row table; swap the drawings selector for a bbox picker built from `floorPlansByFile` + sheet overrides, writing back through the existing per-plan override update path. Add the Unmapped bboxes section.
 - `supabase/functions/spatial-architect/index.ts`: extend the response schema with `bbox_assignments: [{ file_name, page_number, plan_id, levels[] }]` and persist proposals into sheet overrides where `levels_source !== "user"`.
+- Backfill runs as a one-off script over `analysis_request_sheets`, using the existing page→levels maps, applying only to single-`level_floor_plan` pages, and emitting the audit list of everything skipped.
