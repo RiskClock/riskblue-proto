@@ -7664,8 +7664,10 @@ function InstancesReportModal({
             return diameterSortKey(a.diameter) - diameterSortKey(b.diameter);
           })
           .map(({ type, diameter }) => {
-            const typeLabel = type === "(untyped)" ? "" : ` ${type}`;
-            const typePrefix = type === "(untyped)" ? "" : `-${type}`;
+            const fullType = type === "(untyped)" ? "" : expandSubtypeLabel(c.name, type);
+            const typeLabel = fullType ? ` ${fullType}` : "";
+            const typePrefix = fullType ? `-${fullType}` : "";
+
             return {
               key: `${c.name}::${type}::${diameter}`,
               canonicalName: c.name,
