@@ -93,6 +93,7 @@ const DIAMETER_ENABLED_MATCHERS = [
   "cold water",
   "hot water",
   "fire suppression",
+  "riser",
 ];
 const isDiameterEnabledClass = (name: string): boolean => {
   const n = (name || "").toLowerCase();
@@ -131,6 +132,9 @@ const metaFieldsForClass = (name: string): MetaFieldDef[] => {
   }
   return out;
 };
+
+// True when the class has at least one metadata field (Type and/or Pipe size).
+const hasMetaFields = (name: string): boolean => metaFieldsForClass(name).length > 0;
 
 // Sentinel awp_class_name used for lightweight "unit floor plan" indicator
 // dots placed inside a level-plan bbox. These are not tied to any specific
@@ -952,7 +956,7 @@ export const FileViewerModal = ({
     blurActive();
     // For DCW / FS annotations, immediately prompt for pipe diameter so the
     // user can tag the marker without a second click.
-    if (isDiameterEnabledClass(row.awp_class_name)) {
+    if (hasMetaFields(row.awp_class_name)) {
       const anchor = anchorForNormalizedPoint(row.nx, row.ny);
       if (anchor) setMetadataDialog({ instanceId: row.id, anchor });
     }
@@ -1154,7 +1158,7 @@ export const FileViewerModal = ({
     if (!inst) return;
     // DCW / FS: clicking an existing marker opens the metadata popover so the
     // user can adjust diameter (or delete via the trash button).
-    if (isDiameterEnabledClass(inst.awp_class_name)) {
+    if (hasMetaFields(inst.awp_class_name)) {
       const anchor = anchorForNormalizedPoint(inst.nx, inst.ny);
       if (anchor) setMetadataDialog({ instanceId: inst.id, anchor });
       return;
