@@ -679,6 +679,37 @@ export function SpatialArchitectModal({
           </div>
         </div>
 
+        {unmappedBboxes.length > 0 && (
+          <div className="rounded-md border border-amber-300 bg-amber-50/60 dark:bg-amber-950/20">
+            <div className="px-3 py-2 border-b border-amber-300 text-xs font-semibold text-amber-800 dark:text-amber-200">
+              Unmapped bboxes ({unmappedBboxes.length}) — annotations inside these
+              floor plans will not be attributed to any level
+            </div>
+            <div
+              className="max-h-32 overflow-y-auto overscroll-contain divide-y divide-amber-200/60"
+              onWheel={(e) => e.stopPropagation()}
+            >
+              {unmappedBboxes.map((b) => (
+                <div
+                  key={b.key}
+                  className="px-3 py-1 text-xs flex items-center gap-2 min-w-0"
+                >
+                  <span className="truncate font-medium" title={b.fileName}>
+                    {b.fileName}
+                  </span>
+                  <span className="text-muted-foreground shrink-0">p{b.page}</span>
+                  <span className="truncate text-muted-foreground">{b.label}</span>
+                  <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+                    {b.type === "schematic_level_row" ? "schematic row" : "level plan"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+
+
         <div className="flex items-center justify-between">
           <Button type="button" variant="outline" size="sm" onClick={addLevel}>
             <Plus className="h-4 w-4 mr-1" /> Add level
