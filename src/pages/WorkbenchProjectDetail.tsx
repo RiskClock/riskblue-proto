@@ -36,6 +36,7 @@ import { ConsolidateRisersModal } from "@/components/workbench/ConsolidateRisers
 import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectModal";
 import { BulkDrawingDownloadModal } from "@/components/workbench/BulkDrawingDownloadModal";
 import { ManageFilesModal } from "@/components/workbench/ManageFilesModal";
+import { SUBTYPED_CLASSES } from "@/components/CreateProjectModal";
 import { ActivityHistoryPanel } from "@/components/workbench/ActivityHistoryPanel";
 import { normalizeScoutResponse } from "@/lib/scoutResponseNormalizer";
 import {
