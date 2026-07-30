@@ -860,6 +860,7 @@ function SelectBboxPopover({
                     </span>
                     <span className="truncate">
                       p{b.page} · {b.label}
+                      {suffixes?.get(b.key) ?? ""}
                     </span>
                     <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
                       {b.type === "schematic_level_row" ? "schematic row" : "level plan"}
