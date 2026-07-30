@@ -708,45 +708,45 @@ export function SpatialArchitectModal({
   );
 }
 
-function AddPagePopover({
-  pages,
-  existing,
-  onAdd,
-  onRemove,
+/** Level-centric picker: attach level floor plans / schematic rows to a level. */
+function SelectBboxPopover({
+  catalog,
+  selected,
+  onToggle,
 }: {
-  pages: Array<{ file_name: string; page_number: number; label: string }>;
-  existing: Array<{ file_name: string; page_number: number }>;
-  onAdd: (p: { file_name: string; page_number: number }) => void;
-  onRemove: (p: { file_name: string; page_number: number }) => void;
+  catalog: LevelBboxEntry[];
+  selected: string[];
+  onToggle: (key: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const existingKey = new Set(existing.map((e) => `${e.file_name}::${e.page_number}`));
-  const filtered = pages.filter(
-    (p) =>
+  const sel = new Set(selected);
+  const filtered = catalog.filter(
+    (b) =>
       q.trim() === "" ||
-      p.file_name.toLowerCase().includes(q.toLowerCase()) ||
-      p.label.toLowerCase().includes(q.toLowerCase()),
+      b.fileName.toLowerCase().includes(q.toLowerCase()) ||
+      b.label.toLowerCase().includes(q.toLowerCase()) ||
+      `p${b.page}`.includes(q.toLowerCase()),
   );
-  const byFile = new Map<string, typeof filtered>();
-  for (const p of filtered) {
-    const arr = byFile.get(p.file_name) || [];
-    arr.push(p);
-    byFile.set(p.file_name, arr);
+  const byFile = new Map<string, LevelBboxEntry[]>();
+  for (const b of filtered) {
+    const arr = byFile.get(b.fileName) || [];
+    arr.push(b);
+    byFile.set(b.fileName, arr);
   }
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button type="button" size="sm" variant="outline" className="h-6 text-xs">
-          <Plus className="h-3 w-3 mr-1" /> Manage Pages
+          <Plus className="h-3 w-3 mr-1" /> Select floor plans
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-96 p-0 flex flex-col max-h-[24rem]" align="start">
+      <PopoverContent className="w-[26rem] p-0 flex flex-col max-h-[24rem]" align="start">
         <div className="p-2 border-b shrink-0">
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search file or page…"
+            placeholder="Search file, page or bbox name…"
             className="h-8 text-xs"
           />
         </div>
@@ -756,7 +756,7 @@ function AddPagePopover({
         >
           {byFile.size === 0 && (
             <div className="p-3 text-xs text-muted-foreground text-center">
-              No pages match.
+              No level floor plans or schematic rows match.
             </div>
           )}
           {Array.from(byFile.entries()).map(([fname, arr]) => (
@@ -764,20 +764,14 @@ function AddPagePopover({
               <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground truncate">
                 {fname}
               </div>
-              {arr.map((p) => {
-                const isSelected = existingKey.has(`${p.file_name}::${p.page_number}`);
+              {arr.map((b) => {
+                const isSelected = sel.has(b.key);
                 return (
                   <button
-                    key={`${p.file_name}-${p.page_number}`}
+                    key={b.key}
                     type="button"
                     className="w-full text-left px-3 py-1 text-xs hover:bg-muted flex items-center gap-2"
-                    onClick={() => {
-                      if (isSelected) {
-                        onRemove({ file_name: p.file_name, page_number: p.page_number });
-                      } else {
-                        onAdd({ file_name: p.file_name, page_number: p.page_number });
-                      }
-                    }}
+                    onClick={() => onToggle(b.key)}
                   >
                     <span
                       className={`inline-flex items-center justify-center h-4 w-4 shrink-0 rounded border ${
@@ -788,7 +782,12 @@ function AddPagePopover({
                     >
                       {isSelected && <Check className="h-3 w-3" />}
                     </span>
-                    <span className="truncate">{p.label}</span>
+                    <span className="truncate">
+                      p{b.page} · {b.label}
+                    </span>
+                    <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+                      {b.type === "schematic_level_row" ? "schematic row" : "level plan"}
+                    </span>
                   </button>
                 );
               })}
@@ -799,3 +798,4 @@ function AddPagePopover({
     </Popover>
   );
 }
+
