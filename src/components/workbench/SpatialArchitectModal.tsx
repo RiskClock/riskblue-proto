@@ -649,10 +649,11 @@ export function SpatialArchitectModal({
                           key={k}
                           variant="secondary"
                           className="text-[11px] font-normal max-w-full"
-                          title={`${b.fileName} · p${b.page} · ${b.label}`}
+                          title={`${b.fileName} · p${b.page} · ${b.label}${dupSuffix.get(k) ?? ""} · ${b.planId}`}
                         >
                           <span className="truncate">
                             {b.label} · p{b.page}
+                            {dupSuffix.get(k) ?? ""}
                           </span>
                           <button
                             type="button"
