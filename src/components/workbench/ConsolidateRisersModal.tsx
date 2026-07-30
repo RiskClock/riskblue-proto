@@ -474,7 +474,7 @@ export function ConsolidateRisersModal({
                               {activeSection.idPrefix || a.awp_class_name.slice(0, 3).toUpperCase()}
                               {String(a.instance_number ?? 0).padStart(3, "0")}
                             </span>
-                            <span className="text-muted-foreground truncate flex-1">
+                            <span className="text-muted-foreground break-words min-w-[200px] flex-1">
                               {fname} · Page {a.page_index}
                               {spaces.length ? ` · ${spaces.join(", ")}` : ""}
                             </span>
