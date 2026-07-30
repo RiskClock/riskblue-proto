@@ -2361,7 +2361,7 @@ export default function WorkbenchProjectDetail() {
     }
 
     return { levelMap, unitMap, pageUnitPlans, pageLevelPlans, pageLevelDisplayNames };
-  }, [rows?.files, rows?.sheets, floorPlansByFile, canonicalLevelNames]);
+  }, [rows?.files, rows?.sheets, floorPlansByFile, canonicalLevelNames, pageSpaceMap]);
 
   const pageUnitPlansMap = surveyDerivedMaps.pageUnitPlans;
   const pageLevelPlansMap = surveyDerivedMaps.pageLevelPlans;
