@@ -2366,6 +2366,112 @@ export default function WorkbenchProjectDetail() {
   const pageUnitPlansMap = surveyDerivedMaps.pageUnitPlans;
   const pageLevelPlansMap = surveyDerivedMaps.pageLevelPlans;
 
+  // ---- Per-bbox level assignment ------------------------------------------
+  // Levels are a property of the bounding box (level floor plans + schematic
+  // level rows), stored in analysis_request_sheets.floor_plan_overrides
+  // [plan_id].floors, with `levels_source` marking agent vs user assignment.
+  const levelBboxCatalog = useMemo(() => {
+    const canonicalSet = new Set(canonicalLevelNames);
+    const sheetIdByFilePage = new Map<string, string>();
+    for (const s of rows?.sheets ?? []) {
+      sheetIdByFilePage.set(`${s.parent_file_id}::${s.page_index}`, s.id);
+    }
+    const overridesByFilePage = new Map<string, Record<string, any>>();
+    for (const s of rows?.sheets ?? []) {
+      overridesByFilePage.set(
+        `${s.parent_file_id}::${s.page_index}`,
+        (s.floor_plan_overrides as Record<string, any>) ?? {},
+      );
+    }
+    const out: Array<{
+      key: string;
+      fileId: string;
+      fileName: string;
+      sheetId: string | null;
+      page: number;
+      planId: string;
+      label: string;
+      type: string;
+      levels: string[];
+      source: "user" | "agent" | null;
+      resolved: boolean;
+    }> = [];
+    for (const f of rows?.files ?? []) {
+      const byPage = floorPlansByFile.get(f.id);
+      if (!byPage) continue;
+      for (const [page, plans] of byPage.entries()) {
+        const ovrAll = overridesByFilePage.get(`${f.id}::${page}`) ?? {};
+        for (const fp of plans) {
+          const ovr = ovrAll[fp.plan_id] ?? {};
+          const type: string = typeof ovr.type === "string" && ovr.type ? ovr.type : fp.type;
+          if (type !== "level_floor_plan" && type !== "schematic_level_row") continue;
+          const name: string =
+            typeof ovr.name === "string" && ovr.name.trim()
+              ? ovr.name.trim()
+              : (fp.reference_id || floorPlanDisplayLabel(fp));
+          const explicit: string[] = Array.isArray(ovr.floors)
+            ? ovr.floors.filter((x: any) => typeof x === "string" && x.trim())
+            : [];
+          const levels = explicit.length > 0
+            ? explicit
+            : (pageLevelPlansMap.get(`${f.name}::${page}`) ?? [])
+                .flatMap((lp) => lp.levels)
+                .filter((l) => canonicalSet.has(l));
+          out.push({
+            key: `${f.id}::${page}::${fp.plan_id}`,
+            fileId: f.id,
+            fileName: f.name,
+            sheetId: sheetIdByFilePage.get(`${f.id}::${page}`) ?? null,
+            page,
+            planId: fp.plan_id,
+            label: name,
+            type,
+            levels: explicit,
+            source: typeof ovr.levels_source === "string" ? (ovr.levels_source as any) : null,
+            resolved: levels.some((l) => canonicalSet.has(l)),
+          });
+        }
+      }
+    }
+    out.sort(
+      (a, b) => a.fileName.localeCompare(b.fileName) || a.page - b.page || a.label.localeCompare(b.label),
+    );
+    return out;
+  }, [rows?.files, rows?.sheets, floorPlansByFile, canonicalLevelNames, pageLevelPlansMap]);
+
+  /** Persist per-bbox level assignments coming from the Spatial Architect modal. */
+  const saveBboxLevelAssignments = async (
+    assignments: Array<{ key: string; levels: string[] }>,
+  ) => {
+    const byKey = new Map(levelBboxCatalog.map((b) => [b.key, b]));
+    const bySheet = new Map<string, Array<{ planId: string; levels: string[] }>>();
+    for (const a of assignments) {
+      const b = byKey.get(a.key);
+      if (!b?.sheetId) continue;
+      const arr = bySheet.get(b.sheetId) || [];
+      arr.push({ planId: b.planId, levels: a.levels });
+      bySheet.set(b.sheetId, arr);
+    }
+    const sheetById = new Map((rows?.sheets ?? []).map((s) => [s.id, s]));
+    for (const [sheetId, items] of bySheet.entries()) {
+      const sheet = sheetById.get(sheetId);
+      const next: Record<string, any> = {
+        ...(((sheet?.floor_plan_overrides as Record<string, any>) ?? {}) as Record<string, any>),
+      };
+      for (const it of items) {
+        const prev = next[it.planId] ?? {};
+        next[it.planId] = { ...prev, floors: it.levels, levels_source: "user" };
+      }
+      const { error } = await supabase
+        .from("analysis_request_sheets")
+        .update({ floor_plan_overrides: next } as any)
+        .eq("id", sheetId);
+      if (error) throw error;
+    }
+  };
+
+
+
   // Merge survey (primary) with spatial-architect maps (supplemental fallback).
   // If survey already attributed the page to any level (user-placed bbox), do
   // NOT supplement with spatial-architect names — the architect often lists
