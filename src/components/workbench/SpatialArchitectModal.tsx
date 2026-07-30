@@ -425,7 +425,25 @@ export function SpatialArchitectModal({
         .update({ space_hierarchy_json: nextPayload } as any)
         .eq("id", requestId);
       if (upErr) throw upErr;
+
+      // Persist per-bbox level assignments (levels live on the bbox).
+      if (onSaveBboxAssignments && bboxCatalog.length > 0) {
+        const levelsByKey = new Map<string, string[]>();
+        for (const b of bboxCatalog) levelsByKey.set(b.key, []);
+        for (const l of levels) {
+          const nm = l.name.trim();
+          for (const k of bboxByLevel[l.uid] || []) {
+            const arr = levelsByKey.get(k);
+            if (arr && !arr.includes(nm)) arr.push(nm);
+          }
+        }
+        await onSaveBboxAssignments(
+          Array.from(levelsByKey.entries()).map(([key, lv]) => ({ key, levels: lv })),
+        );
+      }
+
       initialSerialized.current = serializeLevels(levels);
+      initialBboxSerialized.current = bboxSerialized;
       toast({ title: "Spatial hierarchy saved" });
       onSaved();
     } catch (e: any) {
