@@ -6720,8 +6720,10 @@ function InstancesReportModal({
       return m ? parseFloat(m[0]) : Number.POSITIVE_INFINITY;
     };
     // Short type token for the acronym pill (e.g. "Potable" -> "P").
-    const shortToken = (t: string) => {
+    const shortToken = (t: string, className: string) => {
       if (t === "(untyped)") return "?";
+      const abbr = subtypeAbbr(className, t);
+      if (abbr) return abbr;
       const parts = t.split(/[\s\-_/]+/).filter(Boolean);
       if (parts.length >= 2) return parts.map((p) => p[0]).join("").toUpperCase().slice(0, 3);
       return t.slice(0, 2).toUpperCase();
