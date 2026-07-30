@@ -1,52 +1,36 @@
-## Root cause (verified)
+# Show Riser by subtype in the Threat Report
 
-`admin-users` correctly returns `409 {"success":false,"error":"A user with this email already exists"}` (verified in `supabase/functions/admin-users/index.ts:326`).
+## Current state (verified)
 
-But the frontend does:
+The Threat Report splits a class into per-subtype entries only when its name matches Cold Water / Hot Water. This test lives in two places in `src/pages/WorkbenchProjectDetail.tsx`:
 
-```ts
-const { data, error } = await supabase.functions.invoke("admin-users", { body });
-if (error) throw error;                       // <- message is lost here
-if (!data?.success) throw new Error(data?.error);
-```
+- `isTypedClassName` (line ~6707) — used by the on-screen Threat Report modal (Overview tiles + Summary matrix).
+- a duplicate local `isTypedClassName` inside `handleExportClick` (line ~7606) — used to build the DOCX payload.
 
-On any non-2xx response, supabase-js returns a `FunctionsHttpError` whose `message` is the fixed string **"Edge Function returned a non-2xx status code"**. The real JSON body lives in `error.context` (a `Response`) and is never read — so the `data?.error` branch below it is dead code for every non-200 case. That's exactly the toast in the screenshot.
+Because "Riser" doesn't match, RS currently appears as:
+- one single Overview row and one single Summary-matrix column, and
+- subtypes only as small indented "Type / Pipe size" sub-rows under that one Overview row.
 
-## The fix
+Riser annotations do already store their subtype in the same `pipe_type` metadata field Cold Water uses, and Riser was recently added to the diameter-enabled classes, so the data needed for the split is already there.
 
-**1. New shared helper** — `src/lib/functionsError.ts`
+## What will change
 
-```ts
-export async function invokeFunction<T>(name, options): Promise<T>
-```
-- Calls `supabase.functions.invoke`.
-- If `error` is a `FunctionsHttpError`, `await error.context.json()` (falling back to `.text()`), and throw an `Error` with the body's `error`/`message` field, plus the HTTP status attached (e.g. `err.status = 409`).
-- If the body has no message, fall back to a status-aware string: 401 → "Your session expired — sign in again", 403 → "You don't have permission to do this", 409 → "That record already exists", 5xx → "The server ran into a problem. Please try again."
-- Also handles `FunctionsRelayError` / `FunctionsFetchError` → "Couldn't reach the server. Check your connection."
-- Still surfaces `data.success === false` bodies returned with a 200.
+Riser will be treated exactly like Cold Water: one report entry per distinct (Type, Pipe size) combination, e.g. `Riser Main Mechanical 100mm` with prefix `RS-Main Mechanical 100mm`, plus a `(untyped)` bucket for risers with no Type set.
 
-**2. Apply it where user-triggered actions show toasts** (highest value first):
+Subtype labels will show the **full name** rather than the stored abbreviation: `MMCH` renders as `Main Mechanical`, `DCHW` as `Domestic Cold/Hot Water`, `CWRS` as `Chilled Water Return/Supply`, `ELCT` as `Electrical`. The same expansion applies to Cold Water abbreviations (`MCE` → `Main City Entry`, etc.) so both classes read consistently. Any Type value that isn't a known abbreviation is shown as typed.
 
-- `src/pages/UserManagement.tsx` — `invokeAction` and the `admin-users` list query (create/update/deactivate/reactivate/reset-password). This fixes the reported bug.
-- `src/components/wizard/CollaboratorsModal.tsx` — add-collaborators / send-invite.
-- `src/components/BuyCreditsModal.tsx` — checkout + policies.
-- `src/pages/AcceptInvite.tsx`, `src/pages/ResetPassword.tsx`, `src/pages/Auth.tsx` (password reset) — auth flows where a vague error blocks the user completely.
-- `src/pages/WorkbenchProjectDetail.tsx` — spatial-architect, survey-pages, run-analysis-pipeline triggers.
-- `src/pages/Configuration.tsx` — resolve-drive-doc.
-- `src/components/wizard/AppliedEpicExportDialog.tsx`, `ProcoreConnect`/`GoogleDriveConnect`/`SharePointConnect` OAuth callbacks.
-
-Fire-and-forget calls (analytics-style notifications, `watch-drive-doc`) are left as-is.
-
-**3. Sharpen the messages that are generic on purpose**
-
-`src/lib/errorHandling.ts#getUserFriendlyError` currently collapses anything unknown to "An unexpected error occurred." Keep the safe mapping, but append the underlying message when it came from our own edge function (i.e. it's an intentional, non-sensitive message) so admins see the specific cause rather than a dead end. Raw Postgres/internal errors keep the sanitized text.
-
-**4. Duplicate-email specifically**
-
-In `UserManagement`'s create modal, when the thrown error has `status === 409`, show the toast as "Email already in use" with the description naming the address, rather than the generic "Error" title.
+The split applies **everywhere**:
+- On-screen Threat Report modal: Overview tiles and Summary matrix.
+- DOCX export: Overview table, Summary matrix columns, and per-space occurrence tables (the class name shown for each row uses the split display name instead of plain "Riser").
 
 ## Technical notes
 
-- No backend/schema changes — `admin-users` already returns correct status codes and messages.
-- `error.context` is only readable once; the helper clones the response before parsing.
-- Toast titles stay short; the specific cause goes in the description.
+1. Add a shared helper (new small module, e.g. `src/lib/awpSubtypeLabels.ts`) exporting:
+   - `SUBTYPE_LABEL_BY_ABBR` — built from `SUBTYPED_CLASSES` in `CreateProjectModal.tsx`, mapping abbreviation to full label per class.
+   - `expandSubtypeLabel(className, typeValue)` — returns the full label, or the raw value when unmapped.
+   - `isSubtypeSplitClass(name)` — matches Cold/Hot Water (existing regex) **or** the unified Riser class.
+2. Replace both copies of `isTypedClassName` with `isSubtypeSplitClass`, and route the type token through `expandSubtypeLabel` in:
+   - `overviewEntries` (preview) — currently uses `shortToken()` for the pill acronym; keep the short acronym for the compact prefix pill but use the full label in the display name.
+   - `classEntries` inside `handleExportClick` (DOCX payload).
+3. In `computeSpaceExportData`, set each row's `awpClassName` to the split display name for subtype-split classes so per-space tables in the DOCX match the Overview/Summary naming.
+4. No schema or data changes; no edge-function changes. `src/lib/threatReportExport.ts` already renders whatever display names the payload supplies.
