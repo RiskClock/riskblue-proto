@@ -197,32 +197,68 @@ export function SpatialArchitectModal({
     setLevels(lvl);
     setNonLevels(others);
     initialSerialized.current = serializeLevels(lvl);
-  }, [open, payload]);
 
-  const isDirty = useMemo(
-    () => serializeLevels(levels) !== initialSerialized.current,
-    [levels],
+    // Seed bbox attachments per level from the catalog's effective levels
+    // (explicit assignment → bbox label → single-bbox page backfill).
+    const seeded: Record<string, string[]> = {};
+    for (const l of lvl) {
+      const nm = l.name.trim().toLowerCase();
+      if (!nm) continue;
+      seeded[l.uid] = bboxCatalog
+        .filter((b) => b.effectiveLevels.some((x) => x.trim().toLowerCase() === nm))
+        .map((b) => b.key);
+    }
+    setBboxByLevel(seeded);
+    initialBboxSerialized.current = JSON.stringify(
+      Object.entries(seeded)
+        .map(([k, v]) => [k, v.slice().sort()])
+        .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+    );
+  }, [open, payload, bboxCatalog]);
+
+  const bboxSerialized = useMemo(
+    () =>
+      JSON.stringify(
+        Object.entries(bboxByLevel)
+          .map(([k, v]) => [k, v.slice().sort()])
+          .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+      ),
+    [bboxByLevel],
   );
 
-  const allPages = useMemo(() => {
-    const out: Array<{
-      file_name: string;
-      page_number: number;
-      label: string;
-    }> = [];
-    for (const g of fileGroups) {
-      for (const sh of g.sheets) {
-        out.push({
-          file_name: g.file.name,
-          page_number: sh.page_index,
-          label: `p${sh.page_index}${
-            sh.sheet_number ? ` · ${sh.sheet_number}` : ""
-          }${sh.sheet_title ? ` · ${sh.sheet_title}` : ""}`,
-        });
-      }
-    }
-    return out;
-  }, [fileGroups]);
+  const isDirty = useMemo(
+    () =>
+      serializeLevels(levels) !== initialSerialized.current ||
+      bboxSerialized !== initialBboxSerialized.current,
+    [levels, bboxSerialized],
+  );
+
+  const bboxByKey = useMemo(
+    () => new Map(bboxCatalog.map((b) => [b.key, b])),
+    [bboxCatalog],
+  );
+
+  const attachedKeys = useMemo(() => {
+    const s = new Set<string>();
+    for (const arr of Object.values(bboxByLevel)) for (const k of arr) s.add(k);
+    return s;
+  }, [bboxByLevel]);
+
+  const unmappedBboxes = useMemo(
+    () => bboxCatalog.filter((b) => !attachedKeys.has(b.key)),
+    [bboxCatalog, attachedKeys],
+  );
+
+  const toggleBbox = (uid: string, key: string) => {
+    setBboxByLevel((prev) => {
+      const cur = prev[uid] || [];
+      return {
+        ...prev,
+        [uid]: cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key],
+      };
+    });
+  };
+
 
   const updateLevel = (uid: string, patch: Partial<LevelDraft>) => {
     setLevels((prev) => prev.map((l) => (l.uid === uid ? { ...l, ...patch } : l)));
