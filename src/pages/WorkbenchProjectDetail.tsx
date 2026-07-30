@@ -7603,11 +7603,11 @@ function InstancesReportModal({
       const sourceDrawings = Array.from(
         new Set(fileGroups.map((g) => g.file.name)),
       );
-      // Cold Water and Hot Water are split into per (Type, Diameter) virtual
-      // classes so the Overview and Summary matrix show a separate row/column
-      // for each combination (e.g. "Cold Water Potable 22mm").
-      const isTypedClassName = (n: string) =>
-        /(^|\s)(cold|hot)\s*water(\s|$)/i.test(n);
+      // Cold Water, Hot Water and Riser are split into per (Type, Diameter)
+      // virtual classes so the Overview and Summary matrix show a separate
+      // row/column for each combination (e.g. "Riser Main Mechanical 100mm").
+      const isTypedClassName = (n: string) => isSubtypeSplitClass(n);
+
       const typeGroupOf = (r: (typeof expanded)[number]) =>
         r.pipeType && r.pipeType.trim() ? r.pipeType.trim() : "(untyped)";
       const diameterOf = (r: (typeof expanded)[number]) =>
