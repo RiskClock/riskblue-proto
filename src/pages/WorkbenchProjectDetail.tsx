@@ -366,6 +366,8 @@ export default function WorkbenchProjectDetail() {
   const [draftCols, setDraftCols] = useState<string[]>([]);
   const [draftAliases, setDraftAliases] = useState<Record<string, string>>({});
   const [draftAliasPrefixes, setDraftAliasPrefixes] = useState<Record<string, string>>({});
+  const [draftSubtypes, setDraftSubtypes] = useState<Record<string, string[]>>({});
+  const [expandedSubtypeClasses, setExpandedSubtypeClasses] = useState<Set<string>>(new Set());
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [textFileId, setTextFileId] = useState<string | null>(null);
   const [textSheet, setTextSheet] = useState<{ id: string; label: string } | null>(null);
