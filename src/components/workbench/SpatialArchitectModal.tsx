@@ -239,6 +239,25 @@ export function SpatialArchitectModal({
     [bboxCatalog],
   );
 
+  // Several distinct bboxes on one page can carry the same label (e.g. four
+  // "LEVEL P5" schematic rows, one per riser column). Give each a "(n of m)"
+  // suffix so identical-looking chips stay tellable apart.
+  const dupSuffix = useMemo(() => {
+    const groups = new Map<string, string[]>();
+    for (const b of bboxCatalog) {
+      const g = `${b.fileName}\u0000${b.page}\u0000${b.label.trim().toLowerCase()}`;
+      const arr = groups.get(g) || [];
+      arr.push(b.key);
+      groups.set(g, arr);
+    }
+    const out = new Map<string, string>();
+    for (const arr of groups.values()) {
+      if (arr.length < 2) continue;
+      arr.forEach((k, i) => out.set(k, ` (${i + 1} of ${arr.length})`));
+    }
+    return out;
+  }, [bboxCatalog]);
+
   const attachedKeys = useMemo(() => {
     const s = new Set<string>();
     for (const arr of Object.values(bboxByLevel)) for (const k of arr) s.add(k);
@@ -249,6 +268,27 @@ export function SpatialArchitectModal({
     () => bboxCatalog.filter((b) => !attachedKeys.has(b.key)),
     [bboxCatalog, attachedKeys],
   );
+
+  // Group the unmapped audit list by file + label so hundreds of rows collapse
+  // into a scannable list of real gaps.
+  const unmappedGroups = useMemo(() => {
+    const map = new Map<
+      string,
+      { fileName: string; label: string; type: string; pages: number[] }
+    >();
+    for (const b of unmappedBboxes) {
+      const k = `${b.fileName}\u0000${b.label.trim().toLowerCase()}\u0000${b.type}`;
+      const g = map.get(k) || { fileName: b.fileName, label: b.label, type: b.type, pages: [] };
+      g.pages.push(b.page);
+      map.set(k, g);
+    }
+    return Array.from(map.values())
+      .map((g) => ({ ...g, pages: Array.from(new Set(g.pages)).sort((a, b) => a - b) }))
+      .sort(
+        (a, b) => a.fileName.localeCompare(b.fileName) || a.label.localeCompare(b.label),
+      );
+  }, [unmappedBboxes]);
+
 
   const toggleBbox = (uid: string, key: string) => {
     setBboxByLevel((prev) => {
@@ -609,10 +649,11 @@ export function SpatialArchitectModal({
                           key={k}
                           variant="secondary"
                           className="text-[11px] font-normal max-w-full"
-                          title={`${b.fileName} · p${b.page} · ${b.label}`}
+                          title={`${b.fileName} · p${b.page} · ${b.label}${dupSuffix.get(k) ?? ""} · ${b.planId}`}
                         >
                           <span className="truncate">
                             {b.label} · p{b.page}
+                            {dupSuffix.get(k) ?? ""}
                           </span>
                           <button
                             type="button"
@@ -628,6 +669,7 @@ export function SpatialArchitectModal({
                     <SelectBboxPopover
                       catalog={bboxCatalog}
                       selected={bboxByLevel[l.uid] || []}
+                      suffixes={dupSuffix}
                       onToggle={(k) => toggleBbox(l.uid, k)}
                     />
                   </div>
@@ -689,18 +731,25 @@ export function SpatialArchitectModal({
               className="max-h-32 overflow-y-auto overscroll-contain divide-y divide-amber-200/60"
               onWheel={(e) => e.stopPropagation()}
             >
-              {unmappedBboxes.map((b) => (
+              {unmappedGroups.map((g) => (
                 <div
-                  key={b.key}
+                  key={`${g.fileName}::${g.label}::${g.type}`}
                   className="px-3 py-1 text-xs flex items-center gap-2 min-w-0"
                 >
-                  <span className="truncate font-medium" title={b.fileName}>
-                    {b.fileName}
+                  <span className="truncate font-medium" title={g.fileName}>
+                    {g.fileName}
                   </span>
-                  <span className="text-muted-foreground shrink-0">p{b.page}</span>
-                  <span className="truncate text-muted-foreground">{b.label}</span>
+                  <span className="truncate text-muted-foreground">{g.label}</span>
+                  <span
+                    className="text-muted-foreground shrink-0"
+                    title={`Pages: ${g.pages.join(", ")}`}
+                  >
+                    {g.pages.length > 3
+                      ? `${g.pages.length} pages`
+                      : g.pages.map((p) => `p${p}`).join(", ")}
+                  </span>
                   <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
-                    {b.type === "schematic_level_row" ? "schematic row" : "level plan"}
+                    {g.type === "schematic_level_row" ? "schematic row" : "level plan"}
                   </span>
                 </div>
               ))}
@@ -744,10 +793,12 @@ export function SpatialArchitectModal({
 function SelectBboxPopover({
   catalog,
   selected,
+  suffixes,
   onToggle,
 }: {
   catalog: LevelBboxEntry[];
   selected: string[];
+  suffixes?: Map<string, string>;
   onToggle: (key: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -816,6 +867,7 @@ function SelectBboxPopover({
                     </span>
                     <span className="truncate">
                       p{b.page} · {b.label}
+                      {suffixes?.get(b.key) ?? ""}
                     </span>
                     <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
                       {b.type === "schematic_level_row" ? "schematic row" : "level plan"}

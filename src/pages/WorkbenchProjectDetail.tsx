@@ -2141,6 +2141,9 @@ export default function WorkbenchProjectDetail() {
       .replace(/[^a-z0-9]+/g, " ")
       .trim();
     t = t.split(/\s+/).map((w) => wordToDigit[w] ?? w).join(" ").trim();
+    // Canonical level names are written "L41"/"LVL41" while raw bbox labels read
+    // "LEVEL 41" (which normalizes to "41"). Strip the L prefix so both match.
+    t = t.replace(/\bl(?:vl)?\s*(\d+)\b/g, "$1").replace(/\s+/g, " ").trim();
     return t;
   };
 
