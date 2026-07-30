@@ -2274,15 +2274,32 @@ export default function WorkbenchProjectDetail() {
       }
     }
 
+    const canonicalSet = new Set(canonicalLevelNames);
     for (const f of files) {
       const byPage = floorPlansByFile.get(f.id);
       if (!byPage) continue;
       for (const [page, plans] of byPage.entries()) {
         const key = `${f.name}::${page}`;
+        // Count level/schematic bboxes on this page — used by the backfill
+        // rule below (a page with exactly one such bbox can inherit the
+        // legacy page→levels mapping onto that bbox).
+        const levelishCount = plans.filter((p) => {
+          const t = effective(p, f.id).type;
+          return t === "level_floor_plan" || t === "schematic_level_row";
+        }).length;
         for (const fp of plans) {
           const e = effective(fp, f.id);
           if (e.type === "level_floor_plan" || e.type === "schematic_level_row") {
-            const canonicalLevels = e.floors.flatMap((l) => canonicalizeLevels(l)).filter(Boolean);
+            let canonicalLevels = e.floors.flatMap((l) => canonicalizeLevels(l)).filter(Boolean);
+            // Backfill: when this bbox's own labels don't resolve to a known
+            // canonical level and it is the only level/schematic bbox on the
+            // page, adopt the page's existing spatial-architect mapping.
+            const resolved = canonicalLevels.some((l) => canonicalSet.has(l));
+            if (!resolved && levelishCount === 1) {
+              const pageLevels = pageSpaceMap.get(key) || [];
+              const inherited = pageLevels.filter((l) => canonicalSet.has(l));
+              if (inherited.length > 0) canonicalLevels = inherited;
+            }
             // Raw display names for the file-list badge (match modal labels).
             // The modal shows the effective bbox label (override.name →
             // reference_id), while Scout's floors[] may contain a canonical
@@ -2296,11 +2313,13 @@ export default function WorkbenchProjectDetail() {
               for (const n of displayFloors) if (!arr.includes(n)) arr.push(n);
               pageLevelDisplayNames.set(key, arr);
             }
-            if (e.type === "level_floor_plan") {
-              const lpArr = pageLevelPlans.get(key) || [];
-              lpArr.push({ levels: canonicalLevels, bbox: e.bbox });
-              pageLevelPlans.set(key, lpArr);
-            }
+            // Both level floor plans and schematic level rows participate in
+            // bbox-containment attribution so annotations are never fanned
+            // out across every level a page happens to depict.
+            const lpArr = pageLevelPlans.get(key) || [];
+            lpArr.push({ levels: canonicalLevels, bbox: e.bbox });
+            pageLevelPlans.set(key, lpArr);
+
 
             const ls = levelMap.get(key) || new Set<string>();
             for (const lvl of canonicalLevels) if (lvl) ls.add(lvl);
