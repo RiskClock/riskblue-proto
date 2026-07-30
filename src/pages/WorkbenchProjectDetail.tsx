@@ -7578,18 +7578,29 @@ function InstancesReportModal({
       ...otherPicks.map((b) => b.page),
     ];
 
+    // Subtype-split classes (Cold/Hot Water, Riser) show the same expanded
+    // display name here as in the Overview and Summary matrix.
+    const displayNameByEntryKey = new Map(
+      overviewEntries.map((e) => [e.key, e.displayName]),
+    );
+
     return {
       name: space,
       rows: rowsForSpace.map((r) => ({
         instanceId: r.instanceId,
-        awpClassName: r.awpClassName,
+        awpClassName: isSubtypeSplitClass(r.awpClassName)
+          ? displayNameByEntryKey.get(entryKeyForRow(r)) || r.awpClassName
+          : r.awpClassName,
         unitName: r.unitName ?? null,
         annotationBaseId: r.annotationBaseId,
         fileName: fileNameById.get(r.fileId) || "",
         pageIndex: r.pageIndex,
         pipeDiameter: r.pipeDiameter ?? null,
-        pipeType: r.pipeType ?? null,
+        pipeType: r.pipeType
+          ? expandSubtypeLabel(r.awpClassName, r.pipeType)
+          : null,
       })),
+
       units,
       pages,
     };
