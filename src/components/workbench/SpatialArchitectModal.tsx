@@ -73,6 +73,18 @@ function serializeLevels(levels: LevelDraft[]): string {
   );
 }
 
+export interface LevelBboxEntry {
+  key: string;
+  fileName: string;
+  page: number;
+  planId: string;
+  label: string;
+  type: string;
+  levels: string[];
+  effectiveLevels: string[];
+  source: "user" | "agent" | null;
+}
+
 export function SpatialArchitectModal({
   open,
   onOpenChange,
@@ -83,6 +95,8 @@ export function SpatialArchitectModal({
   updatedAt,
   running,
   fileGroups,
+  bboxCatalog = [],
+  onSaveBboxAssignments,
   onBuild,
   onSaved,
   canBuild = true,
@@ -96,6 +110,8 @@ export function SpatialArchitectModal({
   updatedAt: string | null | undefined;
   running: boolean;
   fileGroups: Array<{ file: FileLike; sheets: SheetLike[] }>;
+  bboxCatalog?: LevelBboxEntry[];
+  onSaveBboxAssignments?: (a: Array<{ key: string; levels: string[] }>) => Promise<void>;
   onBuild: () => Promise<void> | void;
   onSaved: () => void;
   canBuild?: boolean;
@@ -104,7 +120,11 @@ export function SpatialArchitectModal({
   const [levels, setLevels] = useState<LevelDraft[]>([]);
   const [nonLevels, setNonLevels] = useState<NonLevelRecord[]>([]);
   const [saving, setSaving] = useState(false);
+  // uid -> set of bbox keys attached to that level.
+  const [bboxByLevel, setBboxByLevel] = useState<Record<string, string[]>>({});
+  const initialBboxSerialized = useRef<string>("");
   const initialSerialized = useRef<string>("");
+
 
   // Load editable state from payload whenever it changes / modal opens.
   useEffect(() => {
