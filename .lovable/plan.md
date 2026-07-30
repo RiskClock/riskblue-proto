@@ -35,6 +35,6 @@ Every parking level matched; every numbered level failed. That is exactly the 54
 
 After the change, re-check the catalog counts: attached should rise from 247 to roughly 780+, and the unmapped list should contain only non-level labels.
 
-## Open question
+## Decided
 
-For step 2, would you rather keep one chip per bbox (accurate, four chips for page 106) or collapse repeats into a single chip like `LEVEL P5 · p106 ×4` that attaches/detaches all four at once?
+One chip per bbox (no collapsing): page 106 shows four `LEVEL P5` chips, each individually removable, disambiguated by suffix.
