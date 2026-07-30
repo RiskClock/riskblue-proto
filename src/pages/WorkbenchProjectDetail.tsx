@@ -5255,8 +5255,13 @@ export default function WorkbenchProjectDetail() {
                         const checked = draftCols.includes(opt.name);
                         const aliasVal = draftAliases[opt.name] ?? "";
                         const prefixVal = draftAliasPrefixes[opt.name] ?? "";
+                        const subtypeDefs = SUBTYPED_CLASSES[opt.name];
+                        const pickedSubtypes = draftSubtypes[opt.name] || [];
+                        const subtypeExpanded = expandedSubtypeClasses.has(opt.name);
                         return (
-                          <TableRow key={opt.id}>
+                          <Fragment key={opt.id}>
+                          <TableRow>
+
                             <TableCell className="py-1.5">
                               <Checkbox
                                 checked={checked}
