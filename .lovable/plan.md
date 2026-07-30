@@ -1,40 +1,51 @@
-# Risk Radar → real annotations
+# Bbox-level mapping for the threat report
 
-## What's happening today
+## Problem
 
-Risk Radar (`identify-risk-elements`) asks each class prompt for a findings table and stores the raw markdown into the file's `risk_element_results`. That's exactly what the debug modal shows. Nothing in the app ever converts those rows into annotations — Emerald City's file has 3 classes of Risk Radar output and 0 annotation records. The output also has no x/y, only room ID / drawing label / level / sheet reference, so markers can't be placed from it as-is.
+Today the threat report resolves an annotation's level in two steps: if the page has `level_floor_plan` bboxes, it uses bbox containment; otherwise it falls back to a **page → levels** map built from Scout and Spatial Architect. Two consequences:
 
-## The fix, in two parts
+- `schematic_level_row` bboxes are not part of the containment map at all, so their pages always use the page map.
+- When a page maps to several levels, every annotation on that page is counted once per level — the replication you're seeing.
 
-### 1. Make Risk Radar return coordinates
+## The change
 
-Keep each class's existing prompt untouched (users edit those). The function appends a fixed output contract that requires a JSON array alongside the human-readable table:
+Levels become a property of the **bounding box**, not the page — for `level floor plan` and `schematic level row` bboxes only. Unit floor plans and detail blocks keep their current behavior.
 
-- one object per detected element, with: page number (1-based, must be one of the scoped bbox pages), normalized centre point `x`/`y` in 0–1 of that page, the room identifier / drawing label, level, and any size/diameter or type detail already captured today.
-- elements the model can't localize get `x`/`y` omitted rather than guessed.
+### 1. Spatial Architect modal: a bbox mapping view
 
-The raw response continues to be stored as-is so the debug modal is unchanged; the parsed array is stored next to it in `risk_element_results[class].elements`.
+A new section in the modal lists every level/schematic bbox in the project, grouped by file and page:
 
-### 2. Import elements as annotations
+| Bbox | Page | Type | Levels |
+|---|---|---|---|
+| SEVENTH FLOOR | p14 | Level floor plan | L07 |
+| Typical Tower Plan | p22 | Level floor plan | L05 … L20 (16) |
 
-In the workbench drawing modal and in the Risk Radar section of the debug panel, add a "Add N to drawing" action per file+class that:
+- Each row has a multi-select of the canonical levels from the spatial model.
+- A bbox can be assigned to many levels; annotations inside it are then counted once per assigned level (that is how typical/repeating floor plans get their real count).
+- Rows the agent proposed are marked as such; once you edit a row it is marked user-assigned and the agent will not overwrite it.
+- Rows with no levels assigned are highlighted, since their annotations will land in Unassigned.
+- The button stays disabled for WMSV users, same as today; they can view.
 
-- creates one annotation per element with coordinates, on the reported page, for that AWP class;
-- carries the drawing label / room ID and any size or type detail into the annotation metadata (so Type/Pipe size behave the same as manually placed markers);
-- assigns instance numbers using the existing numbering, so labels come out as e.g. `ERM-004`;
-- skips elements without coordinates and reports the count skipped;
-- is idempotent — re-running the import doesn't duplicate previously imported elements.
+### 2. The agent proposes the mapping
 
-Imported markers are ordinary annotations afterwards: draggable, editable, deletable, and included in exports and the threat report.
+Spatial Architect keeps producing the canonical level list, and additionally proposes a level assignment for each level/schematic bbox using Scout's per-bbox floor labels. Proposals only fill bboxes you have not assigned yourself.
+
+### 3. Threat report attribution
+
+- Both `level floor plan` and `schematic level row` bboxes participate in containment.
+- An annotation is attributed to the levels of the bbox that geometrically contains it. No page-level fan-out.
+- An annotation that sits inside no assigned level/schematic bbox is **Unassigned**, and the report shows a warning with the count and a breakdown by file/page so the gap is visible and fixable.
+- Unit floor plan containment continues to take priority where a unit bbox contains the marker.
 
 ## Notes
 
-- Imports are blocked for projects in Processing state and for users without edit permission, same as manual placement.
-- Elements landing outside the page's floor-plan bounding box are clamped into it, since Risk Radar is already scoped to bbox pages.
-- Emerald City's current results have no coordinates, so it needs one fresh Risk Radar run after this ships before the import has anything to place.
+- Existing projects: nothing breaks, but pages that relied on the page-level fallback will show markers as Unassigned until their bboxes get level assignments — the agent's proposal pass covers most of that on the next run, and the warning surfaces the rest.
+- Badges in the file list keep showing the bbox's own display name; no change there.
 
 ## Technical
 
-- `supabase/functions/identify-risk-elements/index.ts`: append the JSON output contract to the user content; parse the fenced JSON array out of the response; persist `{ result_text, elements, ... }` per class.
-- New shared parser for the element array (tolerant of fenced/partial JSON), reused by the import UI.
-- `src/pages/WorkbenchProjectDetail.tsx` + `FileViewerModal.tsx`: import action that inserts into `drawing_instances` (`file_id`, `sheet_id`, `page_index`, `nx`, `ny`, `awp_class_name`, `metadata`), then refetches the instances query. Dedupe key stored in `metadata.risk_radar_key`.
+- Storage: per-bbox levels persist in `analysis_request_sheets.floor_plan_overrides[plan_id].floors` (the override key already read by `effective()` in `WorkbenchProjectDetail.tsx`), plus a sibling flag `levels_source: "agent" | "user"` for the do-not-overwrite rule.
+- `surveyDerivedMaps`: include `schematic_level_row` in `pageLevelPlans`; stop contributing level/schematic pages to `levelMap` / `unitMap` fan-out.
+- `pairsForPage`: drop the `pageSpaceUnitMap` / `pageSpaceMap` fallback for pages that contain any level/schematic bbox; return `[]` (Unassigned) on no containment and record the miss for the warning panel.
+- `SpatialArchitectModal.tsx`: new bbox mapping table fed by `floorPlansByFile` + sheet overrides; writes overrides back via the existing per-plan override update path.
+- `supabase/functions/spatial-architect/index.ts`: extend the response schema with `bbox_assignments: [{ file_name, page_number, plan_id, levels[] }]` and persist proposals into sheet overrides where `levels_source !== "user"`.
