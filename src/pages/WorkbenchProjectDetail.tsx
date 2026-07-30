@@ -2393,6 +2393,7 @@ export default function WorkbenchProjectDetail() {
       label: string;
       type: string;
       levels: string[];
+      effectiveLevels: string[];
       source: "user" | "agent" | null;
       resolved: boolean;
     }> = [];
@@ -2401,6 +2402,11 @@ export default function WorkbenchProjectDetail() {
       if (!byPage) continue;
       for (const [page, plans] of byPage.entries()) {
         const ovrAll = overridesByFilePage.get(`${f.id}::${page}`) ?? {};
+        const levelish = plans.filter((p) => {
+          const o = ovrAll[p.plan_id] ?? {};
+          const t = typeof o.type === "string" && o.type ? o.type : p.type;
+          return t === "level_floor_plan" || t === "schematic_level_row";
+        });
         for (const fp of plans) {
           const ovr = ovrAll[fp.plan_id] ?? {};
           const type: string = typeof ovr.type === "string" && ovr.type ? ovr.type : fp.type;
@@ -2412,11 +2418,18 @@ export default function WorkbenchProjectDetail() {
           const explicit: string[] = Array.isArray(ovr.floors)
             ? ovr.floors.filter((x: any) => typeof x === "string" && x.trim())
             : [];
-          const levels = explicit.length > 0
-            ? explicit
-            : (pageLevelPlansMap.get(`${f.name}::${page}`) ?? [])
-                .flatMap((lp) => lp.levels)
-                .filter((l) => canonicalSet.has(l));
+          let effectiveLevels = explicit.filter((l) => canonicalSet.has(l));
+          if (effectiveLevels.length === 0) {
+            // Derive from the bbox's own label, then (single-bbox pages only)
+            // from the legacy page → levels mapping.
+            const fromLabel = canonicalizeLevels(name).filter((l) => canonicalSet.has(l));
+            if (fromLabel.length > 0) effectiveLevels = fromLabel;
+            else if (levelish.length === 1) {
+              effectiveLevels = (pageSpaceMap.get(`${f.name}::${page}`) ?? []).filter((l) =>
+                canonicalSet.has(l),
+              );
+            }
+          }
           out.push({
             key: `${f.id}::${page}::${fp.plan_id}`,
             fileId: f.id,
@@ -2427,8 +2440,9 @@ export default function WorkbenchProjectDetail() {
             label: name,
             type,
             levels: explicit,
+            effectiveLevels,
             source: typeof ovr.levels_source === "string" ? (ovr.levels_source as any) : null,
-            resolved: levels.some((l) => canonicalSet.has(l)),
+            resolved: effectiveLevels.length > 0,
           });
         }
       }
