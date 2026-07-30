@@ -786,10 +786,12 @@ export function SpatialArchitectModal({
 function SelectBboxPopover({
   catalog,
   selected,
+  suffixes,
   onToggle,
 }: {
   catalog: LevelBboxEntry[];
   selected: string[];
+  suffixes?: Map<string, string>;
   onToggle: (key: string) => void;
 }) {
   const [open, setOpen] = useState(false);
