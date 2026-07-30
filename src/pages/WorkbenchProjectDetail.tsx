@@ -6773,8 +6773,10 @@ function InstancesReportModal({
         }
       }
       return combosArr.map(({ type, diameter }) => {
-        const typeLabel = type === "(untyped)" ? "" : ` ${shortToken(type)}`;
+        const fullType = type === "(untyped)" ? "" : expandSubtypeLabel(c.name, type);
+        const typeLabel = fullType ? ` ${fullType}` : "";
         const typePrefix = type === "(untyped)" ? "" : `-${shortToken(type)}`;
+
         const hideDiameter =
           diameter === "(no size)" &&
           totalByType.get(type) === 1 &&
