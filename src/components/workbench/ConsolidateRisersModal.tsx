@@ -421,7 +421,7 @@ export function ConsolidateRisersModal({
                       }
                       return (
                         <div key={gIdx} className="border rounded-md p-3 space-y-2">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <Input
                               value={g.label}
                               onChange={(e) => renameGroup(activeSection.key, gIdx, e.target.value)}
@@ -437,7 +437,7 @@ export function ConsolidateRisersModal({
                               <Trash2 className="h-4 w-4" />
                             </Button>
                             {spaces.size > 0 && (
-                              <div className="flex flex-wrap gap-1 ml-2">
+                              <div className="flex flex-wrap gap-1 min-w-0 basis-full">
                                 {Array.from(spaces).map((s) => (
                                   <Badge key={s} variant="outline" className="text-[10px]">
                                     {s}
@@ -468,7 +468,7 @@ export function ConsolidateRisersModal({
                         return (
                           <div
                             key={a.id}
-                            className="flex items-center gap-2 text-xs py-1 border-b last:border-b-0"
+                            className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs py-1 border-b last:border-b-0"
                           >
                             <span className="font-mono w-16 shrink-0">
                               {activeSection.idPrefix || a.awp_class_name.slice(0, 3).toUpperCase()}
