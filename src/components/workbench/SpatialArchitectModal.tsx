@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Popover,
   PopoverContent,
@@ -73,6 +74,18 @@ function serializeLevels(levels: LevelDraft[]): string {
   );
 }
 
+export interface LevelBboxEntry {
+  key: string;
+  fileName: string;
+  page: number;
+  planId: string;
+  label: string;
+  type: string;
+  levels: string[];
+  effectiveLevels: string[];
+  source: "user" | "agent" | null;
+}
+
 export function SpatialArchitectModal({
   open,
   onOpenChange,
@@ -83,6 +96,8 @@ export function SpatialArchitectModal({
   updatedAt,
   running,
   fileGroups,
+  bboxCatalog = [],
+  onSaveBboxAssignments,
   onBuild,
   onSaved,
   canBuild = true,
@@ -96,6 +111,8 @@ export function SpatialArchitectModal({
   updatedAt: string | null | undefined;
   running: boolean;
   fileGroups: Array<{ file: FileLike; sheets: SheetLike[] }>;
+  bboxCatalog?: LevelBboxEntry[];
+  onSaveBboxAssignments?: (a: Array<{ key: string; levels: string[] }>) => Promise<void>;
   onBuild: () => Promise<void> | void;
   onSaved: () => void;
   canBuild?: boolean;
@@ -104,7 +121,11 @@ export function SpatialArchitectModal({
   const [levels, setLevels] = useState<LevelDraft[]>([]);
   const [nonLevels, setNonLevels] = useState<NonLevelRecord[]>([]);
   const [saving, setSaving] = useState(false);
+  // uid -> set of bbox keys attached to that level.
+  const [bboxByLevel, setBboxByLevel] = useState<Record<string, string[]>>({});
+  const initialBboxSerialized = useRef<string>("");
   const initialSerialized = useRef<string>("");
+
 
   // Load editable state from payload whenever it changes / modal opens.
   useEffect(() => {
@@ -177,32 +198,68 @@ export function SpatialArchitectModal({
     setLevels(lvl);
     setNonLevels(others);
     initialSerialized.current = serializeLevels(lvl);
-  }, [open, payload]);
 
-  const isDirty = useMemo(
-    () => serializeLevels(levels) !== initialSerialized.current,
-    [levels],
+    // Seed bbox attachments per level from the catalog's effective levels
+    // (explicit assignment → bbox label → single-bbox page backfill).
+    const seeded: Record<string, string[]> = {};
+    for (const l of lvl) {
+      const nm = l.name.trim().toLowerCase();
+      if (!nm) continue;
+      seeded[l.uid] = bboxCatalog
+        .filter((b) => b.effectiveLevels.some((x) => x.trim().toLowerCase() === nm))
+        .map((b) => b.key);
+    }
+    setBboxByLevel(seeded);
+    initialBboxSerialized.current = JSON.stringify(
+      Object.entries(seeded)
+        .map(([k, v]) => [k, v.slice().sort()])
+        .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+    );
+  }, [open, payload, bboxCatalog]);
+
+  const bboxSerialized = useMemo(
+    () =>
+      JSON.stringify(
+        Object.entries(bboxByLevel)
+          .map(([k, v]) => [k, v.slice().sort()])
+          .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+      ),
+    [bboxByLevel],
   );
 
-  const allPages = useMemo(() => {
-    const out: Array<{
-      file_name: string;
-      page_number: number;
-      label: string;
-    }> = [];
-    for (const g of fileGroups) {
-      for (const sh of g.sheets) {
-        out.push({
-          file_name: g.file.name,
-          page_number: sh.page_index,
-          label: `p${sh.page_index}${
-            sh.sheet_number ? ` · ${sh.sheet_number}` : ""
-          }${sh.sheet_title ? ` · ${sh.sheet_title}` : ""}`,
-        });
-      }
-    }
-    return out;
-  }, [fileGroups]);
+  const isDirty = useMemo(
+    () =>
+      serializeLevels(levels) !== initialSerialized.current ||
+      bboxSerialized !== initialBboxSerialized.current,
+    [levels, bboxSerialized],
+  );
+
+  const bboxByKey = useMemo(
+    () => new Map(bboxCatalog.map((b) => [b.key, b])),
+    [bboxCatalog],
+  );
+
+  const attachedKeys = useMemo(() => {
+    const s = new Set<string>();
+    for (const arr of Object.values(bboxByLevel)) for (const k of arr) s.add(k);
+    return s;
+  }, [bboxByLevel]);
+
+  const unmappedBboxes = useMemo(
+    () => bboxCatalog.filter((b) => !attachedKeys.has(b.key)),
+    [bboxCatalog, attachedKeys],
+  );
+
+  const toggleBbox = (uid: string, key: string) => {
+    setBboxByLevel((prev) => {
+      const cur = prev[uid] || [];
+      return {
+        ...prev,
+        [uid]: cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key],
+      };
+    });
+  };
+
 
   const updateLevel = (uid: string, patch: Partial<LevelDraft>) => {
     setLevels((prev) => prev.map((l) => (l.uid === uid ? { ...l, ...patch } : l)));
@@ -369,7 +426,25 @@ export function SpatialArchitectModal({
         .update({ space_hierarchy_json: nextPayload } as any)
         .eq("id", requestId);
       if (upErr) throw upErr;
+
+      // Persist per-bbox level assignments (levels live on the bbox).
+      if (onSaveBboxAssignments && bboxCatalog.length > 0) {
+        const levelsByKey = new Map<string, string[]>();
+        for (const b of bboxCatalog) levelsByKey.set(b.key, []);
+        for (const l of levels) {
+          const nm = l.name.trim();
+          for (const k of bboxByLevel[l.uid] || []) {
+            const arr = levelsByKey.get(k);
+            if (arr && !arr.includes(nm)) arr.push(nm);
+          }
+        }
+        await onSaveBboxAssignments(
+          Array.from(levelsByKey.entries()).map(([key, lv]) => ({ key, levels: lv })),
+        );
+      }
+
       initialSerialized.current = serializeLevels(levels);
+      initialBboxSerialized.current = bboxSerialized;
       toast({ title: "Spatial hierarchy saved" });
       onSaved();
     } catch (e: any) {
@@ -486,7 +561,7 @@ export function SpatialArchitectModal({
           <div className="grid grid-cols-[minmax(0,1fr)_70px_minmax(0,1.6fr)_128px] items-center gap-2 px-3 py-2 bg-muted/40 border-b text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             <div>Level name</div>
             <div className="text-center">Index</div>
-            <div>Drawings</div>
+            <div>Floor plans / schematic rows</div>
             <div className="text-right">Actions</div>
           </div>
 
@@ -522,47 +597,38 @@ export function SpatialArchitectModal({
                     className="h-8 text-sm text-center"
                     title="Numeric index (P1=-1, Ground=0, L1=1…)"
                   />
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
-                    {l.matched_sources.length === 0 && (
-                      <span className="text-xs text-muted-foreground italic">
-                        None
-                      </span>
+                  <div className="flex flex-wrap items-center gap-1 min-w-0">
+                    {(bboxByLevel[l.uid] || []).length === 0 && (
+                      <span className="text-xs text-muted-foreground italic">None</span>
                     )}
-                    {(() => {
-                      const byFile = new Map<string, number[]>();
-                      for (const m of l.matched_sources) {
-                        const arr = byFile.get(m.file_name) || [];
-                        arr.push(m.page_number);
-                        byFile.set(m.file_name, arr);
-                      }
-                      return Array.from(byFile.entries()).map(([fileName, pages]) => (
-                        <div
-                          key={fileName}
-                          className="flex items-center gap-1.5 min-w-0 max-w-full text-xs"
+                    {(bboxByLevel[l.uid] || []).map((k) => {
+                      const b = bboxByKey.get(k);
+                      if (!b) return null;
+                      return (
+                        <Badge
+                          key={k}
+                          variant="secondary"
+                          className="text-[11px] font-normal max-w-full"
+                          title={`${b.fileName} · p${b.page} · ${b.label}`}
                         >
-                          <span className="font-medium truncate min-w-0" title={fileName}>
-                            {fileName}
+                          <span className="truncate">
+                            {b.label} · p{b.page}
                           </span>
-                          <span className="text-muted-foreground shrink-0">
-                            {pages
-                              .slice()
-                              .sort((a, b) => a - b)
-                              .map((p) => `p${p}`)
-                              .join(", ")}
-                          </span>
-                        </div>
-                      ));
-                    })()}
-                    <AddPagePopover
-                      pages={allPages}
-                      existing={l.matched_sources}
-                      onAdd={(p) => addPage(l.uid, p)}
-                      onRemove={(p) => {
-                        const idx = l.matched_sources.findIndex(
-                          (m) => m.file_name === p.file_name && m.page_number === p.page_number,
-                        );
-                        if (idx >= 0) removePage(l.uid, idx);
-                      }}
+                          <button
+                            type="button"
+                            className="ml-1 text-muted-foreground hover:text-destructive"
+                            onClick={() => toggleBbox(l.uid, k)}
+                            aria-label="Remove bbox"
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                    <SelectBboxPopover
+                      catalog={bboxCatalog}
+                      selected={bboxByLevel[l.uid] || []}
+                      onToggle={(k) => toggleBbox(l.uid, k)}
                     />
                   </div>
                   <div className="flex items-center justify-end gap-0.5">
@@ -613,6 +679,37 @@ export function SpatialArchitectModal({
           </div>
         </div>
 
+        {unmappedBboxes.length > 0 && (
+          <div className="rounded-md border border-amber-300 bg-amber-50/60 dark:bg-amber-950/20">
+            <div className="px-3 py-2 border-b border-amber-300 text-xs font-semibold text-amber-800 dark:text-amber-200">
+              Unmapped bboxes ({unmappedBboxes.length}) — annotations inside these
+              floor plans will not be attributed to any level
+            </div>
+            <div
+              className="max-h-32 overflow-y-auto overscroll-contain divide-y divide-amber-200/60"
+              onWheel={(e) => e.stopPropagation()}
+            >
+              {unmappedBboxes.map((b) => (
+                <div
+                  key={b.key}
+                  className="px-3 py-1 text-xs flex items-center gap-2 min-w-0"
+                >
+                  <span className="truncate font-medium" title={b.fileName}>
+                    {b.fileName}
+                  </span>
+                  <span className="text-muted-foreground shrink-0">p{b.page}</span>
+                  <span className="truncate text-muted-foreground">{b.label}</span>
+                  <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+                    {b.type === "schematic_level_row" ? "schematic row" : "level plan"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+
+
         <div className="flex items-center justify-between">
           <Button type="button" variant="outline" size="sm" onClick={addLevel}>
             <Plus className="h-4 w-4 mr-1" /> Add level
@@ -643,45 +740,45 @@ export function SpatialArchitectModal({
   );
 }
 
-function AddPagePopover({
-  pages,
-  existing,
-  onAdd,
-  onRemove,
+/** Level-centric picker: attach level floor plans / schematic rows to a level. */
+function SelectBboxPopover({
+  catalog,
+  selected,
+  onToggle,
 }: {
-  pages: Array<{ file_name: string; page_number: number; label: string }>;
-  existing: Array<{ file_name: string; page_number: number }>;
-  onAdd: (p: { file_name: string; page_number: number }) => void;
-  onRemove: (p: { file_name: string; page_number: number }) => void;
+  catalog: LevelBboxEntry[];
+  selected: string[];
+  onToggle: (key: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const existingKey = new Set(existing.map((e) => `${e.file_name}::${e.page_number}`));
-  const filtered = pages.filter(
-    (p) =>
+  const sel = new Set(selected);
+  const filtered = catalog.filter(
+    (b) =>
       q.trim() === "" ||
-      p.file_name.toLowerCase().includes(q.toLowerCase()) ||
-      p.label.toLowerCase().includes(q.toLowerCase()),
+      b.fileName.toLowerCase().includes(q.toLowerCase()) ||
+      b.label.toLowerCase().includes(q.toLowerCase()) ||
+      `p${b.page}`.includes(q.toLowerCase()),
   );
-  const byFile = new Map<string, typeof filtered>();
-  for (const p of filtered) {
-    const arr = byFile.get(p.file_name) || [];
-    arr.push(p);
-    byFile.set(p.file_name, arr);
+  const byFile = new Map<string, LevelBboxEntry[]>();
+  for (const b of filtered) {
+    const arr = byFile.get(b.fileName) || [];
+    arr.push(b);
+    byFile.set(b.fileName, arr);
   }
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button type="button" size="sm" variant="outline" className="h-6 text-xs">
-          <Plus className="h-3 w-3 mr-1" /> Manage Pages
+          <Plus className="h-3 w-3 mr-1" /> Select floor plans
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-96 p-0 flex flex-col max-h-[24rem]" align="start">
+      <PopoverContent className="w-[26rem] p-0 flex flex-col max-h-[24rem]" align="start">
         <div className="p-2 border-b shrink-0">
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search file or page…"
+            placeholder="Search file, page or bbox name…"
             className="h-8 text-xs"
           />
         </div>
@@ -691,7 +788,7 @@ function AddPagePopover({
         >
           {byFile.size === 0 && (
             <div className="p-3 text-xs text-muted-foreground text-center">
-              No pages match.
+              No level floor plans or schematic rows match.
             </div>
           )}
           {Array.from(byFile.entries()).map(([fname, arr]) => (
@@ -699,20 +796,14 @@ function AddPagePopover({
               <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground truncate">
                 {fname}
               </div>
-              {arr.map((p) => {
-                const isSelected = existingKey.has(`${p.file_name}::${p.page_number}`);
+              {arr.map((b) => {
+                const isSelected = sel.has(b.key);
                 return (
                   <button
-                    key={`${p.file_name}-${p.page_number}`}
+                    key={b.key}
                     type="button"
                     className="w-full text-left px-3 py-1 text-xs hover:bg-muted flex items-center gap-2"
-                    onClick={() => {
-                      if (isSelected) {
-                        onRemove({ file_name: p.file_name, page_number: p.page_number });
-                      } else {
-                        onAdd({ file_name: p.file_name, page_number: p.page_number });
-                      }
-                    }}
+                    onClick={() => onToggle(b.key)}
                   >
                     <span
                       className={`inline-flex items-center justify-center h-4 w-4 shrink-0 rounded border ${
@@ -723,7 +814,12 @@ function AddPagePopover({
                     >
                       {isSelected && <Check className="h-3 w-3" />}
                     </span>
-                    <span className="truncate">{p.label}</span>
+                    <span className="truncate">
+                      p{b.page} · {b.label}
+                    </span>
+                    <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+                      {b.type === "schematic_level_row" ? "schematic row" : "level plan"}
+                    </span>
                   </button>
                 );
               })}
@@ -734,3 +830,4 @@ function AddPagePopover({
     </Popover>
   );
 }
+
