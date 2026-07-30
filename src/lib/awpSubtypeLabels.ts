@@ -36,6 +36,28 @@ export function expandSubtypeLabel(className: string, typeValue: string): string
 }
 
 /**
+ * Returns the canonical subtype abbreviation ("DCHW") for a stored Type value,
+ * which may already be the abbreviation or the full label. Returns null when
+ * the value isn't a known subtype.
+ */
+export function subtypeAbbr(className: string, typeValue: string): string | null {
+  const raw = (typeValue || "").trim();
+  if (!raw) return null;
+  const upper = raw.toUpperCase();
+  const maps = [
+    SUBTYPE_LABEL_BY_ABBR[(className || "").toLowerCase()],
+    ...Object.values(SUBTYPE_LABEL_BY_ABBR),
+  ].filter(Boolean) as Record<string, string>[];
+  for (const m of maps) {
+    if (m[upper]) return upper;
+    for (const [abbr, label] of Object.entries(m)) {
+      if (label.toUpperCase() === upper) return abbr;
+    }
+  }
+  return null;
+}
+
+/**
  * Classes whose Threat Report rows/columns split per (Type, Pipe size):
  * Cold Water, Hot Water and the unified Riser class.
  */

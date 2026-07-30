@@ -37,7 +37,7 @@ import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectMo
 import { BulkDrawingDownloadModal } from "@/components/workbench/BulkDrawingDownloadModal";
 import { ManageFilesModal } from "@/components/workbench/ManageFilesModal";
 import { SUBTYPED_CLASSES } from "@/components/CreateProjectModal";
-import { expandSubtypeLabel, isSubtypeSplitClass } from "@/lib/awpSubtypeLabels";
+import { expandSubtypeLabel, isSubtypeSplitClass, subtypeAbbr } from "@/lib/awpSubtypeLabels";
 
 import { ActivityHistoryPanel } from "@/components/workbench/ActivityHistoryPanel";
 import { normalizeScoutResponse } from "@/lib/scoutResponseNormalizer";
@@ -6720,8 +6720,10 @@ function InstancesReportModal({
       return m ? parseFloat(m[0]) : Number.POSITIVE_INFINITY;
     };
     // Short type token for the acronym pill (e.g. "Potable" -> "P").
-    const shortToken = (t: string) => {
+    const shortToken = (t: string, className: string) => {
       if (t === "(untyped)") return "?";
+      const abbr = subtypeAbbr(className, t);
+      if (abbr) return abbr;
       const parts = t.split(/[\s\-_/]+/).filter(Boolean);
       if (parts.length >= 2) return parts.map((p) => p[0]).join("").toUpperCase().slice(0, 3);
       return t.slice(0, 2).toUpperCase();
@@ -6775,7 +6777,7 @@ function InstancesReportModal({
       return combosArr.map(({ type, diameter }) => {
         const fullType = type === "(untyped)" ? "" : expandSubtypeLabel(c.name, type);
         const typeLabel = fullType ? ` ${fullType}` : "";
-        const typePrefix = type === "(untyped)" ? "" : `-${shortToken(type)}`;
+        const typePrefix = type === "(untyped)" ? "" : `-${shortToken(type, c.name)}`;
 
         const hideDiameter =
           diameter === "(no size)" &&
@@ -7677,7 +7679,7 @@ function InstancesReportModal({
           .map(({ type, diameter }) => {
             const fullType = type === "(untyped)" ? "" : expandSubtypeLabel(c.name, type);
             const typeLabel = fullType ? ` ${fullType}` : "";
-            const typePrefix = fullType ? `-${fullType}` : "";
+            const typePrefix = fullType ? `-${subtypeAbbr(c.name, type) || fullType}` : "";
 
             return {
               key: `${c.name}::${type}::${diameter}`,
