@@ -37,6 +37,8 @@ import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectMo
 import { BulkDrawingDownloadModal } from "@/components/workbench/BulkDrawingDownloadModal";
 import { ManageFilesModal } from "@/components/workbench/ManageFilesModal";
 import { SUBTYPED_CLASSES } from "@/components/CreateProjectModal";
+import { expandSubtypeLabel, isSubtypeSplitClass } from "@/lib/awpSubtypeLabels";
+
 import { ActivityHistoryPanel } from "@/components/workbench/ActivityHistoryPanel";
 import { normalizeScoutResponse } from "@/lib/scoutResponseNormalizer";
 import {
@@ -6704,10 +6706,8 @@ function InstancesReportModal({
     displayPrefix: string;
     typeGroup: string | null;
   };
-  const isTypedClassName = useCallback(
-    (n: string) => /(^|\s)(cold|hot)\s*water(\s|$)/i.test(n),
-    [],
-  );
+  const isTypedClassName = useCallback((n: string) => isSubtypeSplitClass(n), []);
+
   const overviewEntries = useMemo<OverviewEntry[]>(() => {
     const typeOf = (r: (typeof expanded)[number]) =>
       r.pipeType && r.pipeType.trim() ? r.pipeType.trim() : "(untyped)";
@@ -6773,8 +6773,10 @@ function InstancesReportModal({
         }
       }
       return combosArr.map(({ type, diameter }) => {
-        const typeLabel = type === "(untyped)" ? "" : ` ${shortToken(type)}`;
+        const fullType = type === "(untyped)" ? "" : expandSubtypeLabel(c.name, type);
+        const typeLabel = fullType ? ` ${fullType}` : "";
         const typePrefix = type === "(untyped)" ? "" : `-${shortToken(type)}`;
+
         const hideDiameter =
           diameter === "(no size)" &&
           totalByType.get(type) === 1 &&
@@ -7576,18 +7578,29 @@ function InstancesReportModal({
       ...otherPicks.map((b) => b.page),
     ];
 
+    // Subtype-split classes (Cold/Hot Water, Riser) show the same expanded
+    // display name here as in the Overview and Summary matrix.
+    const displayNameByEntryKey = new Map(
+      overviewEntries.map((e) => [e.key, e.displayName]),
+    );
+
     return {
       name: space,
       rows: rowsForSpace.map((r) => ({
         instanceId: r.instanceId,
-        awpClassName: r.awpClassName,
+        awpClassName: isSubtypeSplitClass(r.awpClassName)
+          ? displayNameByEntryKey.get(entryKeyForRow(r)) || r.awpClassName
+          : r.awpClassName,
         unitName: r.unitName ?? null,
         annotationBaseId: r.annotationBaseId,
         fileName: fileNameById.get(r.fileId) || "",
         pageIndex: r.pageIndex,
         pipeDiameter: r.pipeDiameter ?? null,
-        pipeType: r.pipeType ?? null,
+        pipeType: r.pipeType
+          ? expandSubtypeLabel(r.awpClassName, r.pipeType)
+          : null,
       })),
+
       units,
       pages,
     };
@@ -7601,11 +7614,11 @@ function InstancesReportModal({
       const sourceDrawings = Array.from(
         new Set(fileGroups.map((g) => g.file.name)),
       );
-      // Cold Water and Hot Water are split into per (Type, Diameter) virtual
-      // classes so the Overview and Summary matrix show a separate row/column
-      // for each combination (e.g. "Cold Water Potable 22mm").
-      const isTypedClassName = (n: string) =>
-        /(^|\s)(cold|hot)\s*water(\s|$)/i.test(n);
+      // Cold Water, Hot Water and Riser are split into per (Type, Diameter)
+      // virtual classes so the Overview and Summary matrix show a separate
+      // row/column for each combination (e.g. "Riser Main Mechanical 100mm").
+      const isTypedClassName = (n: string) => isSubtypeSplitClass(n);
+
       const typeGroupOf = (r: (typeof expanded)[number]) =>
         r.pipeType && r.pipeType.trim() ? r.pipeType.trim() : "(untyped)";
       const diameterOf = (r: (typeof expanded)[number]) =>
@@ -7662,8 +7675,10 @@ function InstancesReportModal({
             return diameterSortKey(a.diameter) - diameterSortKey(b.diameter);
           })
           .map(({ type, diameter }) => {
-            const typeLabel = type === "(untyped)" ? "" : ` ${type}`;
-            const typePrefix = type === "(untyped)" ? "" : `-${type}`;
+            const fullType = type === "(untyped)" ? "" : expandSubtypeLabel(c.name, type);
+            const typeLabel = fullType ? ` ${fullType}` : "";
+            const typePrefix = fullType ? `-${fullType}` : "";
+
             return {
               key: `${c.name}::${type}::${diameter}`,
               canonicalName: c.name,
