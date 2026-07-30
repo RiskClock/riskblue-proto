@@ -5907,6 +5907,8 @@ export default function WorkbenchProjectDetail() {
           updatedAt={analysisRequest?.space_hierarchy_updated_at as any}
           running={spaceHierarchyRunning}
           fileGroups={fileGroups}
+          bboxCatalog={levelBboxCatalog}
+          onSaveBboxAssignments={saveBboxLevelAssignments}
           onBuild={buildSpaceHierarchy}
           canBuild={canManage}
           onSaved={() => {
