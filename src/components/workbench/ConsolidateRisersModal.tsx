@@ -15,6 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { SUBTYPED_CLASSES } from "@/components/CreateProjectModal";
 
 // One persisted consolidation group.
 interface ConsolidationGroup {
@@ -31,7 +32,29 @@ interface AnnotationRow {
   page_index: number;
   nx: number;
   ny: number;
+  metadata: Record<string, any> | null;
 }
+
+// A sidebar entry: either a plain class, or a (class, subtype) pair for
+// classes that expose subtypes (Cold Water, Riser).
+interface Section {
+  key: string; // `${className}::${subtype}` ("" subtype = no type / plain class)
+  className: string;
+  subtype: string; // abbreviation, or "" for untyped
+  subtypeLabel: string; // human label, or "No type"
+  idPrefix: string | null;
+}
+
+const NO_TYPE = "";
+
+const sectionKey = (className: string, subtype: string) => `${className}::${subtype}`;
+
+// Subtype of an annotation = its "Type" metadata value (abbreviation).
+const subtypeOf = (a: AnnotationRow): string => {
+  const meta = (a.metadata && typeof a.metadata === "object" ? a.metadata : {}) as Record<string, any>;
+  const t = typeof meta.pipe_type === "string" ? meta.pipe_type.trim() : "";
+  return t;
+};
 
 interface Props {
   open: boolean;
@@ -57,11 +80,78 @@ export function ConsolidateRisersModal({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [annotations, setAnnotations] = useState<AnnotationRow[]>([]);
-  // class -> groups
-  const [groupsByClass, setGroupsByClass] = useState<
-    Record<string, ConsolidationGroup[]>
-  >({});
-  const [activeClass, setActiveClass] = useState<string | null>(null);
+  // section key -> groups
+  const [groupsByKey, setGroupsByKey] = useState<Record<string, ConsolidationGroup[]>>({});
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+
+  // Sections are derived from the annotations actually present. Subtyped
+  // classes fan out into one row per Type found (canonical order), plus a
+  // "No type" row when untyped annotations exist.
+  const sections = useMemo<Section[]>(() => {
+    const out: Section[] = [];
+    for (const c of spannableClasses) {
+      const defs = SUBTYPED_CLASSES[c.name];
+      const rows = annotations.filter((a) => a.awp_class_name === c.name);
+      if (!defs) {
+        out.push({
+          key: sectionKey(c.name, NO_TYPE),
+          className: c.name,
+          subtype: NO_TYPE,
+          subtypeLabel: "",
+          idPrefix: c.idPrefix,
+        });
+        continue;
+      }
+      const present = new Set(rows.map(subtypeOf));
+      for (const d of defs) {
+        if (!present.has(d.abbr)) continue;
+        out.push({
+          key: sectionKey(c.name, d.abbr),
+          className: c.name,
+          subtype: d.abbr,
+          subtypeLabel: d.label,
+          idPrefix: c.idPrefix,
+        });
+      }
+      // Any non-canonical or empty types collapse into "No type".
+      const hasUntyped = rows.some((r) => {
+        const s = subtypeOf(r);
+        return !s || !defs.some((d) => d.abbr === s);
+      });
+      if (hasUntyped) {
+        out.push({
+          key: sectionKey(c.name, NO_TYPE),
+          className: c.name,
+          subtype: NO_TYPE,
+          subtypeLabel: "No type",
+          idPrefix: c.idPrefix,
+        });
+      }
+    }
+    return out;
+  }, [spannableClasses, annotations]);
+
+  // Annotations belonging to a section (subtype-exclusive).
+  const sectionAnnotations = useMemo(() => {
+    const m = new Map<string, AnnotationRow[]>();
+    for (const s of sections) {
+      const defs = SUBTYPED_CLASSES[s.className];
+      const rows = annotations.filter((a) => {
+        if (a.awp_class_name !== s.className) return false;
+        if (!defs) return true;
+        const t = subtypeOf(a);
+        const canonical = !!t && defs.some((d) => d.abbr === t);
+        return s.subtype ? t === s.subtype : !canonical;
+      });
+      m.set(s.key, rows);
+    }
+    return m;
+  }, [sections, annotations]);
+
+  const groupPrefix = (s: Section) => {
+    const base = s.idPrefix || s.className.slice(0, 3).toUpperCase();
+    return s.subtype ? `${base}-${s.subtype}` : base;
+  };
 
   useEffect(() => {
     if (!open || !requestId) return;
@@ -72,7 +162,7 @@ export function ConsolidateRisersModal({
       const [annRes, consRes] = await Promise.all([
         supabase
           .from("drawing_instances" as any)
-          .select("id, awp_class_name, instance_number, file_id, page_index, nx, ny")
+          .select("id, awp_class_name, instance_number, file_id, page_index, nx, ny, metadata")
           .eq("analysis_request_id", requestId)
           .in("awp_class_name", classNames),
         supabase
@@ -81,34 +171,59 @@ export function ConsolidateRisersModal({
           .eq("analysis_request_id", requestId),
       ]);
       if (cancelled) return;
-      const rows = (annRes.data as any[] | null) || [];
-      setAnnotations(rows as AnnotationRow[]);
+      const rows = ((annRes.data as any[] | null) || []) as AnnotationRow[];
+      setAnnotations(rows);
 
-      // Build groups from DB; auto-suggest groups for classes without any.
+      const annMap = new Map(rows.map((r) => [r.id, r] as const));
+      const subtypeForSection = (className: string, memberIds: string[]) => {
+        const defs = SUBTYPED_CLASSES[className];
+        if (!defs) return NO_TYPE;
+        for (const id of memberIds) {
+          const a = annMap.get(id);
+          if (!a) continue;
+          const t = subtypeOf(a);
+          if (t && defs.some((d) => d.abbr === t)) return t;
+        }
+        return NO_TYPE;
+      };
+
+      // Saved groups land in the section matching their members' subtype.
       const existing: Record<string, ConsolidationGroup[]> = {};
       for (const r of (consRes.data as any[] | null) || []) {
-        const list = existing[r.awp_class_name] || [];
-        list.push({
-          id: r.id,
-          label: r.label,
-          member_annotation_ids: (r.member_annotation_ids as string[]) || [],
-        });
-        existing[r.awp_class_name] = list;
+        const members = (r.member_annotation_ids as string[]) || [];
+        const key = sectionKey(r.awp_class_name, subtypeForSection(r.awp_class_name, members));
+        const list = existing[key] || [];
+        list.push({ id: r.id, label: r.label, member_annotation_ids: members });
+        existing[key] = list;
       }
-      // Auto-suggest groupings for classes with no saved groups: cluster by
-      // proximity of (nx, ny) across pages - annotations within 0.05 normalized
-      // distance go into the same group.
+
+      // Auto-suggest groupings for sections with no saved groups: cluster by
+      // proximity of (nx, ny) across pages, within the subtype only.
       for (const c of spannableClasses) {
-        if (existing[c.name]?.length) continue;
-        const classRows = rows.filter((r: AnnotationRow) => r.awp_class_name === c.name);
-        const suggested = clusterByProximity(classRows);
-        existing[c.name] = suggested.map((memberIds, i) => ({
-          label: `${c.idPrefix || c.name.slice(0, 3).toUpperCase()}-${String(i + 1).padStart(3, "0")}`,
-          member_annotation_ids: memberIds,
-        }));
+        const defs = SUBTYPED_CLASSES[c.name];
+        const classRows = rows.filter((r) => r.awp_class_name === c.name);
+        const buckets = new Map<string, AnnotationRow[]>();
+        for (const r of classRows) {
+          const t = subtypeOf(r);
+          const canonical = defs && t && defs.some((d) => d.abbr === t) ? t : NO_TYPE;
+          const k = sectionKey(c.name, defs ? canonical : NO_TYPE);
+          const arr = buckets.get(k) || [];
+          arr.push(r);
+          buckets.set(k, arr);
+        }
+        for (const [k, bucketRows] of buckets) {
+          if (existing[k]?.length) continue;
+          const subtype = k.split("::")[1] || "";
+          const base = c.idPrefix || c.name.slice(0, 3).toUpperCase();
+          const prefix = subtype ? `${base}-${subtype}` : base;
+          existing[k] = clusterByProximity(bucketRows).map((memberIds, i) => ({
+            label: `${prefix}-${String(i + 1).padStart(3, "0")}`,
+            member_annotation_ids: memberIds,
+          }));
+        }
       }
-      setGroupsByClass(existing);
-      setActiveClass(spannableClasses[0]?.name || null);
+      setGroupsByKey(existing);
+      setActiveKey(null);
       setLoading(false);
     })();
     return () => {
@@ -116,25 +231,29 @@ export function ConsolidateRisersModal({
     };
   }, [open, requestId, spannableClasses]);
 
+  // Default the selection to the first available section once derived.
+  useEffect(() => {
+    if (!loading && sections.length && (!activeKey || !sections.some((s) => s.key === activeKey))) {
+      setActiveKey(sections[0].key);
+    }
+  }, [loading, sections, activeKey]);
+
   const annById = useMemo(() => {
     const m = new Map<string, AnnotationRow>();
     for (const a of annotations) m.set(a.id, a);
     return m;
   }, [annotations]);
 
-  const classAnnotations = (className: string) =>
-    annotations.filter((a) => a.awp_class_name === className);
-
-  const updateGroups = (className: string, fn: (g: ConsolidationGroup[]) => ConsolidationGroup[]) => {
-    setGroupsByClass((prev) => ({ ...prev, [className]: fn(prev[className] || []) }));
+  const updateGroups = (key: string, fn: (g: ConsolidationGroup[]) => ConsolidationGroup[]) => {
+    setGroupsByKey((prev) => ({ ...prev, [key]: fn(prev[key] || []) }));
   };
 
-  const renameGroup = (className: string, idx: number, label: string) => {
-    updateGroups(className, (g) => g.map((x, i) => (i === idx ? { ...x, label } : x)));
+  const renameGroup = (key: string, idx: number, label: string) => {
+    updateGroups(key, (g) => g.map((x, i) => (i === idx ? { ...x, label } : x)));
   };
 
-  const toggleMember = (className: string, idx: number, annId: string) => {
-    updateGroups(className, (g) =>
+  const toggleMember = (key: string, idx: number, annId: string) => {
+    updateGroups(key, (g) =>
       g.map((x, i) => {
         if (i !== idx) {
           // Remove from any other group to keep membership exclusive.
@@ -151,18 +270,18 @@ export function ConsolidateRisersModal({
     );
   };
 
-  const addGroup = (className: string, prefix: string | null) => {
-    updateGroups(className, (g) => [
+  const addGroup = (s: Section) => {
+    updateGroups(s.key, (g) => [
       ...g,
       {
-        label: `${prefix || className.slice(0, 3).toUpperCase()}-${String(g.length + 1).padStart(3, "0")}`,
+        label: `${groupPrefix(s)}-${String(g.length + 1).padStart(3, "0")}`,
         member_annotation_ids: [],
       },
     ]);
   };
 
-  const removeGroup = (className: string, idx: number) => {
-    updateGroups(className, (g) => g.filter((_, i) => i !== idx));
+  const removeGroup = (key: string, idx: number) => {
+    updateGroups(key, (g) => g.filter((_, i) => i !== idx));
   };
 
   const handleSave = async () => {
@@ -177,18 +296,22 @@ export function ConsolidateRisersModal({
         .eq("analysis_request_id", requestId)
         .in("awp_class_name", classNames);
 
+      // instance_number stays sequential per class across all its subtypes.
+      const seqByClass = new Map<string, number>();
       const rows: any[] = [];
-      for (const [className, groups] of Object.entries(groupsByClass)) {
-        groups.forEach((g, i) => {
-          if (g.member_annotation_ids.length === 0) return;
+      for (const s of sections) {
+        for (const g of groupsByKey[s.key] || []) {
+          if (g.member_annotation_ids.length === 0) continue;
+          const seq = (seqByClass.get(s.className) || 0) + 1;
+          seqByClass.set(s.className, seq);
           rows.push({
             analysis_request_id: requestId,
-            awp_class_name: className,
-            label: g.label || `${className}-${i + 1}`,
-            instance_number: i + 1,
+            awp_class_name: s.className,
+            label: g.label || `${groupPrefix(s)}-${String(seq).padStart(3, "0")}`,
+            instance_number: seq,
             member_annotation_ids: g.member_annotation_ids,
           });
-        });
+        }
       }
       if (rows.length) {
         const { error } = await supabase.from("annotation_consolidations" as any).insert(rows);
@@ -204,18 +327,18 @@ export function ConsolidateRisersModal({
     }
   };
 
+  const activeSection = sections.find((s) => s.key === activeKey) || null;
+  const activeGroups = activeKey ? groupsByKey[activeKey] || [] : [];
+  const activeAnn = activeKey ? sectionAnnotations.get(activeKey) || [] : [];
+
   const memberToGroup = useMemo(() => {
     const m = new Map<string, number>();
-    if (!activeClass) return m;
-    (groupsByClass[activeClass] || []).forEach((g, i) => {
+    if (!activeKey) return m;
+    (groupsByKey[activeKey] || []).forEach((g, i) => {
       for (const id of g.member_annotation_ids) m.set(id, i);
     });
     return m;
-  }, [groupsByClass, activeClass]);
-
-  const activeAnn = activeClass ? classAnnotations(activeClass) : [];
-  const activeGroups = activeClass ? groupsByClass[activeClass] || [] : [];
-  const activePrefix = spannableClasses.find((c) => c.name === activeClass)?.idPrefix ?? null;
+  }, [groupsByKey, activeKey]);
 
   return (
     <Dialog open={open} onOpenChange={(o) => !saving && onOpenChange(o)}>
@@ -223,8 +346,9 @@ export function ConsolidateRisersModal({
         <DialogHeader>
           <DialogTitle>Riser Unifier</DialogTitle>
           <DialogDescription>
-            For systems that run through multiple floors or rooms, group their annotations together. This
-            combines them into a single row in your report, showing every space they pass through.
+            For systems that run through multiple floors or rooms, group their annotations together. Only
+            annotations of the same type can be grouped. This combines them into a single row in your report,
+            showing every space they pass through.
           </DialogDescription>
         </DialogHeader>
 
@@ -232,26 +356,36 @@ export function ConsolidateRisersModal({
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
-        ) : spannableClasses.length === 0 ? (
+        ) : sections.length === 0 ? (
           <div className="text-sm text-muted-foreground py-8 text-center">
             No annotations in this project belong to a class that can span multiple spaces.
           </div>
         ) : (
-          <div className="grid grid-cols-[180px_1fr] gap-4 max-h-[60vh]">
+          <div className="grid grid-cols-[220px_1fr] gap-4 max-h-[60vh]">
             <div className="border rounded-md overflow-auto">
-              {spannableClasses.map((c) => {
-                const groupCount = (groupsByClass[c.name] || []).length;
-                const annCount = classAnnotations(c.name).length;
+              {sections.map((s) => {
+                const groupCount = (groupsByKey[s.key] || []).length;
+                const annCount = (sectionAnnotations.get(s.key) || []).length;
                 return (
                   <button
-                    key={c.name}
+                    key={s.key}
                     type="button"
-                    onClick={() => setActiveClass(c.name)}
+                    onClick={() => setActiveKey(s.key)}
                     className={`w-full text-left px-3 py-2 text-sm border-b hover:bg-muted/40 ${
-                      activeClass === c.name ? "bg-muted font-medium" : ""
+                      activeKey === s.key ? "bg-muted font-medium" : ""
                     }`}
                   >
-                    <div>{c.name}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span>{s.className}</span>
+                      {s.subtypeLabel && (
+                        <Badge variant="outline" className="text-[10px] font-normal">
+                          {s.subtype || "No type"}
+                        </Badge>
+                      )}
+                    </div>
+                    {s.subtypeLabel && s.subtype && (
+                      <div className="text-[11px] text-muted-foreground">{s.subtypeLabel}</div>
+                    )}
                     <div className="text-[11px] text-muted-foreground">
                       {annCount} annotation{annCount === 1 ? "" : "s"} · {groupCount} group{groupCount === 1 ? "" : "s"}
                     </div>
@@ -261,11 +395,14 @@ export function ConsolidateRisersModal({
             </div>
 
             <ScrollArea className="border rounded-md p-3">
-              {activeClass ? (
+              {activeSection ? (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <div className="text-sm font-medium">{activeClass}</div>
-                    <Button size="sm" variant="outline" onClick={() => addGroup(activeClass!, activePrefix)}>
+                    <div className="text-sm font-medium">
+                      {activeSection.className}
+                      {activeSection.subtypeLabel ? ` · ${activeSection.subtypeLabel}` : ""}
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => addGroup(activeSection)}>
                       <Plus className="h-3.5 w-3.5 mr-1.5" /> Add group
                     </Button>
                   </div>
@@ -287,14 +424,14 @@ export function ConsolidateRisersModal({
                           <div className="flex items-center gap-2">
                             <Input
                               value={g.label}
-                              onChange={(e) => renameGroup(activeClass!, gIdx, e.target.value)}
+                              onChange={(e) => renameGroup(activeSection.key, gIdx, e.target.value)}
                               className="h-8 max-w-[260px]"
                             />
                             <Button
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-muted-foreground"
-                              onClick={() => removeGroup(activeClass!, gIdx)}
+                              onClick={() => removeGroup(activeSection.key, gIdx)}
                               aria-label="Remove group"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -316,7 +453,8 @@ export function ConsolidateRisersModal({
 
                   <div className="pt-2">
                     <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                      Annotations in {activeClass}
+                      Annotations in {activeSection.className}
+                      {activeSection.subtype ? ` · ${activeSection.subtype}` : ""}
                     </div>
                     <div className="text-[11px] text-muted-foreground mb-2">
                       Assign each annotation to one of the groups above (or leave unassigned to keep it as a
@@ -333,7 +471,7 @@ export function ConsolidateRisersModal({
                             className="flex items-center gap-2 text-xs py-1 border-b last:border-b-0"
                           >
                             <span className="font-mono w-16 shrink-0">
-                              {activePrefix || a.awp_class_name.slice(0, 3).toUpperCase()}
+                              {activeSection.idPrefix || a.awp_class_name.slice(0, 3).toUpperCase()}
                               {String(a.instance_number ?? 0).padStart(3, "0")}
                             </span>
                             <span className="text-muted-foreground truncate flex-1">
@@ -344,7 +482,7 @@ export function ConsolidateRisersModal({
                               <label key={gIdx} className="flex items-center gap-1 cursor-pointer">
                                 <Checkbox
                                   checked={groupIdx === gIdx}
-                                  onCheckedChange={() => toggleMember(activeClass!, gIdx, a.id)}
+                                  onCheckedChange={() => toggleMember(activeSection.key, gIdx, a.id)}
                                 />
                                 <span className="text-[11px]">{g.label}</span>
                               </label>
