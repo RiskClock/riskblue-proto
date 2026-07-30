@@ -2451,7 +2451,7 @@ export default function WorkbenchProjectDetail() {
       (a, b) => a.fileName.localeCompare(b.fileName) || a.page - b.page || a.label.localeCompare(b.label),
     );
     return out;
-  }, [rows?.files, rows?.sheets, floorPlansByFile, canonicalLevelNames, pageLevelPlansMap]);
+  }, [rows?.files, rows?.sheets, floorPlansByFile, canonicalLevelNames, pageSpaceMap]);
 
   /** Persist per-bbox level assignments coming from the Spatial Architect modal. */
   const saveBboxLevelAssignments = async (
