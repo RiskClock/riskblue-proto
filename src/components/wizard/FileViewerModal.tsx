@@ -1018,7 +1018,7 @@ export const FileViewerModal = ({
       const levelPlans = (floorPlans ?? []).filter((p) => {
         const eff = (effectiveFloorPlanOverrides as any)[p.plan_id];
         const type = eff?.type ?? p.type;
-        return type === "level_floor_plan";
+        return type === "level_floor_plan" || type === "schematic_level_row";
       });
       // Pick the SMALLEST level bbox that contains the marker's ORIGINAL
       // position. Smallest wins so overlapping/nested level bboxes (e.g. L8
