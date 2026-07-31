@@ -2815,9 +2815,14 @@ export default function WorkbenchProjectDetail() {
       // keep canonical order from the subtype definition
       const defs = SUBTYPED_CLASSES[className] || [];
       const ordered = defs.filter((d) => next.includes(d.abbr)).map((d) => d.abbr);
+      // Selecting any subtype implies the parent class is a column.
+      if (ordered.length > 0) {
+        setDraftCols((cols) => (cols.includes(className) ? cols : [...cols, className]));
+      }
       return { ...prev, [className]: ordered };
     });
   };
+
 
 
   const toggleDraft = (name: string) => {
