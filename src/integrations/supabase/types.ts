@@ -2958,10 +2958,6 @@ export type Database = {
         }
       }
       cleanup_expired_reset_tokens: { Args: never; Returns: undefined }
-      clone_project: {
-        Args: { p_source_project_id: string; p_target_name: string }
-        Returns: string
-      }
       complete_agent_run: {
         Args: { p_error?: string; p_run_id: string; p_status?: string }
         Returns: boolean
