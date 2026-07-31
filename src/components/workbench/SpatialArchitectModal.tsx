@@ -570,7 +570,7 @@ export function SpatialArchitectModal({
           <TooltipProvider delayDuration={150}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <span tabIndex={(!requestId || running || !canBuild) ? -1 : 0}>
+                <span tabIndex={-1}>
                   <Button
                     type="button"
                     size="sm"
