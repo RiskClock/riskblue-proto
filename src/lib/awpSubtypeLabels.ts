@@ -80,7 +80,7 @@ export function expandSubtypeLabelWithSuffix(className: string, typeValue: strin
 export function subtypeAbbr(className: string, typeValue: string): string | null {
   const raw = (typeValue || "").trim();
   if (!raw) return null;
-  const upper = raw.toUpperCase();
+  const upper = resolveAbbr(raw);
   const maps = [
     SUBTYPE_LABEL_BY_ABBR[(className || "").toLowerCase()],
     ...Object.values(SUBTYPE_LABEL_BY_ABBR),
