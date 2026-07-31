@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.clone_project(uuid, text);
