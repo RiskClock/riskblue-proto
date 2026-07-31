@@ -2807,6 +2807,7 @@ const isChildPlanType = (t: string) =>
       labels: string[];
       badges: { label: string; units: number; details: number }[];
       collapsed: boolean;
+      totals: { units: number; details: number };
     };
 
     const entries: Entry[] = [];
@@ -2825,14 +2826,26 @@ const isChildPlanType = (t: string) =>
       // Attachment counters only make sense for the parent (level-ish) types,
       // and only when labels map 1:1 to plans (no level-range consolidation).
       const oneToOne = labels.length === plans.length;
+      const levelish = isLevelishPlanType(type);
+      const totals = { units: 0, details: 0 };
+      if (levelish) {
+        for (const p of plans) {
+          const c = attachedChildCounts(fileId, p);
+          totals.units += c.units;
+          totals.details += c.details;
+        }
+      }
       const badges = labels.map((label, i) => {
-        if (!isLevelishPlanType(type) || !oneToOne) {
-          return { label, units: 0, details: 0 };
+        if (!levelish) return { label, units: 0, details: 0 };
+        if (!oneToOne) {
+          // Consolidated labels (e.g. level ranges): show the page-wide totals
+          // on the first badge so counts are never lost.
+          return i === 0 ? { label, ...totals } : { label, units: 0, details: 0 };
         }
         const { units, details } = attachedChildCounts(fileId, plans[i]);
         return { label, units, details };
       });
-      entries.push({ type, meta, plans, labels, badges, collapsed: false });
+      entries.push({ type, meta, plans, labels, badges, collapsed: false, totals });
     }
     if (entries.length === 0) return null;
 
@@ -2859,6 +2872,23 @@ const isChildPlanType = (t: string) =>
     }
 
     const out: React.ReactNode[] = [];
+    const UNIT_CIRCLE = { bg: "#FDE6FA", fg: "#F54CE4" };
+    const DETAIL_CIRCLE = { bg: "#DCFCE7", fg: "#3BC872" };
+    const circle = (
+      key: string,
+      n: number,
+      colors: { bg: string; fg: string },
+      title: string,
+    ) => (
+      <span
+        key={key}
+        title={title}
+        className="shrink-0 inline-flex items-center justify-center rounded-full h-3.5 min-w-[0.875rem] px-[2px] text-[9px] leading-none"
+        style={{ backgroundColor: colors.bg, color: colors.fg }}
+      >
+        {n}
+      </span>
+    );
     for (const e of entries) {
       const c = e.meta.color;
       const style = {
@@ -2871,10 +2901,26 @@ const isChildPlanType = (t: string) =>
           <Badge
             key={`${e.type}-count`}
             variant="outline"
-            className="h-5 px-1.5 text-[10px]"
+            className="h-5 px-1.5 text-[10px] gap-1"
             style={style}
           >
-            {e.plans.length} {e.meta.plural}
+            <span>
+              {e.plans.length} {e.meta.plural}
+            </span>
+            {e.totals.units > 0 &&
+              circle(
+                "u",
+                e.totals.units,
+                UNIT_CIRCLE,
+                `${e.totals.units} unit floor plan${e.totals.units === 1 ? "" : "s"} attached`,
+              )}
+            {e.totals.details > 0 &&
+              circle(
+                "d",
+                e.totals.details,
+                DETAIL_CIRCLE,
+                `${e.totals.details} detail block${e.totals.details === 1 ? "" : "s"} attached`,
+              )}
           </Badge>,
         );
         continue;
@@ -2888,30 +2934,20 @@ const isChildPlanType = (t: string) =>
             style={style}
           >
             <span className="truncate block">{b.label}</span>
-            {b.units > 0 && (
-              <span
-                title={`${b.units} unit floor plan${b.units === 1 ? "" : "s"} attached`}
-                className="shrink-0 inline-flex items-center justify-center rounded-full h-3.5 min-w-[0.875rem] px-[2px] text-[9px] leading-none"
-                style={{
-                  backgroundColor: softBgFrom(PLAN_TYPE_META.unit_floor_plan.color, 0.35),
-                  color: PLAN_TYPE_META.unit_floor_plan.color,
-                }}
-              >
-                {b.units}
-              </span>
-            )}
-            {b.details > 0 && (
-              <span
-                title={`${b.details} detail block${b.details === 1 ? "" : "s"} attached`}
-                className="shrink-0 inline-flex items-center justify-center rounded-full h-3.5 min-w-[0.875rem] px-[2px] text-[9px] leading-none"
-                style={{
-                  backgroundColor: softBgFrom(PLAN_TYPE_META.typical_detail_block.color, 0.35),
-                  color: PLAN_TYPE_META.typical_detail_block.color,
-                }}
-              >
-                {b.details}
-              </span>
-            )}
+            {b.units > 0 &&
+              circle(
+                "u",
+                b.units,
+                UNIT_CIRCLE,
+                `${b.units} unit floor plan${b.units === 1 ? "" : "s"} attached`,
+              )}
+            {b.details > 0 &&
+              circle(
+                "d",
+                b.details,
+                DETAIL_CIRCLE,
+                `${b.details} detail block${b.details === 1 ? "" : "s"} attached`,
+              )}
           </Badge>,
         );
       });
