@@ -40,6 +40,7 @@ const COLOR_OVERRIDES: Record<string, string> = {
   // Floor-plan badges
   "unit floor plan": "#f92ad5",
   "level floor plan": "#39b52e",
+  "typical_detail_block": "#D48D0B",
   // Domestic water
   "domestic cold water": "#1d68f0", // blue
   "dcw": "#1d68f0",

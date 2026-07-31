@@ -2873,7 +2873,7 @@ const isChildPlanType = (t: string) =>
 
     const out: React.ReactNode[] = [];
     const UNIT_CIRCLE = { bg: "#FDE6FA", fg: "#F54CE4" };
-    const DETAIL_CIRCLE = { bg: "#DCFCE7", fg: "#3BC872" };
+    const DETAIL_CIRCLE = { bg: "#FFF6D6", fg: "#D48D0B" };
     const circle = (
       key: string,
       n: number,
@@ -2894,7 +2894,7 @@ const isChildPlanType = (t: string) =>
       const isDetail = e.type === "typical_detail_block";
       const style = isDetail
         ? {
-            backgroundColor: "#FFC72C",
+            backgroundColor: "#FFF6D6",
             color: "#D48D0B",
             borderColor: "#D48D0B",
           }
