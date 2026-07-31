@@ -2807,6 +2807,7 @@ const isChildPlanType = (t: string) =>
       labels: string[];
       badges: { label: string; units: number; details: number }[];
       collapsed: boolean;
+      totals: { units: number; details: number };
     };
 
     const entries: Entry[] = [];
