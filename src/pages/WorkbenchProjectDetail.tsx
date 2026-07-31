@@ -1315,6 +1315,13 @@ export default function WorkbenchProjectDetail() {
   // (misnamed array — also holds level_floor_plan entries) and in override-
   // only floor-plan entries; merging across sheets is required so that
   // `Referenced in` on a unit-plan can find level plans from other pages.
+// Bbox types that can act as a parent (own attached units / detail blocks)
+// and the child types that can be attached to them.
+const isLevelishPlanType = (t: string) =>
+  t === "level_floor_plan" || t === "schematic_level_row";
+const isChildPlanType = (t: string) =>
+  t === "unit_floor_plan" || t === "typical_detail_block";
+
   const activeFileAllLevelPlans = useMemo<ParsedFloorPlan[]>(() => {
     const deleted = getDeletedPlanIds(activeFloorPlanOverrides);
     const out: ParsedFloorPlan[] = [];
@@ -1322,7 +1329,7 @@ export default function WorkbenchProjectDetail() {
     for (const plans of activeFileFloorPlansByPage.values()) {
       for (const p of plans) {
         const materialized = materializeFloorPlan(p, activeFloorPlanOverrides);
-        if (materialized.type !== "level_floor_plan") continue;
+        if (!isLevelishPlanType(materialized.type)) continue;
         if (deleted.has(p.plan_id) || seen.has(materialized.plan_id)) continue;
         seen.add(materialized.plan_id);
         out.push(materialized);
@@ -1338,14 +1345,14 @@ export default function WorkbenchProjectDetail() {
       for (const entry of getAddedUnitPlans(ovr)) {
         sheetKnownIds.add(entry.plan_id);
         const parsed = materializeFloorPlan(addedUnitPlanToParsed(entry), ovr);
-        if (parsed.type !== "level_floor_plan") continue;
+        if (!isLevelishPlanType(parsed.type)) continue;
         if (sheetDeleted.has(parsed.plan_id) || deleted.has(parsed.plan_id)) continue;
         if (seen.has(parsed.plan_id)) continue;
         seen.add(parsed.plan_id);
         out.push(parsed);
       }
       for (const parsed of overrideOnlyFloorPlans(ovr, s.page_index, sheetKnownIds, sheetDeleted)) {
-        if (parsed.type !== "level_floor_plan") continue;
+        if (!isLevelishPlanType(parsed.type)) continue;
         if (deleted.has(parsed.plan_id) || seen.has(parsed.plan_id)) continue;
         seen.add(parsed.plan_id);
         out.push(parsed);
@@ -1371,7 +1378,7 @@ export default function WorkbenchProjectDetail() {
     for (const plans of activeFileFloorPlansByPage.values()) {
       for (const p of plans) {
         const materialized = materializeFloorPlan(p, activeFloorPlanOverrides);
-        if (materialized.type === "unit_floor_plan" && !deleted.has(p.plan_id)) {
+        if (isChildPlanType(materialized.type) && !deleted.has(p.plan_id)) {
           out.push(materialized);
         }
       }
@@ -1384,7 +1391,7 @@ export default function WorkbenchProjectDetail() {
         addedUnitPlanToParsed(entry),
         activeFloorPlanOverrides,
       );
-      if (parsed.type !== "unit_floor_plan") continue;
+      if (!isChildPlanType(parsed.type)) continue;
       if (deleted.has(parsed.plan_id) || seen.has(parsed.plan_id)) continue;
       seen.add(parsed.plan_id);
       refSeen.add(unitPlanRefKey(parsed).toLowerCase());
@@ -1399,7 +1406,7 @@ export default function WorkbenchProjectDetail() {
       for (const entry of getAddedUnitPlans(ovr)) {
         sheetKnownIds.add(entry.plan_id);
         const parsed = materializeFloorPlan(addedUnitPlanToParsed(entry), ovr);
-        if (parsed.type !== "unit_floor_plan") continue;
+        if (!isChildPlanType(parsed.type)) continue;
         if (sheetDeleted.has(parsed.plan_id) || deleted.has(parsed.plan_id)) continue;
         const refKey = unitPlanRefKey(parsed).toLowerCase();
         if (seen.has(parsed.plan_id) || refSeen.has(refKey)) continue;
@@ -1408,7 +1415,7 @@ export default function WorkbenchProjectDetail() {
         out.push(parsed);
       }
       for (const parsed of overrideOnlyFloorPlans(ovr, s.page_index, sheetKnownIds, sheetDeleted)) {
-        if (parsed.type !== "unit_floor_plan") continue;
+        if (!isChildPlanType(parsed.type)) continue;
         if (deleted.has(parsed.plan_id)) continue;
         const refKey = unitPlanRefKey(parsed).toLowerCase();
         if (seen.has(parsed.plan_id) || refSeen.has(refKey)) continue;
@@ -2260,7 +2267,7 @@ export default function WorkbenchProjectDetail() {
       for (const plans of byPage.values()) {
         for (const fp of plans) {
           const e = effective(fp, f.id);
-          if (e.type !== "level_floor_plan") continue;
+          if (!isLevelishPlanType(e.type)) continue;
           for (const ref of e.units) {
             const k = (ref || "").trim().toLowerCase();
             if (!k) continue;
@@ -2334,7 +2341,7 @@ export default function WorkbenchProjectDetail() {
             }
             unitMap.set(key, pairs);
 
-          } else if (e.type === "unit_floor_plan") {
+          } else if (isChildPlanType(e.type)) {
             const unitLabel = e.name;
             const refKey = e.name.trim().toLowerCase();
             const counts = refKey ? unitRefToLevelCounts.get(refKey) : null;
