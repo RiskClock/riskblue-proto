@@ -2759,7 +2759,7 @@ const isChildPlanType = (t: string) =>
       const inner = new Map<string, string>();
       for (const plans of byPage.values()) {
         for (const fp of plans) {
-          const name = planBadgeLabelRaw(fp).trim().toLowerCase();
+          const name = planBadgeLabel(fp).trim().toLowerCase();
           if (name) inner.set(name, fp.type);
         }
       }
