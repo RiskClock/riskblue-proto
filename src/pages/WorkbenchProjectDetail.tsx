@@ -2891,11 +2891,18 @@ const isChildPlanType = (t: string) =>
     );
     for (const e of entries) {
       const c = e.meta.color;
-      const style = {
-        backgroundColor: softBgFrom(c),
-        color: c,
-        borderColor: softBgFrom(c, 0.5),
-      };
+      const isDetail = e.type === "typical_detail_block";
+      const style = isDetail
+        ? {
+            backgroundColor: "#FFC72C",
+            color: "#D48D0B",
+            borderColor: "#D48D0B",
+          }
+        : {
+            backgroundColor: softBgFrom(c),
+            color: c,
+            borderColor: softBgFrom(c, 0.5),
+          };
       if (e.collapsed) {
         out.push(
           <Badge
