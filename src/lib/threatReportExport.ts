@@ -790,7 +790,7 @@ export async function runThreatReportExport(
         para(
           [
             text(
-              `Units on this level (${totalUnits} ${totalUnits === 1 ? "unit" : "units"})`,
+              `Units / details on this level (${totalUnits} ${totalUnits === 1 ? "item" : "items"})`,
               { bold: true, size: 20 },
             ),
           ],

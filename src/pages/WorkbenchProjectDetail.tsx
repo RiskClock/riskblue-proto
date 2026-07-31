@@ -111,7 +111,7 @@ import {
   forceReleaseAgentLocks,
 } from "@/lib/agentLock";
 
-import { awpClassColor, readableTextOn, softBgFrom } from "@/lib/awpColor";
+import { awpClassColor, floorPlanTypeColor, readableTextOn, softBgFrom } from "@/lib/awpColor";
 
 const PREF_ID = "global";
 
