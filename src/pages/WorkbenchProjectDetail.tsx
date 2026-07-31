@@ -6868,9 +6868,8 @@ function InstancesReportModal({
       if (t === "(untyped)") return "?";
       const abbr = subtypeAbbr(className, t);
       if (abbr) return abbr;
-      const parts = t.split(/[\s\-_/]+/).filter(Boolean);
-      if (parts.length >= 2) return parts.map((p) => p[0]).join("").toUpperCase().slice(0, 3);
-      return t.slice(0, 2).toUpperCase();
+      // Free-typed values (e.g. "DCW/DHW L11-L4") are shown verbatim.
+      return t.trim();
     };
     return classCols.flatMap((c) => {
       const base = displayClassName(c.name);
