@@ -2825,14 +2825,26 @@ const isChildPlanType = (t: string) =>
       // Attachment counters only make sense for the parent (level-ish) types,
       // and only when labels map 1:1 to plans (no level-range consolidation).
       const oneToOne = labels.length === plans.length;
+      const levelish = isLevelishPlanType(type);
+      const totals = { units: 0, details: 0 };
+      if (levelish) {
+        for (const p of plans) {
+          const c = attachedChildCounts(fileId, p);
+          totals.units += c.units;
+          totals.details += c.details;
+        }
+      }
       const badges = labels.map((label, i) => {
-        if (!isLevelishPlanType(type) || !oneToOne) {
-          return { label, units: 0, details: 0 };
+        if (!levelish) return { label, units: 0, details: 0 };
+        if (!oneToOne) {
+          // Consolidated labels (e.g. level ranges): show the page-wide totals
+          // on the first badge so counts are never lost.
+          return i === 0 ? { label, ...totals } : { label, units: 0, details: 0 };
         }
         const { units, details } = attachedChildCounts(fileId, plans[i]);
         return { label, units, details };
       });
-      entries.push({ type, meta, plans, labels, badges, collapsed: false });
+      entries.push({ type, meta, plans, labels, badges, collapsed: false, totals });
     }
     if (entries.length === 0) return null;
 
