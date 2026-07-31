@@ -2289,8 +2289,8 @@ const FloorPlansPanel = ({
           );
           const fallbackLabel = getEffectiveLabel(fp, overrides) ||
             floorPlanDisplayLabel({ ...fp, floors: effFloors });
-          const isUnit = effType === "unit_floor_plan";
-          const isLevel = effType === "level_floor_plan";
+          const isUnit = effType === "unit_floor_plan" || effType === "typical_detail_block";
+          const isLevel = effType === "level_floor_plan" || effType === "schematic_level_row";
           const referencedIn = isUnit ? findReferencingLevels(fp) : [];
           const planAnns = annotationsByPlan.get(fp.plan_id) ?? [];
           const isEditingThis = editingPlan?.planId === fp.plan_id;
@@ -2574,7 +2574,7 @@ const LevelUnitsSection = ({
     <div className="space-y-1">
       <div className="flex items-center justify-between gap-2">
         <div className="text-[10px] font-medium text-muted-foreground">
-          {effUnits.length > 0 ? `Units (${effUnits.length})` : "Units"}
+          {effUnits.length > 0 ? `Units / Details (${effUnits.length})` : "Units / Details"}
         </div>
         {onSaveLevelUnits && (
           <Button
@@ -2605,7 +2605,7 @@ const LevelUnitsSection = ({
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search or create unit…"
+              placeholder="Search or create unit / detail…"
               className="h-7 text-xs"
             />
           </div>
@@ -2615,7 +2615,7 @@ const LevelUnitsSection = ({
           >
             {filtered.length === 0 && !showCreate && (
               <div className="text-[11px] italic text-muted-foreground px-2 py-2">
-                No units.
+                No units or details.
               </div>
             )}
             {filtered.map((ref) => {
@@ -2733,7 +2733,7 @@ const PlaceUnitBboxControl = ({ onPlace }: PlaceUnitBboxControlProps) => {
         onClick={onPlace}
       >
         <Plus className="h-3 w-3" />
-        Place Unit Floor Plan Marker
+        Place Unit / Detail Marker
       </Button>
     </div>
   );
