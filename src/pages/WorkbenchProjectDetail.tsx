@@ -7822,7 +7822,7 @@ function InstancesReportModal({
           .map(({ type, diameter }) => {
             const fullType = type === "(untyped)" ? "" : expandSubtypeLabelWithSuffix(c.name, type);
             const typeLabel = fullType ? ` ${fullType}` : "";
-            const typePrefix = fullType ? `-${subtypeAbbr(c.name, type) || fullType}` : "";
+            const typePrefix = fullType ? `-${subtypeAbbr(c.name, type) || type.trim()}` : "";
 
             return {
               key: `${c.name}::${type}::${diameter}`,
