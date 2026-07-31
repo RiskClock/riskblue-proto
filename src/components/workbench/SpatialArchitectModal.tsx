@@ -530,6 +530,7 @@ export function SpatialArchitectModal({
         onInteractOutside={(e) => {
           if (isDirty && !confirmDiscardIfDirty()) e.preventDefault();
         }}
+        onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle>Spatial Architect</DialogTitle>
