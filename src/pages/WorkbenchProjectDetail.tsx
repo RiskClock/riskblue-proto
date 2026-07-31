@@ -6398,7 +6398,7 @@ function InstancesReportModal({
   optionByName: Map<string, { idPrefix: string | null; category: string }>;
   pageSpaceMap: Map<string, string[]>;
   pageSpaceUnitMap: Map<string, Array<{ level: string; unit?: string }>>;
-  pageUnitPlansMap: Map<string, Array<{ unitLabel: string; levels: string[]; levelsWithCounts: Array<{ level: string; count: number }>; bbox: [number, number, number, number] | null }>>;
+  pageUnitPlansMap: Map<string, Array<{ unitLabel: string; levels: string[]; levelsWithCounts: Array<{ level: string; count: number }>; bbox: [number, number, number, number] | null; planType?: string }>>;
   pageLevelPlansMap: Map<string, Array<{ levels: string[]; bbox: [number, number, number, number] | null; planType?: string }>>;
   spaceHierarchyPayload: any | null | undefined;
   projectName: string;
