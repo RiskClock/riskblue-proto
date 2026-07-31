@@ -2815,9 +2815,14 @@ export default function WorkbenchProjectDetail() {
       // keep canonical order from the subtype definition
       const defs = SUBTYPED_CLASSES[className] || [];
       const ordered = defs.filter((d) => next.includes(d.abbr)).map((d) => d.abbr);
+      // Selecting any subtype implies the parent class is a column.
+      if (ordered.length > 0) {
+        setDraftCols((cols) => (cols.includes(className) ? cols : [...cols, className]));
+      }
       return { ...prev, [className]: ordered };
     });
   };
+
 
 
   const toggleDraft = (name: string) => {
@@ -2829,13 +2834,19 @@ export default function WorkbenchProjectDetail() {
   const doSaveColumns = async () => {
     setSavingPrefs(true);
     try {
+      // Any class with at least one selected subtype must be shown as a column.
+      const colsToSave = [...draftCols];
+      for (const [name, abbrs] of Object.entries(draftSubtypes)) {
+        if (abbrs && abbrs.length && !colsToSave.includes(name)) colsToSave.push(name);
+      }
       const { error } = await supabase.from("workbench_column_preferences").upsert({
         id: prefId,
-        awp_class_names: draftCols,
+        awp_class_names: colsToSave,
         updated_at: new Date().toISOString(),
         updated_by: user?.id ?? null,
       });
       if (error) throw error;
+
 
       // Persist alias changes: diff draft vs current maps.
       const allClassKeys = new Set<string>([
