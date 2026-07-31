@@ -2834,13 +2834,19 @@ export default function WorkbenchProjectDetail() {
   const doSaveColumns = async () => {
     setSavingPrefs(true);
     try {
+      // Any class with at least one selected subtype must be shown as a column.
+      const colsToSave = [...draftCols];
+      for (const [name, abbrs] of Object.entries(draftSubtypes)) {
+        if (abbrs && abbrs.length && !colsToSave.includes(name)) colsToSave.push(name);
+      }
       const { error } = await supabase.from("workbench_column_preferences").upsert({
         id: prefId,
-        awp_class_names: draftCols,
+        awp_class_names: colsToSave,
         updated_at: new Date().toISOString(),
         updated_by: user?.id ?? null,
       });
       if (error) throw error;
+
 
       // Persist alias changes: diff draft vs current maps.
       const allClassKeys = new Set<string>([
