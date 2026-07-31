@@ -37,7 +37,7 @@ import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectMo
 import { BulkDrawingDownloadModal } from "@/components/workbench/BulkDrawingDownloadModal";
 import { ManageFilesModal } from "@/components/workbench/ManageFilesModal";
 import { SUBTYPED_CLASSES } from "@/components/CreateProjectModal";
-import { expandSubtypeLabel, isSubtypeSplitClass, subtypeAbbr } from "@/lib/awpSubtypeLabels";
+import { expandSubtypeLabel, expandSubtypeLabelWithSuffix, isSubtypeSplitClass, subtypeAbbr } from "@/lib/awpSubtypeLabels";
 
 import { ActivityHistoryPanel } from "@/components/workbench/ActivityHistoryPanel";
 import { normalizeScoutResponse } from "@/lib/scoutResponseNormalizer";
@@ -6868,9 +6868,8 @@ function InstancesReportModal({
       if (t === "(untyped)") return "?";
       const abbr = subtypeAbbr(className, t);
       if (abbr) return abbr;
-      const parts = t.split(/[\s\-_/]+/).filter(Boolean);
-      if (parts.length >= 2) return parts.map((p) => p[0]).join("").toUpperCase().slice(0, 3);
-      return t.slice(0, 2).toUpperCase();
+      // Free-typed values (e.g. "DCW/DHW L11-L4") are shown verbatim.
+      return t.trim();
     };
     return classCols.flatMap((c) => {
       const base = displayClassName(c.name);
@@ -6919,7 +6918,7 @@ function InstancesReportModal({
         }
       }
       return combosArr.map(({ type, diameter }) => {
-        const fullType = type === "(untyped)" ? "" : expandSubtypeLabel(c.name, type);
+        const fullType = type === "(untyped)" ? "" : expandSubtypeLabelWithSuffix(c.name, type);
         const typeLabel = fullType ? ` ${fullType}` : "";
         const typePrefix = type === "(untyped)" ? "" : `-${shortToken(type, c.name)}`;
 
@@ -7743,7 +7742,7 @@ function InstancesReportModal({
         pageIndex: r.pageIndex,
         pipeDiameter: r.pipeDiameter ?? null,
         pipeType: r.pipeType
-          ? expandSubtypeLabel(r.awpClassName, r.pipeType)
+          ? expandSubtypeLabelWithSuffix(r.awpClassName, r.pipeType)
           : null,
       })),
 
@@ -7821,9 +7820,9 @@ function InstancesReportModal({
             return diameterSortKey(a.diameter) - diameterSortKey(b.diameter);
           })
           .map(({ type, diameter }) => {
-            const fullType = type === "(untyped)" ? "" : expandSubtypeLabel(c.name, type);
+            const fullType = type === "(untyped)" ? "" : expandSubtypeLabelWithSuffix(c.name, type);
             const typeLabel = fullType ? ` ${fullType}` : "";
-            const typePrefix = fullType ? `-${subtypeAbbr(c.name, type) || fullType}` : "";
+            const typePrefix = fullType ? `-${subtypeAbbr(c.name, type) || type.trim()}` : "";
 
             return {
               key: `${c.name}::${type}::${diameter}`,

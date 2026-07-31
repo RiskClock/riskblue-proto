@@ -15,6 +15,24 @@ export const SUBTYPE_LABEL_BY_ABBR: Record<string, Record<string, string>> =
   );
 
 /**
+ * Alternate spellings seen in real annotation data, mapped to the canonical
+ * subtype abbreviation.
+ */
+export const SUBTYPE_ABBR_ALIASES: Record<string, string> = {
+  "DCW/DHW": "DCHW",
+  "DHW/DCW": "DCHW",
+  DCW: "DCHW",
+  DHW: "DCHW",
+  "CWR/CWS": "CWRS",
+  "CWS/CWR": "CWRS",
+};
+
+function resolveAbbr(value: string): string {
+  const upper = value.trim().toUpperCase();
+  return SUBTYPE_ABBR_ALIASES[upper] || upper;
+}
+
+/**
  * Expands a stored Type value (usually a subtype abbreviation like "MMCH")
  * into its full label ("Main Mechanical"). Unknown values pass through
  * unchanged so free-typed values still render as entered.
@@ -22,18 +40,37 @@ export const SUBTYPE_LABEL_BY_ABBR: Record<string, Record<string, string>> =
 export function expandSubtypeLabel(className: string, typeValue: string): string {
   const raw = (typeValue || "").trim();
   if (!raw) return raw;
+  const key = resolveAbbr(raw);
   const map = SUBTYPE_LABEL_BY_ABBR[(className || "").toLowerCase()];
   if (map) {
-    const hit = map[raw.toUpperCase()];
+    const hit = map[key];
     if (hit) return hit;
   }
   // Fall back to any class' mapping (aliased class names, legacy rows).
   for (const m of Object.values(SUBTYPE_LABEL_BY_ABBR)) {
-    const hit = m[raw.toUpperCase()];
+    const hit = m[key];
     if (hit) return hit;
   }
   return raw;
 }
+
+/**
+ * Like {@link expandSubtypeLabel}, but tolerates a trailing qualifier after
+ * the subtype token: "DCW/DHW L11-L4" -> "Domestic Cold/Hot Water L11-L4".
+ * The remainder is preserved verbatim.
+ */
+export function expandSubtypeLabelWithSuffix(className: string, typeValue: string): string {
+  const raw = (typeValue || "").trim();
+  if (!raw) return raw;
+  const whole = expandSubtypeLabel(className, raw);
+  if (whole !== raw) return whole;
+  const m = raw.match(/^(\S+)\s+(.*)$/);
+  if (!m) return raw;
+  const head = expandSubtypeLabel(className, m[1]);
+  if (head === m[1]) return raw;
+  return `${head} ${m[2]}`.trim();
+}
+
 
 /**
  * Returns the canonical subtype abbreviation ("DCHW") for a stored Type value,
@@ -43,7 +80,7 @@ export function expandSubtypeLabel(className: string, typeValue: string): string
 export function subtypeAbbr(className: string, typeValue: string): string | null {
   const raw = (typeValue || "").trim();
   if (!raw) return null;
-  const upper = raw.toUpperCase();
+  const upper = resolveAbbr(raw);
   const maps = [
     SUBTYPE_LABEL_BY_ABBR[(className || "").toLowerCase()],
     ...Object.values(SUBTYPE_LABEL_BY_ABBR),
