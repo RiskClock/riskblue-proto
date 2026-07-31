@@ -2735,18 +2735,81 @@ const isChildPlanType = (t: string) =>
     "typical_detail_block",
   ];
 
+  // file -> plan_id -> attached child refs (unit floor plans / detail blocks).
+  const planUnitRefsByFile = useMemo(() => {
+    const m = new Map<string, Map<string, string[]>>();
+    for (const s of rows?.sheets ?? []) {
+      const ovr = s.floor_plan_overrides as Record<string, any> | null;
+      if (!ovr) continue;
+      const inner = m.get(s.parent_file_id) ?? new Map<string, string[]>();
+      for (const [planId, v] of Object.entries(ovr)) {
+        if (planId.startsWith("__")) continue;
+        const units = (v as any)?.units;
+        if (Array.isArray(units)) inner.set(planId, units.map((u: any) => String(u)));
+      }
+      m.set(s.parent_file_id, inner);
+    }
+    return m;
+  }, [rows?.sheets]);
+
+  // file -> lowercased plan name -> plan type (to classify attached children).
+  const planTypeByNameByFile = useMemo(() => {
+    const m = new Map<string, Map<string, string>>();
+    for (const [fileId, byPage] of floorPlansByFile.entries()) {
+      const inner = new Map<string, string>();
+      for (const plans of byPage.values()) {
+        for (const fp of plans) {
+          const name = planBadgeLabelRaw(fp).trim().toLowerCase();
+          if (name) inner.set(name, fp.type);
+        }
+      }
+      m.set(fileId, inner);
+    }
+    return m;
+  }, [floorPlansByFile]);
+
+  /** Counts of unit floor plans / detail blocks attached to a level-ish bbox. */
+  const attachedChildCounts = (fileId: string, fp: ParsedFloorPlan) => {
+    const refs =
+      planUnitRefsByFile.get(fileId)?.get(fp.plan_id) ?? fp.referenced_unit_ids ?? [];
+    const types = planTypeByNameByFile.get(fileId);
+    let units = 0;
+    let details = 0;
+    for (const ref of refs) {
+      const k = (ref || "").trim().toLowerCase();
+      if (!k) continue;
+      const t = types?.get(k);
+      if (t === "typical_detail_block") details += 1;
+      else units += 1;
+    }
+    return { units, details };
+  };
+
   /**
-   * Floor-plan badges for a page. Per type: show individual bbox-name badges
-   * when there are 1-2 of that type, otherwise collapse to a single count
-   * badge ("5 level floor plans"). Colors match the bbox colors in the drawing modal.
+   * Floor-plan badges for a page. Individual bbox-name badges are shown by
+   * default; when the total character count across all badges on the page
+   * exceeds MAX_BADGE_CHARS, types are collapsed one at a time (largest
+   * contributor first) into a single count badge ("5 level floor plans")
+   * until the page fits. Colors match the bbox colors in the drawing modal.
    */
   const renderPlanBadges = (
     fileId: string,
     page: number,
     types: string[] = PLAN_BADGE_TYPES,
   ) => {
+    const MAX_BADGE_CHARS = 150;
     const all = floorPlansByFile.get(fileId)?.get(page) ?? [];
-    const out: React.ReactNode[] = [];
+
+    type Entry = {
+      type: string;
+      meta: { color: string; singular: string; plural: string };
+      plans: ParsedFloorPlan[];
+      labels: string[];
+      badges: { label: string; units: number; details: number }[];
+      collapsed: boolean;
+    };
+
+    const entries: Entry[] = [];
     for (const type of types) {
       const plans = all.filter((p) => p.type === type);
       if (plans.length === 0) continue;
@@ -2755,38 +2818,100 @@ const isChildPlanType = (t: string) =>
         singular: type,
         plural: type,
       };
-      const c = meta.color;
+      const labels =
+        type === "level_floor_plan"
+          ? consolidateLevelLabels(plans.map((fp) => planBadgeLabel(fp)))
+          : plans.map((fp) => planBadgeLabel(fp));
+      // Attachment counters only make sense for the parent (level-ish) types,
+      // and only when labels map 1:1 to plans (no level-range consolidation).
+      const oneToOne = labels.length === plans.length;
+      const badges = labels.map((label, i) => {
+        if (!isLevelishPlanType(type) || !oneToOne) {
+          return { label, units: 0, details: 0 };
+        }
+        const { units, details } = attachedChildCounts(fileId, plans[i]);
+        return { label, units, details };
+      });
+      entries.push({ type, meta, plans, labels, badges, collapsed: false });
+    }
+    if (entries.length === 0) return null;
+
+    // ~3 chars of visual weight per attachment circle.
+    const entryChars = (e: Entry) =>
+      e.collapsed
+        ? `${e.plans.length} ${e.meta.plural}`.length
+        : e.badges.reduce(
+            (n, b) => n + b.label.length + (b.units ? 3 : 0) + (b.details ? 3 : 0),
+            0,
+          );
+    const totalChars = () => entries.reduce((n, e) => n + entryChars(e), 0);
+
+    // Collapse the heaviest expandable type until the page fits (or nothing
+    // is left to collapse).
+    while (totalChars() > MAX_BADGE_CHARS) {
+      let target: Entry | null = null;
+      for (const e of entries) {
+        if (e.collapsed || e.plans.length < 2) continue;
+        if (!target || entryChars(e) > entryChars(target)) target = e;
+      }
+      if (!target) break;
+      target.collapsed = true;
+    }
+
+    const out: React.ReactNode[] = [];
+    for (const e of entries) {
+      const c = e.meta.color;
       const style = {
         backgroundColor: softBgFrom(c),
         color: c,
         borderColor: softBgFrom(c, 0.5),
       };
-      if (plans.length > 2) {
+      if (e.collapsed) {
         out.push(
           <Badge
-            key={`${type}-count`}
+            key={`${e.type}-count`}
             variant="outline"
             className="h-5 px-1.5 text-[10px]"
             style={style}
           >
-            {plans.length} {meta.plural}
+            {e.plans.length} {e.meta.plural}
           </Badge>,
         );
         continue;
       }
-      const labels =
-        type === "level_floor_plan"
-          ? consolidateLevelLabels(plans.map((fp) => planBadgeLabel(fp)))
-          : plans.map((fp) => planBadgeLabel(fp));
-      labels.forEach((label, i) => {
+      e.badges.forEach((b, i) => {
         out.push(
           <Badge
-            key={`${type}-${i}-${label}`}
+            key={`${e.type}-${i}-${b.label}`}
             variant="outline"
-            className="h-5 px-1.5 text-[10px] max-w-[220px]"
+            className="h-5 px-1.5 text-[10px] max-w-[220px] gap-1"
             style={style}
           >
-            <span className="truncate block">{label}</span>
+            <span className="truncate block">{b.label}</span>
+            {b.units > 0 && (
+              <span
+                title={`${b.units} unit floor plan${b.units === 1 ? "" : "s"} attached`}
+                className="shrink-0 inline-flex items-center justify-center rounded-full h-3.5 min-w-[0.875rem] px-[2px] text-[9px] leading-none"
+                style={{
+                  backgroundColor: softBgFrom(PLAN_TYPE_META.unit_floor_plan.color, 0.35),
+                  color: PLAN_TYPE_META.unit_floor_plan.color,
+                }}
+              >
+                {b.units}
+              </span>
+            )}
+            {b.details > 0 && (
+              <span
+                title={`${b.details} detail block${b.details === 1 ? "" : "s"} attached`}
+                className="shrink-0 inline-flex items-center justify-center rounded-full h-3.5 min-w-[0.875rem] px-[2px] text-[9px] leading-none"
+                style={{
+                  backgroundColor: softBgFrom(PLAN_TYPE_META.typical_detail_block.color, 0.35),
+                  color: PLAN_TYPE_META.typical_detail_block.color,
+                }}
+              >
+                {b.details}
+              </span>
+            )}
           </Badge>,
         );
       });
