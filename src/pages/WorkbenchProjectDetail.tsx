@@ -37,7 +37,7 @@ import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectMo
 import { BulkDrawingDownloadModal } from "@/components/workbench/BulkDrawingDownloadModal";
 import { ManageFilesModal } from "@/components/workbench/ManageFilesModal";
 import { SUBTYPED_CLASSES } from "@/components/CreateProjectModal";
-import { expandSubtypeLabel, isSubtypeSplitClass, subtypeAbbr } from "@/lib/awpSubtypeLabels";
+import { expandSubtypeLabel, expandSubtypeLabelWithSuffix, isSubtypeSplitClass, subtypeAbbr } from "@/lib/awpSubtypeLabels";
 
 import { ActivityHistoryPanel } from "@/components/workbench/ActivityHistoryPanel";
 import { normalizeScoutResponse } from "@/lib/scoutResponseNormalizer";
@@ -6918,7 +6918,7 @@ function InstancesReportModal({
         }
       }
       return combosArr.map(({ type, diameter }) => {
-        const fullType = type === "(untyped)" ? "" : expandSubtypeLabel(c.name, type);
+        const fullType = type === "(untyped)" ? "" : expandSubtypeLabelWithSuffix(c.name, type);
         const typeLabel = fullType ? ` ${fullType}` : "";
         const typePrefix = type === "(untyped)" ? "" : `-${shortToken(type, c.name)}`;
 
@@ -7742,7 +7742,7 @@ function InstancesReportModal({
         pageIndex: r.pageIndex,
         pipeDiameter: r.pipeDiameter ?? null,
         pipeType: r.pipeType
-          ? expandSubtypeLabel(r.awpClassName, r.pipeType)
+          ? expandSubtypeLabelWithSuffix(r.awpClassName, r.pipeType)
           : null,
       })),
 
@@ -7820,7 +7820,7 @@ function InstancesReportModal({
             return diameterSortKey(a.diameter) - diameterSortKey(b.diameter);
           })
           .map(({ type, diameter }) => {
-            const fullType = type === "(untyped)" ? "" : expandSubtypeLabel(c.name, type);
+            const fullType = type === "(untyped)" ? "" : expandSubtypeLabelWithSuffix(c.name, type);
             const typeLabel = fullType ? ` ${fullType}` : "";
             const typePrefix = fullType ? `-${subtypeAbbr(c.name, type) || fullType}` : "";
 
