@@ -153,3 +153,15 @@ export function softBgFrom(hex: string, alpha = 0.18): string {
     .padStart(2, "0");
   return `#${m[1]}${a}`;
 }
+
+/**
+ * Color for a floor-plan bbox by its plan type. Mirrors the drawing modal so
+ * schematic level rows and typical detail blocks keep their own colors instead
+ * of borrowing the level/unit floor plan colors.
+ */
+export function floorPlanTypeColor(type?: string | null): string {
+  const t = (type || "unknown").trim();
+  if (t === "unit_floor_plan") return awpClassColor("Unit Floor Plan");
+  if (t === "level_floor_plan") return awpClassColor("Level Floor Plan");
+  return awpClassColor(t);
+}
