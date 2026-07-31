@@ -111,7 +111,7 @@ import {
   forceReleaseAgentLocks,
 } from "@/lib/agentLock";
 
-import { awpClassColor, readableTextOn, softBgFrom } from "@/lib/awpColor";
+import { awpClassColor, floorPlanTypeColor, readableTextOn, softBgFrom } from "@/lib/awpColor";
 
 const PREF_ID = "global";
 
@@ -2209,6 +2209,7 @@ const isChildPlanType = (t: string) =>
         levels: string[];
         levelsWithCounts: Array<{ level: string; count: number }>;
         bbox: [number, number, number, number] | null;
+        planType: string;
       }>
     >();
     // Per-page level floor plans (with bbox + canonical level names) for
@@ -2218,6 +2219,7 @@ const isChildPlanType = (t: string) =>
       Array<{
         levels: string[]; // canonical names
         bbox: [number, number, number, number] | null;
+        planType: string;
       }>
     >();
     const files = rows?.files ?? [];
@@ -2327,7 +2329,7 @@ const isChildPlanType = (t: string) =>
             // bbox-containment attribution so annotations are never fanned
             // out across every level a page happens to depict.
             const lpArr = pageLevelPlans.get(key) || [];
-            lpArr.push({ levels: canonicalLevels, bbox: e.bbox });
+            lpArr.push({ levels: canonicalLevels, bbox: e.bbox, planType: e.type });
             pageLevelPlans.set(key, lpArr);
 
 
@@ -2351,7 +2353,7 @@ const isChildPlanType = (t: string) =>
             const parentLevels = levelsWithCounts.map((x) => x.level);
 
             const upArr = pageUnitPlans.get(key) || [];
-            upArr.push({ unitLabel, levels: parentLevels, levelsWithCounts, bbox: e.bbox });
+            upArr.push({ unitLabel, levels: parentLevels, levelsWithCounts, bbox: e.bbox, planType: e.type });
             pageUnitPlans.set(key, upArr);
 
             if (parentLevels.length === 0) continue;
@@ -6396,8 +6398,8 @@ function InstancesReportModal({
   optionByName: Map<string, { idPrefix: string | null; category: string }>;
   pageSpaceMap: Map<string, string[]>;
   pageSpaceUnitMap: Map<string, Array<{ level: string; unit?: string }>>;
-  pageUnitPlansMap: Map<string, Array<{ unitLabel: string; levels: string[]; levelsWithCounts: Array<{ level: string; count: number }>; bbox: [number, number, number, number] | null }>>;
-  pageLevelPlansMap: Map<string, Array<{ levels: string[]; bbox: [number, number, number, number] | null }>>;
+  pageUnitPlansMap: Map<string, Array<{ unitLabel: string; levels: string[]; levelsWithCounts: Array<{ level: string; count: number }>; bbox: [number, number, number, number] | null; planType?: string }>>;
+  pageLevelPlansMap: Map<string, Array<{ levels: string[]; bbox: [number, number, number, number] | null; planType?: string }>>;
   spaceHierarchyPayload: any | null | undefined;
   projectName: string;
   enabledClassNames: string[];
@@ -7336,7 +7338,7 @@ function InstancesReportModal({
               bbox: [bx / 100, by / 100, bw / 100, bh / 100] as [number, number, number, number],
               coordSpace: "normalized" as const,
               page: pageIdx,
-              color: awpClassColor("Level Floor Plan"),
+              color: floorPlanTypeColor(lp.planType),
               label: space,
               shape: "rect" as const,
             });
@@ -7349,7 +7351,7 @@ function InstancesReportModal({
               bbox: [bx / 100, by / 100, bw / 100, bh / 100] as [number, number, number, number],
               coordSpace: "normalized" as const,
               page: pageIdx,
-              color: awpClassColor("Unit Floor Plan"),
+              color: floorPlanTypeColor(up.planType),
               label: up.unitLabel,
               shape: "rect" as const,
             });
@@ -7478,7 +7480,7 @@ function InstancesReportModal({
         {unitsList.length > 0 && (
           <div className="border rounded-md">
             <div className="px-3 py-2 border-b bg-muted/40 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Units on this level ({totalUnitCount} {totalUnitCount === 1 ? "unit" : "units"})
+              Units / details on this level ({totalUnitCount} {totalUnitCount === 1 ? "item" : "items"})
             </div>
             <div className="p-3 grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1 text-xs">
               {unitsList.map((u) => (
@@ -7653,7 +7655,7 @@ function InstancesReportModal({
           bboxOverlays.push({
             id: `lvl-bbox-${pageKey}`,
             nx: bx / 100, ny: by / 100, nw: bw / 100, nh: bh / 100,
-            color: awpClassColor("Level Floor Plan"), label: space, shape: "rect" as const,
+            color: floorPlanTypeColor(matchedLevel.planType), label: space, shape: "rect" as const,
           });
         }
         for (const up of unitPlans) {
@@ -7662,7 +7664,7 @@ function InstancesReportModal({
           bboxOverlays.push({
             id: `unit-bbox-${pageKey}-${up.unitLabel}`,
             nx: bx / 100, ny: by / 100, nw: bw / 100, nh: bh / 100,
-            color: awpClassColor("Unit Floor Plan"), label: up.unitLabel, shape: "rect" as const,
+            color: floorPlanTypeColor(up.planType), label: up.unitLabel, shape: "rect" as const,
           });
         }
         // Unit-marker dots for this file/page - only render on level-plan pages
