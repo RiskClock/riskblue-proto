@@ -55,21 +55,31 @@ export function renderEmail(opts: RenderEmailOptions): string {
       <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
           <td align="center">
-            <a href="${cta.href}" style="display:inline-block;background:linear-gradient(135deg,#1e3a8a 0%,#3b82f6 100%);color:#ffffff;text-decoration:none;padding:13px 28px;border-radius:8px;font-size:14px;font-weight:600;letter-spacing:0.01em;">
-              ${escapeHtml(cta.label)} →
-            </a>
+            <table cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td bgcolor="#1e3a8a" align="center" style="background-color:#1e3a8a;background:linear-gradient(135deg,#1e3a8a 0%,#3b82f6 100%);border-radius:8px;">
+                  <a href="${cta.href}" style="display:inline-block;color:#ffffff;text-decoration:none;padding:13px 28px;border-radius:8px;font-size:14px;font-weight:600;letter-spacing:0.01em;">
+                    ${escapeHtml(cta.label)} →
+                  </a>
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>
       </table>`
     : "";
 
-  const fallbackHtml = ctaFallbackUrl
+  // Always give recipients a copy-pasteable URL when there is a CTA - some
+  // strict mail clients strip buttons/links styling entirely.
+  const fallbackUrl = ctaFallbackUrl ?? cta?.href;
+  const fallbackHtml = fallbackUrl
     ? `
-      <p style="margin:32px 0 0;color:#94a3b8;font-size:12px;line-height:1.5;text-align:center;">
-        Or open this link directly:<br/>
-        <a href="${ctaFallbackUrl}" style="color:#3b82f6;text-decoration:none;word-break:break-all;">${ctaFallbackUrl}</a>
+      <p style="margin:24px 0 0;color:#6b7280;font-size:13px;line-height:1.5;text-align:center;word-break:break-all;">
+        If the button above doesn't work, copy and paste this URL into your browser:<br/>
+        <a href="${fallbackUrl}" style="color:#2563eb;text-decoration:underline;word-break:break-all;">${fallbackUrl}</a>
       </p>`
     : "";
+
 
   return `<!DOCTYPE html>
 <html>
@@ -79,7 +89,7 @@ export function renderEmail(opts: RenderEmailOptions): string {
         <td align="center">
           <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
             <tr>
-              <td style="background:linear-gradient(135deg,#1e3a8a 0%,#3b82f6 100%);padding:28px 32px;">
+              <td bgcolor="#1e3a8a" style="background-color:#1e3a8a;background:linear-gradient(135deg,#1e3a8a 0%,#3b82f6 100%);padding:28px 32px;">
                 <img src="${LOGO_URL}" alt="RiskBlue" width="120" style="display:block;margin:0 0 16px;border:0;outline:none;text-decoration:none;height:auto;" />
                 <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:600;letter-spacing:-0.01em;">${escapeHtml(title)}</h1>
                 ${subtitleHtml}
