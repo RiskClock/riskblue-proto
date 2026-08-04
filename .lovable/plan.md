@@ -33,5 +33,7 @@ No behaviour, token, or routing changes. After editing, the affected email funct
 
 ## Technical detail
 
-- File: `supabase/functions/_shared/email-template.ts` (header `<td>` and the `ctaHtml` block).
+- File: `supabase/functions/_shared/email-template.ts` (header `<td>`, the `ctaHtml` block, and the `fallbackHtml` block which now defaults to `cta.href`).
+- Fallback styling: ~13px, `#6b7280` text, `#2563eb` underlined link, `word-break: break-all`, ~24px top margin, so the button stays the focal point.
 - Redeploy the edge functions that send these emails: `admin-users`, `send-collaborator-invite`, `send-password-reset`, `send-project-created-email`, `send-analysis-complete-email`, `send-threat-report-email`, `notify-access-request`.
+
