@@ -25,7 +25,9 @@ In the shared email template:
 1. Add a solid `background-color` fallback (`#1e3a8a`) *before* the gradient declaration on the header cell, so clients that drop the gradient still show a dark blue band.
 2. Do the same for the CTA button, and wrap the button in a table cell with `bgcolor="#1e3a8a"` plus rounded-corner styling, which is the reliable bulletproof-button pattern across clients.
 3. Keep the gradient for clients that support it — it simply layers on top of the solid colour.
-4. Leave copy, logo asset and links unchanged.
+4. Always render a plain-text URL fallback directly beneath the button whenever a CTA exists: small muted grey text ("If the button above doesn't work, copy and paste this URL into your browser:") followed by the CTA URL as a wrapped, underlined link. Today this fallback only appears when a caller explicitly passes `ctaFallbackUrl`, and none of the senders do — so it defaults to the CTA's own href instead.
+5. Leave copy, logo asset and links unchanged.
+
 
 No behaviour, token, or routing changes. After editing, the affected email functions are redeployed so the change takes effect.
 
