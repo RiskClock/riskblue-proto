@@ -316,7 +316,7 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
       };
 
   const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
-  const DRAG_THRESHOLD = 4;
+  const DRAG_THRESHOLD = 5;
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
@@ -333,7 +333,7 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
     const s = viewScale || 1;
     const dx = rawDx / s;
     const dy = rawDy / s;
-    const moved = cur.moved || Math.hypot(rawDx, rawDy) > DRAG_THRESHOLD;
+    const moved = cur.moved || Math.hypot(rawDx, rawDy) >= DRAG_THRESHOLD;
     setDrag({ ...cur, dx, dy, moved });
   };
   const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {

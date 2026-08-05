@@ -44,7 +44,7 @@ interface DocumentSurfaceProps {
 }
 
 
-const CLICK_MOVE_THRESHOLD = 4;
+const CLICK_MOVE_THRESHOLD = 5;
 
 type HandleId =
   | "move"
@@ -107,7 +107,7 @@ export const DocumentSurface = ({
     if (!onCanvasClick || !start) return;
     const dx = e.clientX - start.x;
     const dy = e.clientY - start.y;
-    if (Math.hypot(dx, dy) > CLICK_MOVE_THRESHOLD) return;
+    if (Math.hypot(dx, dy) >= CLICK_MOVE_THRESHOLD) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const nx = (e.clientX - rect.left) / rect.width;
     const ny = (e.clientY - rect.top) / rect.height;
