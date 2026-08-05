@@ -5558,16 +5558,16 @@ const isChildPlanType = (t: string) =>
                 customize their acronym and name for this project. Shared
                 across all internal users.
               </DialogDescription>
+            </DialogHeader>
+            <div className="flex-1 min-h-0 overflow-y-auto py-2">
               {projectSelectedClassNames.length > 0 && (
-                <div className="text-xs text-muted-foreground pt-2 max-h-24 overflow-y-auto pr-1">
+                <div className="text-xs text-muted-foreground pb-4 pr-1">
                   <span className="font-medium text-foreground">
                     Original selection at project creation:
                   </span>{" "}
                   {projectSelectedClassNames.join(", ")}
                 </div>
               )}
-            </DialogHeader>
-            <div className="flex-1 min-h-0 overflow-y-auto py-2">
               {Object.entries(grouped).map(([category, opts]) => (
                 <div key={category} className="mb-5">
                   <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
