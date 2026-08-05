@@ -5550,8 +5550,8 @@ const isChildPlanType = (t: string) =>
 
         {/* Manage columns modal */}
         <Dialog open={manageOpen} onOpenChange={setManageOpen}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
+          <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+            <DialogHeader className="shrink-0">
               <DialogTitle>Manage columns</DialogTitle>
               <DialogDescription>
                 Pick which assets and water systems appear as columns, and
@@ -5559,7 +5559,7 @@ const isChildPlanType = (t: string) =>
                 across all internal users.
               </DialogDescription>
               {projectSelectedClassNames.length > 0 && (
-                <div className="text-xs text-muted-foreground pt-2">
+                <div className="text-xs text-muted-foreground pt-2 max-h-24 overflow-y-auto pr-1">
                   <span className="font-medium text-foreground">
                     Original selection at project creation:
                   </span>{" "}
@@ -5567,7 +5567,7 @@ const isChildPlanType = (t: string) =>
                 </div>
               )}
             </DialogHeader>
-            <div className="max-h-[60vh] overflow-auto py-2">
+            <div className="flex-1 min-h-0 overflow-y-auto py-2">
               {Object.entries(grouped).map(([category, opts]) => (
                 <div key={category} className="mb-5">
                   <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
