@@ -2104,7 +2104,8 @@ const DetectionsPanel = ({
                             })()}
                             <button
                               onClick={() => handleDeleteFromList(i.id)}
-                              className="shrink-0 text-muted-foreground hover:text-destructive px-1"
+                              disabled={viewingMode}
+                              className="shrink-0 text-muted-foreground hover:text-destructive px-1 disabled:opacity-40 disabled:pointer-events-none"
                               aria-label="Remove marker"
                             >
                               ×
