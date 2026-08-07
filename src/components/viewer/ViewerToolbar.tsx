@@ -169,7 +169,7 @@ export const ViewerToolbar = ({
           variant="outline"
           size="icon"
           onClick={onRotate}
-          title={rotation ? `Rotated ${rotation}° — click to rotate again` : "Rotate 90°"}
+          title={rotation ? `Rotated ${rotation}° - click to rotate again` : "Rotate 90°"}
           style={
             rotation
               ? {
