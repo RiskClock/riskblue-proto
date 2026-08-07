@@ -382,7 +382,7 @@ export default function InternalWorkbench() {
       return 0;
     });
     return out;
-  }, [projects, filterCreators, filterStatuses, sortKey, sortDir]);
+  }, [projects, filterCreators, filterCreatorTypes, filterStatuses, sortKey, sortDir]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -407,7 +407,9 @@ export default function InternalWorkbench() {
     );
 
   const filterCount =
-    (filterCreators.length > 0 ? 1 : 0) + (filterStatuses.length > 0 ? 1 : 0);
+    (filterCreators.length > 0 ? 1 : 0) +
+    (filterCreatorTypes.length > 0 ? 1 : 0) +
+    (filterStatuses.length > 0 ? 1 : 0);
 
   const handleView = (p: WorkbenchProject) => {
     navigate(`/project/${p.id}`);
@@ -540,6 +542,13 @@ export default function InternalWorkbench() {
                 <Label className="text-xs uppercase text-muted-foreground">
                   Created By
                 </Label>
+                <ChecklistGroup
+                  options={CREATOR_TYPE_OPTIONS}
+                  selected={filterCreatorTypes}
+                  onChange={setFilterCreatorTypes}
+                  emptyLabel="No user types"
+                />
+                <div className="my-2 border-t" />
                 <ChecklistGroup
                   options={creatorOptions}
                   selected={filterCreators}
