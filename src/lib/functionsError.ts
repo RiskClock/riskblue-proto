@@ -13,7 +13,7 @@ export class FunctionInvokeError extends Error {
 
 const statusFallback = (status?: number) => {
   if (status === 400) return "The request was rejected. Please check the values you entered.";
-  if (status === 401) return "Your session expired — please sign in again.";
+  if (status === 401) return "Your session expired - please sign in again.";
   if (status === 403) return "You don't have permission to do this.";
   if (status === 404) return "The requested item could not be found.";
   if (status === 409) return "That record already exists.";

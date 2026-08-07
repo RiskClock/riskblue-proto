@@ -439,7 +439,7 @@ export function BulkDrawingDownloadModal({
                     <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                     <div className="flex-1 truncate">{f.fileName}</div>
                     <div className="w-20 text-right text-xs text-muted-foreground">
-                      {pages != null ? `${pages} page${pages === 1 ? "" : "s"}` : "—"}
+                      {pages != null ? `${pages} page${pages === 1 ? "" : "s"}` : "-"}
                     </div>
                   </label>
                 );

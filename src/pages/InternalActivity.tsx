@@ -153,7 +153,7 @@ export default function InternalActivity() {
                     const cat = categorize(ev);
                     const projectName = ev.project_id
                       ? projectMap.get(ev.project_id) || ev.project_id
-                      : "—";
+                      : "-";
                     return (
                       <TableRow key={ev.id}>
                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap w-px">
