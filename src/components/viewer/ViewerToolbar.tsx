@@ -53,7 +53,10 @@ export const ViewerToolbar = ({
   onDownload,
   rotation = 0,
   onRotate,
+  viewingMode = false,
+  onToggleViewingMode,
   pageNav,
+
 }: ViewerToolbarProps) => {
 
   const [jumpValue, setJumpValue] = useState<string>(
