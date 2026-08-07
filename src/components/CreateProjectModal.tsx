@@ -71,12 +71,33 @@ export const RISER_SUBTYPES: { label: string; abbr: string }[] = [
   { label: "Domestic Cold/Hot Water", abbr: "DCHW" },
   { label: "Chilled Water Return/Supply", abbr: "CWRS" },
   { label: "Electrical", abbr: "ELCT" },
+  { label: "Fire Sprinkler", abbr: "FSPK" },
+];
+export const KITCHEN_EQUIPMENT_SUBTYPES: { label: string; abbr: string }[] = [
+  { label: "Sink", abbr: "SINK" },
+  { label: "Refrigerator", abbr: "RFGR" },
+  { label: "Dishwasher", abbr: "DSHW" },
+  { label: "Ice maker", abbr: "ICEM" },
+];
+export const WASHROOM_FIXTURE_SUBTYPES: { label: string; abbr: string }[] = [
+  { label: "Sink", abbr: "SINK" },
+  { label: "Toilet", abbr: "TLT" },
+  { label: "Bathtub", abbr: "BTHT" },
+  { label: "Shower Box", abbr: "SHWB" },
+];
+export const LAUNDRY_EQUIPMENT_SUBTYPES: { label: string; abbr: string }[] = [
+  { label: "Sink", abbr: "SINK" },
+  { label: "Water Heater", abbr: "WTRH" },
+  { label: "Washing Machine", abbr: "WSHM" },
 ];
 const COLD_WATER_NAME = "Cold Water";
 const RISER_NAME = "Riser";
 export const SUBTYPED_CLASSES: Record<string, { label: string; abbr: string }[]> = {
   [COLD_WATER_NAME]: COLD_WATER_SUBTYPES,
   [RISER_NAME]: RISER_SUBTYPES,
+  "Kitchen Equipment": KITCHEN_EQUIPMENT_SUBTYPES,
+  "Washroom Fixtures": WASHROOM_FIXTURE_SUBTYPES,
+  "Laundry Equipment": LAUNDRY_EQUIPMENT_SUBTYPES,
 };
 
 
@@ -493,7 +514,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
                 <span className="text-destructive">*</span>
               </Label>
               <div className="border rounded-md">
-                <div className="p-3 space-y-4 max-h-72 overflow-y-auto">
+                <div className="p-3 space-y-4">
                   {Object.entries(grouped).map(([category, opts]) => (
                     <div key={category}>
                       <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
@@ -607,11 +628,6 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
                   />
                 </div>
               </div>
-              {!hasAnyClass && (
-                <p className="text-xs text-muted-foreground">
-                  Select at least one class.
-                </p>
-              )}
             </div>
           </div>
           </div>

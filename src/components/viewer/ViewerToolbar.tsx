@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  Eye,
   Maximize2,
   ZoomIn,
   ZoomOut,
@@ -30,6 +31,9 @@ export interface ViewerToolbarProps {
   rotation?: 0 | 90 | 180 | 270;
   /** Advance rotation 90° CW. When set, renders a rotate button. */
   onRotate?: () => void;
+  /** When set, renders the viewing-mode (read-only) eye toggle. */
+  viewingMode?: boolean;
+  onToggleViewingMode?: () => void;
   pageNav?: {
     current: number;
     total: number;
@@ -38,6 +42,7 @@ export interface ViewerToolbarProps {
     onJump?: (page: number) => void;
   };
 }
+
 
 export const ViewerToolbar = ({
   scale,
@@ -48,7 +53,10 @@ export const ViewerToolbar = ({
   onDownload,
   rotation = 0,
   onRotate,
+  viewingMode = false,
+  onToggleViewingMode,
   pageNav,
+
 }: ViewerToolbarProps) => {
 
   const [jumpValue, setJumpValue] = useState<string>(
@@ -125,9 +133,31 @@ export const ViewerToolbar = ({
           <div className="w-px h-6 bg-border mx-1" />
         </>
       )}
+      {onToggleViewingMode && (
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={onToggleViewingMode}
+          title="Viewing mode"
+          aria-label="Viewing mode"
+          aria-pressed={viewingMode}
+          style={
+            viewingMode
+              ? {
+                  backgroundColor: "#2563EB",
+                  borderColor: "#2563EB",
+                  color: "#ffffff",
+                }
+              : undefined
+          }
+        >
+          <Eye className="w-4 h-4" />
+        </Button>
+      )}
       <Button variant="outline" size="icon" onClick={onZoomOut}>
         <ZoomOut className="w-4 h-4" />
       </Button>
+
       <span className="text-sm min-w-[4rem] text-center">
         {Math.round(scale * 100)}%
       </span>
@@ -139,7 +169,7 @@ export const ViewerToolbar = ({
           variant="outline"
           size="icon"
           onClick={onRotate}
-          title={rotation ? `Rotated ${rotation}° — click to rotate again` : "Rotate 90°"}
+          title={rotation ? `Rotated ${rotation}° - click to rotate again` : "Rotate 90°"}
           style={
             rotation
               ? {

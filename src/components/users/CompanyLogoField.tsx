@@ -186,7 +186,7 @@ export function CompanyLogoField({ company }: { company: string | null }) {
           </div>
           {!rows.some((r) => r.is_current) && (
             <p className="text-[11px] text-muted-foreground">
-              No logo selected yet — click a suggestion to use it for {trimmed}.
+              No logo selected yet - click a suggestion to use it for {trimmed}.
             </p>
           )}
         </div>

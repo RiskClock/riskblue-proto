@@ -52,7 +52,7 @@ interface Props {
 const ACCEPTED_TYPES = ".pdf,.png,.jpg,.jpeg,.dwg,.dxf";
 
 const formatBytes = (bytes: number | null | undefined) => {
-  if (!bytes && bytes !== 0) return "—";
+  if (!bytes && bytes !== 0) return "-";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -251,7 +251,7 @@ export function ManageFilesModal({
                         </div>
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {f.pageCount || f.expected_page_count || "—"}
+                        {f.pageCount || f.expected_page_count || "-"}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{formatBytes(f.size_bytes)}</TableCell>
                       <TableCell>
@@ -269,7 +269,7 @@ export function ManageFilesModal({
                                   ? "Procore"
                                   : f.source_type === "sharepoint"
                                     ? "SharePoint"
-                                    : f.source_type || "—"}
+                                    : f.source_type || "-"}
                         </Badge>
                       </TableCell>
                       {canManage && (

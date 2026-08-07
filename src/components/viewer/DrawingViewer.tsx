@@ -97,6 +97,9 @@ export interface DrawingViewerProps {
   rotation?: RotationDeg;
   /** Optional rotate button in the toolbar. */
   onRotate?: () => void;
+  /** Viewing (read-only) mode toggle rendered in the toolbar. */
+  viewingMode?: boolean;
+  onToggleViewingMode?: () => void;
   /** When true, suppress the purple glow indicator (used in report previews). */
   hideRotationIndicator?: boolean;
   /**
@@ -143,6 +146,8 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       onDownload,
       rotation = 0,
       onRotate,
+      viewingMode = false,
+      onToggleViewingMode,
       hideRotationIndicator = false,
       onPlacingChange,
     },
@@ -616,6 +621,8 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                 onDownload={onDownload}
                 rotation={rotation}
                 onRotate={onRotate}
+                viewingMode={viewingMode}
+                onToggleViewingMode={onToggleViewingMode}
 
                 pageNav={
                   !hidePageNav && layout === "single-page" && totalPages > 1
