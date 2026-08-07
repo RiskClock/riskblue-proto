@@ -60,6 +60,8 @@ interface WorkbenchProject {
   account_type: "standard" | "wmsv";
   creator_name: string;
   creator_email: string;
+  company: string | null;
+  is_internal: boolean;
   file_count: number;
   total_size_bytes: number | null;
   status: string | null;
@@ -135,15 +137,23 @@ const formatBytes = (bytes: number | null): string => {
 type SortKey =
   | "name"
   | "creator"
+  | "company"
   | "created_at"
   | "file_count"
   | "total_size_bytes";
 type SortDir = "asc" | "desc";
 
-type WBColumnId = "creator" | "created_at" | "file_count" | "total_size_bytes" | "workbench_status";
+type WBColumnId =
+  | "creator"
+  | "company"
+  | "created_at"
+  | "file_count"
+  | "total_size_bytes"
+  | "workbench_status";
 const WB_ALL_COLUMNS: { id: WBColumnId; label: string }[] = [
   { id: "workbench_status", label: "Status" },
   { id: "creator", label: "Created By" },
+  { id: "company", label: "Company" },
   { id: "created_at", label: "Created On" },
   { id: "file_count", label: "Files" },
   { id: "total_size_bytes", label: "Total Size" },
@@ -151,7 +161,7 @@ const WB_ALL_COLUMNS: { id: WBColumnId; label: string }[] = [
 const WB_COLUMN_PREFS_KEY = "workbench-column-prefs-v2";
 const loadWBColumnPrefs = (): Record<WBColumnId, boolean> => {
   const defaults: Record<WBColumnId, boolean> = {
-    creator: true, created_at: true, file_count: true, total_size_bytes: true, workbench_status: true,
+    creator: true, company: true, created_at: true, file_count: true, total_size_bytes: true, workbench_status: true,
   };
   try {
     const raw = localStorage.getItem(WB_COLUMN_PREFS_KEY);
@@ -159,6 +169,11 @@ const loadWBColumnPrefs = (): Record<WBColumnId, boolean> => {
   } catch {}
   return defaults;
 };
+
+const CREATOR_TYPE_OPTIONS = [
+  { value: "internal", label: "Internal users" },
+  { value: "external", label: "End users" },
+];
 
 export default function InternalWorkbench() {
   const { user } = useAuth();
