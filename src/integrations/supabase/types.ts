@@ -1257,6 +1257,7 @@ export type Database = {
       critical_assets: {
         Row: {
           can_span_multiple_spaces: boolean
+          category: string
           cost: string
           created_at: string
           default_control_ids: string[]
@@ -1279,6 +1280,7 @@ export type Database = {
         }
         Insert: {
           can_span_multiple_spaces?: boolean
+          category?: string
           cost: string
           created_at?: string
           default_control_ids?: string[]
@@ -1301,6 +1303,7 @@ export type Database = {
         }
         Update: {
           can_span_multiple_spaces?: boolean
+          category?: string
           cost?: string
           created_at?: string
           default_control_ids?: string[]
