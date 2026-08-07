@@ -415,6 +415,29 @@ export const FileViewerModal = ({
   const sidebarEnabled =
     !readOnly && !!awpClasses && !!analysisRequestId && !!parentFileId;
 
+  // Viewing mode: everything stays visible but the canvas and the editing
+  // controls are locked, so panning while zoomed in can't create/remove
+  // annotations by accident. Persisted across sessions.
+  const [viewingMode, setViewingMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("drawing-viewer:viewing-mode") === "1";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "drawing-viewer:viewing-mode",
+        viewingMode ? "1" : "0",
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [viewingMode]);
+  const editingEnabled = sidebarEnabled && !viewingMode;
+
+
   const storageKey = persistKey ? `workbench-awp-class:${persistKey}` : null;
 
   const readStoredClass = useCallback((): string | null => {
