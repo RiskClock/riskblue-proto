@@ -66,7 +66,8 @@ export const AWPItemEditModal = ({
       if (updates.name && updates.name !== prev.name) {
         const newCategory = getCategoryForName(awpOptions, updates.name);
         if (newCategory) {
-          updated.category = newCategory;
+          updated.category =
+            newCategory === "Equipment & Fixtures" ? "Asset" : newCategory;
           // Regenerate ID based on new class
           const otherItems = allItems.filter(i => i.id !== prev.id);
           updated.id = generateNextIdFromOptions(updates.name, awpOptions, otherItems);
