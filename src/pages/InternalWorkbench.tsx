@@ -585,6 +585,11 @@ export default function InternalWorkbench() {
                       Created By <SortIcon k="creator" />
                     </TableHead>
                   )}
+                  {columnPrefs.company && (
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("company")}>
+                      Company <SortIcon k="company" />
+                    </TableHead>
+                  )}
                   {columnPrefs.created_at && (
                     <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("created_at")}>
                       Created On <SortIcon k="created_at" />
@@ -673,6 +678,11 @@ export default function InternalWorkbench() {
                               )}
                             </Tooltip>
                           </TooltipProvider>
+                        </TableCell>
+                      )}
+                      {columnPrefs.company && (
+                        <TableCell className="text-sm text-muted-foreground">
+                          {p.company || "-"}
                         </TableCell>
                       )}
                       {columnPrefs.created_at && (
