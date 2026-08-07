@@ -339,6 +339,11 @@ export default function InternalWorkbench() {
         filterCreators.includes(p.creator_email || p.creator_name),
       );
     }
+    if (filterCreatorTypes.length > 0) {
+      rows = rows.filter((p) =>
+        filterCreatorTypes.includes(p.is_internal ? "internal" : "external"),
+      );
+    }
     if (filterStatuses.length > 0) {
       rows = rows.filter((p) => p.status && filterStatuses.includes(p.status));
     }
@@ -354,6 +359,10 @@ export default function InternalWorkbench() {
         case "creator":
           va = a.creator_name.toLowerCase();
           vb = b.creator_name.toLowerCase();
+          break;
+        case "company":
+          va = (a.company || "").toLowerCase();
+          vb = (b.company || "").toLowerCase();
           break;
         case "created_at":
           va = new Date(a.created_at).getTime();
