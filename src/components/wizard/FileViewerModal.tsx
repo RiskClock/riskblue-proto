@@ -1514,13 +1514,20 @@ export const FileViewerModal = ({
               initialFit="page"
               minScale={0.8}
               maxScale={8}
-              onCanvasClick={sidebarEnabled ? handleCanvasClick : undefined}
-              onOverlayClick={sidebarEnabled ? handleOverlayClick : undefined}
-              onOverlayDrag={sidebarEnabled ? handleOverlayDrag : undefined}
+              onCanvasClick={editingEnabled ? handleCanvasClick : undefined}
+              onOverlayClick={editingEnabled ? handleOverlayClick : undefined}
+              onOverlayDrag={editingEnabled ? handleOverlayDrag : undefined}
+              viewingMode={viewingMode}
+              onToggleViewingMode={() => {
+                setViewingMode((v) => {
+                  if (!v) setEditingPlan(null);
+                  return !v;
+                });
+              }}
               onActivePageRenderedSizeChange={setRenderedPageSize}
               onApiReady={(api) => (viewerApiRef.current = api)}
               editorBbox={
-                editingPlan
+                editingPlan && !viewingMode
                   ? {
                       nx: editingPlan.bbox[0] / 100,
                       ny: editingPlan.bbox[1] / 100,
@@ -1604,16 +1611,17 @@ export const FileViewerModal = ({
                     allLevelPlanOverrides={allLevelPlanOverrides}
                     overrides={effectiveFloorPlanOverrides}
 
-                    onSaveOverride={onSaveFloorPlanOverride}
-                    onEditFloors={onEditFloors}
+                    onSaveOverride={viewingMode ? undefined : onSaveFloorPlanOverride}
+                    onEditFloors={viewingMode ? undefined : onEditFloors}
                     onEditLevelUnits={onEditLevelUnits}
                     onSaveLevelUnits={onSaveLevelUnits}
                     onPlaceUnitBbox={sidebarEnabled ? handleStartUnitMarkerPlacement : undefined}
+                    viewingMode={viewingMode}
                     instancesOnPage={Array.from(instancesByClassThisFile.values()).flat()}
                     numberByInstanceId={numberByInstanceId}
                     instanceLabel={instanceLabel}
                     editingPlan={editingPlan}
-                    onEnterEdit={enterPlanEdit}
+                    onEnterEdit={viewingMode ? undefined : enterPlanEdit}
                     onCancelEdit={cancelPlanEdit}
                     onSaveEdit={savePlanEdit}
                     onEditingNameChange={(name) =>
@@ -1625,10 +1633,12 @@ export const FileViewerModal = ({
                       }
                       setEditingPlan((p) => (p ? { ...p, type: t } : p));
                     }}
-                    onRequestDelete={(planId, label) =>
-                      setConfirmDelete({ planId, label })
+                    onRequestDelete={
+                      viewingMode
+                        ? undefined
+                        : (planId, label) => setConfirmDelete({ planId, label })
                     }
-                    onAddPlan={onAddPlan ? handleAddPlan : undefined}
+                    onAddPlan={onAddPlan && !viewingMode ? handleAddPlan : undefined}
                     focusNamePlanId={focusNamePlanId}
                     onFocusHandled={() => setFocusNamePlanId(null)}
                   />
@@ -1645,6 +1655,7 @@ export const FileViewerModal = ({
                     effectivePage={effectivePage}
                     instanceLabel={instanceLabel}
                     handleDeleteFromList={handleDeleteFromList}
+                    viewingMode={viewingMode}
                     loadingInstances={loadingInstances}
                     undo={undo}
                     redo={redo}
@@ -1912,6 +1923,8 @@ interface DetectionsPanelProps {
   effectivePage: number;
   instanceLabel: (i: DrawingInstanceRow) => string;
   handleDeleteFromList: (id: string) => void;
+  /** Read-only viewing mode: hide destructive/edit affordances. */
+  viewingMode?: boolean;
   loadingInstances: boolean;
   undo: () => void;
   redo: () => void;
@@ -1959,6 +1972,7 @@ const DetectionsPanel = ({
   effectivePage,
   instanceLabel,
   handleDeleteFromList,
+  viewingMode = false,
   loadingInstances,
   undo,
   redo,
@@ -1975,14 +1989,16 @@ const DetectionsPanel = ({
         <div>
           <h4 className="text-sm font-medium">AWP classes</h4>
           <p className="text-[11px] text-muted-foreground">
-            Click the canvas to mark; click a marker to remove.
+            {viewingMode
+              ? "Viewing mode is on. Editing is locked."
+              : "Click the canvas to mark; click a marker to remove."}
           </p>
         </div>
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={undo} disabled={pastLen === 0} aria-label="Undo" title="Undo">
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={undo} disabled={viewingMode || pastLen === 0} aria-label="Undo" title="Undo">
             <Undo2 className="h-3.5 w-3.5" />
           </Button>
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={redo} disabled={futureLen === 0} aria-label="Redo" title="Redo">
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={redo} disabled={viewingMode || futureLen === 0} aria-label="Redo" title="Redo">
             <Redo2 className="h-3.5 w-3.5" />
           </Button>
         </div>
@@ -2161,6 +2177,8 @@ interface FloorPlansPanelProps {
   onEditingTypeChange?: (type: string) => void;
   onRequestDelete?: (planId: string, label: string) => void;
   onAddPlan?: () => void | Promise<void>;
+  /** Read-only viewing mode: only unit/detail attachment stays enabled. */
+  viewingMode?: boolean;
   /** When set, that row's name <Input> should autoFocus + select() on mount
    *  and the row should scroll into view. Parent clears via onFocusHandled. */
   focusNamePlanId?: string | null;
@@ -2186,6 +2204,7 @@ const FloorPlansPanel = ({
   onEditingTypeChange,
   onRequestDelete,
   onAddPlan,
+  viewingMode = false,
   focusNamePlanId,
   onFocusHandled,
 }: FloorPlansPanelProps) => {
