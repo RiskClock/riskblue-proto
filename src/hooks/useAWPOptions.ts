@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 export interface AWPOption {
   id: string;
   name: string;
-  category: "Asset" | "Water System" | "Process";
+  category: "Asset" | "Water System" | "Equipment & Fixtures" | "Process";
   idPrefix: string | null;
   defaultControlIds: string[];
   canSpanMultipleSpaces: boolean;
@@ -22,7 +22,7 @@ export function useAWPOptions() {
       const [assetsRes, systemsRes, processesRes] = await Promise.all([
         supabase
           .from("critical_assets")
-          .select("id, name, display_order, id_prefix, default_control_ids, can_span_multiple_spaces" as any)
+          .select("id, name, display_order, id_prefix, default_control_ids, can_span_multiple_spaces, category" as any)
           .eq("is_active", true)
           .order("display_order"),
         supabase
@@ -56,11 +56,22 @@ export function useAWPOptions() {
         canSpanMultipleSpaces: !!r.can_span_multiple_spaces,
       });
 
-      const assets: AWPOption[] = ((assetsRes.data as any[]) || []).map(toOpt("Asset"));
+      // critical_assets carries a `category` column so "Equipment & Fixtures"
+      // classes live alongside plain assets.
+      const assetRows = ((assetsRes.data as any[]) || []).map((r) =>
+        toOpt(
+          r.category === "Equipment & Fixtures" ? "Equipment & Fixtures" : "Asset",
+        )(r),
+      );
+      const assets = assetRows.filter((o) => o.category === "Asset");
+      const equipment = assetRows.filter(
+        (o) => o.category === "Equipment & Fixtures",
+      );
       const systems: AWPOption[] = ((systemsRes.data as any[]) || []).map(toOpt("Water System"));
       const processes: AWPOption[] = ((processesRes.data as any[]) || []).map(toOpt("Process"));
 
-      return [...assets, ...systems, ...processes];
+      // Display order: Water Systems, Assets, Equipment & Fixtures, Processes.
+      return [...systems, ...assets, ...equipment, ...processes];
     },
     staleTime: 1000 * 60 * 30, // Cache for 30 minutes
   });
@@ -82,7 +93,7 @@ export function groupAWPOptionsByCategory(options: AWPOption[]): Record<string, 
 /**
  * Get category for a given AWP name
  */
-export function getCategoryForName(options: AWPOption[], name: string): "Asset" | "Water System" | "Process" | null {
+export function getCategoryForName(options: AWPOption[], name: string): AWPOption["category"] | null {
   const found = options.find((o) => o.name === name);
   return found?.category || null;
 }
