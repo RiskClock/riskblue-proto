@@ -133,9 +133,31 @@ export const ViewerToolbar = ({
           <div className="w-px h-6 bg-border mx-1" />
         </>
       )}
+      {onToggleViewingMode && (
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={onToggleViewingMode}
+          title="Viewing mode"
+          aria-label="Viewing mode"
+          aria-pressed={viewingMode}
+          style={
+            viewingMode
+              ? {
+                  backgroundColor: "#2563EB",
+                  borderColor: "#2563EB",
+                  color: "#ffffff",
+                }
+              : undefined
+          }
+        >
+          <Eye className="w-4 h-4" />
+        </Button>
+      )}
       <Button variant="outline" size="icon" onClick={onZoomOut}>
         <ZoomOut className="w-4 h-4" />
       </Button>
+
       <span className="text-sm min-w-[4rem] text-center">
         {Math.round(scale * 100)}%
       </span>
