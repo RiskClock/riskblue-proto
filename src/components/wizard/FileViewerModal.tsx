@@ -46,6 +46,7 @@ import {
   getEffectiveType,
 } from "@/lib/surveyFloorPlans";
 import { AnnotationMetadataPopover } from "@/components/wizard/AnnotationMetadataPopover";
+import { SUBTYPED_CLASSES } from "@/components/CreateProjectModal";
 import {
   AlertDialog,
   AlertDialogAction,
