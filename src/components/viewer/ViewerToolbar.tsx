@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  Eye,
   Maximize2,
   ZoomIn,
   ZoomOut,
@@ -30,6 +31,9 @@ export interface ViewerToolbarProps {
   rotation?: 0 | 90 | 180 | 270;
   /** Advance rotation 90° CW. When set, renders a rotate button. */
   onRotate?: () => void;
+  /** When set, renders the viewing-mode (read-only) eye toggle. */
+  viewingMode?: boolean;
+  onToggleViewingMode?: () => void;
   pageNav?: {
     current: number;
     total: number;
@@ -38,6 +42,7 @@ export interface ViewerToolbarProps {
     onJump?: (page: number) => void;
   };
 }
+
 
 export const ViewerToolbar = ({
   scale,
