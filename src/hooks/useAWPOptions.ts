@@ -95,7 +95,9 @@ export function groupAWPOptionsByCategory(options: AWPOption[]): Record<string, 
   ];
   const acc: Record<string, AWPOption[]> = {};
   for (const key of order) {
-    const group = options.filter((o) => o.displayCategory === key);
+    const group = options.filter(
+      (o) => (o.displayCategory ?? o.category) === key,
+    );
     if (group.length > 0) acc[key] = group;
   }
   return acc;
