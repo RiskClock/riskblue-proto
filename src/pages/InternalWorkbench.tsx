@@ -190,7 +190,12 @@ export default function InternalWorkbench() {
   const saved = (() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return JSON.parse(raw) as { creators?: string[]; statuses?: string[] };
+      if (raw)
+        return JSON.parse(raw) as {
+          creators?: string[];
+          statuses?: string[];
+          creatorTypes?: string[];
+        };
     } catch {}
     return null;
   })();
@@ -198,6 +203,9 @@ export default function InternalWorkbench() {
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [filterCreators, setFilterCreators] = useState<string[]>(saved?.creators ?? []);
+  const [filterCreatorTypes, setFilterCreatorTypes] = useState<string[]>(
+    saved?.creatorTypes ?? [],
+  );
   const [filterStatuses, setFilterStatuses] = useState<string[]>(saved?.statuses ?? []);
   const [columnPrefs, setColumnPrefs] = useState<Record<WBColumnId, boolean>>(() => loadWBColumnPrefs());
   useEffect(() => {
@@ -215,9 +223,13 @@ export default function InternalWorkbench() {
   useEffect(() => {
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ creators: filterCreators, statuses: filterStatuses }),
+      JSON.stringify({
+        creators: filterCreators,
+        statuses: filterStatuses,
+        creatorTypes: filterCreatorTypes,
+      }),
     );
-  }, [filterCreators, filterStatuses]);
+  }, [filterCreators, filterStatuses, filterCreatorTypes]);
 
   const { data: projects, isLoading, refetch } = useQuery({
     queryKey: ["workbench-projects"],
@@ -237,7 +249,7 @@ export default function InternalWorkbench() {
       const [profilesRes, analysisRes, emailsRes] = await Promise.all([
         supabase
           .from("profiles")
-          .select("user_id, display_name, account_type")
+          .select("user_id, display_name, account_type, company")
           .in("user_id", userIds),
         ids.length > 0
           ? supabase
@@ -274,6 +286,8 @@ export default function InternalWorkbench() {
           account_type: (prof?.account_type as any) || "standard",
           creator_name: prof?.display_name || (email ? email.split("@")[0] : "Unknown"),
           creator_email: email,
+          company: (prof?.company as string) || null,
+          is_internal: email.toLowerCase().endsWith("@riskclock.com"),
           file_count: analysis?.file_count ?? 0,
           total_size_bytes: analysis?.total_size_bytes ?? null,
           status: analysis?.status ?? null,
