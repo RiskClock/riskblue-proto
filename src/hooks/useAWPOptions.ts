@@ -4,7 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 export interface AWPOption {
   id: string;
   name: string;
-  category: "Asset" | "Water System" | "Equipment & Fixtures" | "Process";
+  category: "Asset" | "Water System" | "Process";
+  /**
+   * Grouping label used by pickers. Equipment & Fixtures classes live in the
+   * critical_assets table (so all asset logic keeps working) but are shown in
+   * their own group.
+   */
+  displayCategory: "Water System" | "Asset" | "Equipment & Fixtures" | "Process";
   idPrefix: string | null;
   defaultControlIds: string[];
   canSpanMultipleSpaces: boolean;
@@ -51,21 +57,21 @@ export function useAWPOptions() {
         id: r.id,
         name: r.name,
         category: cat,
+        displayCategory:
+          cat === "Asset" && r.category === "Equipment & Fixtures"
+            ? "Equipment & Fixtures"
+            : cat,
         idPrefix: r.id_prefix || null,
         defaultControlIds: (r.default_control_ids as string[]) || [],
         canSpanMultipleSpaces: !!r.can_span_multiple_spaces,
       });
 
-      // critical_assets carries a `category` column so "Equipment & Fixtures"
-      // classes live alongside plain assets.
-      const assetRows = ((assetsRes.data as any[]) || []).map((r) =>
-        toOpt(
-          r.category === "Equipment & Fixtures" ? "Equipment & Fixtures" : "Asset",
-        )(r),
+      const assetRows = ((assetsRes.data as any[]) || []).map(toOpt("Asset"));
+      const assets = assetRows.filter(
+        (o) => o.displayCategory === "Asset",
       );
-      const assets = assetRows.filter((o) => o.category === "Asset");
       const equipment = assetRows.filter(
-        (o) => o.category === "Equipment & Fixtures",
+        (o) => o.displayCategory === "Equipment & Fixtures",
       );
       const systems: AWPOption[] = ((systemsRes.data as any[]) || []).map(toOpt("Water System"));
       const processes: AWPOption[] = ((processesRes.data as any[]) || []).map(toOpt("Process"));
@@ -81,13 +87,18 @@ export function useAWPOptions() {
  * Group AWP options by category for dropdowns
  */
 export function groupAWPOptionsByCategory(options: AWPOption[]): Record<string, AWPOption[]> {
-  return options.reduce((acc, opt) => {
-    if (!acc[opt.category]) {
-      acc[opt.category] = [];
-    }
-    acc[opt.category].push(opt);
-    return acc;
-  }, {} as Record<string, AWPOption[]>);
+  const order: AWPOption["displayCategory"][] = [
+    "Water System",
+    "Asset",
+    "Equipment & Fixtures",
+    "Process",
+  ];
+  const acc: Record<string, AWPOption[]> = {};
+  for (const key of order) {
+    const group = options.filter((o) => o.displayCategory === key);
+    if (group.length > 0) acc[key] = group;
+  }
+  return acc;
 }
 
 /**

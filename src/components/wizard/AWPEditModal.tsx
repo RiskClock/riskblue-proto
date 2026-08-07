@@ -500,7 +500,7 @@ export const AWPEditModal = ({
       const newItem: AnalysisItem = {
         id,
         name: row.name,
-        category: category === "Equipment & Fixtures" ? "Asset" : category || "Asset",
+        category: category || "Asset",
         areaName: row.areaName || undefined,
         floor: row.floor || undefined,
         drawingCode: row.drawingCode || undefined,
