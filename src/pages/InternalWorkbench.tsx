@@ -60,6 +60,8 @@ interface WorkbenchProject {
   account_type: "standard" | "wmsv";
   creator_name: string;
   creator_email: string;
+  company: string | null;
+  is_internal: boolean;
   file_count: number;
   total_size_bytes: number | null;
   status: string | null;
@@ -135,15 +137,23 @@ const formatBytes = (bytes: number | null): string => {
 type SortKey =
   | "name"
   | "creator"
+  | "company"
   | "created_at"
   | "file_count"
   | "total_size_bytes";
 type SortDir = "asc" | "desc";
 
-type WBColumnId = "creator" | "created_at" | "file_count" | "total_size_bytes" | "workbench_status";
+type WBColumnId =
+  | "creator"
+  | "company"
+  | "created_at"
+  | "file_count"
+  | "total_size_bytes"
+  | "workbench_status";
 const WB_ALL_COLUMNS: { id: WBColumnId; label: string }[] = [
   { id: "workbench_status", label: "Status" },
   { id: "creator", label: "Created By" },
+  { id: "company", label: "Company" },
   { id: "created_at", label: "Created On" },
   { id: "file_count", label: "Files" },
   { id: "total_size_bytes", label: "Total Size" },
@@ -151,7 +161,7 @@ const WB_ALL_COLUMNS: { id: WBColumnId; label: string }[] = [
 const WB_COLUMN_PREFS_KEY = "workbench-column-prefs-v2";
 const loadWBColumnPrefs = (): Record<WBColumnId, boolean> => {
   const defaults: Record<WBColumnId, boolean> = {
-    creator: true, created_at: true, file_count: true, total_size_bytes: true, workbench_status: true,
+    creator: true, company: true, created_at: true, file_count: true, total_size_bytes: true, workbench_status: true,
   };
   try {
     const raw = localStorage.getItem(WB_COLUMN_PREFS_KEY);
@@ -159,6 +169,11 @@ const loadWBColumnPrefs = (): Record<WBColumnId, boolean> => {
   } catch {}
   return defaults;
 };
+
+const CREATOR_TYPE_OPTIONS = [
+  { value: "internal", label: "Internal users" },
+  { value: "external", label: "End users" },
+];
 
 export default function InternalWorkbench() {
   const { user } = useAuth();
@@ -175,7 +190,12 @@ export default function InternalWorkbench() {
   const saved = (() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return JSON.parse(raw) as { creators?: string[]; statuses?: string[] };
+      if (raw)
+        return JSON.parse(raw) as {
+          creators?: string[];
+          statuses?: string[];
+          creatorTypes?: string[];
+        };
     } catch {}
     return null;
   })();
@@ -183,6 +203,9 @@ export default function InternalWorkbench() {
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [filterCreators, setFilterCreators] = useState<string[]>(saved?.creators ?? []);
+  const [filterCreatorTypes, setFilterCreatorTypes] = useState<string[]>(
+    saved?.creatorTypes ?? [],
+  );
   const [filterStatuses, setFilterStatuses] = useState<string[]>(saved?.statuses ?? []);
   const [columnPrefs, setColumnPrefs] = useState<Record<WBColumnId, boolean>>(() => loadWBColumnPrefs());
   useEffect(() => {
@@ -200,9 +223,13 @@ export default function InternalWorkbench() {
   useEffect(() => {
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ creators: filterCreators, statuses: filterStatuses }),
+      JSON.stringify({
+        creators: filterCreators,
+        statuses: filterStatuses,
+        creatorTypes: filterCreatorTypes,
+      }),
     );
-  }, [filterCreators, filterStatuses]);
+  }, [filterCreators, filterStatuses, filterCreatorTypes]);
 
   const { data: projects, isLoading, refetch } = useQuery({
     queryKey: ["workbench-projects"],
@@ -222,7 +249,7 @@ export default function InternalWorkbench() {
       const [profilesRes, analysisRes, emailsRes] = await Promise.all([
         supabase
           .from("profiles")
-          .select("user_id, display_name, account_type")
+          .select("user_id, display_name, account_type, company")
           .in("user_id", userIds),
         ids.length > 0
           ? supabase
@@ -259,6 +286,8 @@ export default function InternalWorkbench() {
           account_type: (prof?.account_type as any) || "standard",
           creator_name: prof?.display_name || (email ? email.split("@")[0] : "Unknown"),
           creator_email: email,
+          company: (prof?.company as string) || null,
+          is_internal: email.toLowerCase().endsWith("@riskclock.com"),
           file_count: analysis?.file_count ?? 0,
           total_size_bytes: analysis?.total_size_bytes ?? null,
           status: analysis?.status ?? null,
@@ -310,6 +339,11 @@ export default function InternalWorkbench() {
         filterCreators.includes(p.creator_email || p.creator_name),
       );
     }
+    if (filterCreatorTypes.length > 0) {
+      rows = rows.filter((p) =>
+        filterCreatorTypes.includes(p.is_internal ? "internal" : "external"),
+      );
+    }
     if (filterStatuses.length > 0) {
       rows = rows.filter((p) => p.status && filterStatuses.includes(p.status));
     }
@@ -325,6 +359,10 @@ export default function InternalWorkbench() {
         case "creator":
           va = a.creator_name.toLowerCase();
           vb = b.creator_name.toLowerCase();
+          break;
+        case "company":
+          va = (a.company || "").toLowerCase();
+          vb = (b.company || "").toLowerCase();
           break;
         case "created_at":
           va = new Date(a.created_at).getTime();
@@ -344,7 +382,7 @@ export default function InternalWorkbench() {
       return 0;
     });
     return out;
-  }, [projects, filterCreators, filterStatuses, sortKey, sortDir]);
+  }, [projects, filterCreators, filterCreatorTypes, filterStatuses, sortKey, sortDir]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -369,7 +407,9 @@ export default function InternalWorkbench() {
     );
 
   const filterCount =
-    (filterCreators.length > 0 ? 1 : 0) + (filterStatuses.length > 0 ? 1 : 0);
+    (filterCreators.length > 0 ? 1 : 0) +
+    (filterCreatorTypes.length > 0 ? 1 : 0) +
+    (filterStatuses.length > 0 ? 1 : 0);
 
   const handleView = (p: WorkbenchProject) => {
     navigate(`/project/${p.id}`);
@@ -503,6 +543,13 @@ export default function InternalWorkbench() {
                   Created By
                 </Label>
                 <ChecklistGroup
+                  options={CREATOR_TYPE_OPTIONS}
+                  selected={filterCreatorTypes}
+                  onChange={setFilterCreatorTypes}
+                  emptyLabel="No user types"
+                />
+                <div className="my-2 border-t" />
+                <ChecklistGroup
                   options={creatorOptions}
                   selected={filterCreators}
                   onChange={setFilterCreators}
@@ -536,6 +583,11 @@ export default function InternalWorkbench() {
                   {columnPrefs.creator && (
                     <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("creator")}>
                       Created By <SortIcon k="creator" />
+                    </TableHead>
+                  )}
+                  {columnPrefs.company && (
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("company")}>
+                      Company <SortIcon k="company" />
                     </TableHead>
                   )}
                   {columnPrefs.created_at && (
@@ -626,6 +678,11 @@ export default function InternalWorkbench() {
                               )}
                             </Tooltip>
                           </TooltipProvider>
+                        </TableCell>
+                      )}
+                      {columnPrefs.company && (
+                        <TableCell className="text-sm text-muted-foreground">
+                          {p.company || "-"}
                         </TableCell>
                       )}
                       {columnPrefs.created_at && (

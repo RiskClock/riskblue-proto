@@ -46,6 +46,7 @@ import {
   getEffectiveType,
 } from "@/lib/surveyFloorPlans";
 import { AnnotationMetadataPopover } from "@/components/wizard/AnnotationMetadataPopover";
+import { SUBTYPED_CLASSES } from "@/components/CreateProjectModal";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -100,9 +101,18 @@ const isDiameterEnabledClass = (name: string): boolean => {
   return DIAMETER_ENABLED_MATCHERS.some((m) => n.includes(m));
 };
 
-// Type is optional for Cold Water, Hot Water and Riser.
+// Type is available for any class that defines subtypes (Cold Water, Riser,
+// Kitchen Equipment, Washroom Fixtures, Laundry Equipment, ...).
+const SUBTYPED_CLASS_KEYS = new Set(
+  Object.keys(SUBTYPED_CLASSES).map((k) => k.toLowerCase()),
+);
 const isTypeEnabledClass = (name: string): boolean => {
-  const n = (name || "").toLowerCase();
+  const n = (name || "").trim().toLowerCase();
+  if (!n) return false;
+  if (SUBTYPED_CLASS_KEYS.has(n)) return true;
+  for (const key of SUBTYPED_CLASS_KEYS) {
+    if (n.includes(key)) return true;
+  }
   return n.includes("cold water") || n.includes("hot water") || n.includes("riser");
 };
 

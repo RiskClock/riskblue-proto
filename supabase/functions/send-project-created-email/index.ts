@@ -66,81 +66,126 @@ serve(async (req) => {
       .maybeSingle();
     const creatorName = profile?.display_name || creatorEmail;
 
-    // Categorize selected classes by looking them up in awp_classes
     const selectedNames: string[] = Array.isArray((project as any).selected_awp_class_names)
       ? (project as any).selected_awp_class_names
       : [];
     const otherClasses: string[] = Array.isArray((project as any).selected_other_classes)
       ? (project as any).selected_other_classes
       : [];
-
-    const groups: Record<string, string[]> = {
-      "Critical Assets": [],
-      "Water Systems": [],
-      "Processes": [],
-      "Other": [...otherClasses],
-    };
-
-    if (selectedNames.length > 0) {
-      const { data: classes } = await admin
-        .from("awp_classes")
-        .select("name, category");
-      const normalize = (s: string) =>
-        s.trim().toLowerCase().replace(/s$/, "");
-      const catByNorm = new Map<string, string>(
-        (classes || []).map((c: any) => [normalize(c.name), c.category]),
-      );
-      for (const name of selectedNames) {
-        const cat = catByNorm.get(normalize(name));
-        if (cat === "Asset") groups["Critical Assets"].push(name);
-        else if (cat === "Water System") groups["Water Systems"].push(name);
-        else if (cat === "Process") groups["Processes"].push(name);
-        else groups["Other"].push(name);
-      }
-    }
-
-    const renderGroup = (title: string, items: string[]) =>
-      items.length === 0
-        ? ""
-        : `<h3 style="margin:18px 0 6px;font-size:14px;">${escapeHtml(title)} (${items.length})</h3>
-           <ul style="margin:0;padding-left:20px;">${items
-             .map((n) => `<li>${escapeHtml(n)}</li>`)
-             .join("")}</ul>`;
-
-    const selectionsHtml = ["Critical Assets", "Water Systems", "Processes", "Other"]
-      .map((k) => renderGroup(k, groups[k]))
-      .join("");
-
-    // Subtypes (e.g. Cold Water → MCE, PB, ...)
     const subtypesMap = ((project as any).selected_awp_subtypes || {}) as Record<
       string,
       string[]
     >;
+
+    // Build a name -> { category, prefix } lookup from every class source.
+    const normalize = (s: string) => s.trim().toLowerCase().replace(/s$/, "");
+    const meta = new Map<string, { category: string; prefix: string | null }>();
+
+    const [assetsRes, waterRes, processRes, awpRes] = await Promise.all([
+      admin.from("critical_assets").select("name, category, id_prefix"),
+      admin.from("water_systems").select("name, id_prefix"),
+      admin.from("processes").select("name, id_prefix"),
+      admin.from("awp_classes").select("name, category, id_prefix"),
+    ]);
+
+    for (const r of (assetsRes.data || []) as any[]) {
+      meta.set(normalize(r.name), {
+        category: r.category || "Asset",
+        prefix: r.id_prefix ?? null,
+      });
+    }
+    for (const r of (waterRes.data || []) as any[]) {
+      if (!meta.has(normalize(r.name)))
+        meta.set(normalize(r.name), { category: "Water System", prefix: r.id_prefix ?? null });
+    }
+    for (const r of (processRes.data || []) as any[]) {
+      if (!meta.has(normalize(r.name)))
+        meta.set(normalize(r.name), { category: "Process", prefix: r.id_prefix ?? null });
+    }
+    for (const r of (awpRes.data || []) as any[]) {
+      if (!meta.has(normalize(r.name)))
+        meta.set(normalize(r.name), {
+          category: r.category || "Other",
+          prefix: r.id_prefix ?? null,
+        });
+    }
+
     const subtypeLabelByAbbr: Record<string, string> = {
       MCE: "Main City Entry",
       PB: "Post-Booster",
       ZE: "Zone Entry",
       SRE: "Suite Riser Entry",
       SE: "Suite Entry",
+      MMCH: "Main Mechanical",
+      DCHW: "Domestic Cold/Hot Water",
+      CWRS: "Chilled Water Supply/Return",
+      ELCT: "Electrical",
+      FSPK: "Fire Sprinkler",
+      SINK: "Sink",
+      RFGR: "Refrigerator",
+      DSHW: "Dishwasher",
+      ICEM: "Ice Maker",
+      TLT: "Toilet",
+      BTHT: "Bathtub",
+      SHWB: "Shower Box",
+      WTRH: "Water Heater",
+      WSHM: "Washing Machine",
     };
-    const subtypeEntries = Object.entries(subtypesMap).filter(
-      ([, abbrs]) => Array.isArray(abbrs) && abbrs.length > 0,
-    );
-    const subtypesHtml =
-      subtypeEntries.length === 0
-        ? ""
-        : subtypeEntries
-            .map(
-              ([cls, abbrs]) => `
-              <h3 style="margin:18px 0 6px;font-size:14px;">${escapeHtml(cls)} subtypes (${abbrs.length})</h3>
-              <ul style="margin:0;padding-left:20px;">${abbrs
-                .map((a) => {
-                  const lbl = subtypeLabelByAbbr[a] || a;
-                  return `<li>${escapeHtml(lbl)} <span style="color:#666;font-family:monospace;">(${escapeHtml(a)})</span></li>`;
-                })
-                .join("")}</ul>`,
-            )
-            .join("");
+
+    const CATEGORY_ORDER = [
+      "Water System",
+      "Asset",
+      "Equipment & Fixtures",
+      "Process",
+      "Other",
+    ];
+    const CATEGORY_TITLES: Record<string, string> = {
+      "Water System": "Water Systems",
+      Asset: "Assets",
+      "Equipment & Fixtures": "Equipment & Fixtures",
+      Process: "Processes",
+      Other: "Other",
+    };
+
+    const groups: Record<string, string[]> = {};
+    for (const c of CATEGORY_ORDER) groups[c] = [];
+    for (const name of selectedNames) {
+      const info = meta.get(normalize(name));
+      const cat = info?.category && groups[info.category] ? info.category : "Other";
+      groups[cat].push(name);
+    }
+    groups["Other"].push(...otherClasses);
+
+    const renderClassItem = (name: string) => {
+      const info = meta.get(normalize(name));
+      const prefix = info?.prefix
+        ? ` <span style="color:#666;font-family:monospace;">(${escapeHtml(info.prefix)})</span>`
+        : "";
+      const abbrs = Array.isArray(subtypesMap[name]) ? subtypesMap[name] : [];
+      const sub =
+        abbrs.length === 0
+          ? ""
+          : `<ul style="margin:2px 0 6px;padding-left:20px;">${abbrs
+              .map(
+                (a) =>
+                  `<li>${escapeHtml(subtypeLabelByAbbr[a] || a)} <span style="color:#666;font-family:monospace;">(${escapeHtml(a)})</span></li>`,
+              )
+              .join("")}</ul>`;
+      const count = abbrs.length > 0 ? ` (${abbrs.length})` : "";
+      return `<li>${escapeHtml(name)}${prefix}${count}${sub}</li>`;
+    };
+
+    const selectionsHtml = CATEGORY_ORDER.map((cat) => {
+      const items = groups[cat];
+      if (!items || items.length === 0) return "";
+      return `<h3 style="margin:18px 0 6px;font-size:14px;">${escapeHtml(
+        CATEGORY_TITLES[cat],
+      )} (${items.length})</h3>
+        <ul style="margin:0;padding-left:20px;">${items.map(renderClassItem).join("")}</ul>`;
+    }).join("");
+
+    const subtypesHtml = "";
+
 
     const subject = `New project created: ${project.name}`;
     const html = `
