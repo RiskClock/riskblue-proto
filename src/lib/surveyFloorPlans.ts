@@ -15,10 +15,18 @@ export interface ParsedFloorPlan {
   reference_id: string | null;
   /** [left, top, width, height] as percentages (0..100) of the visible page. */
   xy_width_height_pct: [number, number, number, number] | null;
+  /**
+   * Optional irregular polygon outline as [[x, y], ...] percentages (0..100)
+   * of the visible page. When present with >= 3 points it supersedes the
+   * rectangle for rendering and containment; `xy_width_height_pct` stays in
+   * sync as the polygon's bounding envelope.
+   */
+  points_pct?: [number, number][] | null;
   page_number: number;
   floors: string[];
   referenced_unit_ids: string[];
 }
+
 
 function stripCodeFence(text: string): string {
   return text
@@ -72,6 +80,83 @@ function asBbox(v: any): [number, number, number, number] | null {
   return nums as [number, number, number, number];
 }
 
+/** Parse an optional polygon outline: [[x, y], ...] in page percentages. */
+export function asPointsPct(v: any): [number, number][] | null {
+  if (!Array.isArray(v) || v.length < 3) return null;
+  const out: [number, number][] = [];
+  for (const p of v) {
+    let x: number, y: number;
+    if (Array.isArray(p) && p.length >= 2) {
+      x = Number(p[0]);
+      y = Number(p[1]);
+    } else if (p && typeof p === "object") {
+      x = Number((p as any).x);
+      y = Number((p as any).y);
+    } else return null;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    out.push([x, y]);
+  }
+  return out.length >= 3 ? out : null;
+}
+
+/** Envelope [x, y, w, h] (pct) of a polygon. */
+export function envelopeOfPointsPct(
+  points: [number, number][],
+): [number, number, number, number] {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [x, y] of points) {
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+  }
+  if (!Number.isFinite(minX)) return [0, 0, 0, 0];
+  return [minX, minY, Math.max(0, maxX - minX), Math.max(0, maxY - minY)];
+}
+
+/** Corners of a [x, y, w, h] pct rect, clockwise from top-left. */
+export function rectToPointsPct(
+  bb: [number, number, number, number],
+): [number, number][] {
+  const [x, y, w, h] = bb;
+  return [
+    [x, y],
+    [x + w, y],
+    [x + w, y + h],
+    [x, y + h],
+  ];
+}
+
+/** Ray-casting containment test in pct space. */
+export function pointInPolygonPct(
+  x: number,
+  y: number,
+  points: [number, number][],
+): boolean {
+  if (!points || points.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const xi = points[i][0], yi = points[i][1];
+    const xj = points[j][0], yj = points[j][1];
+    const intersects =
+      yi > y !== yj > y &&
+      x < ((xj - xi) * (y - yi)) / (yj - yi || Number.EPSILON) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+/** Shoelace area (pct^2) of a polygon. */
+export function polygonAreaPct(points: [number, number][]): number {
+  if (!points || points.length < 3) return 0;
+  let sum = 0;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    sum += (points[j][0] + points[i][0]) * (points[j][1] - points[i][1]);
+  }
+  return Math.abs(sum / 2);
+}
+
+
 function flattenPages(parsed: any): any[] {
   if (!parsed) return [];
   if (Array.isArray(parsed)) {
@@ -123,6 +208,8 @@ export function parseSurveyFloorPlans(
         type: (fp.type as FloorPlanType) ?? "unknown",
         reference_id,
         xy_width_height_pct: asBbox(fp.xy_width_height_pct ?? fp.xy_width_height_pt),
+        points_pct: asPointsPct(fp.points_pct ?? fp.points),
+
         page_number: pageNum,
         floors,
         referenced_unit_ids,
@@ -205,6 +292,8 @@ export interface AddedUnitPlanEntry {
   page_number: number;
   type?: FloorPlanType;
   bbox_pct?: [number, number, number, number] | null;
+  points_pct?: [number, number][] | null;
+
   name?: string | null;
 }
 
@@ -234,6 +323,8 @@ export function addedUnitPlanToParsed(entry: AddedUnitPlanEntry): ParsedFloorPla
     type: entry.type || "unit_floor_plan",
     reference_id: entry.reference_id,
     xy_width_height_pct: entry.bbox_pct ?? null,
+    points_pct: asPointsPct(entry.points_pct),
+
     page_number: entry.page_number,
     floors: [],
     referenced_unit_ids: [],
@@ -268,6 +359,55 @@ export function getEffectiveBbox(
   }
   return fp.xy_width_height_pct;
 }
+
+/**
+ * Effective irregular outline for a plan, in page percentages. Returns null
+ * when the plan is still a plain rectangle. Overrides win over Scout output.
+ */
+export function getEffectivePoints(
+  fp: ParsedFloorPlan,
+  overrides: Record<string, any> | null | undefined,
+): [number, number][] | null {
+  const ovr = overrides?.[fp.plan_id];
+  if (ovr && Object.prototype.hasOwnProperty.call(ovr, "points_pct")) {
+    // An explicit null in the override means "reverted to a rectangle".
+    return asPointsPct(ovr.points_pct);
+  }
+  return asPointsPct(fp.points_pct);
+}
+
+/**
+ * Containment test for a plan using its polygon when present, otherwise its
+ * rectangle. `nx`/`ny` are normalized 0..1 page coordinates.
+ */
+export function isPointInsidePlan(
+  fp: ParsedFloorPlan,
+  overrides: Record<string, any> | null | undefined,
+  nx: number,
+  ny: number,
+): boolean {
+  const x = nx * 100;
+  const y = ny * 100;
+  const pts = getEffectivePoints(fp, overrides);
+  if (pts) return pointInPolygonPct(x, y, pts);
+  const bb = getEffectiveBbox(fp, overrides);
+  if (!bb) return false;
+  const [bx, by, bw, bh] = bb;
+  return x >= bx && x <= bx + bw && y >= by && y <= by + bh;
+}
+
+/** Area (pct^2) used to prefer the most specific plan when several contain a point. */
+export function planAreaPct(
+  fp: ParsedFloorPlan,
+  overrides: Record<string, any> | null | undefined,
+): number {
+  const pts = getEffectivePoints(fp, overrides);
+  if (pts) return polygonAreaPct(pts);
+  const bb = getEffectiveBbox(fp, overrides);
+  if (!bb) return Infinity;
+  return bb[2] * bb[3];
+}
+
 
 export function getEffectiveLabel(
   fp: ParsedFloorPlan,

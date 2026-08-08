@@ -42,6 +42,13 @@ import {
   floorPlanDisplayLabel,
   unitPlanRefKey,
   getEffectiveBbox,
+  getEffectivePoints,
+  isPointInsidePlan,
+  planAreaPct,
+  pointInPolygonPct,
+  envelopeOfPointsPct,
+  rectToPointsPct,
+
   getEffectiveLabel,
   getEffectiveType,
 } from "@/lib/surveyFloorPlans";
@@ -212,6 +219,7 @@ interface FileViewerModalProps {
       units?: string[];
       annotations?: string[];
       bbox_pct?: [number, number, number, number] | null;
+      points_pct?: [number, number][] | null;
       name?: string | null;
       type?: string | null;
     },
@@ -490,9 +498,12 @@ export const FileViewerModal = ({
   type EditingPlanState = {
     planId: string;
     bbox: [number, number, number, number]; // pct 0..100
+    /** Irregular outline (pct 0..100). Null while the shape is a rectangle. */
+    points: [number, number][] | null;
     name: string;
     type: string;
     origBbox: [number, number, number, number];
+    origPoints: [number, number][] | null;
     origName: string;
     origType: string;
   };
@@ -557,6 +568,7 @@ export const FileViewerModal = ({
       [editingPlan.planId]: {
         ...((floorPlanOverrides ?? {}) as any)[editingPlan.planId],
         bbox_pct: editingPlan.bbox,
+        points_pct: editingPlan.points,
         name: editingPlan.name.trim() || null,
         type: editingPlan.type,
       },
@@ -567,7 +579,8 @@ export const FileViewerModal = ({
     editingPlan &&
     (editingPlan.name !== editingPlan.origName ||
       editingPlan.type !== editingPlan.origType ||
-      editingPlan.bbox.some((v, i) => v !== editingPlan.origBbox[i]))
+      editingPlan.bbox.some((v, i) => v !== editingPlan.origBbox[i]) ||
+      JSON.stringify(editingPlan.points) !== JSON.stringify(editingPlan.origPoints))
   );
 
   // Reset editor state when modal closes or page changes. Do NOT reset
@@ -592,11 +605,23 @@ export const FileViewerModal = ({
     }
     await onSaveFloorPlanOverride(cur.planId, {
       bbox_pct: cur.bbox,
+      points_pct: cur.points,
       name: cur.name.trim() || null,
       type: cur.type,
     });
     setEditingPlan(null);
   }, [onSaveFloorPlanOverride]);
+
+  // Toggle the shape being edited between a plain rectangle and an editable
+  // polygon. Converting seeds the polygon from the current envelope; resetting
+  // drops the points and keeps the envelope as the rectangle.
+  const toggleEditingPlanShape = useCallback(() => {
+    setEditingPlan((prev) => {
+      if (!prev) return prev;
+      if (prev.points) return { ...prev, points: null };
+      return { ...prev, points: rectToPointsPct(prev.bbox) };
+    });
+  }, []);
 
   const enterPlanEdit = useCallback(
     async (fp: ParsedFloorPlan) => {
@@ -606,7 +631,8 @@ export const FileViewerModal = ({
         if (
           prev.name !== prev.origName ||
           prev.type !== prev.origType ||
-          prev.bbox.some((v, i) => v !== prev.origBbox[i])
+          prev.bbox.some((v, i) => v !== prev.origBbox[i]) ||
+          JSON.stringify(prev.points) !== JSON.stringify(prev.origPoints)
         ) {
           await savePlanEdit();
         }
@@ -617,12 +643,15 @@ export const FileViewerModal = ({
       const name = getEffectiveLabel(fp, floorPlanOverrides ?? {});
       const ovrType = (floorPlanOverrides as any)?.[fp.plan_id]?.type;
       const type = (typeof ovrType === "string" && ovrType) ? ovrType : fp.type || "level_floor_plan";
+      const pts = getEffectivePoints(fp, floorPlanOverrides ?? {});
       const state: EditingPlanState = {
         planId: fp.plan_id,
         bbox: [bb[0], bb[1], bb[2], bb[3]],
+        points: pts ? pts.map((p) => [p[0], p[1]] as [number, number]) : null,
         name,
         type,
         origBbox: [bb[0], bb[1], bb[2], bb[3]],
+        origPoints: pts ? pts.map((p) => [p[0], p[1]] as [number, number]) : null,
         origName: name,
         origType: type,
       };
@@ -1061,19 +1090,28 @@ export const FileViewerModal = ({
       const px = inst.nx * 100;
       const py = inst.ny * 100;
       const containingPlan = levelPlans
-        .map((p) => ({ p, bb: getEffectiveBbox(p, effectiveFloorPlanOverrides) }))
-        .filter(({ bb }) => {
-          if (!bb) return false;
-          const [bx, by, bw, bh] = bb;
-          return px >= bx && px <= bx + bw && py >= by && py <= by + bh;
-        })
-        .sort((a, b) => a.bb![2] * a.bb![3] - b.bb![2] * b.bb![3])[0]?.p;
+        .filter((p) =>
+          isPointInsidePlan(p, effectiveFloorPlanOverrides, inst.nx, inst.ny),
+        )
+        .sort(
+          (a, b) =>
+            planAreaPct(a, effectiveFloorPlanOverrides) -
+            planAreaPct(b, effectiveFloorPlanOverrides),
+        )[0];
       if (!containingPlan) return;
       const bb = getEffectiveBbox(containingPlan, effectiveFloorPlanOverrides);
       if (!bb) return;
       const [bx, by, bw, bh] = bb;
-      const clampedNx = Math.max(bx / 100, Math.min((bx + bw) / 100, nx));
-      const clampedNy = Math.max(by / 100, Math.min((by + bh) / 100, ny));
+      let clampedNx = Math.max(bx / 100, Math.min((bx + bw) / 100, nx));
+      let clampedNy = Math.max(by / 100, Math.min((by + bh) / 100, ny));
+      // For irregular outlines the envelope clamp isn't enough - if the point
+      // lands in a concave notch, keep the marker at its previous position.
+      const poly = getEffectivePoints(containingPlan, effectiveFloorPlanOverrides);
+      if (poly && !pointInPolygonPct(clampedNx * 100, clampedNy * 100, poly)) {
+        clampedNx = inst.nx;
+        clampedNy = inst.ny;
+      }
+
       // Optimistic local update.
       setInstances((prev) =>
         prev.map((i) =>
@@ -1403,13 +1441,18 @@ export const FileViewerModal = ({
       const bb = getEffectiveBbox(fp, floorPlanOverrides ?? {});
       if (!bb) continue;
       const [left, top, width, height] = bb;
+      const polyPts = getEffectivePoints(fp, floorPlanOverrides ?? {});
       const labelBase = getEffectiveLabel(fp, floorPlanOverrides ?? {});
       out.push({
         id: `fp-${fp.plan_id}`,
         bbox: [left / 100, top / 100, width / 100, height / 100],
+        points: polyPts
+          ? polyPts.map(([px, py]) => ({ nx: px / 100, ny: py / 100 }))
+          : undefined,
         coordSpace: "normalized" as const,
         page: currentPage,
         shape: "rect" as const,
+
         color: (() => {
           const t = ((floorPlanOverrides ?? {})[fp.plan_id] as any)?.type || fp.type || "unknown";
           return awpClassColor(
@@ -1546,6 +1589,23 @@ export const FileViewerModal = ({
                     }
                   : null
               }
+              editorPoints={
+                editingPlan && editingPlan.points && !viewingMode
+                  ? editingPlan.points.map(([x, y]) => ({ nx: x / 100, ny: y / 100 }))
+                  : null
+              }
+              onEditorPointsChange={(next) =>
+                setEditingPlan((prev) => {
+                  if (!prev) return prev;
+                  const pts = next.map(
+                    (p) => [p.nx * 100, p.ny * 100] as [number, number],
+                  );
+                  // Keep the rectangular envelope in sync so everything that
+                  // still reads bbox_pct (lists, exports, fit-to-selection)
+                  // stays correct.
+                  return { ...prev, points: pts, bbox: envelopeOfPointsPct(pts) };
+                })
+              }
               onEditorBboxChange={(next) =>
                 setEditingPlan((prev) =>
                   prev
@@ -1633,6 +1693,7 @@ export const FileViewerModal = ({
                     editingPlan={editingPlan}
                     onEnterEdit={viewingMode ? undefined : enterPlanEdit}
                     onCancelEdit={cancelPlanEdit}
+                    onToggleEditingShape={toggleEditingPlanShape}
                     onSaveEdit={savePlanEdit}
                     onEditingNameChange={(name) =>
                       setEditingPlan((p) => (p ? { ...p, name } : p))
@@ -1945,24 +2006,20 @@ interface DetectionsPanelProps {
   floorPlanOverrides?: Record<string, any>;
 }
 
-// Find the floor plan whose bbox contains the normalized (0..1) point.
-// Prefers smaller (more specific) bboxes when multiple contain the point.
+// Find the floor plan whose outline contains the normalized (0..1) point.
+// Uses true polygon containment when the plan has an irregular outline, and
+// prefers smaller (more specific) shapes when several contain the point.
 const findContainingPlan = (
   plans: ParsedFloorPlan[],
   nx: number,
   ny: number,
   overrides: Record<string, any> = {},
 ): ParsedFloorPlan | null => {
-  const x = nx * 100;
-  const y = ny * 100;
   let best: ParsedFloorPlan | null = null;
   let bestArea = Infinity;
   for (const fp of plans) {
-    const bb = getEffectiveBbox(fp, overrides);
-    if (!bb) continue;
-    const [bx, by, bw, bh] = bb;
-    if (x < bx || x > bx + bw || y < by || y > by + bh) continue;
-    const area = bw * bh;
+    if (!isPointInsidePlan(fp, overrides, nx, ny)) continue;
+    const area = planAreaPct(fp, overrides);
     if (area < bestArea) {
       best = fp;
       bestArea = area;
@@ -1970,6 +2027,7 @@ const findContainingPlan = (
   }
   return best;
 };
+
 
 const DetectionsPanel = ({
   awpClasses,
@@ -2137,6 +2195,7 @@ const DetectionsPanel = ({
 interface EditingPlanShape {
   planId: string;
   bbox: [number, number, number, number];
+  points?: [number, number][] | null;
   name: string;
   type: string;
   origBbox: [number, number, number, number];
@@ -2160,6 +2219,7 @@ interface FloorPlansPanelProps {
       units?: string[];
       annotations?: string[];
       bbox_pct?: [number, number, number, number] | null;
+      points_pct?: [number, number][] | null;
       name?: string | null;
       type?: string | null;
     },
@@ -2186,6 +2246,8 @@ interface FloorPlansPanelProps {
   onSaveEdit?: () => void | Promise<void>;
   onEditingNameChange?: (name: string) => void;
   onEditingTypeChange?: (type: string) => void;
+  /** Switch the edited shape between a rectangle and an editable polygon. */
+  onToggleEditingShape?: () => void;
   onRequestDelete?: (planId: string, label: string) => void;
   onAddPlan?: () => void | Promise<void>;
   /** Read-only viewing mode: only unit/detail attachment stays enabled. */
@@ -2210,6 +2272,7 @@ const FloorPlansPanel = ({
   editingPlan,
   onEnterEdit,
   onCancelEdit,
+  onToggleEditingShape,
   onSaveEdit,
   onEditingNameChange,
   onEditingTypeChange,
@@ -2458,6 +2521,22 @@ const FloorPlansPanel = ({
                       >
                         Cancel
                       </Button>
+                      {onToggleEditingShape && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-2 text-[11px] ml-auto"
+                          onClick={() => onToggleEditingShape()}
+                          title={
+                            editingPlan?.points
+                              ? "Snap the shape back to a plain rectangle"
+                              : "Drag vertices, and click edge dots to add points"
+                          }
+                        >
+                          {editingPlan?.points ? "Reset to rectangle" : "Irregular shape"}
+                        </Button>
+                      )}
                     </>
                   ) : (
                     <Button

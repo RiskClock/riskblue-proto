@@ -24,7 +24,9 @@ import {
   rotateNormalizedRect,
   inverseRotateNormalizedRect,
   inverseRotateNormalizedPoint,
+  rotateNormalizedPoint,
   type RotationDeg,
+  type NormalizedPoint,
   type NormalizedOverlay,
   type OverlayInput,
 } from "./viewerGeometry";
@@ -80,6 +82,9 @@ export interface DrawingViewerProps {
   editorBbox?: EditorBbox | null;
   /** Live updates while the user drags the editor. */
   onEditorBboxChange?: (next: EditorBbox) => void;
+  /** Irregular polygon outline (source space, 0..1) for the edited shape. */
+  editorPoints?: NormalizedPoint[] | null;
+  onEditorPointsChange?: (next: NormalizedPoint[]) => void;
   /** Border/handle color for the editor bbox. */
   editorColor?: string;
   /**
@@ -142,6 +147,8 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       interactive = true,
       editorBbox,
       onEditorBboxChange,
+      editorPoints,
+      onEditorPointsChange,
       editorColor,
       onDownload,
       rotation = 0,
@@ -546,6 +553,21 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                               : next;
                             onEditorBboxChange(src as EditorBbox);
                           }
+                        : undefined
+                    }
+                    editorPoints={
+                      editorPoints && rotation
+                        ? editorPoints.map((p) => rotateNormalizedPoint(p, rotation))
+                        : editorPoints ?? null
+                    }
+                    onEditorPointsChange={
+                      onEditorPointsChange
+                        ? (next) =>
+                            onEditorPointsChange(
+                              rotation
+                                ? next.map((p) => inverseRotateNormalizedPoint(p, rotation))
+                                : next,
+                            )
                         : undefined
                     }
                     editorColor={editorColor}

@@ -90,6 +90,8 @@ import {
   DELETED_PLAN_IDS_KEY,
   getDeletedPlanIds,
   getEffectiveBbox,
+  getEffectivePoints,
+  asPointsPct,
   getEffectiveLabel,
   getEffectiveType,
   unitPlanRefKey,
@@ -165,6 +167,7 @@ function materializeFloorPlan(
     type: getEffectiveType(plan, overrides),
     reference_id: getEffectiveLabel(plan, overrides) || plan.reference_id,
     xy_width_height_pct: getEffectiveBbox(plan, overrides),
+    points_pct: getEffectivePoints(plan, overrides),
     // Non-standard passthrough so the Pages-by-File list can prefer the
     // user-typed rename over Scout's floors[] label without re-fetching
     // overrides at render time.
@@ -192,6 +195,7 @@ function overrideOnlyFloorPlans(
       type: type || "level_floor_plan",
       reference_id: name || planId,
       xy_width_height_pct: bbox,
+      points_pct: asPointsPct(ovr?.points_pct),
       page_number: page,
       floors: [],
       referenced_unit_ids: [],

@@ -167,7 +167,18 @@ interface CircleInfo {
 // re-render; the rest are bailed out by `React.memo`'s shallow-equal check.
 
 interface RectOverlayProps {
-  r: { id: string; x: number; y: number; w: number; h: number; color: string; label?: string };
+  r: {
+    id: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    color: string;
+    label?: string;
+    /** Polygon outline in page px, relative to the box origin (x, y). */
+    pts?: { x: number; y: number }[];
+  };
+
   hovered: boolean;
   exportScale: number;
   /**
@@ -202,20 +213,37 @@ const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewSca
         height={r.h}
         style={{ position: "absolute", left: 0, top: 0, overflow: "visible", pointerEvents: "none" }}
       >
-        <rect
-          data-export-kind="rect"
-          data-color={r.color}
-          data-border-px={borderPxScreen}
-          x={borderPxPage / 2}
-          y={borderPxPage / 2}
-          width={Math.max(0, r.w - borderPxPage)}
-          height={Math.max(0, r.h - borderPxPage)}
-          fill="none"
-          stroke={withAlpha(r.color, 0.5)}
-          strokeWidth={borderPxPage}
-          vectorEffect="non-scaling-stroke"
-          style={{ vectorEffect: "non-scaling-stroke", strokeWidth: borderPxPage }}
-        />
+        {r.pts && r.pts.length >= 3 ? (
+          <polygon
+            data-export-kind="polygon"
+            data-color={r.color}
+            data-border-px={borderPxScreen}
+            data-points={r.pts.map((p) => `${p.x},${p.y}`).join(" ")}
+            points={r.pts.map((p) => `${p.x},${p.y}`).join(" ")}
+            fill="none"
+            stroke={withAlpha(r.color, 0.5)}
+            strokeWidth={borderPxPage}
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+            style={{ vectorEffect: "non-scaling-stroke", strokeWidth: borderPxPage }}
+          />
+        ) : (
+          <rect
+            data-export-kind="rect"
+            data-color={r.color}
+            data-border-px={borderPxScreen}
+            x={borderPxPage / 2}
+            y={borderPxPage / 2}
+            width={Math.max(0, r.w - borderPxPage)}
+            height={Math.max(0, r.h - borderPxPage)}
+            fill="none"
+            stroke={withAlpha(r.color, 0.5)}
+            strokeWidth={borderPxPage}
+            vectorEffect="non-scaling-stroke"
+            style={{ vectorEffect: "non-scaling-stroke", strokeWidth: borderPxPage }}
+          />
+        )}
+
       </svg>
       {label ? (
         <div
@@ -479,16 +507,31 @@ export const OverlayLayer = ({
   const rects = useMemo(() => {
     return overlays
       .filter((o) => o.shape === "rect")
-      .map((o) => ({
-        id: o.id,
-        x: o.rect.px?.x ?? o.rect.nx * pageSize.width,
-        y: o.rect.px?.y ?? o.rect.ny * pageSize.height,
-        w: Math.max(1, o.rect.px?.w ?? o.rect.nw * pageSize.width),
-        h: Math.max(1, o.rect.px?.h ?? o.rect.nh * pageSize.height),
-        color: o.color ?? defaultColor,
-        label: o.label,
-      }));
+      .map((o) => {
+        const x = o.rect.px?.x ?? o.rect.nx * pageSize.width;
+        const y = o.rect.px?.y ?? o.rect.ny * pageSize.height;
+        // Polygon points are absolute normalized page coords; convert to px
+        // and rebase onto the box origin so they share the wrapper's offset.
+        const pts =
+          o.rect.points && o.rect.points.length >= 3
+            ? o.rect.points.map((p) => ({
+                x: p.nx * pageSize.width - x,
+                y: p.ny * pageSize.height - y,
+              }))
+            : undefined;
+        return {
+          id: o.id,
+          x,
+          y,
+          w: Math.max(1, o.rect.px?.w ?? o.rect.nw * pageSize.width),
+          h: Math.max(1, o.rect.px?.h ?? o.rect.nh * pageSize.height),
+          color: o.color ?? defaultColor,
+          label: o.label,
+          pts,
+        };
+      });
   }, [overlays, pageSize.width, pageSize.height, defaultColor]);
+
 
 
   const fontPx = LABEL_FONT_PX * exportScale;
