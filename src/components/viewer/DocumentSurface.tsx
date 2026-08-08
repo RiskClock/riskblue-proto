@@ -31,6 +31,15 @@ interface DocumentSurfaceProps {
   editorBbox?: EditorBbox | null;
   /** Live change while dragging. */
   onEditorBboxChange?: (next: EditorBbox) => void;
+  /**
+   * Irregular polygon outline (0..1) for the shape being edited. When present
+   * with >= 3 points the editor switches from the rectangle handles to
+   * vertex/midpoint editing and `editorBbox` is treated as its envelope.
+   */
+  editorPoints?: NormalizedPoint[] | null;
+  /** Live change while dragging / adding / deleting a vertex. */
+  onEditorPointsChange?: (next: NormalizedPoint[]) => void;
+
   /** Border / corner-handle color for the editor bbox. Defaults to primary. */
   editorColor?: string;
   /**
