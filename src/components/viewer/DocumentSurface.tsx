@@ -216,13 +216,13 @@ export const DocumentSurface = ({
 
   /** Drag an existing vertex, or a whole polygon when `index` is null. */
   const startPolygonDrag = (
-    e: ReactPointerEvent<HTMLElement>,
+    e: ReactPointerEvent<Element>,
     index: number | null,
   ) => {
     if (!polyPoints || !onEditorPointsChange) return;
     e.stopPropagation();
     e.preventDefault();
-    const targetEl = e.currentTarget;
+    const targetEl = e.currentTarget as Element;
     try { targetEl.setPointerCapture(e.pointerId); } catch { /* */ }
     const surface = targetEl.closest("[data-doc-surface]") as HTMLElement | null;
     const surfRect = surface?.getBoundingClientRect();
@@ -283,7 +283,7 @@ export const DocumentSurface = ({
 
   /** Split the edge after `index` by inserting its midpoint, then drag it. */
   const startMidpointDrag = (
-    e: ReactPointerEvent<HTMLElement>,
+    e: ReactPointerEvent<Element>,
     index: number,
   ) => {
     if (!polyPoints || !onEditorPointsChange) return;
