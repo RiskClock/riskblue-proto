@@ -1068,19 +1068,28 @@ export const FileViewerModal = ({
       const px = inst.nx * 100;
       const py = inst.ny * 100;
       const containingPlan = levelPlans
-        .map((p) => ({ p, bb: getEffectiveBbox(p, effectiveFloorPlanOverrides) }))
-        .filter(({ bb }) => {
-          if (!bb) return false;
-          const [bx, by, bw, bh] = bb;
-          return px >= bx && px <= bx + bw && py >= by && py <= by + bh;
-        })
-        .sort((a, b) => a.bb![2] * a.bb![3] - b.bb![2] * b.bb![3])[0]?.p;
+        .filter((p) =>
+          isPointInsidePlan(p, effectiveFloorPlanOverrides, inst.nx, inst.ny),
+        )
+        .sort(
+          (a, b) =>
+            planAreaPct(a, effectiveFloorPlanOverrides) -
+            planAreaPct(b, effectiveFloorPlanOverrides),
+        )[0];
       if (!containingPlan) return;
       const bb = getEffectiveBbox(containingPlan, effectiveFloorPlanOverrides);
       if (!bb) return;
       const [bx, by, bw, bh] = bb;
-      const clampedNx = Math.max(bx / 100, Math.min((bx + bw) / 100, nx));
-      const clampedNy = Math.max(by / 100, Math.min((by + bh) / 100, ny));
+      let clampedNx = Math.max(bx / 100, Math.min((bx + bw) / 100, nx));
+      let clampedNy = Math.max(by / 100, Math.min((by + bh) / 100, ny));
+      // For irregular outlines the envelope clamp isn't enough - if the point
+      // lands in a concave notch, keep the marker at its previous position.
+      const poly = getEffectivePoints(containingPlan, effectiveFloorPlanOverrides);
+      if (poly && !pointInPolygonPct(clampedNx * 100, clampedNy * 100, poly)) {
+        clampedNx = inst.nx;
+        clampedNy = inst.ny;
+      }
+
       // Optimistic local update.
       setInstances((prev) =>
         prev.map((i) =>
