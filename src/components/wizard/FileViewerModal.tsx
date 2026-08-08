@@ -1578,6 +1578,23 @@ export const FileViewerModal = ({
                     }
                   : null
               }
+              editorPoints={
+                editingPlan && editingPlan.points && !viewingMode
+                  ? editingPlan.points.map(([x, y]) => ({ nx: x / 100, ny: y / 100 }))
+                  : null
+              }
+              onEditorPointsChange={(next) =>
+                setEditingPlan((prev) => {
+                  if (!prev) return prev;
+                  const pts = next.map(
+                    (p) => [p.nx * 100, p.ny * 100] as [number, number],
+                  );
+                  // Keep the rectangular envelope in sync so everything that
+                  // still reads bbox_pct (lists, exports, fit-to-selection)
+                  // stays correct.
+                  return { ...prev, points: pts, bbox: envelopeOfPointsPct(pts) };
+                })
+              }
               onEditorBboxChange={(next) =>
                 setEditingPlan((prev) =>
                   prev
