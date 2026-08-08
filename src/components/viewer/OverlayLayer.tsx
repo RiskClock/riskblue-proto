@@ -213,20 +213,37 @@ const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewSca
         height={r.h}
         style={{ position: "absolute", left: 0, top: 0, overflow: "visible", pointerEvents: "none" }}
       >
-        <rect
-          data-export-kind="rect"
-          data-color={r.color}
-          data-border-px={borderPxScreen}
-          x={borderPxPage / 2}
-          y={borderPxPage / 2}
-          width={Math.max(0, r.w - borderPxPage)}
-          height={Math.max(0, r.h - borderPxPage)}
-          fill="none"
-          stroke={withAlpha(r.color, 0.5)}
-          strokeWidth={borderPxPage}
-          vectorEffect="non-scaling-stroke"
-          style={{ vectorEffect: "non-scaling-stroke", strokeWidth: borderPxPage }}
-        />
+        {r.pts && r.pts.length >= 3 ? (
+          <polygon
+            data-export-kind="polygon"
+            data-color={r.color}
+            data-border-px={borderPxScreen}
+            data-points={r.pts.map((p) => `${p.x},${p.y}`).join(" ")}
+            points={r.pts.map((p) => `${p.x},${p.y}`).join(" ")}
+            fill="none"
+            stroke={withAlpha(r.color, 0.5)}
+            strokeWidth={borderPxPage}
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+            style={{ vectorEffect: "non-scaling-stroke", strokeWidth: borderPxPage }}
+          />
+        ) : (
+          <rect
+            data-export-kind="rect"
+            data-color={r.color}
+            data-border-px={borderPxScreen}
+            x={borderPxPage / 2}
+            y={borderPxPage / 2}
+            width={Math.max(0, r.w - borderPxPage)}
+            height={Math.max(0, r.h - borderPxPage)}
+            fill="none"
+            stroke={withAlpha(r.color, 0.5)}
+            strokeWidth={borderPxPage}
+            vectorEffect="non-scaling-stroke"
+            style={{ vectorEffect: "non-scaling-stroke", strokeWidth: borderPxPage }}
+          />
+        )}
+
       </svg>
       {label ? (
         <div
