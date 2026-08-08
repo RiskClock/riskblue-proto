@@ -497,9 +497,12 @@ export const FileViewerModal = ({
   type EditingPlanState = {
     planId: string;
     bbox: [number, number, number, number]; // pct 0..100
+    /** Irregular outline (pct 0..100). Null while the shape is a rectangle. */
+    points: [number, number][] | null;
     name: string;
     type: string;
     origBbox: [number, number, number, number];
+    origPoints: [number, number][] | null;
     origName: string;
     origType: string;
   };
@@ -564,6 +567,7 @@ export const FileViewerModal = ({
       [editingPlan.planId]: {
         ...((floorPlanOverrides ?? {}) as any)[editingPlan.planId],
         bbox_pct: editingPlan.bbox,
+        points_pct: editingPlan.points,
         name: editingPlan.name.trim() || null,
         type: editingPlan.type,
       },
@@ -574,7 +578,8 @@ export const FileViewerModal = ({
     editingPlan &&
     (editingPlan.name !== editingPlan.origName ||
       editingPlan.type !== editingPlan.origType ||
-      editingPlan.bbox.some((v, i) => v !== editingPlan.origBbox[i]))
+      editingPlan.bbox.some((v, i) => v !== editingPlan.origBbox[i]) ||
+      JSON.stringify(editingPlan.points) !== JSON.stringify(editingPlan.origPoints))
   );
 
   // Reset editor state when modal closes or page changes. Do NOT reset
@@ -599,6 +604,7 @@ export const FileViewerModal = ({
     }
     await onSaveFloorPlanOverride(cur.planId, {
       bbox_pct: cur.bbox,
+      points_pct: cur.points,
       name: cur.name.trim() || null,
       type: cur.type,
     });
@@ -613,7 +619,8 @@ export const FileViewerModal = ({
         if (
           prev.name !== prev.origName ||
           prev.type !== prev.origType ||
-          prev.bbox.some((v, i) => v !== prev.origBbox[i])
+          prev.bbox.some((v, i) => v !== prev.origBbox[i]) ||
+          JSON.stringify(prev.points) !== JSON.stringify(prev.origPoints)
         ) {
           await savePlanEdit();
         }
@@ -624,12 +631,15 @@ export const FileViewerModal = ({
       const name = getEffectiveLabel(fp, floorPlanOverrides ?? {});
       const ovrType = (floorPlanOverrides as any)?.[fp.plan_id]?.type;
       const type = (typeof ovrType === "string" && ovrType) ? ovrType : fp.type || "level_floor_plan";
+      const pts = getEffectivePoints(fp, floorPlanOverrides ?? {});
       const state: EditingPlanState = {
         planId: fp.plan_id,
         bbox: [bb[0], bb[1], bb[2], bb[3]],
+        points: pts ? pts.map((p) => [p[0], p[1]] as [number, number]) : null,
         name,
         type,
         origBbox: [bb[0], bb[1], bb[2], bb[3]],
+        origPoints: pts ? pts.map((p) => [p[0], p[1]] as [number, number]) : null,
         origName: name,
         origType: type,
       };
