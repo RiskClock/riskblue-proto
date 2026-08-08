@@ -49,6 +49,13 @@ Existing rectangles keep working untouched - a box with no `points` behaves exac
 - `move` translates all points; the n/s/e/w/corner handles scale all points against the envelope so existing resize behaviour is preserved.
 - Emit `onEditorBboxChange({ nx, ny, nw, nh, points })` with the envelope recomputed each frame.
 
+**Handle affordances**
+- Midpoint ghost handles get a transparent ~18px hit area centred on the visible dot, sized in page units (`18 / viewScale`) so it stays ~18 CSS px at any zoom.
+- Cursors: `copy` (plus) on midpoint handles, `grab` on vertex handles switching to `grabbing` while dragging; existing `move` / resize cursors unchanged.
+- Clicking a vertex selects it (highlighted fill); Delete or Backspace then removes it, subject to the same `points.length > 3` guardrail. Escape clears the selection. The key listener is scoped to the viewer surface so it never intercepts typing in sidebar inputs.
+
+
+
 **Containment consumers** (switch envelope test to `pointInPolygon` when `points` exists, envelope otherwise)
 - `FileViewerModal.tsx`: `findPlanContaining` (~line 1948), per-plan membership (~line 2264), and marker drag clamping (~lines 1049-1149; clamp to the nearest point inside the polygon rather than the inner rect).
 - `WorkbenchProjectDetail.tsx`: `pairsForPage` / `surveyDerivedMaps` level and unit attribution, and attachment-count badges.
