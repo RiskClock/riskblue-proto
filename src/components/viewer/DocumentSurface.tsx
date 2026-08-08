@@ -567,7 +567,7 @@ export const DocumentSurface = ({
           onPlacingChange={onPlacingChange}
         />
       )}
-      {renderEditor()}
+      {polyPoints ? renderPolygonEditor() : renderEditor()}
     </div>
   );
 };
