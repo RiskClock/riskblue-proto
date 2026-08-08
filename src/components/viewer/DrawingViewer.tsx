@@ -24,7 +24,9 @@ import {
   rotateNormalizedRect,
   inverseRotateNormalizedRect,
   inverseRotateNormalizedPoint,
+  rotateNormalizedPoint,
   type RotationDeg,
+  type NormalizedPoint,
   type NormalizedOverlay,
   type OverlayInput,
 } from "./viewerGeometry";
