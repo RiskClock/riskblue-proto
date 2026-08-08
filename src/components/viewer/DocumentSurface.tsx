@@ -1,11 +1,13 @@
 import {
   CSSProperties,
   PointerEvent as ReactPointerEvent,
+  useEffect,
   useLayoutEffect,
   useRef,
+  useState,
 } from "react";
 import { OverlayLayer } from "./OverlayLayer";
-import type { NormalizedOverlay } from "./viewerGeometry";
+import type { NormalizedOverlay, NormalizedPoint } from "./viewerGeometry";
 
 export interface EditorBbox {
   nx: number;
@@ -13,6 +15,7 @@ export interface EditorBbox {
   nw: number;
   nh: number;
 }
+
 
 interface DocumentSurfaceProps {
   imageUrl: string;
