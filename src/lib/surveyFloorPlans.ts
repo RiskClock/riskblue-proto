@@ -208,6 +208,8 @@ export function parseSurveyFloorPlans(
         type: (fp.type as FloorPlanType) ?? "unknown",
         reference_id,
         xy_width_height_pct: asBbox(fp.xy_width_height_pct ?? fp.xy_width_height_pt),
+        points_pct: asPointsPct(fp.points_pct ?? fp.points),
+
         page_number: pageNum,
         floors,
         referenced_unit_ids,
