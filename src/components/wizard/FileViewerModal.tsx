@@ -219,6 +219,7 @@ interface FileViewerModalProps {
       units?: string[];
       annotations?: string[];
       bbox_pct?: [number, number, number, number] | null;
+      points_pct?: [number, number][] | null;
       name?: string | null;
       type?: string | null;
     },
@@ -2188,6 +2189,7 @@ interface FloorPlansPanelProps {
       units?: string[];
       annotations?: string[];
       bbox_pct?: [number, number, number, number] | null;
+      points_pct?: [number, number][] | null;
       name?: string | null;
       type?: string | null;
     },
