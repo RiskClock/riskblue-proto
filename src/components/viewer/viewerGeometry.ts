@@ -152,6 +152,77 @@ function toNormalizedRectBase(input: OverlayInput): NormalizedRect | null {
   return null;
 }
 
+export function toNormalizedRect(input: OverlayInput): NormalizedRect | null {
+  const rect = toNormalizedRectBase(input);
+  if (!rect) return null;
+  if (input.points && input.points.length >= 3) {
+    return { ...rect, points: input.points };
+  }
+  return rect;
+}
+
+// ---------- Polygon helpers --------------------------------------------------
+
+/** Axis-aligned envelope of a polygon. */
+export function envelopeOfPoints(
+  points: NormalizedPoint[],
+): { nx: number; ny: number; nw: number; nh: number } {
+  if (!points || points.length === 0) return { nx: 0, ny: 0, nw: 0, nh: 0 };
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of points) {
+    if (p.nx < minX) minX = p.nx;
+    if (p.ny < minY) minY = p.ny;
+    if (p.nx > maxX) maxX = p.nx;
+    if (p.ny > maxY) maxY = p.ny;
+  }
+  return { nx: minX, ny: minY, nw: Math.max(0, maxX - minX), nh: Math.max(0, maxY - minY) };
+}
+
+/** The 4 corners of a rect, clockwise from top-left. */
+export function rectToPoints(rect: {
+  nx: number;
+  ny: number;
+  nw: number;
+  nh: number;
+}): NormalizedPoint[] {
+  const { nx, ny, nw, nh } = rect;
+  return [
+    { nx, ny },
+    { nx: nx + nw, ny },
+    { nx: nx + nw, ny: ny + nh },
+    { nx, ny: ny + nh },
+  ];
+}
+
+/** Ray-casting point-in-polygon test. Points on the edge count as inside. */
+export function pointInPolygon(
+  pt: { nx: number; ny: number },
+  points: NormalizedPoint[],
+): boolean {
+  if (!points || points.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const xi = points[i].nx, yi = points[i].ny;
+    const xj = points[j].nx, yj = points[j].ny;
+    const intersects =
+      yi > pt.ny !== yj > pt.ny &&
+      pt.nx < ((xj - xi) * (pt.ny - yi)) / (yj - yi || Number.EPSILON) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+/** Shoelace area of a polygon (absolute value, normalized units). */
+export function polygonArea(points: NormalizedPoint[]): number {
+  if (!points || points.length < 3) return 0;
+  let sum = 0;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    sum += (points[j].nx + points[i].nx) * (points[j].ny - points[i].ny);
+  }
+  return Math.abs(sum / 2);
+}
+
+
 /** Compute target transform (scale + translate) to fit a normalized rect inside a viewport. */
 export interface FitTarget {
   scale: number;
