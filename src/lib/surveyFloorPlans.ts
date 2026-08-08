@@ -15,10 +15,18 @@ export interface ParsedFloorPlan {
   reference_id: string | null;
   /** [left, top, width, height] as percentages (0..100) of the visible page. */
   xy_width_height_pct: [number, number, number, number] | null;
+  /**
+   * Optional irregular polygon outline as [[x, y], ...] percentages (0..100)
+   * of the visible page. When present with >= 3 points it supersedes the
+   * rectangle for rendering and containment; `xy_width_height_pct` stays in
+   * sync as the polygon's bounding envelope.
+   */
+  points_pct?: [number, number][] | null;
   page_number: number;
   floors: string[];
   referenced_unit_ids: string[];
 }
+
 
 function stripCodeFence(text: string): string {
   return text
