@@ -80,6 +80,83 @@ function asBbox(v: any): [number, number, number, number] | null {
   return nums as [number, number, number, number];
 }
 
+/** Parse an optional polygon outline: [[x, y], ...] in page percentages. */
+export function asPointsPct(v: any): [number, number][] | null {
+  if (!Array.isArray(v) || v.length < 3) return null;
+  const out: [number, number][] = [];
+  for (const p of v) {
+    let x: number, y: number;
+    if (Array.isArray(p) && p.length >= 2) {
+      x = Number(p[0]);
+      y = Number(p[1]);
+    } else if (p && typeof p === "object") {
+      x = Number((p as any).x);
+      y = Number((p as any).y);
+    } else return null;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    out.push([x, y]);
+  }
+  return out.length >= 3 ? out : null;
+}
+
+/** Envelope [x, y, w, h] (pct) of a polygon. */
+export function envelopeOfPointsPct(
+  points: [number, number][],
+): [number, number, number, number] {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [x, y] of points) {
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+  }
+  if (!Number.isFinite(minX)) return [0, 0, 0, 0];
+  return [minX, minY, Math.max(0, maxX - minX), Math.max(0, maxY - minY)];
+}
+
+/** Corners of a [x, y, w, h] pct rect, clockwise from top-left. */
+export function rectToPointsPct(
+  bb: [number, number, number, number],
+): [number, number][] {
+  const [x, y, w, h] = bb;
+  return [
+    [x, y],
+    [x + w, y],
+    [x + w, y + h],
+    [x, y + h],
+  ];
+}
+
+/** Ray-casting containment test in pct space. */
+export function pointInPolygonPct(
+  x: number,
+  y: number,
+  points: [number, number][],
+): boolean {
+  if (!points || points.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const xi = points[i][0], yi = points[i][1];
+    const xj = points[j][0], yj = points[j][1];
+    const intersects =
+      yi > y !== yj > y &&
+      x < ((xj - xi) * (y - yi)) / (yj - yi || Number.EPSILON) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+/** Shoelace area (pct^2) of a polygon. */
+export function polygonAreaPct(points: [number, number][]): number {
+  if (!points || points.length < 3) return 0;
+  let sum = 0;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    sum += (points[j][0] + points[i][0]) * (points[j][1] - points[i][1]);
+  }
+  return Math.abs(sum / 2);
+}
+
+
 function flattenPages(parsed: any): any[] {
   if (!parsed) return [];
   if (Array.isArray(parsed)) {
