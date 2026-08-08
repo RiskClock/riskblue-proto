@@ -97,7 +97,8 @@ function looksLikeXYWHNormalized(b: BBoxArray): boolean {
 }
 
 /** Convert an overlay input into a normalized 0..1 rect on its page. */
-export function toNormalizedRect(input: OverlayInput): NormalizedRect | null {
+function toNormalizedRectBase(input: OverlayInput): NormalizedRect | null {
+
   const b = input.bbox;
   if (!b || b.length < 4) return null;
 
