@@ -335,3 +335,18 @@ export function inverseRotateNormalizedPoint(
   return rotateNormalizedPoint(pt, normalizeRotation(360 - rotation));
 }
 
+/** Rotate a polygon (source-space) into rotated-space. */
+export function rotateNormalizedPolygon(
+  points: NormalizedPoint[],
+  rotation: RotationDeg,
+): NormalizedPoint[] {
+  if (!points || points.length === 0) return [];
+  return points.map((p) => rotateNormalizedPoint(p, rotation));
+}
+
+export function inverseRotateNormalizedPolygon(
+  points: NormalizedPoint[],
+  rotation: RotationDeg,
+): NormalizedPoint[] {
+  return rotateNormalizedPolygon(points, normalizeRotation(360 - rotation));
+}
