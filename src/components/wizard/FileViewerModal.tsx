@@ -1945,24 +1945,20 @@ interface DetectionsPanelProps {
   floorPlanOverrides?: Record<string, any>;
 }
 
-// Find the floor plan whose bbox contains the normalized (0..1) point.
-// Prefers smaller (more specific) bboxes when multiple contain the point.
+// Find the floor plan whose outline contains the normalized (0..1) point.
+// Uses true polygon containment when the plan has an irregular outline, and
+// prefers smaller (more specific) shapes when several contain the point.
 const findContainingPlan = (
   plans: ParsedFloorPlan[],
   nx: number,
   ny: number,
   overrides: Record<string, any> = {},
 ): ParsedFloorPlan | null => {
-  const x = nx * 100;
-  const y = ny * 100;
   let best: ParsedFloorPlan | null = null;
   let bestArea = Infinity;
   for (const fp of plans) {
-    const bb = getEffectiveBbox(fp, overrides);
-    if (!bb) continue;
-    const [bx, by, bw, bh] = bb;
-    if (x < bx || x > bx + bw || y < by || y > by + bh) continue;
-    const area = bw * bh;
+    if (!isPointInsidePlan(fp, overrides, nx, ny)) continue;
+    const area = planAreaPct(fp, overrides);
     if (area < bestArea) {
       best = fp;
       bestArea = area;
@@ -1970,6 +1966,7 @@ const findContainingPlan = (
   }
   return best;
 };
+
 
 const DetectionsPanel = ({
   awpClasses,
