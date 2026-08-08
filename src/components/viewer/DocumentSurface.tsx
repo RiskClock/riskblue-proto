@@ -211,6 +211,226 @@ export const DocumentSurface = ({
     window.addEventListener("pointerup", up);
   };
 
+  // ---- Polygon (irregular bbox) editing ----------------------------------
+  const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
+  /** Drag an existing vertex, or a whole polygon when `index` is null. */
+  const startPolygonDrag = (
+    e: ReactPointerEvent<HTMLElement>,
+    index: number | null,
+  ) => {
+    if (!polyPoints || !onEditorPointsChange) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const targetEl = e.currentTarget;
+    try { targetEl.setPointerCapture(e.pointerId); } catch { /* */ }
+    const surface = targetEl.closest("[data-doc-surface]") as HTMLElement | null;
+    const surfRect = surface?.getBoundingClientRect();
+    if (!surfRect) return;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const start = polyPoints.map((p) => ({ ...p }));
+    let moved = false;
+
+    const move = (ev: PointerEvent) => {
+      const dxN = (ev.clientX - startX) / surfRect.width;
+      const dyN = (ev.clientY - startY) / surfRect.height;
+      if (Math.hypot(ev.clientX - startX, ev.clientY - startY) >= CLICK_MOVE_THRESHOLD) {
+        moved = true;
+      }
+      if (!moved) return;
+      let next: NormalizedPoint[];
+      if (index === null) {
+        next = start.map((p) => ({ nx: clamp01(p.nx + dxN), ny: clamp01(p.ny + dyN) }));
+      } else {
+        let nx = clamp01(start[index].nx + dxN);
+        let ny = clamp01(start[index].ny + dyN);
+        // Shift snaps the vertex to a horizontal / vertical line with the
+        // neighbouring vertex it is closest to aligning with.
+        if (ev.shiftKey) {
+          const prev = start[(index - 1 + start.length) % start.length];
+          const nextPt = start[(index + 1) % start.length];
+          const cand = [prev, nextPt];
+          const dxs = cand.map((c) => Math.abs(nx - c.nx));
+          const dys = cand.map((c) => Math.abs(ny - c.ny));
+          const minDx = Math.min(...dxs);
+          const minDy = Math.min(...dys);
+          if (minDx <= minDy) nx = cand[dxs.indexOf(minDx)].nx;
+          else ny = cand[dys.indexOf(minDy)].ny;
+        }
+        next = start.map((p, i) => (i === index ? { nx, ny } : p));
+      }
+      onEditorPointsChange(next);
+    };
+    const up = (ev: PointerEvent) => {
+      try { targetEl.releasePointerCapture(ev.pointerId); } catch { /* */ }
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      if (!moved && index !== null) {
+        // A click (no drag) on a vertex removes it, as long as the polygon
+        // keeps at least a triangle. Otherwise it just becomes selected.
+        if (start.length > 3) {
+          onEditorPointsChange(start.filter((_, i) => i !== index));
+          setSelectedVertex(null);
+        } else {
+          setSelectedVertex(index);
+        }
+      }
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
+  /** Split the edge after `index` by inserting its midpoint, then drag it. */
+  const startMidpointDrag = (
+    e: ReactPointerEvent<HTMLElement>,
+    index: number,
+  ) => {
+    if (!polyPoints || !onEditorPointsChange) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const a = polyPoints[index];
+    const b = polyPoints[(index + 1) % polyPoints.length];
+    const mid = { nx: (a.nx + b.nx) / 2, ny: (a.ny + b.ny) / 2 };
+    const next = [
+      ...polyPoints.slice(0, index + 1),
+      mid,
+      ...polyPoints.slice(index + 1),
+    ];
+    onEditorPointsChange(next);
+    setSelectedVertex(index + 1);
+  };
+
+  // Delete / Backspace removes the selected vertex (never below a triangle).
+  useEffect(() => {
+    if (selectedVertex === null || !polyPoints || !onEditorPointsChange) return;
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== "Delete" && ev.key !== "Backspace") return;
+      const target = ev.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
+      if (polyPoints.length <= 3) return;
+      ev.preventDefault();
+      onEditorPointsChange(polyPoints.filter((_, i) => i !== selectedVertex));
+      setSelectedVertex(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedVertex, polyPoints, onEditorPointsChange]);
+
+  const renderPolygonEditor = () => {
+    if (!polyPoints) return null;
+    const s = Math.max(0.0001, viewScale || 1);
+    const strokePxPage = 2 / s;
+    const edgeColor = editorColor || "hsl(var(--primary))";
+    // Handles keep a constant on-screen size, and their pointer hit area is
+    // padded out to ~18px so they stay easy to grab on touch devices.
+    const vertexPx = 10 / s;
+    const hitPx = 18 / s;
+    const px = polyPoints.map((p) => ({
+      x: p.nx * pageSize.width,
+      y: p.ny * pageSize.height,
+    }));
+    const pointsAttr = px.map((p) => `${p.x},${p.y}`).join(" ");
+    return (
+      <div
+        className="absolute"
+        style={{ left: 0, top: 0, width: pageSize.width, height: pageSize.height, pointerEvents: "none" }}
+      >
+        <svg
+          width={pageSize.width}
+          height={pageSize.height}
+          style={{ position: "absolute", inset: 0, overflow: "visible", pointerEvents: "none" }}
+        >
+          <polygon
+            points={pointsAttr}
+            fill="transparent"
+            stroke={edgeColor}
+            strokeWidth={strokePxPage}
+            strokeDasharray={`${6 / s} ${4 / s}`}
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+            style={{ vectorEffect: "non-scaling-stroke", strokeWidth: strokePxPage, pointerEvents: "auto", cursor: "move" }}
+            onPointerDown={(e) => startPolygonDrag(e, null)}
+          />
+        </svg>
+
+        {/* Midpoint ghost handles - click/drag to split the edge. */}
+        {px.map((p, i) => {
+          const b = px[(i + 1) % px.length];
+          const mx = (p.x + b.x) / 2;
+          const my = (p.y + b.y) / 2;
+          return (
+            <div
+              key={`mid-${i}`}
+              onPointerDown={(e) => startMidpointDrag(e, i)}
+              title="Add point"
+              style={{
+                position: "absolute",
+                left: mx - hitPx / 2,
+                top: my - hitPx / 2,
+                width: hitPx,
+                height: hitPx,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                pointerEvents: "auto",
+                cursor: "copy",
+              }}
+            >
+              <div
+                style={{
+                  width: vertexPx * 0.75,
+                  height: vertexPx * 0.75,
+                  borderRadius: "50%",
+                  backgroundColor: "white",
+                  border: `${1 / s}px solid ${edgeColor}`,
+                  opacity: 0.7,
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+          );
+        })}
+
+        {/* Vertex handles - drag to move, click to delete. */}
+        {px.map((p, i) => (
+          <div
+            key={`vtx-${i}`}
+            onPointerDown={(e) => startPolygonDrag(e, i)}
+            title={polyPoints.length > 3 ? "Drag to move, click to delete" : "Drag to move"}
+            style={{
+              position: "absolute",
+              left: p.x - hitPx / 2,
+              top: p.y - hitPx / 2,
+              width: hitPx,
+              height: hitPx,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              pointerEvents: "auto",
+              cursor: "grab",
+            }}
+            onPointerUpCapture={(e) => (e.currentTarget.style.cursor = "grab")}
+            onPointerDownCapture={(e) => (e.currentTarget.style.cursor = "grabbing")}
+          >
+            <div
+              style={{
+                width: vertexPx,
+                height: vertexPx,
+                borderRadius: 2,
+                backgroundColor: selectedVertex === i ? "white" : edgeColor,
+                border: `${1 / s}px solid ${selectedVertex === i ? edgeColor : "white"}`,
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+
   const renderEditor = () => {
     if (!editorBbox) return null;
     const left = editorBbox.nx * pageSize.width;
