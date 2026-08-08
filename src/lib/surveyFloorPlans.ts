@@ -292,6 +292,8 @@ export interface AddedUnitPlanEntry {
   page_number: number;
   type?: FloorPlanType;
   bbox_pct?: [number, number, number, number] | null;
+  points_pct?: [number, number][] | null;
+
   name?: string | null;
 }
 
