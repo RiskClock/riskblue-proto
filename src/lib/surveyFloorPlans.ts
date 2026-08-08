@@ -323,6 +323,8 @@ export function addedUnitPlanToParsed(entry: AddedUnitPlanEntry): ParsedFloorPla
     type: entry.type || "unit_floor_plan",
     reference_id: entry.reference_id,
     xy_width_height_pct: entry.bbox_pct ?? null,
+    points_pct: asPointsPct(entry.points_pct),
+
     page_number: entry.page_number,
     floors: [],
     referenced_unit_ids: [],
