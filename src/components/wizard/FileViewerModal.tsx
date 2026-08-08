@@ -1410,13 +1410,18 @@ export const FileViewerModal = ({
       const bb = getEffectiveBbox(fp, floorPlanOverrides ?? {});
       if (!bb) continue;
       const [left, top, width, height] = bb;
+      const polyPts = getEffectivePoints(fp, floorPlanOverrides ?? {});
       const labelBase = getEffectiveLabel(fp, floorPlanOverrides ?? {});
       out.push({
         id: `fp-${fp.plan_id}`,
         bbox: [left / 100, top / 100, width / 100, height / 100],
+        points: polyPts
+          ? polyPts.map(([px, py]) => ({ nx: px / 100, ny: py / 100 }))
+          : undefined,
         coordSpace: "normalized" as const,
         page: currentPage,
         shape: "rect" as const,
+
         color: (() => {
           const t = ((floorPlanOverrides ?? {})[fp.plan_id] as any)?.type || fp.type || "unknown";
           return awpClassColor(
