@@ -42,6 +42,13 @@ import {
   floorPlanDisplayLabel,
   unitPlanRefKey,
   getEffectiveBbox,
+  getEffectivePoints,
+  isPointInsidePlan,
+  planAreaPct,
+  pointInPolygonPct,
+  envelopeOfPointsPct,
+  rectToPointsPct,
+
   getEffectiveLabel,
   getEffectiveType,
 } from "@/lib/surveyFloorPlans";
