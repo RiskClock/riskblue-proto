@@ -507,16 +507,31 @@ export const OverlayLayer = ({
   const rects = useMemo(() => {
     return overlays
       .filter((o) => o.shape === "rect")
-      .map((o) => ({
-        id: o.id,
-        x: o.rect.px?.x ?? o.rect.nx * pageSize.width,
-        y: o.rect.px?.y ?? o.rect.ny * pageSize.height,
-        w: Math.max(1, o.rect.px?.w ?? o.rect.nw * pageSize.width),
-        h: Math.max(1, o.rect.px?.h ?? o.rect.nh * pageSize.height),
-        color: o.color ?? defaultColor,
-        label: o.label,
-      }));
+      .map((o) => {
+        const x = o.rect.px?.x ?? o.rect.nx * pageSize.width;
+        const y = o.rect.px?.y ?? o.rect.ny * pageSize.height;
+        // Polygon points are absolute normalized page coords; convert to px
+        // and rebase onto the box origin so they share the wrapper's offset.
+        const pts =
+          o.rect.points && o.rect.points.length >= 3
+            ? o.rect.points.map((p) => ({
+                x: p.nx * pageSize.width - x,
+                y: p.ny * pageSize.height - y,
+              }))
+            : undefined;
+        return {
+          id: o.id,
+          x,
+          y,
+          w: Math.max(1, o.rect.px?.w ?? o.rect.nw * pageSize.width),
+          h: Math.max(1, o.rect.px?.h ?? o.rect.nh * pageSize.height),
+          color: o.color ?? defaultColor,
+          label: o.label,
+          pts,
+        };
+      });
   }, [overlays, pageSize.width, pageSize.height, defaultColor]);
+
 
 
   const fontPx = LABEL_FONT_PX * exportScale;
