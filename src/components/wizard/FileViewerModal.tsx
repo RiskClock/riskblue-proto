@@ -612,6 +612,17 @@ export const FileViewerModal = ({
     setEditingPlan(null);
   }, [onSaveFloorPlanOverride]);
 
+  // Toggle the shape being edited between a plain rectangle and an editable
+  // polygon. Converting seeds the polygon from the current envelope; resetting
+  // drops the points and keeps the envelope as the rectangle.
+  const toggleEditingPlanShape = useCallback(() => {
+    setEditingPlan((prev) => {
+      if (!prev) return prev;
+      if (prev.points) return { ...prev, points: null };
+      return { ...prev, points: rectToPointsPct(prev.bbox) };
+    });
+  }, []);
+
   const enterPlanEdit = useCallback(
     async (fp: ParsedFloorPlan) => {
       // If another row is being edited, auto-save it first.
@@ -1682,6 +1693,7 @@ export const FileViewerModal = ({
                     editingPlan={editingPlan}
                     onEnterEdit={viewingMode ? undefined : enterPlanEdit}
                     onCancelEdit={cancelPlanEdit}
+                    onToggleEditingShape={toggleEditingPlanShape}
                     onSaveEdit={savePlanEdit}
                     onEditingNameChange={(name) =>
                       setEditingPlan((p) => (p ? { ...p, name } : p))
@@ -2183,6 +2195,7 @@ const DetectionsPanel = ({
 interface EditingPlanShape {
   planId: string;
   bbox: [number, number, number, number];
+  points?: [number, number][] | null;
   name: string;
   type: string;
   origBbox: [number, number, number, number];
@@ -2233,6 +2246,8 @@ interface FloorPlansPanelProps {
   onSaveEdit?: () => void | Promise<void>;
   onEditingNameChange?: (name: string) => void;
   onEditingTypeChange?: (type: string) => void;
+  /** Switch the edited shape between a rectangle and an editable polygon. */
+  onToggleEditingShape?: () => void;
   onRequestDelete?: (planId: string, label: string) => void;
   onAddPlan?: () => void | Promise<void>;
   /** Read-only viewing mode: only unit/detail attachment stays enabled. */
@@ -2257,6 +2272,7 @@ const FloorPlansPanel = ({
   editingPlan,
   onEnterEdit,
   onCancelEdit,
+  onToggleEditingShape,
   onSaveEdit,
   onEditingNameChange,
   onEditingTypeChange,
@@ -2505,6 +2521,22 @@ const FloorPlansPanel = ({
                       >
                         Cancel
                       </Button>
+                      {onToggleEditingShape && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-2 text-[11px] ml-auto"
+                          onClick={() => onToggleEditingShape()}
+                          title={
+                            editingPlan?.points
+                              ? "Snap the shape back to a plain rectangle"
+                              : "Drag vertices, and click edge dots to add points"
+                          }
+                        >
+                          {editingPlan?.points ? "Reset to rectangle" : "Irregular shape"}
+                        </Button>
+                      )}
                     </>
                   ) : (
                     <Button
