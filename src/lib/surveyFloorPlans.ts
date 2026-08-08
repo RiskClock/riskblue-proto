@@ -360,6 +360,55 @@ export function getEffectiveBbox(
   return fp.xy_width_height_pct;
 }
 
+/**
+ * Effective irregular outline for a plan, in page percentages. Returns null
+ * when the plan is still a plain rectangle. Overrides win over Scout output.
+ */
+export function getEffectivePoints(
+  fp: ParsedFloorPlan,
+  overrides: Record<string, any> | null | undefined,
+): [number, number][] | null {
+  const ovr = overrides?.[fp.plan_id];
+  if (ovr && Object.prototype.hasOwnProperty.call(ovr, "points_pct")) {
+    // An explicit null in the override means "reverted to a rectangle".
+    return asPointsPct(ovr.points_pct);
+  }
+  return asPointsPct(fp.points_pct);
+}
+
+/**
+ * Containment test for a plan using its polygon when present, otherwise its
+ * rectangle. `nx`/`ny` are normalized 0..1 page coordinates.
+ */
+export function isPointInsidePlan(
+  fp: ParsedFloorPlan,
+  overrides: Record<string, any> | null | undefined,
+  nx: number,
+  ny: number,
+): boolean {
+  const x = nx * 100;
+  const y = ny * 100;
+  const pts = getEffectivePoints(fp, overrides);
+  if (pts) return pointInPolygonPct(x, y, pts);
+  const bb = getEffectiveBbox(fp, overrides);
+  if (!bb) return false;
+  const [bx, by, bw, bh] = bb;
+  return x >= bx && x <= bx + bw && y >= by && y <= by + bh;
+}
+
+/** Area (pct^2) used to prefer the most specific plan when several contain a point. */
+export function planAreaPct(
+  fp: ParsedFloorPlan,
+  overrides: Record<string, any> | null | undefined,
+): number {
+  const pts = getEffectivePoints(fp, overrides);
+  if (pts) return polygonAreaPct(pts);
+  const bb = getEffectiveBbox(fp, overrides);
+  if (!bb) return Infinity;
+  return bb[2] * bb[3];
+}
+
+
 export function getEffectiveLabel(
   fp: ParsedFloorPlan,
   overrides: Record<string, any> | null | undefined,
