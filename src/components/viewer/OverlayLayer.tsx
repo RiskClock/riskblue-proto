@@ -167,7 +167,18 @@ interface CircleInfo {
 // re-render; the rest are bailed out by `React.memo`'s shallow-equal check.
 
 interface RectOverlayProps {
-  r: { id: string; x: number; y: number; w: number; h: number; color: string; label?: string };
+  r: {
+    id: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    color: string;
+    label?: string;
+    /** Polygon outline in page px, relative to the box origin (x, y). */
+    pts?: { x: number; y: number }[];
+  };
+
   hovered: boolean;
   exportScale: number;
   /**
