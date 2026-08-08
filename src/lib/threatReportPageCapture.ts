@@ -208,6 +208,46 @@ export async function rasterizeViewerSurface(
     ctx.restore();
   });
 
+  // Irregular polygon bboxes. Points are in the SVG's local user space, so
+  // map each one through the live screen CTM before converting to canvas.
+  const polys = surfaceEl.querySelectorAll<SVGPolygonElement>(
+    '[data-export-kind="polygon"]',
+  );
+  polys.forEach((poly) => {
+    const raw = poly.getAttribute("data-points") || poly.getAttribute("points") || "";
+    const pts = raw
+      .trim()
+      .split(/\s+/)
+      .map((pair) => pair.split(",").map(Number))
+      .filter((p) => p.length === 2 && p.every((n) => Number.isFinite(n)));
+    if (pts.length < 3) return;
+    const svg = poly.ownerSVGElement;
+    const ctm = svg?.getScreenCTM();
+    if (!svg || !ctm) return;
+    const color = poly.getAttribute("data-color") || "#dc2626";
+    const borderPx = Number(poly.getAttribute("data-border-px") || "2") * outScale;
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = borderPx;
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    pts.forEach(([px, py], i) => {
+      const sp = svg.createSVGPoint();
+      sp.x = px;
+      sp.y = py;
+      const screen = sp.matrixTransform(ctm);
+      const local = toLocal(screen.x, screen.y);
+      if (i === 0) ctx.moveTo(local.x, local.y);
+      else ctx.lineTo(local.x, local.y);
+    });
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  });
+
+
+
 
   // Labels (pill + text) — draw fully opaque on an offscreen canvas, then
   // composite at the configured opacity to match CSS group-opacity.
