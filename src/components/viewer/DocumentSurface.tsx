@@ -93,6 +93,8 @@ export const DocumentSurface = ({
   onRenderedSizeChange,
   editorBbox,
   onEditorBboxChange,
+  editorPoints,
+  onEditorPointsChange,
   editorColor,
   rotation = 0,
   syncPlacement,
@@ -101,6 +103,10 @@ export const DocumentSurface = ({
   const downRef = useRef<{ x: number; y: number } | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const editing = !!editorBbox;
+  const polyPoints =
+    editorPoints && editorPoints.length >= 3 ? editorPoints : null;
+  const [selectedVertex, setSelectedVertex] = useState<number | null>(null);
+
   const style: CSSProperties = {
     width: pageSize.width,
     height: pageSize.height,
