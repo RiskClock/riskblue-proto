@@ -72,6 +72,12 @@ export interface OverlayInput {
    * region indicators placed inside a level-plan bbox.
    */
   variant?: "dot";
+  /**
+   * Optional irregular polygon outline in normalized (0..1) page space. Only
+   * meaningful for `shape: "rect"` overlays; `bbox` should carry the envelope.
+   */
+  points?: NormalizedPoint[];
+
 }
 
 export interface NormalizedOverlay {
