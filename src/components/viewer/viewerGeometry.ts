@@ -32,6 +32,11 @@ export type BBoxArray =
   | [number, number, number, number]
   | number[];
 
+export interface NormalizedPoint {
+  nx: number; // 0..1
+  ny: number; // 0..1
+}
+
 export interface NormalizedRect {
   nx: number; // 0..1
   ny: number; // 0..1
@@ -39,7 +44,14 @@ export interface NormalizedRect {
   nh: number; // 0..1
   /** Original rendered-page CSS pixel rect, when the caller supplied one. */
   px?: { x: number; y: number; w: number; h: number };
+  /**
+   * Optional irregular polygon outline (0..1 normalized). When present with
+   * >= 3 points the shape is rendered as a polygon and the rect fields act as
+   * its bounding envelope.
+   */
+  points?: NormalizedPoint[];
 }
+
 
 export interface OverlayInput {
   id: string;
