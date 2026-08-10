@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Plus, Trash2, FileText } from "lucide-react";
+import { Loader2, Plus, Trash2, FileText, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { toStorageSafeFileName } from "@/lib/utils";
@@ -47,6 +47,12 @@ interface Props {
   files: ManageFilesRow[];
   canManage: boolean;
   onChanged: () => void;
+  /**
+   * Opens the drawing download flow (with/without annotations & bounding
+   * boxes). Called with a single file id from a row action, or `null` for
+   * "download all".
+   */
+  onDownload?: (fileIds: string[] | null) => void;
 }
 
 const ACCEPTED_TYPES = ".pdf,.png,.jpg,.jpeg,.dwg,.dxf";
@@ -69,6 +75,7 @@ export function ManageFilesModal({
   files,
   canManage,
   onChanged,
+  onDownload,
 }: Props) {
   const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -214,7 +221,7 @@ export function ManageFilesModal({
       <Dialog open={open} onOpenChange={(o) => !uploading && !deleting && onOpenChange(o)}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Project files</DialogTitle>
+            <DialogTitle>Project Files</DialogTitle>
             <DialogDescription>
               {files.length} file{files.length === 1 ? "" : "s"} · {totals.pages} page
               {totals.pages === 1 ? "" : "s"} · {formatBytes(totals.bytes)}
@@ -229,13 +236,13 @@ export function ManageFilesModal({
                   <TableHead className="w-20 text-right">Pages</TableHead>
                   <TableHead className="w-24 text-right">Size</TableHead>
                   <TableHead className="w-32">Source</TableHead>
-                  {canManage && <TableHead className="w-12" />}
+                  <TableHead className={canManage ? "w-20" : "w-12"} />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {files.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={canManage ? 5 : 4} className="text-center text-sm text-muted-foreground py-8">
+                    <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-8">
                       No files in this project yet.
                     </TableCell>
                   </TableRow>
@@ -272,19 +279,33 @@ export function ManageFilesModal({
                                     : f.source_type || "-"}
                         </Badge>
                       </TableCell>
-                      {canManage && (
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                            onClick={() => setDeleteTarget(f)}
-                            aria-label={`Delete ${f.name}`}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </TableCell>
-                      )}
+                      <TableCell>
+                        <div className="flex items-center justify-end gap-0.5">
+                          {onDownload && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                              onClick={() => onDownload([f.id])}
+                              aria-label={`Download ${f.name}`}
+                              title="Download drawing"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {canManage && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                              onClick={() => setDeleteTarget(f)}
+                              aria-label={`Delete ${f.name}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -321,6 +342,17 @@ export function ManageFilesModal({
                     Add files
                   </Button>
                 </>
+              )}
+              {onDownload && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onDownload(null)}
+                  disabled={uploading || files.length === 0}
+                >
+                  <Download className="h-3.5 w-3.5 mr-1.5" />
+                  Download all
+                </Button>
               )}
               {uploadProgress && (
                 <span className="text-xs text-muted-foreground">
