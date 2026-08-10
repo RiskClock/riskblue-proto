@@ -2530,9 +2530,6 @@ const FloorPlansPanel = ({
                       >
                         Cancel
                       </Button>
-                      <span className="ml-auto text-[10px] text-muted-foreground">
-                        Drag points, click edge dots to add, click a point to remove
-                      </span>
 
                     </>
                   ) : (
