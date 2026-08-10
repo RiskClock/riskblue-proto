@@ -4108,7 +4108,7 @@ const isChildPlanType = (t: string) =>
 
         <main className="flex-1 min-h-0 overflow-hidden flex flex-col">
           {/* Docked toolbar: Risk Agents row + agent status cards */}
-          <div className="shrink-0 border-b bg-background max-h-[45vh] overflow-auto">
+          <div className="shrink-0 bg-background max-h-[45vh] overflow-auto">
           <div className="container mx-auto px-6 pt-4 pb-3 space-y-4">
 
             {/* Action toolbar - the Agents row lives further below in the

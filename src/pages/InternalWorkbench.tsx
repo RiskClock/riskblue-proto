@@ -603,9 +603,9 @@ export default function InternalWorkbench() {
         ) : !projects || projects.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">No projects yet.</div>
         ) : (
-          <div className="bg-card rounded-lg border overflow-hidden">
+          <div className="bg-card rounded-lg border">
             <Table>
-              <TableHeader className="sticky top-0 z-10 bg-card">
+              <TableHeader className="sticky top-0 z-10 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))]">
                 <TableRow>
                   <TableHead
                     className="cursor-pointer select-none"
@@ -632,7 +632,7 @@ export default function InternalWorkbench() {
                     </TableHead>
                   )}
                   {columnPrefs.file_count && (
-                    <TableHead className="text-right cursor-pointer select-none" onClick={() => toggleSort("file_count")}>
+                    <TableHead className="text-left cursor-pointer select-none" onClick={() => toggleSort("file_count")}>
                       Files <SortIcon k="file_count" />
                     </TableHead>
                   )}
@@ -722,7 +722,7 @@ export default function InternalWorkbench() {
                         </TableCell>
                       )}
                       {columnPrefs.file_count && (
-                        <TableCell className="text-right tabular-nums">
+                        <TableCell className="text-left tabular-nums">
                           {p.file_count || 0}
                           {p.total_size_bytes ? (
                             <span className="text-muted-foreground"> ({formatBytes(p.total_size_bytes)})</span>
