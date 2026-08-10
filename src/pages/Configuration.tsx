@@ -549,6 +549,7 @@ export default function Configuration() {
         <SurveyPagePromptSection />
         <AnalyzePromptSection />
         <SpaceHierarchyPromptSection />
+        <AskWadeSection />
       </main>
 
       {/* Control Edit Modal */}
