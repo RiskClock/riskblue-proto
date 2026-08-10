@@ -583,7 +583,29 @@ export default function InternalWorkbench() {
                 )}
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-80 space-y-4">
+            <PopoverContent align="end" className="w-80 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div>
+                <Label className="text-xs uppercase text-muted-foreground">
+                  Status
+                </Label>
+                <ChecklistGroup
+                  options={WB_STATUS_OPTIONS}
+                  selected={filterWBStatuses}
+                  onChange={setFilterWBStatuses}
+                  emptyLabel="No statuses"
+                />
+              </div>
+              <div>
+                <Label className="text-xs uppercase text-muted-foreground">
+                  Company
+                </Label>
+                <ChecklistGroup
+                  options={companyOptions}
+                  selected={filterCompanies}
+                  onChange={setFilterCompanies}
+                  emptyLabel="No companies"
+                />
+              </div>
               <div>
                 <Label className="text-xs uppercase text-muted-foreground">
                   Created By
@@ -612,6 +634,8 @@ export default function InternalWorkbench() {
               setFilterCreators([]);
               setFilterCreatorTypes([]);
               setFilterStatuses([]);
+              setFilterWBStatuses([]);
+              setFilterCompanies([]);
             }}
             disabled={!search && filterCount === 0}
           >
