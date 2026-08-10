@@ -346,6 +346,16 @@ export default function InternalWorkbench() {
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [projects]);
 
+  const companyOptions = useMemo(() => {
+    const seen = new Set<string>();
+    for (const p of projects || []) {
+      if (p.company) seen.add(p.company);
+    }
+    return Array.from(seen)
+      .map((c) => ({ value: c, label: c }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [projects]);
+
   const filteredSorted = useMemo(() => {
     let rows = projects || [];
     const q = search.trim().toLowerCase();
@@ -367,6 +377,14 @@ export default function InternalWorkbench() {
     }
     if (filterStatuses.length > 0) {
       rows = rows.filter((p) => p.status && filterStatuses.includes(p.status));
+    }
+    if (filterWBStatuses.length > 0) {
+      rows = rows.filter((p) =>
+        filterWBStatuses.includes(p.workbench_status || "processing"),
+      );
+    }
+    if (filterCompanies.length > 0) {
+      rows = rows.filter((p) => p.company && filterCompanies.includes(p.company));
     }
     const out = rows.slice();
     out.sort((a, b) => {
