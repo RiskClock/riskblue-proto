@@ -393,7 +393,31 @@ export const DocumentSurface = ({
             style={{ vectorEffect: "non-scaling-stroke", strokeWidth: strokePxPage, pointerEvents: "auto", cursor: "move" }}
             onPointerDown={(e) => startPolygonDrag(e, null)}
           />
+          {/* Edge hit lines - drag to move the whole edge. */}
+          {px.map((p, i) => {
+            const b = px[(i + 1) % px.length];
+            const vertical =
+              Math.abs(b.x - p.x) < Math.abs(b.y - p.y);
+            return (
+              <line
+                key={`edge-${i}`}
+                x1={p.x}
+                y1={p.y}
+                x2={b.x}
+                y2={b.y}
+                stroke="transparent"
+                strokeWidth={12 / s}
+                strokeLinecap="butt"
+                style={{
+                  pointerEvents: "stroke",
+                  cursor: vertical ? "ew-resize" : "ns-resize",
+                }}
+                onPointerDown={(e) => startEdgeDrag(e, i)}
+              />
+            );
+          })}
         </svg>
+
 
         {/* Midpoint ghost handles - click/drag to split the edge. */}
         {px.map((p, i) => {
