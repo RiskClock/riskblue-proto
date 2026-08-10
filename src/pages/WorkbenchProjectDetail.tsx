@@ -4861,33 +4861,18 @@ const isChildPlanType = (t: string) =>
                               <TooltipTrigger asChild>
                                 <button
                                   type="button"
-                                  onClick={() => setBulkDownloadOpen(true)}
-                                  disabled={pageInfoRows.length === 0}
-                                  className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                  aria-label="Download drawings"
-                                >
-                                  <Download className="h-3.5 w-3.5" />
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent side="bottom">
-                                Download drawings (PDF)
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  type="button"
                                   onClick={() => setManageFilesOpen(true)}
                                   className="text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50"
-                                  aria-label="Manage files"
+                                  aria-label="Project files"
                                 >
                                   <FolderOpen className="h-3.5 w-3.5" />
                                 </button>
                               </TooltipTrigger>
                               <TooltipContent side="bottom">
-                                Manage files
+                                Project Files
                               </TooltipContent>
                             </Tooltip>
+
                           </div>
                         </TableHead>
                         {enabledCols.map((name) => {
