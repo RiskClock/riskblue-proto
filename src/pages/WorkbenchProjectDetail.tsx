@@ -6612,6 +6612,7 @@ function InstancesReportModal({
   const [loading, setLoading] = useState(false);
   const [instances, setInstances] = useState<any[]>([]);
   const [selected, setSelected] = useState<string>("__overview__");
+  const [wadeOpen, setWadeOpen] = useState(false);
   
 
   useEffect(() => {
