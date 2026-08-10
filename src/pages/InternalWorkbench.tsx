@@ -559,7 +559,7 @@ export default function InternalWorkbench() {
         infoContent={<p>All projects across every user. Internal access only.</p>}
       />
       <main className="flex-1 min-h-0 overflow-hidden flex flex-col">
-        <div className="shrink-0 border-b bg-background">
+        <div className="shrink-0 bg-background">
         <div className="container mx-auto px-6 py-4 flex flex-wrap items-center justify-end gap-3">
           <div className="relative flex-1 min-w-[220px] max-w-sm">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -658,8 +658,8 @@ export default function InternalWorkbench() {
         ) : !projects || projects.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">No projects yet.</div>
         ) : (
-          <div className="bg-card rounded-lg border min-h-0 max-h-full overflow-auto">
-            <Table className="[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-card [&_thead_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
+          <div className="bg-card rounded-lg border min-h-0 max-h-full overflow-auto [&>div]:overflow-visible">
+            <Table className="[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-20 [&_thead_th]:bg-card [&_thead_th]:shadow-[inset_0_1px_0_hsl(var(--border)),inset_0_-1px_0_hsl(var(--border))]">
               <TableHeader>
                 <TableRow>
                   <TableHead
