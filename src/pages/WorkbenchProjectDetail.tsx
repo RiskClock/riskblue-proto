@@ -8203,6 +8203,83 @@ function InstancesReportModal({
     }
   }
 
+  // Compact JSON snapshot of everything shown in this report - detections,
+  // spaces, floor-plan bboxes and the Spatial Architect hierarchy - handed to
+  // the Ask Wade assistant as grounding context.
+  const buildWadeContext = useCallback(() => {
+    const detections = expanded.map((r) => ({
+      id: r.annotationBaseId,
+      class: displayClassName(r.awpClassName),
+      category: r.category,
+      subtype: r.pipeType || null,
+      diameter: r.pipeDiameter || null,
+      level: r.spaceName || "Unassigned",
+      unit: r.unitName || null,
+      sheet: fileNameById.get(r.fileId) || r.fileId,
+      page: r.pageIndex + 1,
+    }));
+
+    const countsByClass: Record<string, number> = {};
+    for (const d of detections) countsByClass[d.class] = (countsByClass[d.class] || 0) + 1;
+
+    const countsByLevel: Record<string, number> = {};
+    for (const d of detections) countsByLevel[d.level] = (countsByLevel[d.level] || 0) + 1;
+
+    const planPages: any[] = [];
+    for (const g of fileGroups) {
+      for (const sh of g.sheets) {
+        const key = `${g.file.name}::${sh.page_index}`;
+        const levels = pageLevelPlansMap.get(key) || [];
+        const units = pageUnitPlansMap.get(key) || [];
+        if (levels.length === 0 && units.length === 0) continue;
+        planPages.push({
+          sheet: g.file.name,
+          page: (sh.page_index ?? 0) + 1,
+          levelPlans: levels.map((l) => ({ levels: l.levels, planType: l.planType || "level_floor_plan" })),
+          unitPlans: units.map((u) => ({
+            unit: u.unitLabel,
+            levels: u.levels,
+            planType: u.planType || "unit_floor_plan",
+          })),
+        });
+      }
+    }
+
+    const hp: any = (spaceHierarchyPayload as any)?.parsed;
+    const hierarchy = (hp?.physical_spaces || hp?.spatial_records || []).map((s: any) => ({
+      name: s?.standardized_space_name,
+      category: s?.space_category || null,
+      index: s?.space_index ?? null,
+      appliesToLevels: s?.applies_to_levels || [],
+    }));
+
+    return {
+      project: { name: projectName, id: projectId },
+      enabledClasses: (enabledClassNames || []).map((n) => displayClassName(n)),
+      reportSpaces: spaceList.map((s) => (s === "__unassigned__" ? "Unassigned" : s)),
+      totals: {
+        detections: detections.length,
+        byClass: countsByClass,
+        byLevel: countsByLevel,
+      },
+      spatialHierarchy: hierarchy,
+      floorPlanPages: planPages,
+      detections,
+    };
+  }, [
+    expanded,
+    displayClassName,
+    fileNameById,
+    fileGroups,
+    pageLevelPlansMap,
+    pageUnitPlansMap,
+    spaceHierarchyPayload,
+    projectName,
+    projectId,
+    enabledClassNames,
+    spaceList,
+  ]);
+
   const renderRight = () => {
     if (loading) {
       return (
