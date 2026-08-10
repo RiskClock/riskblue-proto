@@ -258,34 +258,28 @@ export const DocumentSurface = ({
           if (minDx <= minDy) nx = cand[dxs.indexOf(minDx)].nx;
           else ny = cand[dys.indexOf(minDy)].ny;
         } else {
-          // Auto-snap the corner to a true right angle when it is already
-          // within 5 degrees of one. Work in page pixels so the aspect
+          // Snap each adjacent edge to true horizontal / vertical when it is
+          // within 5 degrees of an axis. Work in page pixels so the aspect
           // ratio of the page doesn't distort the angle.
-          const W = pageSize.width;
-          const H = pageSize.height;
-          const px = nx * W, py = ny * H;
-          const ax = prev.nx * W - px, ay = prev.ny * H - py;
-          const bx = nextPt.nx * W - px, by = nextPt.ny * H - py;
-          const la = Math.hypot(ax, ay);
-          const lb = Math.hypot(bx, by);
-          if (la > 1e-6 && lb > 1e-6) {
-            const cos = (ax * bx + ay * by) / (la * lb);
-            const angle = (Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI;
-            if (Math.abs(angle - 90) <= 5) {
-              // Keep the edge to `prev` as-is and move the vertex so the
-              // edge to `next` becomes perpendicular to it: project `next`
-              // onto the line through `prev` in the direction of the corner.
-              const ux = -ax / la, uy = -ay / la; // prev -> corner unit vector
-              const pvx = nextPt.nx * W - prev.nx * W;
-              const pvy = nextPt.ny * H - prev.ny * H;
-              const t = pvx * ux + pvy * uy;
-              const sx = prev.nx * W + ux * t;
-              const sy = prev.ny * H + uy * t;
-              nx = clamp01(sx / W);
-              ny = clamp01(sy / H);
-            }
+          const W = pageSize.width || 1;
+          const H = pageSize.height || 1;
+          const TOL = 5;
+          let bestH: { dev: number; ny: number } | null = null;
+          let bestV: { dev: number; nx: number } | null = null;
+          for (const n of [prev, nextPt]) {
+            const dx = (n.nx - nx) * W;
+            const dy = (n.ny - ny) * H;
+            if (Math.hypot(dx, dy) < 1e-6) continue;
+            const ang = Math.abs((Math.atan2(dy, dx) * 180) / Math.PI); // 0..180
+            const devH = Math.min(ang, 180 - ang);
+            const devV = Math.abs(ang - 90);
+            if (devH <= TOL && (!bestH || devH < bestH.dev)) bestH = { dev: devH, ny: n.ny };
+            if (devV <= TOL && (!bestV || devV < bestV.dev)) bestV = { dev: devV, nx: n.nx };
           }
+          if (bestH) ny = clamp01(bestH.ny);
+          if (bestV) nx = clamp01(bestV.nx);
         }
+
         next = start.map((p, i) => (i === index ? { nx, ny } : p));
 
       }
