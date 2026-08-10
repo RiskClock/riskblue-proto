@@ -287,14 +287,15 @@ const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewSca
           data-export-kind="label"
           data-color={r.color}
           data-text-color={textColor}
-          data-x={r.x}
-          data-y={r.y}
+          data-x={r.x + (r.labelAnchor?.x ?? 0)}
+          data-y={r.y + (r.labelAnchor?.y ?? 0)}
           data-font-px={fontCss}
           data-opacity={1}
           className="absolute font-bold pointer-events-none"
           style={{
-            left: 0,
-            top: 0,
+            left: r.labelAnchor?.x ?? 0,
+            top: r.labelAnchor?.y ?? 0,
+
             height: labelHCss,
             lineHeight: `${fontCss * 1.4}px`,
             fontSize: fontCss,
