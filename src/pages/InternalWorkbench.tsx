@@ -23,6 +23,9 @@ import {
   ArrowUpDown,
   Filter,
   Loader2,
+  Plus,
+  RotateCcw,
+  Search,
   MoreHorizontal,
   ShieldAlert,
   Settings2,
@@ -51,6 +54,7 @@ import {
 } from "@/components/ui/tooltip";
 import { format } from "date-fns";
 import { getUserFriendlyError } from "@/lib/errorHandling";
+import { CreateProjectModal } from "@/components/CreateProjectModal";
 
 interface WorkbenchProject {
   id: string;
@@ -139,8 +143,7 @@ type SortKey =
   | "creator"
   | "company"
   | "created_at"
-  | "file_count"
-  | "total_size_bytes";
+  | "file_count";
 type SortDir = "asc" | "desc";
 
 type WBColumnId =
@@ -148,7 +151,6 @@ type WBColumnId =
   | "company"
   | "created_at"
   | "file_count"
-  | "total_size_bytes"
   | "workbench_status";
 const WB_ALL_COLUMNS: { id: WBColumnId; label: string }[] = [
   { id: "workbench_status", label: "Status" },
@@ -156,12 +158,11 @@ const WB_ALL_COLUMNS: { id: WBColumnId; label: string }[] = [
   { id: "company", label: "Company" },
   { id: "created_at", label: "Created On" },
   { id: "file_count", label: "Files" },
-  { id: "total_size_bytes", label: "Total Size" },
 ];
 const WB_COLUMN_PREFS_KEY = "workbench-column-prefs-v2";
 const loadWBColumnPrefs = (): Record<WBColumnId, boolean> => {
   const defaults: Record<WBColumnId, boolean> = {
-    creator: true, company: true, created_at: true, file_count: true, total_size_bytes: true, workbench_status: true,
+    creator: true, company: true, created_at: true, file_count: true, workbench_status: true,
   };
   try {
     const raw = localStorage.getItem(WB_COLUMN_PREFS_KEY);
@@ -207,6 +208,8 @@ export default function InternalWorkbench() {
     saved?.creatorTypes ?? [],
   );
   const [filterStatuses, setFilterStatuses] = useState<string[]>(saved?.statuses ?? []);
+  const [search, setSearch] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
   const [columnPrefs, setColumnPrefs] = useState<Record<WBColumnId, boolean>>(() => loadWBColumnPrefs());
   useEffect(() => {
     try { localStorage.setItem(WB_COLUMN_PREFS_KEY, JSON.stringify(columnPrefs)); } catch {}
@@ -334,6 +337,13 @@ export default function InternalWorkbench() {
 
   const filteredSorted = useMemo(() => {
     let rows = projects || [];
+    const q = search.trim().toLowerCase();
+    if (q) {
+      rows = rows.filter((p) =>
+        [p.name, p.creator_name, p.creator_email, p.company || ""]
+          .some((v) => (v || "").toLowerCase().includes(q)),
+      );
+    }
     if (filterCreators.length > 0) {
       rows = rows.filter((p) =>
         filterCreators.includes(p.creator_email || p.creator_name),
@@ -372,17 +382,13 @@ export default function InternalWorkbench() {
           va = a.file_count || 0;
           vb = b.file_count || 0;
           break;
-        case "total_size_bytes":
-          va = a.total_size_bytes ?? -1;
-          vb = b.total_size_bytes ?? -1;
-          break;
       }
       if (va < vb) return sortDir === "asc" ? -1 : 1;
       if (va > vb) return sortDir === "asc" ? 1 : -1;
       return 0;
     });
     return out;
-  }, [projects, filterCreators, filterCreatorTypes, filterStatuses, sortKey, sortDir]);
+  }, [projects, search, filterCreators, filterCreatorTypes, filterStatuses, sortKey, sortDir]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -390,7 +396,7 @@ export default function InternalWorkbench() {
     } else {
       setSortKey(key);
       setSortDir(
-        key === "created_at" || key === "file_count" || key === "total_size_bytes"
+        key === "created_at" || key === "file_count"
           ? "desc"
           : "asc",
       );
@@ -521,9 +527,18 @@ export default function InternalWorkbench() {
         infoTitle="About the Workbench"
         infoContent={<p>All projects across every user. Internal access only.</p>}
       />
-      <main className="container mx-auto px-6 py-8 flex-1 overflow-auto">
-        <div className="mb-6 flex items-center justify-end gap-3">
-
+      <main className="flex-1 min-h-0 overflow-hidden flex flex-col">
+        <div className="shrink-0 border-b bg-background">
+        <div className="container mx-auto px-6 py-4 flex flex-wrap items-center justify-end gap-3">
+          <div className="relative flex-1 min-w-[220px] max-w-sm">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search projects, creators, companies"
+              className="pl-8"
+            />
+          </div>
 
           <Popover>
             <PopoverTrigger asChild>
@@ -558,8 +573,29 @@ export default function InternalWorkbench() {
               </div>
             </PopoverContent>
           </Popover>
+
+          <Button
+            variant="outline"
+            onClick={() => {
+              setSearch("");
+              setFilterCreators([]);
+              setFilterCreatorTypes([]);
+              setFilterStatuses([]);
+            }}
+            disabled={!search && filterCount === 0}
+          >
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Reset
+          </Button>
+
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            New Project
+          </Button>
+        </div>
         </div>
 
+        <div className="container mx-auto px-6 py-6 flex-1 min-h-0 overflow-auto">
         {isLoading ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading projects…
@@ -569,7 +605,7 @@ export default function InternalWorkbench() {
         ) : (
           <div className="bg-card rounded-lg border overflow-hidden">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-card">
                 <TableRow>
                   <TableHead
                     className="cursor-pointer select-none"
@@ -598,11 +634,6 @@ export default function InternalWorkbench() {
                   {columnPrefs.file_count && (
                     <TableHead className="text-right cursor-pointer select-none" onClick={() => toggleSort("file_count")}>
                       Files <SortIcon k="file_count" />
-                    </TableHead>
-                  )}
-                  {columnPrefs.total_size_bytes && (
-                    <TableHead className="text-right cursor-pointer select-none" onClick={() => toggleSort("total_size_bytes")}>
-                      Total Size <SortIcon k="total_size_bytes" />
                     </TableHead>
                   )}
                   <TableHead className="text-right w-[140px]">
@@ -691,11 +722,11 @@ export default function InternalWorkbench() {
                         </TableCell>
                       )}
                       {columnPrefs.file_count && (
-                        <TableCell className="text-right tabular-nums">{p.file_count || 0}</TableCell>
-                      )}
-                      {columnPrefs.total_size_bytes && (
                         <TableCell className="text-right tabular-nums">
-                          {formatBytes(p.total_size_bytes)}
+                          {p.file_count || 0}
+                          {p.total_size_bytes ? (
+                            <span className="text-muted-foreground"> ({formatBytes(p.total_size_bytes)})</span>
+                          ) : null}
                         </TableCell>
                       )}
 
@@ -726,7 +757,17 @@ export default function InternalWorkbench() {
             </Table>
           </div>
         )}
+        </div>
       </main>
+
+      <CreateProjectModal
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={() => {
+          setCreateOpen(false);
+          refetch();
+        }}
+      />
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && closeDelete()}>
         <AlertDialogContent>
