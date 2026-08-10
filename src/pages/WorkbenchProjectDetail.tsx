@@ -8300,7 +8300,11 @@ function InstancesReportModal({
         <DialogHeader>
           <DialogTitle>Threat Report</DialogTitle>
         </DialogHeader>
-        <div className="grid grid-cols-[220px_1fr] gap-4 max-h-[70vh]">
+        <div
+          className={`grid gap-4 h-[70vh] max-h-[70vh] ${
+            wadeOpen ? "grid-cols-[220px_1fr_380px]" : "grid-cols-[220px_1fr]"
+          }`}
+        >
           <div className="border rounded-md overflow-auto">
             <button
               type="button"
