@@ -651,11 +651,16 @@ export const FileViewerModal = ({
       const state: EditingPlanState = {
         planId: fp.plan_id,
         bbox: [bb[0], bb[1], bb[2], bb[3]],
-        points: pts ? pts.map((p) => [p[0], p[1]] as [number, number]) : null,
+        // Editing is always vertex-based: a rectangle is seeded with its four
+        // corners so pivot points can be dragged / added / removed directly.
+        points: pts
+          ? pts.map((p) => [p[0], p[1]] as [number, number])
+          : rectToPointsPct([bb[0], bb[1], bb[2], bb[3]]),
         name,
         type,
         origBbox: [bb[0], bb[1], bb[2], bb[3]],
         origPoints: pts ? pts.map((p) => [p[0], p[1]] as [number, number]) : null,
+
         origName: name,
         origType: type,
       };
