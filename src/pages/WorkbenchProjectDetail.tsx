@@ -17,6 +17,7 @@ import {
   Bug,
   History,
   FolderOpen,
+  MessageSquare,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
