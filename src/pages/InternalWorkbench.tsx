@@ -417,7 +417,7 @@ export default function InternalWorkbench() {
       return 0;
     });
     return out;
-  }, [projects, search, filterCreators, filterCreatorTypes, filterStatuses, sortKey, sortDir]);
+  }, [projects, search, filterCreators, filterCreatorTypes, filterStatuses, filterWBStatuses, filterCompanies, sortKey, sortDir]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -444,7 +444,9 @@ export default function InternalWorkbench() {
   const filterCount =
     (filterCreators.length > 0 ? 1 : 0) +
     (filterCreatorTypes.length > 0 ? 1 : 0) +
-    (filterStatuses.length > 0 ? 1 : 0);
+    (filterStatuses.length > 0 ? 1 : 0) +
+    (filterWBStatuses.length > 0 ? 1 : 0) +
+    (filterCompanies.length > 0 ? 1 : 0);
 
   const handleView = (p: WorkbenchProject) => {
     navigate(`/project/${p.id}`);
