@@ -566,6 +566,8 @@ export const OverlayLayer = ({
           color: o.color ?? defaultColor,
           label: o.label,
           pts,
+          labelAnchor: pts ? polygonLabelAnchor(pts) : { x: 0, y: 0 },
+
         };
       });
   }, [overlays, pageSize.width, pageSize.height, defaultColor]);
