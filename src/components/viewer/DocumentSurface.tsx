@@ -245,11 +245,11 @@ export const DocumentSurface = ({
       } else {
         let nx = clamp01(start[index].nx + dxN);
         let ny = clamp01(start[index].ny + dyN);
+        const prev = start[(index - 1 + start.length) % start.length];
+        const nextPt = start[(index + 1) % start.length];
         // Shift snaps the vertex to a horizontal / vertical line with the
         // neighbouring vertex it is closest to aligning with.
         if (ev.shiftKey) {
-          const prev = start[(index - 1 + start.length) % start.length];
-          const nextPt = start[(index + 1) % start.length];
           const cand = [prev, nextPt];
           const dxs = cand.map((c) => Math.abs(nx - c.nx));
           const dys = cand.map((c) => Math.abs(ny - c.ny));
@@ -257,8 +257,37 @@ export const DocumentSurface = ({
           const minDy = Math.min(...dys);
           if (minDx <= minDy) nx = cand[dxs.indexOf(minDx)].nx;
           else ny = cand[dys.indexOf(minDy)].ny;
+        } else {
+          // Auto-snap the corner to a true right angle when it is already
+          // within 5 degrees of one. Work in page pixels so the aspect
+          // ratio of the page doesn't distort the angle.
+          const W = pageSize.width;
+          const H = pageSize.height;
+          const px = nx * W, py = ny * H;
+          const ax = prev.nx * W - px, ay = prev.ny * H - py;
+          const bx = nextPt.nx * W - px, by = nextPt.ny * H - py;
+          const la = Math.hypot(ax, ay);
+          const lb = Math.hypot(bx, by);
+          if (la > 1e-6 && lb > 1e-6) {
+            const cos = (ax * bx + ay * by) / (la * lb);
+            const angle = (Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI;
+            if (Math.abs(angle - 90) <= 5) {
+              // Keep the edge to `prev` as-is and move the vertex so the
+              // edge to `next` becomes perpendicular to it: project `next`
+              // onto the line through `prev` in the direction of the corner.
+              const ux = -ax / la, uy = -ay / la; // prev -> corner unit vector
+              const pvx = nextPt.nx * W - prev.nx * W;
+              const pvy = nextPt.ny * H - prev.ny * H;
+              const t = pvx * ux + pvy * uy;
+              const sx = prev.nx * W + ux * t;
+              const sy = prev.ny * H + uy * t;
+              nx = clamp01(sx / W);
+              ny = clamp01(sy / H);
+            }
+          }
         }
         next = start.map((p, i) => (i === index ? { nx, ny } : p));
+
       }
       onEditorPointsChange(next);
     };

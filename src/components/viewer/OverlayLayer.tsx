@@ -157,7 +157,42 @@ interface CircleInfo {
 // inside a Web Worker off the main thread. See overlayPlacementClient.ts
 // for the request/cancel API used below.
 
-
+/**
+ * Where a bbox label should dock. For plain rectangles that's the top-left
+ * corner. For polygons the envelope's top-left corner can sit in empty space
+ * (L-shaped / notched rooms), so we dock to the left end of the longest
+ * near-horizontal edge in the upper part of the shape instead.
+ */
+export function polygonLabelAnchor(
+  pts: { x: number; y: number }[] | undefined,
+): { x: number; y: number } {
+  if (!pts || pts.length < 3) return { x: 0, y: 0 };
+  const ys = pts.map((p) => p.y);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const height = Math.max(1, maxY - minY);
+  let best: { x: number; y: number; score: number } | null = null;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % pts.length];
+    const dx = Math.abs(b.x - a.x);
+    const dy = Math.abs(b.y - a.y);
+    if (dx < 1 || dy > dx * 0.35) continue; // not near-horizontal
+    const top = Math.min(a.y, b.y);
+    // Prefer long edges that sit close to the top of the shape.
+    const score = dx * (1 - Math.min(1, (top - minY) / height) * 0.9);
+    if (!best || score > best.score) {
+      best = { x: Math.min(a.x, b.x), y: top, score };
+    }
+  }
+  if (best) return { x: best.x, y: best.y };
+  // Fall back to the topmost vertex (leftmost if tied).
+  let top = pts[0];
+  for (const p of pts) {
+    if (p.y < top.y || (p.y === top.y && p.x < top.x)) top = p;
+  }
+  return { x: top.x, y: top.y };
+}
 
 
 // ---- Memoized child components --------------------------------------------
@@ -177,7 +212,10 @@ interface RectOverlayProps {
     label?: string;
     /** Polygon outline in page px, relative to the box origin (x, y). */
     pts?: { x: number; y: number }[];
+    /** Label dock point in page px, relative to the box origin (x, y). */
+    labelAnchor?: { x: number; y: number };
   };
+
 
   hovered: boolean;
   exportScale: number;
@@ -249,14 +287,15 @@ const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewSca
           data-export-kind="label"
           data-color={r.color}
           data-text-color={textColor}
-          data-x={r.x}
-          data-y={r.y}
+          data-x={r.x + (r.labelAnchor?.x ?? 0)}
+          data-y={r.y + (r.labelAnchor?.y ?? 0)}
           data-font-px={fontCss}
           data-opacity={1}
           className="absolute font-bold pointer-events-none"
           style={{
-            left: 0,
-            top: 0,
+            left: r.labelAnchor?.x ?? 0,
+            top: r.labelAnchor?.y ?? 0,
+
             height: labelHCss,
             lineHeight: `${fontCss * 1.4}px`,
             fontSize: fontCss,
@@ -527,6 +566,8 @@ export const OverlayLayer = ({
           color: o.color ?? defaultColor,
           label: o.label,
           pts,
+          labelAnchor: pts ? polygonLabelAnchor(pts) : { x: 0, y: 0 },
+
         };
       });
   }, [overlays, pageSize.width, pageSize.height, defaultColor]);
@@ -554,7 +595,7 @@ export const OverlayLayer = ({
   const rectLayoutKey = useMemo(
     () =>
       rects
-        .map((r) => `${r.id}:${Math.round(r.x)}:${Math.round(r.y)}:${Math.round(r.w)}:${Math.round(r.h)}:${r.label ?? ""}`)
+        .map((r) => `${r.id}:${Math.round(r.x)}:${Math.round(r.y)}:${Math.round(r.w)}:${Math.round(r.h)}:${Math.round(r.labelAnchor?.x ?? 0)}:${Math.round(r.labelAnchor?.y ?? 0)}:${r.label ?? ""}`)
         .join("|"),
     [rects],
   );
@@ -579,8 +620,9 @@ export const OverlayLayer = ({
       const w = (measuredW ?? r.label.length * charPx) + padX * 2 + 4;
       rectObstacles.push({
         id: `${r.id}__label`,
-        x: r.x,
-        y: r.y,
+        x: r.x + (r.labelAnchor?.x ?? 0),
+        y: r.y + (r.labelAnchor?.y ?? 0),
+
         w,
         h: labelH,
         color: r.color,
