@@ -595,7 +595,7 @@ export const OverlayLayer = ({
   const rectLayoutKey = useMemo(
     () =>
       rects
-        .map((r) => `${r.id}:${Math.round(r.x)}:${Math.round(r.y)}:${Math.round(r.w)}:${Math.round(r.h)}:${r.label ?? ""}`)
+        .map((r) => `${r.id}:${Math.round(r.x)}:${Math.round(r.y)}:${Math.round(r.w)}:${Math.round(r.h)}:${Math.round(r.labelAnchor?.x ?? 0)}:${Math.round(r.labelAnchor?.y ?? 0)}:${r.label ?? ""}`)
         .join("|"),
     [rects],
   );
