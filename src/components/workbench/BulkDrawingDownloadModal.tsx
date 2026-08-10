@@ -69,7 +69,13 @@ export interface BulkDrawingDownloadModalProps {
    * excluded from the export so it mirrors what the user sees on-screen.
    */
   enabledClassNames?: string[];
+  /**
+   * When provided, only these file ids start checked (used by the per-row
+   * download button in the Project Files modal).
+   */
+  initialSelectedFileIds?: string[] | null;
 }
+
 
 function isPdfFile(f: BulkFileEntry): boolean {
   const mime = (f.mimeType || "").toLowerCase();
@@ -87,6 +93,7 @@ export function BulkDrawingDownloadModal({
   extraOverlaysByFilePage,
   classPrefixByName,
   enabledClassNames,
+  initialSelectedFileIds,
 }: BulkDrawingDownloadModalProps) {
   const { toast } = useToast();
   const { logActivity } = useActivityLogger();
@@ -101,15 +108,22 @@ export function BulkDrawingDownloadModal({
   // Reset selection to "all PDFs" every time the modal opens.
   useEffect(() => {
     if (!open) return;
+    const only = initialSelectedFileIds && initialSelectedFileIds.length > 0
+      ? new Set(initialSelectedFileIds)
+      : null;
     const next = new Set<string>();
-    for (const f of files) if (isPdfFile(f) && f.storagePath) next.add(f.fileId);
+    for (const f of files) {
+      if (!isPdfFile(f) || !f.storagePath) continue;
+      if (only && !only.has(f.fileId)) continue;
+      next.add(f.fileId);
+    }
     setSelected(next);
     setProgress(null);
     // Seed page counts from what we already know.
     const seed = new Map<string, number>();
     for (const f of files) if (f.knownPageCount) seed.set(f.fileId, f.knownPageCount);
     setPageCounts(seed);
-  }, [open, files]);
+  }, [open, files, initialSelectedFileIds]);
 
   const pdfFiles = useMemo(() => files.filter(isPdfFile), [files]);
   const nonPdfFiles = useMemo(() => files.filter((f) => !isPdfFile(f)), [files]);
