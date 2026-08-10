@@ -176,6 +176,11 @@ const CREATOR_TYPE_OPTIONS = [
   { value: "external", label: "End users" },
 ];
 
+const WB_STATUS_OPTIONS = [
+  { value: "processing", label: "Processing" },
+  { value: "processed", label: "Processed" },
+];
+
 export default function InternalWorkbench() {
   const { user } = useAuth();
   const navigate = useNavigate();
