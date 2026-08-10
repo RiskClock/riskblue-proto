@@ -176,6 +176,11 @@ const CREATOR_TYPE_OPTIONS = [
   { value: "external", label: "End users" },
 ];
 
+const WB_STATUS_OPTIONS = [
+  { value: "processing", label: "Processing" },
+  { value: "processed", label: "Processed" },
+];
+
 export default function InternalWorkbench() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -196,6 +201,8 @@ export default function InternalWorkbench() {
           creators?: string[];
           statuses?: string[];
           creatorTypes?: string[];
+          wbStatuses?: string[];
+          companies?: string[];
         };
     } catch {}
     return null;
@@ -208,6 +215,8 @@ export default function InternalWorkbench() {
     saved?.creatorTypes ?? [],
   );
   const [filterStatuses, setFilterStatuses] = useState<string[]>(saved?.statuses ?? []);
+  const [filterWBStatuses, setFilterWBStatuses] = useState<string[]>(saved?.wbStatuses ?? []);
+  const [filterCompanies, setFilterCompanies] = useState<string[]>(saved?.companies ?? []);
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [columnPrefs, setColumnPrefs] = useState<Record<WBColumnId, boolean>>(() => loadWBColumnPrefs());
@@ -230,9 +239,11 @@ export default function InternalWorkbench() {
         creators: filterCreators,
         statuses: filterStatuses,
         creatorTypes: filterCreatorTypes,
+        wbStatuses: filterWBStatuses,
+        companies: filterCompanies,
       }),
     );
-  }, [filterCreators, filterStatuses, filterCreatorTypes]);
+  }, [filterCreators, filterStatuses, filterCreatorTypes, filterWBStatuses, filterCompanies]);
 
   const { data: projects, isLoading, refetch } = useQuery({
     queryKey: ["workbench-projects"],
@@ -335,6 +346,16 @@ export default function InternalWorkbench() {
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [projects]);
 
+  const companyOptions = useMemo(() => {
+    const seen = new Set<string>();
+    for (const p of projects || []) {
+      if (p.company) seen.add(p.company);
+    }
+    return Array.from(seen)
+      .map((c) => ({ value: c, label: c }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [projects]);
+
   const filteredSorted = useMemo(() => {
     let rows = projects || [];
     const q = search.trim().toLowerCase();
@@ -356,6 +377,14 @@ export default function InternalWorkbench() {
     }
     if (filterStatuses.length > 0) {
       rows = rows.filter((p) => p.status && filterStatuses.includes(p.status));
+    }
+    if (filterWBStatuses.length > 0) {
+      rows = rows.filter((p) =>
+        filterWBStatuses.includes(p.workbench_status || "processing"),
+      );
+    }
+    if (filterCompanies.length > 0) {
+      rows = rows.filter((p) => p.company && filterCompanies.includes(p.company));
     }
     const out = rows.slice();
     out.sort((a, b) => {
@@ -388,7 +417,7 @@ export default function InternalWorkbench() {
       return 0;
     });
     return out;
-  }, [projects, search, filterCreators, filterCreatorTypes, filterStatuses, sortKey, sortDir]);
+  }, [projects, search, filterCreators, filterCreatorTypes, filterStatuses, filterWBStatuses, filterCompanies, sortKey, sortDir]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -415,7 +444,9 @@ export default function InternalWorkbench() {
   const filterCount =
     (filterCreators.length > 0 ? 1 : 0) +
     (filterCreatorTypes.length > 0 ? 1 : 0) +
-    (filterStatuses.length > 0 ? 1 : 0);
+    (filterStatuses.length > 0 ? 1 : 0) +
+    (filterWBStatuses.length > 0 ? 1 : 0) +
+    (filterCompanies.length > 0 ? 1 : 0);
 
   const handleView = (p: WorkbenchProject) => {
     navigate(`/project/${p.id}`);
@@ -552,7 +583,29 @@ export default function InternalWorkbench() {
                 )}
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-80 space-y-4">
+            <PopoverContent align="end" className="w-80 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div>
+                <Label className="text-xs uppercase text-muted-foreground">
+                  Status
+                </Label>
+                <ChecklistGroup
+                  options={WB_STATUS_OPTIONS}
+                  selected={filterWBStatuses}
+                  onChange={setFilterWBStatuses}
+                  emptyLabel="No statuses"
+                />
+              </div>
+              <div>
+                <Label className="text-xs uppercase text-muted-foreground">
+                  Company
+                </Label>
+                <ChecklistGroup
+                  options={companyOptions}
+                  selected={filterCompanies}
+                  onChange={setFilterCompanies}
+                  emptyLabel="No companies"
+                />
+              </div>
               <div>
                 <Label className="text-xs uppercase text-muted-foreground">
                   Created By
@@ -581,6 +634,8 @@ export default function InternalWorkbench() {
               setFilterCreators([]);
               setFilterCreatorTypes([]);
               setFilterStatuses([]);
+              setFilterWBStatuses([]);
+              setFilterCompanies([]);
             }}
             disabled={!search && filterCount === 0}
           >
@@ -595,7 +650,7 @@ export default function InternalWorkbench() {
         </div>
         </div>
 
-        <div className="container mx-auto px-6 py-6 flex-1 min-h-0 overflow-auto">
+        <div className="container mx-auto px-6 py-6 flex-1 min-h-0 overflow-hidden flex flex-col">
         {isLoading ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading projects…
@@ -603,9 +658,9 @@ export default function InternalWorkbench() {
         ) : !projects || projects.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">No projects yet.</div>
         ) : (
-          <div className="bg-card rounded-lg border overflow-hidden">
-            <Table>
-              <TableHeader className="sticky top-0 z-10 bg-card">
+          <div className="bg-card rounded-lg border flex-1 min-h-0 overflow-auto [&>div]:h-full">
+            <Table className="[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-card [&_thead_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
+              <TableHeader>
                 <TableRow>
                   <TableHead
                     className="cursor-pointer select-none"
@@ -632,7 +687,7 @@ export default function InternalWorkbench() {
                     </TableHead>
                   )}
                   {columnPrefs.file_count && (
-                    <TableHead className="text-right cursor-pointer select-none" onClick={() => toggleSort("file_count")}>
+                    <TableHead className="text-left cursor-pointer select-none" onClick={() => toggleSort("file_count")}>
                       Files <SortIcon k="file_count" />
                     </TableHead>
                   )}
@@ -722,7 +777,7 @@ export default function InternalWorkbench() {
                         </TableCell>
                       )}
                       {columnPrefs.file_count && (
-                        <TableCell className="text-right tabular-nums">
+                        <TableCell className="text-left tabular-nums">
                           {p.file_count || 0}
                           {p.total_size_bytes ? (
                             <span className="text-muted-foreground"> ({formatBytes(p.total_size_bytes)})</span>

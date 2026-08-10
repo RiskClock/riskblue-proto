@@ -59,6 +59,15 @@ serve(async (req) => {
     const { data: authUser } = await admin.auth.admin.getUserById(project.user_id);
     const creatorEmail = authUser?.user?.email ?? "(unknown)";
 
+    // Skip notifications for projects created by internal users.
+    if (creatorEmail.toLowerCase().endsWith("@riskclock.com")) {
+      console.log("[send-project-created-email] skipped internal creator", { projectId });
+      return new Response(JSON.stringify({ success: true, skipped: "internal_creator" }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { data: profile } = await admin
       .from("profiles")
       .select("display_name")
