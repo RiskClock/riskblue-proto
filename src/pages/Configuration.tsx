@@ -1062,3 +1062,103 @@ function SpaceHierarchyPromptSection() {
     </div>
   );
 }
+
+// ---------------- Ask Wade (Threat Report assistant) ----------------
+function AskWadeSection() {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [content, setContent] = useState("");
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+
+  const loadPrompt = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("app_settings" as any)
+        .select("value, updated_at")
+        .eq("key", "ask_wade_prompt")
+        .maybeSingle();
+      if (error) throw error;
+      setContent((data as any)?.value ?? "");
+      setUpdatedAt((data as any)?.updated_at ?? null);
+    } catch (e: any) {
+      toast({ title: "Failed to load prompt", description: e.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openModal = async () => {
+    setOpen(true);
+    await loadPrompt();
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("app_settings" as any)
+        .upsert(
+          { key: "ask_wade_prompt", value: content, updated_at: new Date().toISOString() } as any,
+          { onConflict: "key" },
+        );
+      if (error) throw error;
+      toast({ title: "Prompt saved", description: "Ask Wade will use the updated prompt on the next question." });
+      setOpen(false);
+    } catch (e: any) {
+      toast({ title: "Save failed", description: e.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-8 bg-card rounded-lg border p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Ask Wade</h2>
+          <p className="text-sm text-muted-foreground">
+            Model and system prompt for the Ask Wade assistant in the Threat Report modal. The
+            project's report context is appended after the prompt.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <PromptModelPicker settingKey="ask_wade_model" defaultModel="gemini-3.5-flash" />
+          <Button variant="outline" onClick={openModal}>Edit Prompt</Button>
+        </div>
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Ask Wade Prompt</DialogTitle>
+            <DialogDescription>
+              {updatedAt
+                ? `Last updated ${format(new Date(updatedAt), "MMM d, yyyy 'at' h:mm a")}`
+                : "Leave blank to use the built-in default prompt."}
+            </DialogDescription>
+          </DialogHeader>
+          {loading ? (
+            <div className="flex items-center justify-center py-12 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading...
+            </div>
+          ) : (
+            <Textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              className="font-mono text-xs flex-1 min-h-[400px]"
+            />
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
+            <Button onClick={save} disabled={saving || loading}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
