@@ -8344,6 +8344,13 @@ function InstancesReportModal({
             })}
           </div>
           <div className="overflow-auto pr-1">{renderRight()}</div>
+          {wadeOpen && (
+            <AskWadePanel
+              projectId={projectId}
+              onClose={() => setWadeOpen(false)}
+              buildContext={buildWadeContext}
+            />
+          )}
         </div>
         <DialogFooter className="flex flex-row sm:justify-between gap-2">
           <div className="flex gap-2">
@@ -8371,6 +8378,13 @@ function InstancesReportModal({
                 Send to WMG Project
               </Button>
             )}
+            <Button
+              variant={wadeOpen ? "secondary" : "outline"}
+              onClick={() => setWadeOpen((v) => !v)}
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Ask Wade
+            </Button>
           </div>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
         </DialogFooter>
