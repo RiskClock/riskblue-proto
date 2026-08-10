@@ -194,7 +194,9 @@ interface RectOverlayProps {
 const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewScale }: RectOverlayProps) {
   const s = Math.max(0.0001, viewScale);
   const borderPxScreen = (hovered ? 3 : 2) * exportScale;
-  const borderPxPage = borderPxScreen / s;
+  // Border thickness is expressed in page units so it scales with zoom, the
+  // same way the previous CSS border did.
+  const borderPxPage = borderPxScreen;
   // Label docks to the top-left corner of the box like a header tab. It
   // shares the box's top-left origin so it visually "sits on" the border.
   const label = r.label ?? "";
@@ -206,8 +208,6 @@ const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewSca
   const textColor = readableTextOn(r.color);
   return (
     <div style={{ position: "absolute", left: r.x, top: r.y, pointerEvents: "none" }}>
-      {/* SVG border with non-scaling-stroke keeps the stroke a constant
-          number of device pixels regardless of ancestor CSS transforms. */}
       <svg
         width={r.w}
         height={r.h}
@@ -224,8 +224,7 @@ const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewSca
             stroke={withAlpha(r.color, 0.5)}
             strokeWidth={borderPxPage}
             strokeLinejoin="round"
-            vectorEffect="non-scaling-stroke"
-            style={{ vectorEffect: "non-scaling-stroke", strokeWidth: borderPxPage }}
+            style={{ strokeWidth: borderPxPage }}
           />
         ) : (
           <rect
@@ -239,10 +238,10 @@ const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewSca
             fill="none"
             stroke={withAlpha(r.color, 0.5)}
             strokeWidth={borderPxPage}
-            vectorEffect="non-scaling-stroke"
-            style={{ vectorEffect: "non-scaling-stroke", strokeWidth: borderPxPage }}
+            style={{ strokeWidth: borderPxPage }}
           />
         )}
+
 
       </svg>
       {label ? (
