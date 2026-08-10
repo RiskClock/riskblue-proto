@@ -4841,9 +4841,12 @@ const isChildPlanType = (t: string) =>
                 </DialogContent>
               </Dialog>
             </div>
+          </div>
 
+          {/* Scrollable body */}
+          <div className="container mx-auto px-6 pb-6 flex-1 min-h-0 overflow-auto">
+            <div className="space-y-3">
 
-            <div className="mt-6 space-y-3">
 
               {pageInfoRows.length === 0 ? (
                 <div className="text-sm text-muted-foreground text-center py-6">
