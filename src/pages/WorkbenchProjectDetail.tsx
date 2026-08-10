@@ -446,6 +446,9 @@ export default function WorkbenchProjectDetail() {
   const reportInputRef = useRef<HTMLInputElement>(null);
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [bulkDownloadOpen, setBulkDownloadOpen] = useState(false);
+  // File ids pre-checked when the download flow is opened from a single row in
+  // the Project Files modal; null means "all files".
+  const [bulkPreselect, setBulkPreselect] = useState<string[] | null>(null);
 
   // Page Info table (lightweight: just enumerate pages per file, no splitting)
   type PageInfoRow = {
@@ -6091,6 +6094,7 @@ const isChildPlanType = (t: string) =>
           spaceHierarchyPayload={spaceHierarchyPayload}
           projectName={project?.name || "Project"}
           enabledClassNames={enabledCols}
+          initialSelectedFileIds={bulkPreselect}
           consolidations={consolidations || []}
           aliasMap={aliasMap}
           aliasPrefixMap={aliasPrefixMap}
@@ -6113,6 +6117,10 @@ const isChildPlanType = (t: string) =>
           canBuild={canManage}
           onSaved={() => {
             queryClient.invalidateQueries({ queryKey: ["workbench-analysis-request", projectId] });
+          }}
+          onDownload={(fileIds) => {
+            setBulkPreselect(fileIds);
+            setBulkDownloadOpen(true);
           }}
         />
 
