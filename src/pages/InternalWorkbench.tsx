@@ -201,6 +201,8 @@ export default function InternalWorkbench() {
           creators?: string[];
           statuses?: string[];
           creatorTypes?: string[];
+          wbStatuses?: string[];
+          companies?: string[];
         };
     } catch {}
     return null;
@@ -213,6 +215,8 @@ export default function InternalWorkbench() {
     saved?.creatorTypes ?? [],
   );
   const [filterStatuses, setFilterStatuses] = useState<string[]>(saved?.statuses ?? []);
+  const [filterWBStatuses, setFilterWBStatuses] = useState<string[]>(saved?.wbStatuses ?? []);
+  const [filterCompanies, setFilterCompanies] = useState<string[]>(saved?.companies ?? []);
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [columnPrefs, setColumnPrefs] = useState<Record<WBColumnId, boolean>>(() => loadWBColumnPrefs());
@@ -235,9 +239,11 @@ export default function InternalWorkbench() {
         creators: filterCreators,
         statuses: filterStatuses,
         creatorTypes: filterCreatorTypes,
+        wbStatuses: filterWBStatuses,
+        companies: filterCompanies,
       }),
     );
-  }, [filterCreators, filterStatuses, filterCreatorTypes]);
+  }, [filterCreators, filterStatuses, filterCreatorTypes, filterWBStatuses, filterCompanies]);
 
   const { data: projects, isLoading, refetch } = useQuery({
     queryKey: ["workbench-projects"],
