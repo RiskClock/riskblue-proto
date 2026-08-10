@@ -258,27 +258,22 @@ export const DocumentSurface = ({
           if (minDx <= minDy) nx = cand[dxs.indexOf(minDx)].nx;
           else ny = cand[dys.indexOf(minDy)].ny;
         } else {
-          // Snap each adjacent edge to true horizontal / vertical when it is
-          // within 5 degrees of an axis. Work in page pixels so the aspect
-          // ratio of the page doesn't distort the angle.
-          const W = pageSize.width || 1;
-          const H = pageSize.height || 1;
-          const TOL = 5;
+          // Snap each adjacent edge to true horizontal / vertical when the
+          // dragged vertex is within 5 on-screen pixels of the neighbour on
+          // that axis, so the snap feels the same at any zoom level.
+          const SNAP_PX = 5;
           let bestH: { dev: number; ny: number } | null = null;
           let bestV: { dev: number; nx: number } | null = null;
           for (const n of [prev, nextPt]) {
-            const dx = (n.nx - nx) * W;
-            const dy = (n.ny - ny) * H;
-            if (Math.hypot(dx, dy) < 1e-6) continue;
-            const ang = Math.abs((Math.atan2(dy, dx) * 180) / Math.PI); // 0..180
-            const devH = Math.min(ang, 180 - ang);
-            const devV = Math.abs(ang - 90);
-            if (devH <= TOL && (!bestH || devH < bestH.dev)) bestH = { dev: devH, ny: n.ny };
-            if (devV <= TOL && (!bestV || devV < bestV.dev)) bestV = { dev: devV, nx: n.nx };
+            const dyPx = Math.abs(n.ny - ny) * surfRect.height;
+            const dxPx = Math.abs(n.nx - nx) * surfRect.width;
+            if (dyPx <= SNAP_PX && (!bestH || dyPx < bestH.dev)) bestH = { dev: dyPx, ny: n.ny };
+            if (dxPx <= SNAP_PX && (!bestV || dxPx < bestV.dev)) bestV = { dev: dxPx, nx: n.nx };
           }
           if (bestH) ny = clamp01(bestH.ny);
           if (bestV) nx = clamp01(bestV.nx);
         }
+
 
         next = start.map((p, i) => (i === index ? { nx, ny } : p));
 
