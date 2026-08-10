@@ -301,6 +301,46 @@ export const DocumentSurface = ({
     setSelectedVertex(index + 1);
   };
 
+  /** Drag a whole edge perpendicular to itself (H or V depending on slope). */
+  const startEdgeDrag = (e: ReactPointerEvent<Element>, index: number) => {
+    if (!polyPoints || !onEditorPointsChange) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const targetEl = e.currentTarget as Element;
+    try { targetEl.setPointerCapture(e.pointerId); } catch { /* */ }
+    const surface = targetEl.closest("[data-doc-surface]") as HTMLElement | null;
+    const surfRect = surface?.getBoundingClientRect();
+    if (!surfRect) return;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const start = polyPoints.map((p) => ({ ...p }));
+    const i = index;
+    const j = (index + 1) % start.length;
+    // Edge more vertical -> move horizontally, else vertically.
+    const vertical =
+      Math.abs(start[j].nx - start[i].nx) * pageSize.width <
+      Math.abs(start[j].ny - start[i].ny) * pageSize.height;
+
+    const move = (ev: PointerEvent) => {
+      const dxN = (ev.clientX - startX) / surfRect.width;
+      const dyN = (ev.clientY - startY) / surfRect.height;
+      const next = start.map((p, k) => {
+        if (k !== i && k !== j) return p;
+        return vertical
+          ? { nx: clamp01(p.nx + dxN), ny: p.ny }
+          : { nx: p.nx, ny: clamp01(p.ny + dyN) };
+      });
+      onEditorPointsChange(next);
+    };
+    const up = (ev: PointerEvent) => {
+      try { targetEl.releasePointerCapture(ev.pointerId); } catch { /* */ }
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
   // Delete / Backspace removes the selected vertex (never below a triangle).
   useEffect(() => {
     if (selectedVertex === null || !polyPoints || !onEditorPointsChange) return;
