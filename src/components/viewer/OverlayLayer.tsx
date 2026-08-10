@@ -212,7 +212,10 @@ interface RectOverlayProps {
     label?: string;
     /** Polygon outline in page px, relative to the box origin (x, y). */
     pts?: { x: number; y: number }[];
+    /** Label dock point in page px, relative to the box origin (x, y). */
+    labelAnchor?: { x: number; y: number };
   };
+
 
   hovered: boolean;
   exportScale: number;
