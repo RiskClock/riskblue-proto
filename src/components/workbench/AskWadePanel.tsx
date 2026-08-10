@@ -6,7 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Send, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { getFunctionsErrorMessage } from "@/lib/functionsError";
+import { normalizeFunctionError } from "@/lib/functionsError";
 
 interface WadeMessage {
   id?: string;
@@ -83,7 +83,7 @@ export function AskWadePanel({
           messages: next.map((m) => ({ role: m.role, content: m.content })),
         },
       });
-      if (error) throw new Error(await getFunctionsErrorMessage(error));
+      if (error) throw await normalizeFunctionError(error);
       if ((data as any)?.error) throw new Error((data as any).error);
 
       const answer = (data as any).response as string;
