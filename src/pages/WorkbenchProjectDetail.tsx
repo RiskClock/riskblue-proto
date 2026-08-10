@@ -4845,6 +4845,8 @@ const isChildPlanType = (t: string) =>
               </Dialog>
             </div>
           </div>
+          </div>
+
 
           {/* Scrollable body */}
           <div className="container mx-auto px-6 pb-6 flex-1 min-h-0 overflow-auto">
