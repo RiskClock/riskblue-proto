@@ -157,7 +157,42 @@ interface CircleInfo {
 // inside a Web Worker off the main thread. See overlayPlacementClient.ts
 // for the request/cancel API used below.
 
-
+/**
+ * Where a bbox label should dock. For plain rectangles that's the top-left
+ * corner. For polygons the envelope's top-left corner can sit in empty space
+ * (L-shaped / notched rooms), so we dock to the left end of the longest
+ * near-horizontal edge in the upper part of the shape instead.
+ */
+export function polygonLabelAnchor(
+  pts: { x: number; y: number }[] | undefined,
+): { x: number; y: number } {
+  if (!pts || pts.length < 3) return { x: 0, y: 0 };
+  const ys = pts.map((p) => p.y);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const height = Math.max(1, maxY - minY);
+  let best: { x: number; y: number; score: number } | null = null;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % pts.length];
+    const dx = Math.abs(b.x - a.x);
+    const dy = Math.abs(b.y - a.y);
+    if (dx < 1 || dy > dx * 0.35) continue; // not near-horizontal
+    const top = Math.min(a.y, b.y);
+    // Prefer long edges that sit close to the top of the shape.
+    const score = dx * (1 - Math.min(1, (top - minY) / height) * 0.9);
+    if (!best || score > best.score) {
+      best = { x: Math.min(a.x, b.x), y: top, score };
+    }
+  }
+  if (best) return { x: best.x, y: best.y };
+  // Fall back to the topmost vertex (leftmost if tied).
+  let top = pts[0];
+  for (const p of pts) {
+    if (p.y < top.y || (p.y === top.y && p.x < top.x)) top = p;
+  }
+  return { x: top.x, y: top.y };
+}
 
 
 // ---- Memoized child components --------------------------------------------
