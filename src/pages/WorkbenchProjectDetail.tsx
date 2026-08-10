@@ -36,6 +36,7 @@ import { ConsolidateRisersModal } from "@/components/workbench/ConsolidateRisers
 import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectModal";
 import { BulkDrawingDownloadModal } from "@/components/workbench/BulkDrawingDownloadModal";
 import { ManageFilesModal } from "@/components/workbench/ManageFilesModal";
+import { AskWadePanel } from "@/components/workbench/AskWadePanel";
 import { SUBTYPED_CLASSES } from "@/components/CreateProjectModal";
 import { expandSubtypeLabel, expandSubtypeLabelWithSuffix, isSubtypeSplitClass, subtypeAbbr } from "@/lib/awpSubtypeLabels";
 
