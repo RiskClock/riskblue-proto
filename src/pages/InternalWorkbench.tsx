@@ -595,7 +595,7 @@ export default function InternalWorkbench() {
         </div>
         </div>
 
-        <div className="container mx-auto px-6 py-6 flex-1 min-h-0 overflow-auto">
+        <div className="container mx-auto px-6 py-6 flex-1 min-h-0 overflow-hidden flex flex-col">
         {isLoading ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading projects…
@@ -603,9 +603,9 @@ export default function InternalWorkbench() {
         ) : !projects || projects.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">No projects yet.</div>
         ) : (
-          <div className="bg-card rounded-lg border">
-            <Table>
-              <TableHeader className="sticky top-0 z-10 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))]">
+          <div className="bg-card rounded-lg border flex-1 min-h-0 overflow-auto [&>div]:h-full">
+            <Table className="[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-card [&_thead_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
+              <TableHeader>
                 <TableRow>
                   <TableHead
                     className="cursor-pointer select-none"
