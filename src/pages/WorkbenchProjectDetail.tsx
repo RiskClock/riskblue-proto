@@ -4024,86 +4024,84 @@ const isChildPlanType = (t: string) =>
   return (
     <TooltipProvider delayDuration={150}>
       <div className="h-screen flex flex-col bg-background overflow-hidden">
-        <AppHeader title={project?.name || "Project"} />
-
-        {/* Sub-header (no longer sticky) */}
-        <div className="border-b bg-background">
-          <div className="container mx-auto px-6 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
+        <AppHeader
+          title={
+            <div className="flex items-center gap-1.5 min-w-0">
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="h-7 w-7 shrink-0"
                 onClick={() => navigate(canManage ? "/workbench" : "/projects")}
                 aria-label="Back"
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
-              <div className="flex items-center gap-2 ml-3">
-                <span className="text-xs font-medium text-muted-foreground">Status:</span>
-
-                {canManage ? (
-                  <Select
-                    value={((project as any)?.workbench_status as string) || "processing"}
-                    onValueChange={async (val) => {
-                      if (!projectId) return;
-                      const prev = ((project as any)?.workbench_status as string) || "processing";
+              <span className="truncate">{project?.name || "Project"}</span>
+            </div>
+          }
+          leftContent={
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs font-medium text-muted-foreground">Status:</span>
+              {canManage ? (
+                <Select
+                  value={((project as any)?.workbench_status as string) || "processing"}
+                  onValueChange={async (val) => {
+                    if (!projectId) return;
+                    const prev = ((project as any)?.workbench_status as string) || "processing";
+                    queryClient.setQueryData(
+                      ["workbench-project", projectId],
+                      (old: any) => (old ? { ...old, workbench_status: val } : old),
+                    );
+                    const { error } = await supabase
+                      .from("projects")
+                      .update({ workbench_status: val } as any)
+                      .eq("id", projectId);
+                    if (error) {
                       queryClient.setQueryData(
                         ["workbench-project", projectId],
-                        (old: any) => (old ? { ...old, workbench_status: val } : old),
+                        (old: any) => (old ? { ...old, workbench_status: prev } : old),
                       );
-                      const { error } = await supabase
-                        .from("projects")
-                        .update({ workbench_status: val } as any)
-                        .eq("id", projectId);
-                      if (error) {
-                        queryClient.setQueryData(
-                          ["workbench-project", projectId],
-                          (old: any) => (old ? { ...old, workbench_status: prev } : old),
-                        );
-                        toast({
-                          variant: "destructive",
-                          title: "Failed to update status",
-                          description: getUserFriendlyError(error),
-                        });
-                      } else {
-                        queryClient.invalidateQueries({ queryKey: ["workbench-project", projectId] });
-                        toast({ title: "Status updated" });
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="h-7 text-xs w-[130px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="processing">Processing</SelectItem>
-                      <SelectItem value="processed">Processed</SelectItem>
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  (() => {
-                    const s = ((project as any)?.workbench_status as string) || "processing";
-                    const cls =
-                      s === "processed"
-                        ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                        : "bg-amber-100 text-amber-800 border-amber-300";
-                    return (
-                      <Badge variant="outline" className={cls}>
-                        {s === "processed" ? "Processed" : "Processing"}
-                      </Badge>
-                    );
-                  })()
-                )}
-              </div>
+                      toast({
+                        variant: "destructive",
+                        title: "Failed to update status",
+                        description: getUserFriendlyError(error),
+                      });
+                    } else {
+                      queryClient.invalidateQueries({ queryKey: ["workbench-project", projectId] });
+                      toast({ title: "Status updated" });
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-7 text-xs w-[130px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="processing">Processing</SelectItem>
+                    <SelectItem value="processed">Processed</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                (() => {
+                  const s = ((project as any)?.workbench_status as string) || "processing";
+                  const cls =
+                    s === "processed"
+                      ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                      : "bg-amber-100 text-amber-800 border-amber-300";
+                  return (
+                    <Badge variant="outline" className={cls}>
+                      {s === "processed" ? "Processed" : "Processing"}
+                    </Badge>
+                  );
+                })()
+              )}
+              {activePhase && (
+                <Badge variant="outline" className="text-xs capitalize">
+                  {dbPhase || activePhase}
+                </Badge>
+              )}
             </div>
-            {activePhase && (
-              <Badge variant="outline" className="text-xs capitalize">
-                {dbPhase || activePhase}
-              </Badge>
-            )}
-          </div>
-        </div>
-
+          }
+        />
 
         <main className="flex-1 min-h-0 overflow-hidden flex flex-col">
           {/* Docked toolbar: Risk Agents row + agent status cards */}
