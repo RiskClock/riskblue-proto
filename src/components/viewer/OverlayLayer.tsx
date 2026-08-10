@@ -620,8 +620,9 @@ export const OverlayLayer = ({
       const w = (measuredW ?? r.label.length * charPx) + padX * 2 + 4;
       rectObstacles.push({
         id: `${r.id}__label`,
-        x: r.x,
-        y: r.y,
+        x: r.x + (r.labelAnchor?.x ?? 0),
+        y: r.y + (r.labelAnchor?.y ?? 0),
+
         w,
         h: labelH,
         color: r.color,
