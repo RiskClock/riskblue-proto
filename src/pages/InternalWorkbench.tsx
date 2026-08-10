@@ -658,7 +658,7 @@ export default function InternalWorkbench() {
         ) : !projects || projects.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">No projects yet.</div>
         ) : (
-          <div className="bg-card rounded-lg border flex-1 min-h-0 overflow-auto [&>div]:h-full">
+          <div className="bg-card rounded-lg border min-h-0 max-h-full overflow-auto">
             <Table className="[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-card [&_thead_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
               <TableHeader>
                 <TableRow>
