@@ -17,6 +17,7 @@ import {
   Bug,
   History,
   FolderOpen,
+  MessageSquare,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -36,6 +37,7 @@ import { ConsolidateRisersModal } from "@/components/workbench/ConsolidateRisers
 import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectModal";
 import { BulkDrawingDownloadModal } from "@/components/workbench/BulkDrawingDownloadModal";
 import { ManageFilesModal } from "@/components/workbench/ManageFilesModal";
+import { AskWadePanel } from "@/components/workbench/AskWadePanel";
 import { SUBTYPED_CLASSES } from "@/components/CreateProjectModal";
 import { expandSubtypeLabel, expandSubtypeLabelWithSuffix, isSubtypeSplitClass, subtypeAbbr } from "@/lib/awpSubtypeLabels";
 
@@ -6611,6 +6613,7 @@ function InstancesReportModal({
   const [loading, setLoading] = useState(false);
   const [instances, setInstances] = useState<any[]>([]);
   const [selected, setSelected] = useState<string>("__overview__");
+  const [wadeOpen, setWadeOpen] = useState(false);
   
 
   useEffect(() => {
@@ -8201,6 +8204,83 @@ function InstancesReportModal({
     }
   }
 
+  // Compact JSON snapshot of everything shown in this report - detections,
+  // spaces, floor-plan bboxes and the Spatial Architect hierarchy - handed to
+  // the Ask Wade assistant as grounding context.
+  const buildWadeContext = useCallback(() => {
+    const detections = expanded.map((r) => ({
+      id: r.annotationBaseId,
+      class: displayClassName(r.awpClassName),
+      category: r.category,
+      subtype: r.pipeType || null,
+      diameter: r.pipeDiameter || null,
+      level: r.spaceName || "Unassigned",
+      unit: r.unitName || null,
+      sheet: fileNameById.get(r.fileId) || r.fileId,
+      page: r.pageIndex + 1,
+    }));
+
+    const countsByClass: Record<string, number> = {};
+    for (const d of detections) countsByClass[d.class] = (countsByClass[d.class] || 0) + 1;
+
+    const countsByLevel: Record<string, number> = {};
+    for (const d of detections) countsByLevel[d.level] = (countsByLevel[d.level] || 0) + 1;
+
+    const planPages: any[] = [];
+    for (const g of fileGroups) {
+      for (const sh of g.sheets) {
+        const key = `${g.file.name}::${sh.page_index}`;
+        const levels = pageLevelPlansMap.get(key) || [];
+        const units = pageUnitPlansMap.get(key) || [];
+        if (levels.length === 0 && units.length === 0) continue;
+        planPages.push({
+          sheet: g.file.name,
+          page: (sh.page_index ?? 0) + 1,
+          levelPlans: levels.map((l) => ({ levels: l.levels, planType: l.planType || "level_floor_plan" })),
+          unitPlans: units.map((u) => ({
+            unit: u.unitLabel,
+            levels: u.levels,
+            planType: u.planType || "unit_floor_plan",
+          })),
+        });
+      }
+    }
+
+    const hp: any = (spaceHierarchyPayload as any)?.parsed;
+    const hierarchy = (hp?.physical_spaces || hp?.spatial_records || []).map((s: any) => ({
+      name: s?.standardized_space_name,
+      category: s?.space_category || null,
+      index: s?.space_index ?? null,
+      appliesToLevels: s?.applies_to_levels || [],
+    }));
+
+    return {
+      project: { name: projectName, id: projectId },
+      enabledClasses: (enabledClassNames || []).map((n) => displayClassName(n)),
+      reportSpaces: spaceList.map((s) => (s === "__unassigned__" ? "Unassigned" : s)),
+      totals: {
+        detections: detections.length,
+        byClass: countsByClass,
+        byLevel: countsByLevel,
+      },
+      spatialHierarchy: hierarchy,
+      floorPlanPages: planPages,
+      detections,
+    };
+  }, [
+    expanded,
+    displayClassName,
+    fileNameById,
+    fileGroups,
+    pageLevelPlansMap,
+    pageUnitPlansMap,
+    spaceHierarchyPayload,
+    projectName,
+    projectId,
+    enabledClassNames,
+    spaceList,
+  ]);
+
   const renderRight = () => {
     if (loading) {
       return (
@@ -8221,7 +8301,11 @@ function InstancesReportModal({
         <DialogHeader>
           <DialogTitle>Threat Report</DialogTitle>
         </DialogHeader>
-        <div className="grid grid-cols-[220px_1fr] gap-4 max-h-[70vh]">
+        <div
+          className={`grid gap-4 h-[70vh] max-h-[70vh] ${
+            wadeOpen ? "grid-cols-[220px_1fr_380px]" : "grid-cols-[220px_1fr]"
+          }`}
+        >
           <div className="border rounded-md overflow-auto">
             <button
               type="button"
@@ -8261,6 +8345,13 @@ function InstancesReportModal({
             })}
           </div>
           <div className="overflow-auto pr-1">{renderRight()}</div>
+          {wadeOpen && (
+            <AskWadePanel
+              projectId={projectId}
+              onClose={() => setWadeOpen(false)}
+              buildContext={buildWadeContext}
+            />
+          )}
         </div>
         <DialogFooter className="flex flex-row sm:justify-between gap-2">
           <div className="flex gap-2">
@@ -8288,6 +8379,13 @@ function InstancesReportModal({
                 Send to WMG Project
               </Button>
             )}
+            <Button
+              variant={wadeOpen ? "secondary" : "outline"}
+              onClick={() => setWadeOpen((v) => !v)}
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Ask Wade
+            </Button>
           </div>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
         </DialogFooter>
