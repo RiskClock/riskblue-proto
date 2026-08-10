@@ -69,7 +69,13 @@ export interface BulkDrawingDownloadModalProps {
    * excluded from the export so it mirrors what the user sees on-screen.
    */
   enabledClassNames?: string[];
+  /**
+   * When provided, only these file ids start checked (used by the per-row
+   * download button in the Project Files modal).
+   */
+  initialSelectedFileIds?: string[] | null;
 }
+
 
 function isPdfFile(f: BulkFileEntry): boolean {
   const mime = (f.mimeType || "").toLowerCase();
