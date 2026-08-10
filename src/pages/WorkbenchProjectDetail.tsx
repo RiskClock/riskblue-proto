@@ -6094,7 +6094,6 @@ const isChildPlanType = (t: string) =>
           spaceHierarchyPayload={spaceHierarchyPayload}
           projectName={project?.name || "Project"}
           enabledClassNames={enabledCols}
-          initialSelectedFileIds={bulkPreselect}
           consolidations={consolidations || []}
           aliasMap={aliasMap}
           aliasPrefixMap={aliasPrefixMap}
@@ -6117,10 +6116,6 @@ const isChildPlanType = (t: string) =>
           canBuild={canManage}
           onSaved={() => {
             queryClient.invalidateQueries({ queryKey: ["workbench-analysis-request", projectId] });
-          }}
-          onDownload={(fileIds) => {
-            setBulkPreselect(fileIds);
-            setBulkDownloadOpen(true);
           }}
         />
 
@@ -6171,6 +6166,10 @@ const isChildPlanType = (t: string) =>
             queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
             queryClient.invalidateQueries({ queryKey: ["workbench-analysis-request", projectId] });
           }}
+          onDownload={(fileIds) => {
+            setBulkPreselect(fileIds);
+            setBulkDownloadOpen(true);
+          }}
         />
 
         <BulkDrawingDownloadModal
@@ -6193,6 +6192,7 @@ const isChildPlanType = (t: string) =>
 
           }))}
           enabledClassNames={enabledCols}
+          initialSelectedFileIds={bulkPreselect}
           classPrefixByName={(() => {
             const m = new Map<string, string | null>();
             for (const [name, opt] of optionByName.entries()) {
