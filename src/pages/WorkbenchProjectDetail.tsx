@@ -6174,7 +6174,10 @@ const isChildPlanType = (t: string) =>
 
         <BulkDrawingDownloadModal
           open={bulkDownloadOpen}
-          onOpenChange={setBulkDownloadOpen}
+          onOpenChange={(o) => {
+            setBulkDownloadOpen(o);
+            if (!o) setBulkPreselect(null);
+          }}
           analysisRequestId={requestId ?? null}
           projectId={projectId ?? null}
           projectName={project?.name || "Project"}
