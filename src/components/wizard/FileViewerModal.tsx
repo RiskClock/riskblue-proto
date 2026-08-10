@@ -1702,7 +1702,7 @@ export const FileViewerModal = ({
                     editingPlan={editingPlan}
                     onEnterEdit={viewingMode ? undefined : enterPlanEdit}
                     onCancelEdit={cancelPlanEdit}
-                    onToggleEditingShape={toggleEditingPlanShape}
+                    
                     onSaveEdit={savePlanEdit}
                     onEditingNameChange={(name) =>
                       setEditingPlan((p) => (p ? { ...p, name } : p))
@@ -2256,7 +2256,7 @@ interface FloorPlansPanelProps {
   onEditingNameChange?: (name: string) => void;
   onEditingTypeChange?: (type: string) => void;
   /** Switch the edited shape between a rectangle and an editable polygon. */
-  onToggleEditingShape?: () => void;
+  
   onRequestDelete?: (planId: string, label: string) => void;
   onAddPlan?: () => void | Promise<void>;
   /** Read-only viewing mode: only unit/detail attachment stays enabled. */
@@ -2281,7 +2281,7 @@ const FloorPlansPanel = ({
   editingPlan,
   onEnterEdit,
   onCancelEdit,
-  onToggleEditingShape,
+  
   onSaveEdit,
   onEditingNameChange,
   onEditingTypeChange,
@@ -2530,22 +2530,10 @@ const FloorPlansPanel = ({
                       >
                         Cancel
                       </Button>
-                      {onToggleEditingShape && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-6 px-2 text-[11px] ml-auto"
-                          onClick={() => onToggleEditingShape()}
-                          title={
-                            editingPlan?.points
-                              ? "Snap the shape back to a plain rectangle"
-                              : "Drag vertices, and click edge dots to add points"
-                          }
-                        >
-                          {editingPlan?.points ? "Reset to rectangle" : "Irregular shape"}
-                        </Button>
-                      )}
+                      <span className="ml-auto text-[10px] text-muted-foreground">
+                        Drag points, click edge dots to add, click a point to remove
+                      </span>
+
                     </>
                   ) : (
                     <Button
