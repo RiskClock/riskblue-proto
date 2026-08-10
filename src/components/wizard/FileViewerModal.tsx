@@ -597,6 +597,20 @@ export const FileViewerModal = ({
     setEditingPlan(null);
   }, [currentPage, fileId]);
 
+  /**
+   * True when the polygon is just the 4 corners of its envelope, in which
+   * case we persist it as a plain rectangle (points_pct = null).
+   */
+  const isPlainRectPoints = (
+    pts: [number, number][] | null,
+    bbox: [number, number, number, number],
+  ) => {
+    if (!pts || pts.length !== 4) return false;
+    const corners = rectToPointsPct(bbox);
+    const eq = (a: number, b: number) => Math.abs(a - b) < 1e-6;
+    return pts.every((p, i) => eq(p[0], corners[i][0]) && eq(p[1], corners[i][1]));
+  };
+
   const savePlanEdit = useCallback(async () => {
     const cur = editingPlanRef.current;
     if (!cur || !onSaveFloorPlanOverride) return;
@@ -605,23 +619,13 @@ export const FileViewerModal = ({
     }
     await onSaveFloorPlanOverride(cur.planId, {
       bbox_pct: cur.bbox,
-      points_pct: cur.points,
+      points_pct: isPlainRectPoints(cur.points, cur.bbox) ? null : cur.points,
       name: cur.name.trim() || null,
       type: cur.type,
     });
     setEditingPlan(null);
   }, [onSaveFloorPlanOverride]);
 
-  // Toggle the shape being edited between a plain rectangle and an editable
-  // polygon. Converting seeds the polygon from the current envelope; resetting
-  // drops the points and keeps the envelope as the rectangle.
-  const toggleEditingPlanShape = useCallback(() => {
-    setEditingPlan((prev) => {
-      if (!prev) return prev;
-      if (prev.points) return { ...prev, points: null };
-      return { ...prev, points: rectToPointsPct(prev.bbox) };
-    });
-  }, []);
 
   const enterPlanEdit = useCallback(
     async (fp: ParsedFloorPlan) => {
@@ -647,11 +651,16 @@ export const FileViewerModal = ({
       const state: EditingPlanState = {
         planId: fp.plan_id,
         bbox: [bb[0], bb[1], bb[2], bb[3]],
-        points: pts ? pts.map((p) => [p[0], p[1]] as [number, number]) : null,
+        // Editing is always vertex-based: a rectangle is seeded with its four
+        // corners so pivot points can be dragged / added / removed directly.
+        points: pts
+          ? pts.map((p) => [p[0], p[1]] as [number, number])
+          : rectToPointsPct([bb[0], bb[1], bb[2], bb[3]]),
         name,
         type,
         origBbox: [bb[0], bb[1], bb[2], bb[3]],
         origPoints: pts ? pts.map((p) => [p[0], p[1]] as [number, number]) : null,
+
         origName: name,
         origType: type,
       };
@@ -1693,7 +1702,7 @@ export const FileViewerModal = ({
                     editingPlan={editingPlan}
                     onEnterEdit={viewingMode ? undefined : enterPlanEdit}
                     onCancelEdit={cancelPlanEdit}
-                    onToggleEditingShape={toggleEditingPlanShape}
+                    
                     onSaveEdit={savePlanEdit}
                     onEditingNameChange={(name) =>
                       setEditingPlan((p) => (p ? { ...p, name } : p))
@@ -2247,7 +2256,7 @@ interface FloorPlansPanelProps {
   onEditingNameChange?: (name: string) => void;
   onEditingTypeChange?: (type: string) => void;
   /** Switch the edited shape between a rectangle and an editable polygon. */
-  onToggleEditingShape?: () => void;
+  
   onRequestDelete?: (planId: string, label: string) => void;
   onAddPlan?: () => void | Promise<void>;
   /** Read-only viewing mode: only unit/detail attachment stays enabled. */
@@ -2272,7 +2281,7 @@ const FloorPlansPanel = ({
   editingPlan,
   onEnterEdit,
   onCancelEdit,
-  onToggleEditingShape,
+  
   onSaveEdit,
   onEditingNameChange,
   onEditingTypeChange,
@@ -2521,22 +2530,10 @@ const FloorPlansPanel = ({
                       >
                         Cancel
                       </Button>
-                      {onToggleEditingShape && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-6 px-2 text-[11px] ml-auto"
-                          onClick={() => onToggleEditingShape()}
-                          title={
-                            editingPlan?.points
-                              ? "Snap the shape back to a plain rectangle"
-                              : "Drag vertices, and click edge dots to add points"
-                          }
-                        >
-                          {editingPlan?.points ? "Reset to rectangle" : "Irregular shape"}
-                        </Button>
-                      )}
+                      <span className="ml-auto text-[10px] text-muted-foreground">
+                        Drag points, click edge dots to add, click a point to remove
+                      </span>
+
                     </>
                   ) : (
                     <Button

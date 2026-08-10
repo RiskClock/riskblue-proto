@@ -4861,7 +4861,7 @@ const isChildPlanType = (t: string) =>
               ) : (
                 <div className="bg-card rounded-lg border relative [&>div]:overflow-visible">
                   <Table>
-                    <TableHeader className="sticky top-0 z-20 bg-card shadow-sm">
+                    <TableHeader className="sticky top-0 z-20 bg-card shadow-[inset_0_1px_0_hsl(var(--border)),0_1px_2px_hsl(var(--border))]">
                       <TableRow className="bg-card">
                         <TableHead className={`${stickyHeadFirst} h-9 py-1`}>
                           <div className="inline-flex items-center gap-1.5">
