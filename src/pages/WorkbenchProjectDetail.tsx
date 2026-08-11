@@ -34,6 +34,7 @@ import { useActivityLogger } from "@/hooks/useActivityLogger";
 import { useAccountType } from "@/hooks/useAccountType";
 import { SpaceEditModal } from "@/components/workbench/SpaceEditModal";
 import { ConsolidateRisersModal } from "@/components/workbench/ConsolidateRisersModal";
+import { ScoutRunModal } from "@/components/workbench/ScoutRunModal";
 import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectModal";
 import { BulkDrawingDownloadModal } from "@/components/workbench/BulkDrawingDownloadModal";
 import { ManageFilesModal } from "@/components/workbench/ManageFilesModal";
@@ -394,6 +395,7 @@ export default function WorkbenchProjectDetail() {
   } | null>(null);
   // Typed-confirmation state for Scout re-run over existing survey data.
   const [scoutConfirmOpen, setScoutConfirmOpen] = useState(false);
+  const [scoutRunOpen, setScoutRunOpen] = useState(false);
   const [scoutConfirmText, setScoutConfirmText] = useState("");
   const scoutRerunAfterConfirmRef = useRef<null | (() => void)>(null);
   // One-shot bypass flag set by the confirm dialog so the re-click doesn't
@@ -5914,6 +5916,24 @@ const isChildPlanType = (t: string) =>
           onBuild={buildSpaceHierarchy}
           canBuild={canManage}
           onSaved={() => {
+            queryClient.invalidateQueries({ queryKey: ["workbench-analysis-request", projectId] });
+          }}
+        />
+
+        <ScoutRunModal
+          open={scoutRunOpen}
+          onOpenChange={setScoutRunOpen}
+          requestId={requestId}
+          projectId={projectId ?? null}
+          files={(rows?.files ?? []).map((f) => ({
+            id: f.id,
+            name: f.name,
+            pages: (rows?.sheets ?? [])
+              .filter((s) => s.parent_file_id === f.id)
+              .map((s) => ({ page_index: s.page_index, sheet_number: s.sheet_number ?? null }))
+              .sort((a, b) => a.page_index - b.page_index),
+          }))}
+          onApplied={() => {
             queryClient.invalidateQueries({ queryKey: ["workbench-analysis-request", projectId] });
           }}
         />
