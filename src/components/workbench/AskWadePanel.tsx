@@ -14,6 +14,12 @@ interface WadeMessage {
   content: string;
 }
 
+// Number of most recent turns sent to the model per request. The full history
+// is still rendered and persisted.
+const MAX_HISTORY_TURNS = 10;
+
+
+
 export function AskWadePanel({
   projectId,
   onClose,
