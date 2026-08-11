@@ -124,12 +124,15 @@ export function AskWadePanel({
       }
 
       const next: WadeMessage[] = [...messages, { role: "user", content: text }];
+      // Sliding window: only the most recent turns are sent to the model. The
+      // full transcript stays in the UI and in wade_chat_messages.
+      const windowed = next.slice(-MAX_HISTORY_TURNS);
       const { data, error } = await supabase.functions.invoke("ask-wade", {
         headers: { Authorization: `Bearer ${session.access_token}` },
         body: {
           projectId,
           context: buildContext(),
-          messages: next.map((m) => ({ role: m.role, content: m.content })),
+          messages: windowed.map((m) => ({ role: m.role, content: m.content })),
         },
       });
       if (error) throw await normalizeFunctionError(error);
