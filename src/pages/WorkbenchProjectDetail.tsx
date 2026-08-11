@@ -8383,7 +8383,6 @@ function InstancesReportModal({
               variant={wadeOpen ? "secondary" : "outline"}
               onClick={() => setWadeOpen((v) => !v)}
             >
-              <MessageSquare className="h-4 w-4 mr-2" />
               Ask Wade
             </Button>
           </div>

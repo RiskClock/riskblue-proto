@@ -513,13 +513,16 @@ export default function Configuration() {
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         ) : (
           <div className="bg-card rounded-lg border">
+            <div className="px-4 py-3 border-b">
+              <h2 className="text-lg font-semibold">Risk Mitigation Classes</h2>
+            </div>
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[180px]">AWP Class</TableHead>
                   <TableHead className="w-[180px]">Default Controls</TableHead>
                   <TableHead className="w-[160px]">Can Span Multiple Spaces</TableHead>
-                  <TableHead className="w-[350px]">Full Prompt</TableHead>
+                  <TableHead className="w-[350px]">Individual Detection Prompt</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -546,10 +549,7 @@ export default function Configuration() {
           </div>
         )}
 
-        <SurveyPagePromptSection />
-        <AnalyzePromptSection />
-        <SpaceHierarchyPromptSection />
-        <AskWadeSection />
+        <AIAgentsSection />
       </main>
 
       {/* Control Edit Modal */}
@@ -754,7 +754,7 @@ function PromptModelPicker({ settingKey, defaultModel }: { settingKey: string; d
 
   return (
     <Select value={model} onValueChange={onChange} disabled={loading}>
-      <SelectTrigger className="w-[260px]">
+      <SelectTrigger className="w-[260px] [&>span]:flex-1 [&>span]:text-left [&>span]:truncate [&>span]:block">
         <SelectValue placeholder="Select model" />
       </SelectTrigger>
       <SelectContent>
@@ -767,109 +767,79 @@ function PromptModelPicker({ settingKey, defaultModel }: { settingKey: string; d
 }
 
 // ---------------- Scout Agent Prompt ----------------
-function SurveyPagePromptSection() {
-  const { toast } = useToast();
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [content, setContent] = useState("");
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
-
-  const loadPrompt = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("app_settings" as any)
-        .select("value, updated_at")
-        .eq("key", "survey_page_prompt")
-        .maybeSingle();
-      if (error) throw error;
-      setContent((data as any)?.value ?? "");
-      setUpdatedAt((data as any)?.updated_at ?? null);
-    } catch (e: any) {
-      toast({ title: "Failed to load prompt", description: (e as any)?.message, variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const openModal = async () => {
-    setOpen(true);
-    await loadPrompt();
-  };
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      const { error } = await supabase
-        .from("app_settings" as any)
-        .upsert({ key: "survey_page_prompt", value: content, updated_at: new Date().toISOString() } as any, { onConflict: "key" });
-      if (error) throw error;
-      toast({ title: "Prompt saved", description: "Scout Agent will use the updated prompt next run." });
-      setOpen(false);
-    } catch (e: any) {
-      toast({ title: "Save failed", description: (e as any)?.message, variant: "destructive" });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="mt-8 bg-card rounded-lg border p-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Scout Agent Prompt</h2>
-          <p className="text-sm text-muted-foreground">
-            System prompt sent to Gemini when the Scout agent surveys each page. The PNG of every page is attached as image input.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <PromptModelPicker settingKey="survey_page_model" defaultModel="gemini-3.5-flash" />
-          <Button variant="outline" onClick={openModal}>Edit Prompt</Button>
-        </div>
-      </div>
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Scout Agent Prompt</DialogTitle>
-            <DialogDescription>
-              {updatedAt
-                ? `Last updated ${format(new Date(updatedAt), "MMM d, yyyy 'at' h:mm a")}`
-                : "Edit and save the prompt used by Survey Pages."}
-            </DialogDescription>
-          </DialogHeader>
-          {loading ? (
-            <div className="flex items-center justify-center py-12 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading…
-            </div>
-          ) : (
-            <Textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              className="font-mono text-xs flex-1 min-h-[400px]"
-            />
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
-            <Button onClick={save} disabled={saving || loading}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-// ---------------- Analyze Prompt ----------------
+// ---------------- AI Agents ----------------
 // The developer/user-message text that the analyze-drawings edge function
 // sends alongside each AWP class's system prompt. Keep in sync with
 // supabase/functions/analyze-drawings/index.ts.
 const DEFAULT_ANALYZE_PROMPT =
   "Analyze this drawing according to the instructions provided.";
 
-function AnalyzePromptSection() {
+type AgentConfig = {
+  title: string;
+  description: string;
+  modelKey: string;
+  defaultModel: string;
+  promptKey: string;
+  buttonLabel: string;
+  dialogTitle: string;
+  fallbackDescription: string;
+  savedDescription: string;
+  defaultPrompt?: string;
+};
+
+const AGENT_CONFIGS: AgentConfig[] = [
+  {
+    title: "Scout Agent",
+    description:
+      "System prompt sent to Gemini when the Scout agent surveys each page. The PNG of every page is attached as image input.",
+    modelKey: "survey_page_model",
+    defaultModel: "gemini-3.5-flash",
+    promptKey: "survey_page_prompt",
+    buttonLabel: "Show Prompt",
+    dialogTitle: "Scout Agent Prompt",
+    fallbackDescription: "Edit and save the prompt used by Survey Pages.",
+    savedDescription: "Scout Agent will use the updated prompt next run.",
+  },
+  {
+    title: "Risk Radar Agent",
+    description:
+      "System prompt used by the Risk Radar agent (Identify Risk Elements). Sent to Gemini with the cached PDF context.",
+    modelKey: "analyze_model",
+    defaultModel: "gemini-3.5-flash",
+    promptKey: "analyze_prompt",
+    buttonLabel: "Show Prompt",
+    dialogTitle: "Risk Radar Agent Prompt",
+    fallbackDescription: "Edit and save the prompt used by the Analyze stage.",
+    savedDescription: "Risk Radar Agent will use the updated prompt next run.",
+    defaultPrompt: DEFAULT_ANALYZE_PROMPT,
+  },
+  {
+    title: "Spatial Architect Agent",
+    description:
+      "Prompt sent to the Spatial Architect agent. Scout's per-page output is appended after the prompt for normalization.",
+    modelKey: "space_hierarchy_model",
+    defaultModel: "gemini-2.5-flash-lite",
+    promptKey: "space_hierarchy_prompt",
+    buttonLabel: "Show Prompt",
+    dialogTitle: "Spatial Architect Agent Prompt",
+    fallbackDescription: "Edit and save the prompt used by Build Space Hierarchy.",
+    savedDescription: "Spatial Architect Agent will use the updated prompt next run.",
+  },
+  {
+    title: "Wade Agent",
+    description:
+      "Model and system prompt for the Wade assistant in the Threat Report modal. The project's report context is appended after the prompt.",
+    modelKey: "ask_wade_model",
+    defaultModel: "gemini-3.5-flash",
+    promptKey: "ask_wade_prompt",
+    buttonLabel: "Show System Prompt",
+    dialogTitle: "Wade Agent System Prompt",
+    fallbackDescription: "Leave blank to use the built-in default prompt.",
+    savedDescription: "Wade will use the updated prompt on the next question.",
+  },
+];
+
+function AgentPromptRow({ agent }: { agent: AgentConfig }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -883,12 +853,12 @@ function AnalyzePromptSection() {
       const { data, error } = await supabase
         .from("app_settings" as any)
         .select("value, updated_at")
-        .eq("key", "analyze_prompt")
+        .eq("key", agent.promptKey)
         .maybeSingle();
       if (error) throw error;
       const stored = (data as any)?.value;
       setContent(
-        typeof stored === "string" && stored.length > 0 ? stored : DEFAULT_ANALYZE_PROMPT,
+        typeof stored === "string" && stored.length > 0 ? stored : (agent.defaultPrompt ?? ""),
       );
       setUpdatedAt((data as any)?.updated_at ?? null);
     } catch (e: any) {
@@ -908,9 +878,12 @@ function AnalyzePromptSection() {
     try {
       const { error } = await supabase
         .from("app_settings" as any)
-        .upsert({ key: "analyze_prompt", value: content, updated_at: new Date().toISOString() } as any, { onConflict: "key" });
+        .upsert(
+          { key: agent.promptKey, value: content, updated_at: new Date().toISOString() } as any,
+          { onConflict: "key" },
+        );
       if (error) throw error;
-      toast({ title: "Prompt saved", description: "Risk Radar Agent will use the updated prompt next run." });
+      toast({ title: "Prompt saved", description: agent.savedDescription });
       setOpen(false);
     } catch (e: any) {
       toast({ title: "Save failed", description: (e as any)?.message, variant: "destructive" });
@@ -920,224 +893,28 @@ function AnalyzePromptSection() {
   };
 
   return (
-    <div className="mt-8 bg-card rounded-lg border p-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Risk Radar Agent Prompt</h2>
-          <p className="text-sm text-muted-foreground">
-            System prompt used by the Risk Radar agent (Identify Risk Elements). Sent to Gemini with the cached PDF context.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <PromptModelPicker settingKey="analyze_model" defaultModel="gemini-3.5-flash" />
-          <Button variant="outline" onClick={openModal}>Edit Prompt</Button>
-        </div>
-      </div>
+    <>
+      <TableRow>
+        <TableCell className="align-top">
+          <div className="font-medium">{agent.title}</div>
+          <p className="text-sm text-muted-foreground mt-1 max-w-[620px]">{agent.description}</p>
+        </TableCell>
+        <TableCell className="align-top">
+          <PromptModelPicker settingKey={agent.modelKey} defaultModel={agent.defaultModel} />
+        </TableCell>
+        <TableCell className="align-top text-right">
+          <Button variant="outline" onClick={openModal}>{agent.buttonLabel}</Button>
+        </TableCell>
+      </TableRow>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Risk Radar Agent Prompt</DialogTitle>
+            <DialogTitle>{agent.dialogTitle}</DialogTitle>
             <DialogDescription>
               {updatedAt
                 ? `Last updated ${format(new Date(updatedAt), "MMM d, yyyy 'at' h:mm a")}`
-                : "Edit and save the prompt used by the Analyze stage."}
-            </DialogDescription>
-          </DialogHeader>
-          {loading ? (
-            <div className="flex items-center justify-center py-12 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading…
-            </div>
-          ) : (
-            <Textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              className="font-mono text-xs flex-1 min-h-[400px]"
-            />
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
-            <Button onClick={save} disabled={saving || loading}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-// ---------------- Space Hierarchy Prompt ----------------
-function SpaceHierarchyPromptSection() {
-  const { toast } = useToast();
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [content, setContent] = useState("");
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
-
-  const loadPrompt = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("app_settings" as any)
-        .select("value, updated_at")
-        .eq("key", "space_hierarchy_prompt")
-        .maybeSingle();
-      if (error) throw error;
-      setContent((data as any)?.value ?? "");
-      setUpdatedAt((data as any)?.updated_at ?? null);
-    } catch (e: any) {
-      toast({ title: "Failed to load prompt", description: e.message, variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const openModal = async () => {
-    setOpen(true);
-    await loadPrompt();
-  };
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      const { error } = await supabase
-        .from("app_settings" as any)
-        .upsert({ key: "space_hierarchy_prompt", value: content, updated_at: new Date().toISOString() } as any, { onConflict: "key" });
-      if (error) throw error;
-      toast({ title: "Prompt saved", description: "Spatial Architect Agent will use the updated prompt next run." });
-      setOpen(false);
-    } catch (e: any) {
-      toast({ title: "Save failed", description: e.message, variant: "destructive" });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="mt-8 bg-card rounded-lg border p-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Spatial Architect Agent Prompt</h2>
-          <p className="text-sm text-muted-foreground">
-            Prompt sent to the Spatial Architect agent. Scout's per-page output is appended after the prompt for normalization.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <PromptModelPicker settingKey="space_hierarchy_model" defaultModel="gemini-2.5-flash-lite" />
-          <Button variant="outline" onClick={openModal}>Edit Prompt</Button>
-        </div>
-      </div>
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Spatial Architect Agent Prompt</DialogTitle>
-            <DialogDescription>
-              {updatedAt
-                ? `Last updated ${format(new Date(updatedAt), "MMM d, yyyy 'at' h:mm a")}`
-                : "Edit and save the prompt used by Build Space Hierarchy."}
-            </DialogDescription>
-          </DialogHeader>
-          {loading ? (
-            <div className="flex items-center justify-center py-12 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading…
-            </div>
-          ) : (
-            <Textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              className="font-mono text-xs flex-1 min-h-[400px]"
-            />
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
-            <Button onClick={save} disabled={saving || loading}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-// ---------------- Ask Wade (Threat Report assistant) ----------------
-function AskWadeSection() {
-  const { toast } = useToast();
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [content, setContent] = useState("");
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
-
-  const loadPrompt = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("app_settings" as any)
-        .select("value, updated_at")
-        .eq("key", "ask_wade_prompt")
-        .maybeSingle();
-      if (error) throw error;
-      setContent((data as any)?.value ?? "");
-      setUpdatedAt((data as any)?.updated_at ?? null);
-    } catch (e: any) {
-      toast({ title: "Failed to load prompt", description: e.message, variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const openModal = async () => {
-    setOpen(true);
-    await loadPrompt();
-  };
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      const { error } = await supabase
-        .from("app_settings" as any)
-        .upsert(
-          { key: "ask_wade_prompt", value: content, updated_at: new Date().toISOString() } as any,
-          { onConflict: "key" },
-        );
-      if (error) throw error;
-      toast({ title: "Prompt saved", description: "Ask Wade will use the updated prompt on the next question." });
-      setOpen(false);
-    } catch (e: any) {
-      toast({ title: "Save failed", description: e.message, variant: "destructive" });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="mt-8 bg-card rounded-lg border p-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Ask Wade</h2>
-          <p className="text-sm text-muted-foreground">
-            Model and system prompt for the Ask Wade assistant in the Threat Report modal. The
-            project's report context is appended after the prompt.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <PromptModelPicker settingKey="ask_wade_model" defaultModel="gemini-3.5-flash" />
-          <Button variant="outline" onClick={openModal}>Edit Prompt</Button>
-        </div>
-      </div>
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Ask Wade Prompt</DialogTitle>
-            <DialogDescription>
-              {updatedAt
-                ? `Last updated ${format(new Date(updatedAt), "MMM d, yyyy 'at' h:mm a")}`
-                : "Leave blank to use the built-in default prompt."}
+                : agent.fallbackDescription}
             </DialogDescription>
           </DialogHeader>
           {loading ? (
@@ -1159,6 +936,30 @@ function AskWadeSection() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
+  );
+}
+
+function AIAgentsSection() {
+  return (
+    <div className="mt-8 bg-card rounded-lg border">
+      <div className="px-4 py-3 border-b">
+        <h2 className="text-lg font-semibold">AI Agents</h2>
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Agent</TableHead>
+            <TableHead className="w-[280px]">Model</TableHead>
+            <TableHead className="w-[200px]" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {AGENT_CONFIGS.map((agent) => (
+            <AgentPromptRow key={agent.promptKey} agent={agent} />
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }
