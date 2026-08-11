@@ -496,56 +496,43 @@ export default function Configuration() {
       />
 
       <main className="container mx-auto px-6 py-8">
-        <div className="flex items-center justify-end mb-6">
-
-
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={() => setShowRevertDialog(true)} disabled={!hasUnsavedChanges}>
-              <RotateCcw className="h-4 w-4 mr-2" />Revert Changes
-            </Button>
-            <Button onClick={() => setShowSaveDialog(true)} disabled={!hasUnsavedChanges}>
-              <Save className="h-4 w-4 mr-2" />Save Changes
-            </Button>
-          </div>
-        </div>
-
         {loading ? (
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         ) : (
-          <div className="bg-card rounded-lg border">
-            <div className="px-4 py-3 border-b">
-              <h2 className="text-lg font-semibold">Risk Mitigation Classes</h2>
+          <div>
+            <h2 className="text-lg font-semibold mb-3">Risk Mitigation Classes</h2>
+            <div className="bg-card rounded-lg border">
+              <Table className="[&_td]:py-2 [&_th]:py-2 [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-card [&_thead_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[180px]">AWP Class</TableHead>
+                    <TableHead className="w-[180px]">Default Controls</TableHead>
+                    <TableHead className="w-[160px]">Can Span Multiple Spaces</TableHead>
+                    <TableHead className="w-[350px]">Individual Detection Prompt</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow className="bg-muted/50 hover:bg-muted/50">
+                    <TableCell colSpan={4} className="font-semibold text-sm py-2">Critical Assets</TableCell>
+                  </TableRow>
+                  {groupedAWPs.critical_assets.map((awp) => (
+                    <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} promptCell={renderPromptCell(awp)} />
+                  ))}
+                  <TableRow className="bg-muted/50 hover:bg-muted/50">
+                    <TableCell colSpan={4} className="font-semibold text-sm py-2">Water Systems</TableCell>
+                  </TableRow>
+                  {groupedAWPs.water_systems.map((awp) => (
+                    <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} promptCell={renderPromptCell(awp)} />
+                  ))}
+                  <TableRow className="bg-muted/50 hover:bg-muted/50">
+                    <TableCell colSpan={4} className="font-semibold text-sm py-2">Processes</TableCell>
+                  </TableRow>
+                  {groupedAWPs.processes.map((awp) => (
+                    <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} promptCell={renderPromptCell(awp)} />
+                  ))}
+                </TableBody>
+              </Table>
             </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[180px]">AWP Class</TableHead>
-                  <TableHead className="w-[180px]">Default Controls</TableHead>
-                  <TableHead className="w-[160px]">Can Span Multiple Spaces</TableHead>
-                  <TableHead className="w-[350px]">Individual Detection Prompt</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableCell colSpan={4} className="font-semibold text-sm py-2">Critical Assets</TableCell>
-                </TableRow>
-                {groupedAWPs.critical_assets.map((awp) => (
-                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} promptCell={renderPromptCell(awp)} />
-                ))}
-                <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableCell colSpan={4} className="font-semibold text-sm py-2">Water Systems</TableCell>
-                </TableRow>
-                {groupedAWPs.water_systems.map((awp) => (
-                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} promptCell={renderPromptCell(awp)} />
-                ))}
-                <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableCell colSpan={4} className="font-semibold text-sm py-2">Processes</TableCell>
-                </TableRow>
-                {groupedAWPs.processes.map((awp) => (
-                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} promptCell={renderPromptCell(awp)} />
-                ))}
-              </TableBody>
-            </Table>
           </div>
         )}
 
@@ -558,49 +545,11 @@ export default function Configuration() {
           awp={editingControlsAwp}
           controls={controls}
           currentIds={getCurrentControlIds(editingControlsAwp)}
-          pendingChange={pendingChanges.get(editingControlsAwp.id)}
           onAddControl={handleAddControl}
           onRemoveControl={handleRemoveControl}
           onClose={() => setEditingControlsAwp(null)}
         />
       )}
-
-      <AlertDialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
-        <AlertDialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Save Changes</AlertDialogTitle>
-            <AlertDialogDescription>The following changes will be applied:</AlertDialogDescription>
-          </AlertDialogHeader>
-          <ScrollArea className="flex-1 max-h-[50vh] pr-4">
-            <div className="space-y-4">
-              {changeSummary.map((item, idx) => (
-                <div key={idx} className="border rounded-lg p-3">
-                  <p className="font-medium text-foreground">{item.category}: {item.awpName}</p>
-                  {item.added.length > 0 && <p className="text-sm text-green-600">+ {item.added.join(", ")}</p>}
-                  {item.removed.length > 0 && <p className="text-sm text-destructive">- {item.removed.join(", ")}</p>}
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Confirm"}</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={showRevertDialog} onOpenChange={setShowRevertDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Discard Changes</AlertDialogTitle>
-            <AlertDialogDescription>Are you sure you want to discard all unsaved changes?</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRevert}>Discard</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
