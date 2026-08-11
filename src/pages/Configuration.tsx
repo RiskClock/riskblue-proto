@@ -650,7 +650,7 @@ interface ControlEditModalProps {
   onClose: () => void;
 }
 
-function ControlEditModal({ awp, controls, currentIds, pendingChange, onAddControl, onRemoveControl, onClose }: ControlEditModalProps) {
+function ControlEditModal({ awp, controls, currentIds, onAddControl, onRemoveControl, onClose }: ControlEditModalProps) {
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="max-w-lg">
