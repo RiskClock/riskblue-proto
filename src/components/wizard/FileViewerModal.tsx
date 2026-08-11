@@ -265,7 +265,13 @@ const BOUNDING_BOX_COLOR = "#39FF14"; // legacy detections (green)
 
 type HistoryAction =
   | { type: "add"; instance: DrawingInstanceRow }
-  | { type: "delete"; instance: DrawingInstanceRow };
+  | { type: "delete"; instance: DrawingInstanceRow }
+  | {
+      type: "move";
+      id: string;
+      from: { nx: number; ny: number };
+      to: { nx: number; ny: number };
+    };
 
 
 export const FileViewerModal = ({
