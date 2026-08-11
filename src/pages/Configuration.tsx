@@ -942,24 +942,25 @@ function AgentPromptRow({ agent }: { agent: AgentConfig }) {
 
 function AIAgentsSection() {
   return (
-    <div className="mt-8 bg-card rounded-lg border">
-      <div className="px-4 py-3 border-b">
-        <h2 className="text-lg font-semibold">AI Agents</h2>
+    <div className="mt-8">
+      <h2 className="text-lg font-semibold mb-3">AI Agents</h2>
+      <div className="bg-card rounded-lg border">
+        <Table className="[&_td]:py-2 [&_th]:py-2 [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-card [&_thead_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[200px]">Agent</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead className="w-[280px]">Model</TableHead>
+              <TableHead className="w-[170px]" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {AGENT_CONFIGS.map((agent) => (
+              <AgentPromptRow key={agent.promptKey} agent={agent} />
+            ))}
+          </TableBody>
+        </Table>
       </div>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Agent</TableHead>
-            <TableHead className="w-[280px]">Model</TableHead>
-            <TableHead className="w-[200px]" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {AGENT_CONFIGS.map((agent) => (
-            <AgentPromptRow key={agent.promptKey} agent={agent} />
-          ))}
-        </TableBody>
-      </Table>
     </div>
   );
 }
