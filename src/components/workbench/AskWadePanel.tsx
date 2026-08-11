@@ -152,6 +152,7 @@ export function AskWadePanel({
       await persist("assistant", answer);
       sessionCountRef.current += 1;
     } catch (e: any) {
+      setInput((cur) => (cur.trim() ? cur : text));
       toast({
         title: "Wade could not answer",
         description: e?.message || "Something went wrong.",
@@ -250,7 +251,7 @@ export function AskWadePanel({
           }}
         />
         <Button size="icon" onClick={() => void send()} disabled={!input.trim() || sending}>
-          {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          <Send className="h-4 w-4" />
         </Button>
       </div>
     </div>
