@@ -35,6 +35,20 @@ Rules:
   referring to detections so the user can find them.
 - When counting, count from the context data and show the breakdown.`;
 
+// Only the last N turns of the conversation are sent to the model; the UI still
+// shows (and the database still stores) the full transcript.
+const MAX_HISTORY_TURNS = 10;
+const CACHE_TTL_SECONDS = 900;
+
+// contextHash -> Gemini cached-content name. Per-isolate, so a cold start just
+// means one extra cache create.
+const cacheRegistry = new Map<string, { name: string; expiresAt: number }>();
+
+async function sha256Hex(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
