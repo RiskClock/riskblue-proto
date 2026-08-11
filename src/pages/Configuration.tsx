@@ -754,7 +754,7 @@ function PromptModelPicker({ settingKey, defaultModel }: { settingKey: string; d
 
   return (
     <Select value={model} onValueChange={onChange} disabled={loading}>
-      <SelectTrigger className="w-[260px]">
+      <SelectTrigger className="w-[260px] [&>span]:flex-1 [&>span]:text-left [&>span]:truncate [&>span]:block">
         <SelectValue placeholder="Select model" />
       </SelectTrigger>
       <SelectContent>
