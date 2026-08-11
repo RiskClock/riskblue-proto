@@ -374,6 +374,18 @@ Deno.serve(async (req) => {
           ? pdfPageCount
           : (knownMaxSheetPage > 0 ? knownMaxSheetPage : CHUNK_SIZE);
 
+        let allChunks: Array<Awaited<ReturnType<typeof runChunk>>>;
+        if (pageNumbers.length > 0) {
+          // Explicit page selection: one chunk per requested page, all in
+          // parallel. No discovery chunk needed.
+          const hint = Math.max(initialCeiling, ...pageNumbers);
+          console.log(
+            `[survey-pages] chunking file=${fileName} selectedPages=${pageNumbers.join(",")} hint=${hint}`,
+          );
+          allChunks = await Promise.all(
+            pageNumbers.map((p) => runChunk(p, p, hint)),
+          );
+        } else {
         const firstEnd = Math.min(CHUNK_SIZE, initialCeiling);
         const firstChunk = await runChunk(1, firstEnd, initialCeiling);
 
@@ -404,7 +416,9 @@ Deno.serve(async (req) => {
         const restResults = await Promise.all(
           chunkRanges.map(([s, e]) => runChunk(s, e, totalForChunking)),
         );
-        const allChunks = [firstChunk, ...restResults];
+        allChunks = [firstChunk, ...restResults];
+        }
+
 
         // Simple concatenation: append each chunk's parsed JSON array into
         // one combined array. No merging by file_name, no dedupe, no
