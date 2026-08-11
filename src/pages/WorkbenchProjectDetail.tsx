@@ -34,6 +34,7 @@ import { useActivityLogger } from "@/hooks/useActivityLogger";
 import { useAccountType } from "@/hooks/useAccountType";
 import { SpaceEditModal } from "@/components/workbench/SpaceEditModal";
 import { ConsolidateRisersModal } from "@/components/workbench/ConsolidateRisersModal";
+import { ScoutRunModal } from "@/components/workbench/ScoutRunModal";
 import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectModal";
 import { BulkDrawingDownloadModal } from "@/components/workbench/BulkDrawingDownloadModal";
 import { ManageFilesModal } from "@/components/workbench/ManageFilesModal";
@@ -394,6 +395,7 @@ export default function WorkbenchProjectDetail() {
   } | null>(null);
   // Typed-confirmation state for Scout re-run over existing survey data.
   const [scoutConfirmOpen, setScoutConfirmOpen] = useState(false);
+  const [scoutRunOpen, setScoutRunOpen] = useState(false);
   const [scoutConfirmText, setScoutConfirmText] = useState("");
   const scoutRerunAfterConfirmRef = useRef<null | (() => void)>(null);
   // One-shot bypass flag set by the confirm dialog so the re-click doesn't
@@ -4128,210 +4130,7 @@ const isChildPlanType = (t: string) =>
                 <Button
                   className={(!requestId || surveyRunning || !canManage || processingLock) ? "pointer-events-none" : ""}
                   type="button"
-                  onClick={async () => {
-                    if (!requestId) return;
-                    // Safeguard: if Scout has already run on any file in this
-                    // request, require typed confirmation before overwriting.
-                    // Re-running Scout replaces survey_raw_response, which the
-                    // whole Workbench UI (floor plans, spaces, threat report)
-                    // reads from - an accidental re-run silently destroys work.
-                    const filesWithSurvey = (rows?.files ?? []).filter(
-                      (f) => (f as any).survey_raw_response && String((f as any).survey_raw_response).trim().length > 0,
-                    );
-                    // Consume the one-shot bypass first so a confirmed re-run
-                    // doesn't loop back into the same dialog.
-                    const bypass = scoutBypassConfirmRef.current;
-                    scoutBypassConfirmRef.current = false;
-                    if (filesWithSurvey.length > 0 && !bypass) {
-                      // Defer the original run until the user types "delete".
-                      // Capture the click target so we can re-dispatch it once
-                      // confirmed (avoids duplicating the ~100-line runner).
-                      const btn = (typeof window !== "undefined" ? document.activeElement : null) as HTMLButtonElement | null;
-                      scoutRerunAfterConfirmRef.current = () => {
-                        scoutRerunAfterConfirmRef.current = null;
-                        scoutBypassConfirmRef.current = true;
-                        setScoutConfirmOpen(false);
-                        setScoutConfirmText("");
-                        // Re-click the original button; the bypass ref is now
-                        // set so the guard above will skip the confirmation.
-                        setTimeout(() => btn?.click(), 0);
-                      };
-                      void logActivity("workbench_scout_rerun", projectId ?? undefined, {
-                        analysis_request_id: requestId,
-                        files_with_existing_survey: filesWithSurvey.length,
-                        prompted_for_confirmation: true,
-                      });
-                      setScoutConfirmOpen(true);
-                      return;
-                    }
-                    // Passed the gate (either no prior survey, or the user
-                    // just typed "delete"). Log the actual run.
-                    if (filesWithSurvey.length > 0) {
-                      void logActivity("workbench_scout_rerun_confirmed_overwrite", projectId ?? undefined, {
-                        analysis_request_id: requestId,
-                        files_with_existing_survey: filesWithSurvey.length,
-                      });
-                    }
-                    // Collect original PDFs attached to this request.
-                    const { data: filesData, error: filesErr } = await supabase
-                      .from("analysis_request_files")
-                      .select("id, name")
-                      .eq("analysis_request_id", requestId)
-                      .order("name");
-                    if (filesErr) {
-                      toast({ variant: "destructive", title: "Survey Pages failed", description: filesErr.message });
-                      return;
-                    }
-                    const files = (filesData ?? []) as Array<{ id: string; name: string }>;
-                    if (files.length === 0) {
-                      toast({ variant: "destructive", title: "No files", description: "This analysis request has no source PDFs." });
-                      return;
-                    }
-
-                    if (!projectId) return;
-                    const lock = await acquireAgentLock(projectId, "Scout", requestId);
-                    if (!lock.ok) {
-                      toast({
-                        variant: "destructive",
-                        title: lock.busy ? "Another agent is running" : "Scout unavailable",
-                        description: lock.message,
-                      });
-                      return;
-                    }
-                    const stopHeartbeat = startAgentHeartbeat(lock.runId);
-
-                    setSurveyRunning(true);
-                    setSurveyRecoveredRun(false);
-                    setSurveyResults([]);
-                    setSurveyRawText("");
-
-                    
-
-                    const aggregated: typeof surveyResults = [];
-                    const rawChunks: string[] = [];
-                    let totalSheets = 0;
-                    let withResult = 0;
-
-                    try {
-                      for (let i = 0; i < files.length; i++) {
-                        const f = files[i];
-                        window.sessionStorage.setItem(
-                          surveyProgressStorageKey(requestId),
-                          JSON.stringify({ current: i + 1, total: files.length, fileName: f.name, phase: "uploading" }),
-                        );
-                        setSurveyProgress({
-                          current: i + 1,
-                          total: files.length,
-                          fileName: f.name,
-                          phase: "uploading",
-                        });
-                        // Tiny tick so the UI renders "uploading" before invoke blocks.
-                        await new Promise((r) => setTimeout(r, 30));
-                        window.sessionStorage.setItem(
-                          surveyProgressStorageKey(requestId),
-                          JSON.stringify({ current: i + 1, total: files.length, fileName: f.name, phase: "querying" }),
-                        );
-                        setSurveyProgress({
-                          current: i + 1,
-                          total: files.length,
-                          fileName: f.name,
-                          phase: "querying",
-                        });
-
-                        // Capture the baseline updated_at so we can detect
-                        // when the background job finishes.
-                        const { data: baselineRow } = await supabase
-                          .from("analysis_request_files")
-                          .select("survey_raw_updated_at")
-                          .eq("id", f.id)
-                          .maybeSingle();
-                        const baselineUpdatedAt = (baselineRow as any)?.survey_raw_updated_at ?? null;
-
-                        const { data, error } = await supabase.functions.invoke("survey-pages", {
-                          body: { analysisRequestId: requestId, fileId: f.id },
-                        });
-                        if (error) throw await normalizeFunctionError(error);
-                        if ((data as any)?.error) throw new Error((data as any).error);
-
-                        // Poll for completion (background job writes
-                        // survey_raw_updated_at last). Up to 8 minutes.
-                        const maxAttempts = 240;
-                        let attempts = 0;
-                        let finalRawText = "";
-                        while (attempts < maxAttempts) {
-                          await new Promise((r) => setTimeout(r, 2000));
-                          attempts++;
-                          const { data: pollRow } = await supabase
-                            .from("analysis_request_files")
-                            .select("survey_raw_response, survey_raw_updated_at")
-                            .eq("id", f.id)
-                            .maybeSingle();
-                          const updatedAt = (pollRow as any)?.survey_raw_updated_at ?? null;
-                          if (updatedAt && updatedAt !== baselineUpdatedAt) {
-                            finalRawText = (pollRow as any)?.survey_raw_response ?? "";
-                            if (finalRawText.startsWith("ERROR: ")) {
-                              throw new Error(finalRawText.slice(7));
-                            }
-                            break;
-                          }
-                        }
-                        if (!finalRawText && attempts >= maxAttempts) {
-                          throw new Error(`Timed out waiting for Survey Pages on ${f.name}.`);
-                        }
-
-                        // Fetch persisted sheet results for this file.
-                        const { data: sheetRows, error: sheetsErr } = await supabase
-                          .from("analysis_request_sheets")
-                          .select("id, page_index, sheet_number, survey_result")
-                          .eq("analysis_request_id", requestId!)
-                          .eq("parent_file_id", f.id)
-                          .order("page_index", { ascending: true });
-                        if (sheetsErr) throw sheetsErr;
-
-                        const results = (sheetRows ?? []).map((s: any) => ({
-                          sheetId: s.id,
-                          file: f.name,
-                          page: s.page_index,
-                          sheet_number: s.sheet_number,
-                          content: formatSurveyContent(s.survey_result),
-                        })) as typeof surveyResults;
-                        aggregated.push(...results);
-                        rawChunks.push(`===== ${f.name} =====\n${finalRawText}`);
-                        totalSheets += results.length;
-                        withResult += results.filter((r) => r.content.trim().length > 0).length;
-
-                        // Stream results into the UI as each file finishes.
-                        setSurveyResults([...aggregated]);
-                        setSurveyRawText(rawChunks.join("\n\n"));
-                      }
-
-                      setSurveyProgress({
-                        current: files.length,
-                        total: files.length,
-                        fileName: "",
-                        phase: "done",
-                      });
-                      window.sessionStorage.removeItem(surveyProgressStorageKey(requestId));
-                      await releaseAgentLock(lock.runId, "completed");
-                      toast({
-                        title: "Survey Pages complete",
-                        description: `${withResult} of ${totalSheets} pages received a result across ${files.length} file${files.length === 1 ? "" : "s"}.`,
-                      });
-                    } catch (err: unknown) {
-                      window.sessionStorage.removeItem(surveyProgressStorageKey(requestId));
-                      const message = err instanceof Error ? err.message : "Unknown error";
-                      await releaseAgentLock(lock.runId, "failed", message);
-                      toast({
-                        variant: "destructive",
-                        title: "Survey Pages failed",
-                        description: message,
-                      });
-                    } finally {
-                      stopHeartbeat();
-                      setSurveyRunning(false);
-                    }
-
-                  }}
+                  onClick={() => setScoutRunOpen(true)}
                   variant="outline"
                   disabled={!requestId || surveyRunning || !canManage || processingLock}
                 >
@@ -6117,6 +5916,24 @@ const isChildPlanType = (t: string) =>
           onBuild={buildSpaceHierarchy}
           canBuild={canManage}
           onSaved={() => {
+            queryClient.invalidateQueries({ queryKey: ["workbench-analysis-request", projectId] });
+          }}
+        />
+
+        <ScoutRunModal
+          open={scoutRunOpen}
+          onOpenChange={setScoutRunOpen}
+          requestId={requestId}
+          projectId={projectId ?? null}
+          files={(rows?.files ?? []).map((f) => ({
+            id: f.id,
+            name: f.name,
+            pages: (rows?.sheets ?? [])
+              .filter((s) => s.parent_file_id === f.id)
+              .map((s) => ({ page_index: s.page_index, sheet_number: s.sheet_number ?? null }))
+              .sort((a, b) => a.page_index - b.page_index),
+          }))}
+          onApplied={() => {
             queryClient.invalidateQueries({ queryKey: ["workbench-analysis-request", projectId] });
           }}
         />

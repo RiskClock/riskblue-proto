@@ -140,9 +140,21 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const analysisRequestId: string | undefined = body?.analysisRequestId;
     const fileId: string | undefined = body?.fileId;
+    // Optional 1-based page numbers to survey. When present only these pages
+    // are sent to the model and only their sheets are updated.
+    const pageNumbers: number[] = Array.isArray(body?.pageNumbers)
+      ? Array.from(
+          new Set(
+            body.pageNumbers
+              .map((p: unknown) => Number(p))
+              .filter((p: number) => Number.isFinite(p) && p >= 1),
+          ),
+        ).sort((a, b) => (a as number) - (b as number)) as number[]
+      : [];
     if (!analysisRequestId || !fileId) {
       return json({ error: "analysisRequestId and fileId are required" }, 400);
     }
+
 
     // Load prompt.
     const { data: promptRow } = await admin
@@ -362,6 +374,18 @@ Deno.serve(async (req) => {
           ? pdfPageCount
           : (knownMaxSheetPage > 0 ? knownMaxSheetPage : CHUNK_SIZE);
 
+        let allChunks: Array<Awaited<ReturnType<typeof runChunk>>>;
+        if (pageNumbers.length > 0) {
+          // Explicit page selection: one chunk per requested page, all in
+          // parallel. No discovery chunk needed.
+          const hint = Math.max(initialCeiling, ...pageNumbers);
+          console.log(
+            `[survey-pages] chunking file=${fileName} selectedPages=${pageNumbers.join(",")} hint=${hint}`,
+          );
+          allChunks = await Promise.all(
+            pageNumbers.map((p) => runChunk(p, p, hint)),
+          );
+        } else {
         const firstEnd = Math.min(CHUNK_SIZE, initialCeiling);
         const firstChunk = await runChunk(1, firstEnd, initialCeiling);
 
@@ -392,7 +416,9 @@ Deno.serve(async (req) => {
         const restResults = await Promise.all(
           chunkRanges.map(([s, e]) => runChunk(s, e, totalForChunking)),
         );
-        const allChunks = [firstChunk, ...restResults];
+        allChunks = [firstChunk, ...restResults];
+        }
+
 
         // Simple concatenation: append each chunk's parsed JSON array into
         // one combined array. No merging by file_name, no dedupe, no
@@ -454,8 +480,12 @@ Deno.serve(async (req) => {
           itemByPage.set(page, item);
         }
 
+        const selectedSet = new Set(pageNumbers);
         const updates: Array<{ id: string; content: string }> = [];
         for (const s of sheetRows) {
+          // Page-scoped runs must not clobber sheets that weren't surveyed.
+          if (selectedSet.size > 0 && !selectedSet.has(s.page_index)) continue;
+
           const item = itemByPage.get(s.page_index);
           let content: string;
           if (item) {
