@@ -8208,17 +8208,21 @@ function InstancesReportModal({
   // spaces, floor-plan bboxes and the Spatial Architect hierarchy - handed to
   // the Ask Wade assistant as grounding context.
   const buildWadeContext = useCallback(() => {
-    const detections = expanded.map((r) => ({
-      id: r.annotationBaseId,
-      class: displayClassName(r.awpClassName),
-      category: r.category,
-      subtype: r.pipeType || null,
-      diameter: r.pipeDiameter || null,
-      level: r.spaceName || "Unassigned",
-      unit: r.unitName || null,
-      sheet: fileNameById.get(r.fileId) || r.fileId,
-      page: r.pageIndex + 1,
-    }));
+    // Compact rows: omit empty/redundant fields so a full-project payload stays lean.
+    const detections = expanded.map((r) => {
+      const d: Record<string, unknown> = {
+        id: r.annotationBaseId,
+        class: displayClassName(r.awpClassName),
+        level: r.spaceName || "Unassigned",
+        sheet: fileNameById.get(r.fileId) || r.fileId,
+        page: r.pageIndex + 1,
+      };
+      if (r.pipeType) d.subtype = r.pipeType;
+      if (r.pipeDiameter) d.diameter = r.pipeDiameter;
+      if (r.unitName) d.unit = r.unitName;
+      return d as any;
+    });
+
 
     const countsByClass: Record<string, number> = {};
     for (const d of detections) countsByClass[d.class] = (countsByClass[d.class] || 0) + 1;
