@@ -480,8 +480,12 @@ Deno.serve(async (req) => {
           itemByPage.set(page, item);
         }
 
+        const selectedSet = new Set(pageNumbers);
         const updates: Array<{ id: string; content: string }> = [];
         for (const s of sheetRows) {
+          // Page-scoped runs must not clobber sheets that weren't surveyed.
+          if (selectedSet.size > 0 && !selectedSet.has(s.page_index)) continue;
+
           const item = itemByPage.get(s.page_index);
           let content: string;
           if (item) {
