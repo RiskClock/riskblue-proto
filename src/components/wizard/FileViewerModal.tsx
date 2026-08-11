@@ -1270,10 +1270,34 @@ export const FileViewerModal = ({
   };
 
   // ---- Undo / redo --------------------------------------------------------
+  /** Apply a stored position to a marker (used by move undo/redo). */
+  const applyMove = async (id: string, pos: { nx: number; ny: number }) => {
+    const before = instances.find((i) => i.id === id);
+    if (!before) return false;
+    setInstances((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, nx: pos.nx, ny: pos.ny } : i)),
+    );
+    const ok = await dbUpdatePosition(id, pos.nx, pos.ny);
+    if (!ok) {
+      setInstances((prev) =>
+        prev.map((i) =>
+          i.id === id ? { ...i, nx: before.nx, ny: before.ny } : i,
+        ),
+      );
+      return false;
+    }
+    return true;
+  };
+
   const undo = async () => {
     if (past.length === 0) return;
     const action = past[past.length - 1];
-    if (action.type === "add") {
+    if (action.type === "move") {
+      const ok = await applyMove(action.id, action.from);
+      if (!ok) return;
+      setPast((p) => p.slice(0, -1));
+      setFuture((f) => [...f, action]);
+    } else if (action.type === "add") {
       const ok = await dbDelete(action.instance.id);
       if (!ok) return;
       setInstances((prev) => prev.filter((i) => i.id !== action.instance.id));
@@ -1298,7 +1322,12 @@ export const FileViewerModal = ({
   const redo = async () => {
     if (future.length === 0) return;
     const action = future[future.length - 1];
-    if (action.type === "add") {
+    if (action.type === "move") {
+      const ok = await applyMove(action.id, action.to);
+      if (!ok) return;
+      setFuture((f) => f.slice(0, -1));
+      setPast((p) => [...p, action]);
+    } else if (action.type === "add") {
       // Re-insert the previously undone add
       const row = await dbInsert({
         awp_class_name: action.instance.awp_class_name,
@@ -1318,6 +1347,7 @@ export const FileViewerModal = ({
       setPast((p) => [...p, action]);
     }
   };
+
 
   // ---- Source ------------------------------------------------------------
   const source: DocumentSourceDescriptor | null = useMemo(() => {
