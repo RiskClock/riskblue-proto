@@ -8,17 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AppHeader } from "@/components/AppHeader";
-import { Plus, X, Save, RotateCcw, ShieldAlert, ExternalLink, AlertTriangle, Loader2, Link2 } from "lucide-react";
+import { Plus, X, ShieldAlert, ExternalLink, AlertTriangle, Loader2, Link2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { useMitigationControls, getControlNameById } from "@/hooks/useMitigationControls";
@@ -30,11 +28,6 @@ interface AWPItem {
   default_control_ids: string[];
   can_span_multiple_spaces: boolean;
   category: "critical_assets" | "water_systems" | "processes";
-}
-
-interface PendingChange {
-  original: string[];
-  current: string[];
 }
 
 interface PromptInfo {
@@ -63,10 +56,6 @@ export default function Configuration() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   useHeapIdentify();
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [showRevertDialog, setShowRevertDialog] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [pendingChanges, setPendingChanges] = useState<Map<string, PendingChange>>(new Map());
   const [linkingPrompt, setLinkingPrompt] = useState<string | null>(null);
   const [promptUrls, setPromptUrls] = useState<Map<string, string>>(new Map());
   const [resolvingPrompt, setResolvingPrompt] = useState<string | null>(null);
@@ -354,11 +343,6 @@ export default function Configuration() {
   }
 
   const loading = awpLoading || controlsLoading;
-
-  const hasAWPChanges = (awp: AWPItem): boolean => {
-    const change = pendingChanges.get(awp.id);
-    return change ? JSON.stringify([...change.original].sort()) !== JSON.stringify([...change.current].sort()) : false;
-  };
 
   const renderPromptCell = (awp: AWPItem) => {
     const prompt = promptsByName.get(awp.name);
