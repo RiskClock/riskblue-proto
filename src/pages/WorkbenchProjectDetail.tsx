@@ -8261,6 +8261,11 @@ function InstancesReportModal({
       appliesToLevels: s?.applies_to_levels || [],
     }));
 
+    // Aggregates are always complete; the raw detection rows are capped so a
+    // very large project doesn't blow up the per-request payload.
+    const MAX_DETECTION_ROWS = 600;
+    const truncated = detections.length > MAX_DETECTION_ROWS;
+
     return {
       project: { name: projectName, id: projectId },
       enabledClasses: (enabledClassNames || []).map((n) => displayClassName(n)),
@@ -8269,11 +8274,17 @@ function InstancesReportModal({
         detections: detections.length,
         byClass: countsByClass,
         byLevel: countsByLevel,
+        bySheetPage: countsBySheetPage,
       },
       spatialHierarchy: hierarchy,
       floorPlanPages: planPages,
-      detections,
+      detectionsTruncated: truncated,
+      detectionsNote: truncated
+        ? `Only the first ${MAX_DETECTION_ROWS} of ${detections.length} detection rows are listed. The totals above cover all detections - use them for any counting.`
+        : undefined,
+      detections: truncated ? detections.slice(0, MAX_DETECTION_ROWS) : detections,
     };
+
   }, [
     expanded,
     displayClassName,
