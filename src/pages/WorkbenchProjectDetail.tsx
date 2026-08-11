@@ -8265,9 +8265,9 @@ function InstancesReportModal({
       appliesToLevels: s?.applies_to_levels || [],
     }));
 
-    // Aggregates are always complete; the raw detection rows are capped so a
-    // very large project doesn't blow up the per-request payload.
-    const MAX_DETECTION_ROWS = 600;
+    // All detections are sent - Gemini's context window plus prompt caching
+    // makes full fidelity affordable. The cap is only an extreme safety valve.
+    const MAX_DETECTION_ROWS = 10000;
     const truncated = detections.length > MAX_DETECTION_ROWS;
 
     return {
@@ -8282,12 +8282,13 @@ function InstancesReportModal({
       },
       spatialHierarchy: hierarchy,
       floorPlanPages: planPages,
-      detectionsTruncated: truncated,
       detectionsNote: truncated
         ? `Only the first ${MAX_DETECTION_ROWS} of ${detections.length} detection rows are listed. The totals above cover all detections - use them for any counting.`
-        : undefined,
+        : `All ${detections.length} detection rows for this project are listed below - the list is complete, so you can answer negative/exhaustive questions (e.g. levels with no detections of a class) definitively.`,
+      detectionsTruncated: truncated,
       detections: truncated ? detections.slice(0, MAX_DETECTION_ROWS) : detections,
     };
+
 
   }, [
     expanded,
