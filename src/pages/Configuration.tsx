@@ -832,7 +832,7 @@ const AGENT_CONFIGS: AgentConfig[] = [
     modelKey: "ask_wade_model",
     defaultModel: "gemini-3.5-flash",
     promptKey: "ask_wade_prompt",
-    buttonLabel: "Show System Prompt",
+    buttonLabel: "Show Prompt",
     dialogTitle: "Wade Agent System Prompt",
     fallbackDescription: "Leave blank to use the built-in default prompt.",
     savedDescription: "Wade will use the updated prompt on the next question.",
