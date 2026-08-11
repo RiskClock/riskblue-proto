@@ -140,6 +140,7 @@ export function AskWadePanel({
       setMessages((prev) => [...prev, { role: "user", content: text }, { role: "assistant", content: answer }]);
       await persist("user", text);
       await persist("assistant", answer);
+      sessionCountRef.current += 1;
     } catch (e: any) {
       toast({
         title: "Wade could not answer",
