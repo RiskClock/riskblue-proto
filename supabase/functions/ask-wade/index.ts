@@ -42,7 +42,9 @@ Deno.serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return json({ error: "Authentication required" }, 401);
+    if (!authHeader?.startsWith("Bearer ")) {
+      return json({ error: "Authentication required. Please sign in again." }, 401);
+    }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -51,8 +53,14 @@ Deno.serve(async (req) => {
       auth: { persistSession: false },
     });
 
-    const { data: { user }, error: userError } = await userClient.auth.getUser();
-    if (userError || !user) return json({ error: "Invalid or expired session" }, 401);
+    const token = authHeader.slice("Bearer ".length).trim();
+    if (!token) return json({ error: "Authentication required. Please sign in again." }, 401);
+
+    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims?.sub) {
+      console.warn("[ask-wade] token validation failed", claimsError?.message ?? "missing subject");
+      return json({ error: "Your session expired. Please sign in again." }, 401);
+    }
 
     const body = await req.json().catch(() => null);
     const projectId: string | undefined = body?.projectId;

@@ -69,14 +69,27 @@ export function AskWadePanel({
   const send = async () => {
     const text = input.trim();
     if (!text || sending) return;
-    setInput("");
-    const next: WadeMessage[] = [...messages, { role: "user", content: text }];
-    setMessages(next);
     setSending(true);
-    void persist("user", text);
 
     try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      let session = sessionData.session;
+      if (sessionError) throw sessionError;
+
+      const expiresSoon = session?.expires_at && session.expires_at * 1000 <= Date.now() + 60_000;
+      if (expiresSoon) {
+        const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) throw refreshError;
+        session = refreshed.session;
+      }
+
+      if (!session?.access_token) {
+        throw new Error("Your session expired - please sign in again.");
+      }
+
+      const next: WadeMessage[] = [...messages, { role: "user", content: text }];
       const { data, error } = await supabase.functions.invoke("ask-wade", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
         body: {
           projectId,
           context: buildContext(),
@@ -87,8 +100,10 @@ export function AskWadePanel({
       if ((data as any)?.error) throw new Error((data as any).error);
 
       const answer = (data as any).response as string;
-      setMessages((prev) => [...prev, { role: "assistant", content: answer }]);
-      void persist("assistant", answer);
+      setInput("");
+      setMessages((prev) => [...prev, { role: "user", content: text }, { role: "assistant", content: answer }]);
+      await persist("user", text);
+      await persist("assistant", answer);
     } catch (e: any) {
       toast({
         title: "Wade could not answer",
