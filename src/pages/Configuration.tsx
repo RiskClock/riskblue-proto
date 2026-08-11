@@ -644,7 +644,6 @@ interface ControlEditModalProps {
   awp: AWPItem;
   controls: { id: string; name: string; category: string }[];
   currentIds: string[];
-  pendingChange?: PendingChange;
   onAddControl: (awp: AWPItem, controlId: string) => void;
   onRemoveControl: (awp: AWPItem, controlId: string) => void;
   onClose: () => void;
