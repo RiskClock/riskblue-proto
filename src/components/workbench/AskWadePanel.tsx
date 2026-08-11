@@ -56,6 +56,42 @@ export function AskWadePanel({
     if (!loading) inputRef.current?.focus();
   }, [loading]);
 
+  // Log the whole Wade conversation as a single project activity when the
+  // panel closes / unmounts (not one entry per message).
+  const sessionCountRef = useRef(0);
+  useEffect(() => {
+    return () => {
+      const count = sessionCountRef.current;
+      if (count === 0) return;
+      sessionCountRef.current = 0;
+      void (async () => {
+        try {
+          const { data: auth } = await supabase.auth.getUser();
+          const u = auth?.user;
+          if (!u) return;
+          const name =
+            (u.user_metadata as any)?.full_name ||
+            (u.user_metadata as any)?.name ||
+            null;
+          await supabase.from("project_audit_events" as any).insert({
+            project_id: projectId,
+            actor_user_id: u.id,
+            actor_email: u.email ?? null,
+            actor_name: name,
+            entity_type: "wade_chat",
+            entity_id: null,
+            action: "session",
+            summary: `Ask Wade session - ${count} message${count === 1 ? "" : "s"} sent`,
+            details: { message_count: count },
+          } as any);
+        } catch (e) {
+          console.warn("Failed to log Wade session activity", e);
+        }
+      })();
+    };
+  }, [projectId]);
+
+
   const persist = async (role: "user" | "assistant", content: string) => {
     const { data: auth } = await supabase.auth.getUser();
     await supabase.from("wade_chat_messages" as any).insert({
@@ -104,6 +140,7 @@ export function AskWadePanel({
       setMessages((prev) => [...prev, { role: "user", content: text }, { role: "assistant", content: answer }]);
       await persist("user", text);
       await persist("assistant", answer);
+      sessionCountRef.current += 1;
     } catch (e: any) {
       toast({
         title: "Wade could not answer",

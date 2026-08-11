@@ -8,17 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AppHeader } from "@/components/AppHeader";
-import { Plus, X, Save, RotateCcw, ShieldAlert, ExternalLink, AlertTriangle, Loader2, Link2 } from "lucide-react";
+import { Plus, X, ShieldAlert, ExternalLink, AlertTriangle, Loader2, Link2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { useMitigationControls, getControlNameById } from "@/hooks/useMitigationControls";
@@ -30,11 +28,6 @@ interface AWPItem {
   default_control_ids: string[];
   can_span_multiple_spaces: boolean;
   category: "critical_assets" | "water_systems" | "processes";
-}
-
-interface PendingChange {
-  original: string[];
-  current: string[];
 }
 
 interface PromptInfo {
@@ -63,10 +56,6 @@ export default function Configuration() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   useHeapIdentify();
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [showRevertDialog, setShowRevertDialog] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [pendingChanges, setPendingChanges] = useState<Map<string, PendingChange>>(new Map());
   const [linkingPrompt, setLinkingPrompt] = useState<string | null>(null);
   const [promptUrls, setPromptUrls] = useState<Map<string, string>>(new Map());
   const [resolvingPrompt, setResolvingPrompt] = useState<string | null>(null);
@@ -131,90 +120,41 @@ export default function Configuration() {
   }), [awpItems]);
 
   const getCurrentControlIds = (awp: AWPItem): string[] => {
-    const change = pendingChanges.get(awp.id);
-    if (!change) {
-      return [...awp.default_control_ids].sort((a, b) => {
-        const nameA = getControlNameById(controls, a) || a;
-        const nameB = getControlNameById(controls, b) || b;
-        return nameA.localeCompare(nameB);
-      });
-    }
-    const originalSorted = [...change.original].sort((a, b) => {
+    const live = awpItems.find(a => a.id === awp.id) ?? awp;
+    return [...live.default_control_ids].sort((a, b) => {
       const nameA = getControlNameById(controls, a) || a;
       const nameB = getControlNameById(controls, b) || b;
       return nameA.localeCompare(nameB);
     });
-    const newlyAdded = change.current.filter(id => !change.original.includes(id));
-    const remaining = originalSorted.filter(id => change.current.includes(id));
-    return [...remaining, ...newlyAdded];
   };
 
-  const hasUnsavedChanges = useMemo(() => {
-    for (const [, change] of pendingChanges) {
-      if (JSON.stringify([...change.original].sort()) !== JSON.stringify([...change.current].sort())) return true;
-    }
-    return false;
-  }, [pendingChanges]);
-
-  const handleAddControl = (awp: AWPItem, controlId: string) => {
-    const current = pendingChanges.get(awp.id)?.current ?? awp.default_control_ids;
-    if (current.includes(controlId)) return;
-    const original = pendingChanges.get(awp.id)?.original ?? awp.default_control_ids;
-    setPendingChanges(prev => { const next = new Map(prev); next.set(awp.id, { original, current: [...current, controlId] }); return next; });
-  };
-
-  const handleRemoveControl = (awp: AWPItem, controlId: string) => {
-    const current = pendingChanges.get(awp.id)?.current ?? awp.default_control_ids;
-    const original = pendingChanges.get(awp.id)?.original ?? awp.default_control_ids;
-    setPendingChanges(prev => { const next = new Map(prev); next.set(awp.id, { original, current: current.filter(id => id !== controlId) }); return next; });
-  };
-
-  const changeSummary = useMemo(() => {
-    const summary: { category: string; awpName: string; added: string[]; removed: string[] }[] = [];
-    for (const [awpId, change] of pendingChanges) {
-      const awp = awpItems.find(a => a.id === awpId);
-      if (!awp) continue;
-      const added = change.current.filter(id => !change.original.includes(id));
-      const removed = change.original.filter(id => !change.current.includes(id));
-      if (added.length > 0 || removed.length > 0) {
-        const categoryLabel = awp.category === "critical_assets" ? "Critical Assets" : awp.category === "water_systems" ? "Water Systems" : "Processes";
-        summary.push({ category: categoryLabel, awpName: awp.name, added: added.map(id => getControlNameById(controls, id) || id), removed: removed.map(id => getControlNameById(controls, id) || id) });
-      }
-    }
-    return summary;
-  }, [pendingChanges, awpItems, controls]);
-
-  const handleSave = async () => {
-    setSaving(true);
+  const persistControlIds = async (awp: AWPItem, nextIds: string[]) => {
     try {
-      let updatedCount = 0;
-      for (const [awpId, change] of pendingChanges) {
-        const awp = awpItems.find(a => a.id === awpId);
-        if (!awp) continue;
-        if (JSON.stringify([...change.original].sort()) === JSON.stringify([...change.current].sort())) continue;
-        const { data, error } = await supabase.from(awp.category).update({ default_control_ids: change.current }).eq("id", awpId).select("id");
-        if (error) throw error;
-        if (!data || data.length === 0) throw new Error("Not authorized to update AWP configuration.");
-        updatedCount++;
-      }
-      if (updatedCount === 0) {
-        toast({ title: "No changes to save", description: "All configurations are already up to date." });
-      } else {
-        toast({ title: "Changes saved", description: "AWP configurations have been updated." });
-      }
-      setPendingChanges(new Map());
-      setShowSaveDialog(false);
-      setEditingControlsAwp(null);
-      refetchAWPs();
+      const { data, error } = await supabase
+        .from(awp.category)
+        .update({ default_control_ids: nextIds })
+        .eq("id", awp.id)
+        .select("id");
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error("Not authorized to update AWP configuration.");
+      await refetchAWPs();
       queryClient.invalidateQueries({ queryKey: ["awp-options"] });
     } catch (error: any) {
-      toast({ title: "Error saving changes", description: error.message, variant: "destructive" });
-    } finally {
-      setSaving(false);
+      toast({ title: "Could not save change", description: error?.message, variant: "destructive" });
     }
   };
 
-  const handleRevert = () => { setPendingChanges(new Map()); setShowRevertDialog(false); };
+  const handleAddControl = async (awp: AWPItem, controlId: string) => {
+    const current = (awpItems.find(a => a.id === awp.id) ?? awp).default_control_ids;
+    if (current.includes(controlId)) return;
+    await persistControlIds(awp, [...current, controlId]);
+  };
+
+  const handleRemoveControl = async (awp: AWPItem, controlId: string) => {
+    const current = (awpItems.find(a => a.id === awp.id) ?? awp).default_control_ids;
+    await persistControlIds(awp, current.filter(id => id !== controlId));
+  };
+
 
   const handleToggleSpan = async (awp: AWPItem, next: boolean) => {
     try {
@@ -404,11 +344,6 @@ export default function Configuration() {
 
   const loading = awpLoading || controlsLoading;
 
-  const hasAWPChanges = (awp: AWPItem): boolean => {
-    const change = pendingChanges.get(awp.id);
-    return change ? JSON.stringify([...change.original].sort()) !== JSON.stringify([...change.current].sort()) : false;
-  };
-
   const renderPromptCell = (awp: AWPItem) => {
     const prompt = promptsByName.get(awp.name);
     const isEditing = linkingPrompt === awp.name;
@@ -496,56 +431,43 @@ export default function Configuration() {
       />
 
       <main className="container mx-auto px-6 py-8">
-        <div className="flex items-center justify-end mb-6">
-
-
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={() => setShowRevertDialog(true)} disabled={!hasUnsavedChanges}>
-              <RotateCcw className="h-4 w-4 mr-2" />Revert Changes
-            </Button>
-            <Button onClick={() => setShowSaveDialog(true)} disabled={!hasUnsavedChanges}>
-              <Save className="h-4 w-4 mr-2" />Save Changes
-            </Button>
-          </div>
-        </div>
-
         {loading ? (
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         ) : (
-          <div className="bg-card rounded-lg border">
-            <div className="px-4 py-3 border-b">
-              <h2 className="text-lg font-semibold">Risk Mitigation Classes</h2>
+          <div>
+            <h2 className="text-lg font-semibold mb-3">Risk Mitigation Classes</h2>
+            <div className="bg-card rounded-lg border">
+              <Table className="[&_td]:py-2 [&_th]:py-2 [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-card [&_thead_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[180px]">AWP Class</TableHead>
+                    <TableHead className="w-[180px]">Default Controls</TableHead>
+                    <TableHead className="w-[160px]">Can Span Multiple Spaces</TableHead>
+                    <TableHead className="w-[350px]">Individual Detection Prompt</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow className="bg-muted/50 hover:bg-muted/50">
+                    <TableCell colSpan={4} className="font-semibold text-sm py-2">Critical Assets</TableCell>
+                  </TableRow>
+                  {groupedAWPs.critical_assets.map((awp) => (
+                    <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} promptCell={renderPromptCell(awp)} />
+                  ))}
+                  <TableRow className="bg-muted/50 hover:bg-muted/50">
+                    <TableCell colSpan={4} className="font-semibold text-sm py-2">Water Systems</TableCell>
+                  </TableRow>
+                  {groupedAWPs.water_systems.map((awp) => (
+                    <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} promptCell={renderPromptCell(awp)} />
+                  ))}
+                  <TableRow className="bg-muted/50 hover:bg-muted/50">
+                    <TableCell colSpan={4} className="font-semibold text-sm py-2">Processes</TableCell>
+                  </TableRow>
+                  {groupedAWPs.processes.map((awp) => (
+                    <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} promptCell={renderPromptCell(awp)} />
+                  ))}
+                </TableBody>
+              </Table>
             </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[180px]">AWP Class</TableHead>
-                  <TableHead className="w-[180px]">Default Controls</TableHead>
-                  <TableHead className="w-[160px]">Can Span Multiple Spaces</TableHead>
-                  <TableHead className="w-[350px]">Individual Detection Prompt</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableCell colSpan={4} className="font-semibold text-sm py-2">Critical Assets</TableCell>
-                </TableRow>
-                {groupedAWPs.critical_assets.map((awp) => (
-                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} promptCell={renderPromptCell(awp)} />
-                ))}
-                <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableCell colSpan={4} className="font-semibold text-sm py-2">Water Systems</TableCell>
-                </TableRow>
-                {groupedAWPs.water_systems.map((awp) => (
-                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} promptCell={renderPromptCell(awp)} />
-                ))}
-                <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableCell colSpan={4} className="font-semibold text-sm py-2">Processes</TableCell>
-                </TableRow>
-                {groupedAWPs.processes.map((awp) => (
-                  <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} hasChanges={hasAWPChanges(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} promptCell={renderPromptCell(awp)} />
-                ))}
-              </TableBody>
-            </Table>
           </div>
         )}
 
@@ -558,49 +480,11 @@ export default function Configuration() {
           awp={editingControlsAwp}
           controls={controls}
           currentIds={getCurrentControlIds(editingControlsAwp)}
-          pendingChange={pendingChanges.get(editingControlsAwp.id)}
           onAddControl={handleAddControl}
           onRemoveControl={handleRemoveControl}
           onClose={() => setEditingControlsAwp(null)}
         />
       )}
-
-      <AlertDialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
-        <AlertDialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Save Changes</AlertDialogTitle>
-            <AlertDialogDescription>The following changes will be applied:</AlertDialogDescription>
-          </AlertDialogHeader>
-          <ScrollArea className="flex-1 max-h-[50vh] pr-4">
-            <div className="space-y-4">
-              {changeSummary.map((item, idx) => (
-                <div key={idx} className="border rounded-lg p-3">
-                  <p className="font-medium text-foreground">{item.category}: {item.awpName}</p>
-                  {item.added.length > 0 && <p className="text-sm text-green-600">+ {item.added.join(", ")}</p>}
-                  {item.removed.length > 0 && <p className="text-sm text-destructive">- {item.removed.join(", ")}</p>}
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Confirm"}</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={showRevertDialog} onOpenChange={setShowRevertDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Discard Changes</AlertDialogTitle>
-            <AlertDialogDescription>Are you sure you want to discard all unsaved changes?</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRevert}>Discard</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
@@ -610,16 +494,15 @@ interface AWPRowProps {
   awp: AWPItem;
   controls: { id: string; name: string; category: string }[];
   currentIds: string[];
-  hasChanges: boolean;
   onEditControls: () => void;
   onToggleSpan: (next: boolean) => void;
   promptCell: React.ReactNode;
 }
 
-function AWPRow({ awp, controls, currentIds, hasChanges, onEditControls, onToggleSpan, promptCell }: AWPRowProps) {
+function AWPRow({ awp, controls, currentIds, onEditControls, onToggleSpan, promptCell }: AWPRowProps) {
   const count = currentIds.length;
   return (
-    <TableRow className={hasChanges ? "bg-yellow-50/50" : ""}>
+    <TableRow>
       <TableCell className="font-medium py-2">{awp.name}</TableCell>
       <TableCell className="py-2">
         <div className="flex items-center gap-2">
@@ -644,13 +527,12 @@ interface ControlEditModalProps {
   awp: AWPItem;
   controls: { id: string; name: string; category: string }[];
   currentIds: string[];
-  pendingChange?: PendingChange;
   onAddControl: (awp: AWPItem, controlId: string) => void;
   onRemoveControl: (awp: AWPItem, controlId: string) => void;
   onClose: () => void;
 }
 
-function ControlEditModal({ awp, controls, currentIds, pendingChange, onAddControl, onRemoveControl, onClose }: ControlEditModalProps) {
+function ControlEditModal({ awp, controls, currentIds, onAddControl, onRemoveControl, onClose }: ControlEditModalProps) {
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="max-w-lg">
@@ -661,9 +543,8 @@ function ControlEditModal({ awp, controls, currentIds, pendingChange, onAddContr
           <div className="flex flex-wrap gap-1.5">
             {currentIds.map((controlId) => {
               const controlName = getControlNameById(controls, controlId);
-              const isNew = pendingChange && !pendingChange.original.includes(controlId);
               return (
-                <Badge key={controlId} variant="secondary" className={`flex items-center gap-1 text-xs ${isNew ? "border-green-500 bg-green-50" : ""}`}>
+                <Badge key={controlId} variant="secondary" className="flex items-center gap-1 text-xs">
                   {controlName || controlId}
                   <button onClick={() => onRemoveControl(awp, controlId)} className="ml-0.5 hover:text-destructive"><X className="h-3 w-3" /></button>
                 </Badge>
@@ -832,7 +713,7 @@ const AGENT_CONFIGS: AgentConfig[] = [
     modelKey: "ask_wade_model",
     defaultModel: "gemini-3.5-flash",
     promptKey: "ask_wade_prompt",
-    buttonLabel: "Show System Prompt",
+    buttonLabel: "Show Prompt",
     dialogTitle: "Wade Agent System Prompt",
     fallbackDescription: "Leave blank to use the built-in default prompt.",
     savedDescription: "Wade will use the updated prompt on the next question.",
@@ -895,9 +776,9 @@ function AgentPromptRow({ agent }: { agent: AgentConfig }) {
   return (
     <>
       <TableRow>
+        <TableCell className="align-top font-medium">{agent.title}</TableCell>
         <TableCell className="align-top">
-          <div className="font-medium">{agent.title}</div>
-          <p className="text-sm text-muted-foreground mt-1 max-w-[620px]">{agent.description}</p>
+          <p className="text-sm text-muted-foreground max-w-[620px]">{agent.description}</p>
         </TableCell>
         <TableCell className="align-top">
           <PromptModelPicker settingKey={agent.modelKey} defaultModel={agent.defaultModel} />
@@ -942,24 +823,25 @@ function AgentPromptRow({ agent }: { agent: AgentConfig }) {
 
 function AIAgentsSection() {
   return (
-    <div className="mt-8 bg-card rounded-lg border">
-      <div className="px-4 py-3 border-b">
-        <h2 className="text-lg font-semibold">AI Agents</h2>
+    <div className="mt-8">
+      <h2 className="text-lg font-semibold mb-3">AI Agents</h2>
+      <div className="bg-card rounded-lg border">
+        <Table className="[&_td]:py-2 [&_th]:py-2 [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-card [&_thead_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[200px]">Agent</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead className="w-[280px]">Model</TableHead>
+              <TableHead className="w-[170px]" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {AGENT_CONFIGS.map((agent) => (
+              <AgentPromptRow key={agent.promptKey} agent={agent} />
+            ))}
+          </TableBody>
+        </Table>
       </div>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Agent</TableHead>
-            <TableHead className="w-[280px]">Model</TableHead>
-            <TableHead className="w-[200px]" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {AGENT_CONFIGS.map((agent) => (
-            <AgentPromptRow key={agent.promptKey} agent={agent} />
-          ))}
-        </TableBody>
-      </Table>
     </div>
   );
 }
