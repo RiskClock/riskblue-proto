@@ -8409,7 +8409,7 @@ function InstancesReportModal({
               Ask Wade
             </Button>
           </div>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close Threat Report</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
