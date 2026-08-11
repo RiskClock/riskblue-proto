@@ -1153,7 +1153,21 @@ export const FileViewerModal = ({
             i.id === id ? { ...i, nx: inst.nx, ny: inst.ny } : i,
           ),
         );
+        return;
       }
+      if (clampedNx !== inst.nx || clampedNy !== inst.ny) {
+        setPast((p) => [
+          ...p,
+          {
+            type: "move",
+            id,
+            from: { nx: inst.nx, ny: inst.ny },
+            to: { nx: clampedNx, ny: clampedNy },
+          },
+        ]);
+        setFuture([]);
+      }
+
     },
     [instances, floorPlans, effectiveFloorPlanOverrides, dbUpdatePosition],
   );
