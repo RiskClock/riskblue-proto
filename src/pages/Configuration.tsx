@@ -513,13 +513,16 @@ export default function Configuration() {
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         ) : (
           <div className="bg-card rounded-lg border">
+            <div className="px-4 py-3 border-b">
+              <h2 className="text-lg font-semibold">Risk Mitigation Classes</h2>
+            </div>
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[180px]">AWP Class</TableHead>
                   <TableHead className="w-[180px]">Default Controls</TableHead>
                   <TableHead className="w-[160px]">Can Span Multiple Spaces</TableHead>
-                  <TableHead className="w-[350px]">Full Prompt</TableHead>
+                  <TableHead className="w-[350px]">Individual Detection Prompt</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
