@@ -131,90 +131,41 @@ export default function Configuration() {
   }), [awpItems]);
 
   const getCurrentControlIds = (awp: AWPItem): string[] => {
-    const change = pendingChanges.get(awp.id);
-    if (!change) {
-      return [...awp.default_control_ids].sort((a, b) => {
-        const nameA = getControlNameById(controls, a) || a;
-        const nameB = getControlNameById(controls, b) || b;
-        return nameA.localeCompare(nameB);
-      });
-    }
-    const originalSorted = [...change.original].sort((a, b) => {
+    const live = awpItems.find(a => a.id === awp.id) ?? awp;
+    return [...live.default_control_ids].sort((a, b) => {
       const nameA = getControlNameById(controls, a) || a;
       const nameB = getControlNameById(controls, b) || b;
       return nameA.localeCompare(nameB);
     });
-    const newlyAdded = change.current.filter(id => !change.original.includes(id));
-    const remaining = originalSorted.filter(id => change.current.includes(id));
-    return [...remaining, ...newlyAdded];
   };
 
-  const hasUnsavedChanges = useMemo(() => {
-    for (const [, change] of pendingChanges) {
-      if (JSON.stringify([...change.original].sort()) !== JSON.stringify([...change.current].sort())) return true;
-    }
-    return false;
-  }, [pendingChanges]);
-
-  const handleAddControl = (awp: AWPItem, controlId: string) => {
-    const current = pendingChanges.get(awp.id)?.current ?? awp.default_control_ids;
-    if (current.includes(controlId)) return;
-    const original = pendingChanges.get(awp.id)?.original ?? awp.default_control_ids;
-    setPendingChanges(prev => { const next = new Map(prev); next.set(awp.id, { original, current: [...current, controlId] }); return next; });
-  };
-
-  const handleRemoveControl = (awp: AWPItem, controlId: string) => {
-    const current = pendingChanges.get(awp.id)?.current ?? awp.default_control_ids;
-    const original = pendingChanges.get(awp.id)?.original ?? awp.default_control_ids;
-    setPendingChanges(prev => { const next = new Map(prev); next.set(awp.id, { original, current: current.filter(id => id !== controlId) }); return next; });
-  };
-
-  const changeSummary = useMemo(() => {
-    const summary: { category: string; awpName: string; added: string[]; removed: string[] }[] = [];
-    for (const [awpId, change] of pendingChanges) {
-      const awp = awpItems.find(a => a.id === awpId);
-      if (!awp) continue;
-      const added = change.current.filter(id => !change.original.includes(id));
-      const removed = change.original.filter(id => !change.current.includes(id));
-      if (added.length > 0 || removed.length > 0) {
-        const categoryLabel = awp.category === "critical_assets" ? "Critical Assets" : awp.category === "water_systems" ? "Water Systems" : "Processes";
-        summary.push({ category: categoryLabel, awpName: awp.name, added: added.map(id => getControlNameById(controls, id) || id), removed: removed.map(id => getControlNameById(controls, id) || id) });
-      }
-    }
-    return summary;
-  }, [pendingChanges, awpItems, controls]);
-
-  const handleSave = async () => {
-    setSaving(true);
+  const persistControlIds = async (awp: AWPItem, nextIds: string[]) => {
     try {
-      let updatedCount = 0;
-      for (const [awpId, change] of pendingChanges) {
-        const awp = awpItems.find(a => a.id === awpId);
-        if (!awp) continue;
-        if (JSON.stringify([...change.original].sort()) === JSON.stringify([...change.current].sort())) continue;
-        const { data, error } = await supabase.from(awp.category).update({ default_control_ids: change.current }).eq("id", awpId).select("id");
-        if (error) throw error;
-        if (!data || data.length === 0) throw new Error("Not authorized to update AWP configuration.");
-        updatedCount++;
-      }
-      if (updatedCount === 0) {
-        toast({ title: "No changes to save", description: "All configurations are already up to date." });
-      } else {
-        toast({ title: "Changes saved", description: "AWP configurations have been updated." });
-      }
-      setPendingChanges(new Map());
-      setShowSaveDialog(false);
-      setEditingControlsAwp(null);
-      refetchAWPs();
+      const { data, error } = await supabase
+        .from(awp.category)
+        .update({ default_control_ids: nextIds })
+        .eq("id", awp.id)
+        .select("id");
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error("Not authorized to update AWP configuration.");
+      await refetchAWPs();
       queryClient.invalidateQueries({ queryKey: ["awp-options"] });
     } catch (error: any) {
-      toast({ title: "Error saving changes", description: error.message, variant: "destructive" });
-    } finally {
-      setSaving(false);
+      toast({ title: "Could not save change", description: error?.message, variant: "destructive" });
     }
   };
 
-  const handleRevert = () => { setPendingChanges(new Map()); setShowRevertDialog(false); };
+  const handleAddControl = async (awp: AWPItem, controlId: string) => {
+    const current = (awpItems.find(a => a.id === awp.id) ?? awp).default_control_ids;
+    if (current.includes(controlId)) return;
+    await persistControlIds(awp, [...current, controlId]);
+  };
+
+  const handleRemoveControl = async (awp: AWPItem, controlId: string) => {
+    const current = (awpItems.find(a => a.id === awp.id) ?? awp).default_control_ids;
+    await persistControlIds(awp, current.filter(id => id !== controlId));
+  };
+
 
   const handleToggleSpan = async (awp: AWPItem, next: boolean) => {
     try {
