@@ -35,6 +35,20 @@ Rules:
   referring to detections so the user can find them.
 - When counting, count from the context data and show the breakdown.`;
 
+// Only the last N turns of the conversation are sent to the model; the UI still
+// shows (and the database still stores) the full transcript.
+const MAX_HISTORY_TURNS = 10;
+const CACHE_TTL_SECONDS = 900;
+
+// contextHash -> Gemini cached-content name. Per-isolate, so a cold start just
+// means one extra cache create.
+const cacheRegistry = new Map<string, { name: string; expiresAt: number }>();
+
+async function sha256Hex(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -113,47 +127,127 @@ Deno.serve(async (req) => {
       ? context
       : JSON.stringify(context ?? {}, null, 0);
 
-    const contents: any[] = [
-      {
-        role: "user",
-        parts: [
-          { text: `Instructions:\n${systemPrompt}` },
-          { text: `PROJECT CONTEXT JSON (project "${project.name}"):\n${contextText}` },
-        ],
-      },
-      {
-        role: "model",
-        parts: [{ text: "Understood. I have the project context and will answer questions about it." }],
-      },
-    ];
+    // Stable prefix: system prompt + project context. Everything after this is
+    // the conversation, so the prefix can be cached across turns.
+    const prefixText = `PROJECT CONTEXT JSON (project "${project.name}"):\n${contextText}`;
+    const contextHash = await sha256Hex(`${modelId}\n${systemPrompt}\n${prefixText}`);
 
-    for (const m of messages) {
-      if (!m?.content) continue;
-      contents.push({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: String(m.content) }],
-      });
-    }
+    // Sliding window: only the last N turns are sent to the model. The UI keeps
+    // and displays the whole transcript.
+    const windowed = messages
+      .filter((m) => m?.content)
+      .slice(-MAX_HISTORY_TURNS);
 
-    console.log(
-      `[ask-wade] project=${projectId} model=${modelId} contextChars=${contextText.length} turns=${messages.length}`,
-    );
+    const conversation = windowed.map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: String(m.content) }],
+    }));
 
     const ai = new GoogleGenAI({ apiKey });
-    const resp: any = await ai.models.generateContent({
-      model: modelId,
-      contents,
-    });
+
+    // Explicit context caching keyed by the hash of the stable prefix. Cache
+    // entries are reused for ~15 minutes and invalidated automatically whenever
+    // the report context changes (the hash changes with it).
+    let cachedContentName: string | null = null;
+    let cacheState: "hit" | "miss" | "unavailable" = "unavailable";
+    const nowMs = Date.now();
+    const existing = cacheRegistry.get(contextHash);
+    if (existing && existing.expiresAt > nowMs + 30_000) {
+      cachedContentName = existing.name;
+      cacheState = "hit";
+    } else {
+      try {
+        const created: any = await ai.caches.create({
+          model: modelId,
+          config: {
+            contents: [{ role: "user", parts: [{ text: prefixText }] }],
+            systemInstruction: systemPrompt,
+            ttl: `${CACHE_TTL_SECONDS}s`,
+          },
+        });
+        if (created?.name) {
+          cachedContentName = created.name;
+          cacheRegistry.set(contextHash, {
+            name: created.name,
+            expiresAt: nowMs + CACHE_TTL_SECONDS * 1000,
+          });
+          cacheState = "miss";
+        }
+      } catch (cacheErr) {
+        // Context below the model's minimum cacheable size, or caching not
+        // supported for this model - fall back to sending the prefix inline.
+        console.log(
+          `[ask-wade] cache unavailable: ${
+            cacheErr instanceof Error ? cacheErr.message : String(cacheErr)
+          }`,
+        );
+      }
+    }
+
+    // Rough token estimate (~4 chars/token) for cost observability.
+    const approxContextTokens = Math.round(prefixText.length / 4);
+
+    console.log(
+      `[ask-wade] project=${projectId} model=${modelId} contextChars=${prefixText.length} ` +
+        `~contextTokens=${approxContextTokens} turns=${messages.length}/${windowed.length} ` +
+        `cache=${cacheState} hash=${contextHash.slice(0, 12)}`,
+    );
+
+    const request: any = cachedContentName
+      ? {
+        model: modelId,
+        contents: conversation,
+        config: { cachedContent: cachedContentName },
+      }
+      : {
+        model: modelId,
+        contents: [
+          { role: "user", parts: [{ text: prefixText }] },
+          ...conversation,
+        ],
+        config: { systemInstruction: systemPrompt },
+      };
+
+    let resp: any;
+    try {
+      resp = await ai.models.generateContent(request);
+    } catch (genErr) {
+      // A cache entry can expire or be deleted server-side between turns.
+      if (cachedContentName) {
+        cacheRegistry.delete(contextHash);
+        console.log("[ask-wade] cached content rejected, retrying inline");
+        resp = await ai.models.generateContent({
+          model: modelId,
+          contents: [
+            { role: "user", parts: [{ text: prefixText }] },
+            ...conversation,
+          ],
+          config: { systemInstruction: systemPrompt },
+        });
+      } else {
+        throw genErr;
+      }
+    }
 
     const text = resp?.text ??
       resp?.candidates?.[0]?.content?.parts?.map((p: any) => p?.text ?? "").join("") ??
       "";
 
+    const usage = resp?.usageMetadata;
+    if (usage) {
+      console.log(
+        `[ask-wade] usage prompt=${usage.promptTokenCount ?? "?"} ` +
+          `cached=${usage.cachedContentTokenCount ?? 0} ` +
+          `output=${usage.candidatesTokenCount ?? "?"}`,
+      );
+    }
+
     if (!text.trim()) {
       return json({ error: "The model returned an empty response. Try rephrasing." }, 502);
     }
 
-    return json({ response: text, model: modelId });
+    return json({ response: text, model: modelId, cache: cacheState });
+
   } catch (error) {
     console.error("[ask-wade] error:", error);
     return json(
