@@ -895,9 +895,9 @@ function AgentPromptRow({ agent }: { agent: AgentConfig }) {
   return (
     <>
       <TableRow>
+        <TableCell className="align-top font-medium">{agent.title}</TableCell>
         <TableCell className="align-top">
-          <div className="font-medium">{agent.title}</div>
-          <p className="text-sm text-muted-foreground mt-1 max-w-[620px]">{agent.description}</p>
+          <p className="text-sm text-muted-foreground max-w-[620px]">{agent.description}</p>
         </TableCell>
         <TableCell className="align-top">
           <PromptModelPicker settingKey={agent.modelKey} defaultModel={agent.defaultModel} />
