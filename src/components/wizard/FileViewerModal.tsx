@@ -1315,6 +1315,22 @@ export const FileViewerModal = ({
     return true;
   };
 
+  /**
+   * Re-inserting a marker gives it a brand new DB id, so every other history
+   * entry that still points at the old id must be rewritten - otherwise later
+   * undo/redo steps target rows that no longer exist and the stack desyncs.
+   */
+  const remapHistoryId = (oldId: string, newId: string) => {
+    const fix = (a: HistoryAction): HistoryAction => {
+      if (a.type === "move") return a.id === oldId ? { ...a, id: newId } : a;
+      return a.instance.id === oldId
+        ? { ...a, instance: { ...a.instance, id: newId } }
+        : a;
+    };
+    setPast((p) => p.map(fix));
+    setFuture((f) => f.map(fix));
+  };
+
   const undo = async () => {
     if (past.length === 0) return;
     const action = past[past.length - 1];
@@ -1339,6 +1355,7 @@ export const FileViewerModal = ({
       });
       if (!row) return;
       setInstances((prev) => [...prev, row]);
+      remapHistoryId(action.instance.id, row.id);
       setPast((p) => p.slice(0, -1));
       // Store the new row so a subsequent redo deletes the correct id
       setFuture((f) => [...f, { type: "delete", instance: row }]);
@@ -1363,6 +1380,7 @@ export const FileViewerModal = ({
       });
       if (!row) return;
       setInstances((prev) => [...prev, row]);
+      remapHistoryId(action.instance.id, row.id);
       setFuture((f) => f.slice(0, -1));
       setPast((p) => [...p, { type: "add", instance: row }]);
     } else {
@@ -1373,6 +1391,7 @@ export const FileViewerModal = ({
       setPast((p) => [...p, action]);
     }
   };
+
 
 
   // ---- Source ------------------------------------------------------------
