@@ -661,9 +661,8 @@ function ControlEditModal({ awp, controls, currentIds, onAddControl, onRemoveCon
           <div className="flex flex-wrap gap-1.5">
             {currentIds.map((controlId) => {
               const controlName = getControlNameById(controls, controlId);
-              const isNew = pendingChange && !pendingChange.original.includes(controlId);
               return (
-                <Badge key={controlId} variant="secondary" className={`flex items-center gap-1 text-xs ${isNew ? "border-green-500 bg-green-50" : ""}`}>
+                <Badge key={controlId} variant="secondary" className="flex items-center gap-1 text-xs">
                   {controlName || controlId}
                   <button onClick={() => onRemoveControl(awp, controlId)} className="ml-0.5 hover:text-destructive"><X className="h-3 w-3" /></button>
                 </Badge>
