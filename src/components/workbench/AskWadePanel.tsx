@@ -112,6 +112,7 @@ export function AskWadePanel({
     const text = input.trim();
     if (!text || sending) return;
     setSending(true);
+    setInput("");
 
     try {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
@@ -145,12 +146,13 @@ export function AskWadePanel({
       if ((data as any)?.error) throw new Error((data as any).error);
 
       const answer = (data as any).response as string;
-      setInput("");
+      
       setMessages((prev) => [...prev, { role: "user", content: text }, { role: "assistant", content: answer }]);
       await persist("user", text);
       await persist("assistant", answer);
       sessionCountRef.current += 1;
     } catch (e: any) {
+      setInput((cur) => (cur.trim() ? cur : text));
       toast({
         title: "Wade could not answer",
         description: e?.message || "Something went wrong.",
@@ -249,7 +251,7 @@ export function AskWadePanel({
           }}
         />
         <Button size="icon" onClick={() => void send()} disabled={!input.trim() || sending}>
-          {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          <Send className="h-4 w-4" />
         </Button>
       </div>
     </div>
