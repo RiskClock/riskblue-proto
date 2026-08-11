@@ -1082,9 +1082,21 @@ export const FileViewerModal = ({
               i.id === id ? { ...i, nx: inst.nx, ny: inst.ny } : i,
             ),
           );
+          return;
         }
+        setPast((p) => [
+          ...p,
+          {
+            type: "move",
+            id,
+            from: { nx: inst.nx, ny: inst.ny },
+            to: { nx: clampedNx, ny: clampedNy },
+          },
+        ]);
+        setFuture([]);
         return;
       }
+
       if (!overlayId.startsWith("um-")) return;
       const id = overlayId.slice(3);
       const inst = instances.find((i) => i.id === id);
