@@ -112,6 +112,7 @@ export function AskWadePanel({
     const text = input.trim();
     if (!text || sending) return;
     setSending(true);
+    setInput("");
 
     try {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
@@ -145,7 +146,7 @@ export function AskWadePanel({
       if ((data as any)?.error) throw new Error((data as any).error);
 
       const answer = (data as any).response as string;
-      setInput("");
+      
       setMessages((prev) => [...prev, { role: "user", content: text }, { role: "assistant", content: answer }]);
       await persist("user", text);
       await persist("assistant", answer);
