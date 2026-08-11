@@ -8208,17 +8208,21 @@ function InstancesReportModal({
   // spaces, floor-plan bboxes and the Spatial Architect hierarchy - handed to
   // the Ask Wade assistant as grounding context.
   const buildWadeContext = useCallback(() => {
-    const detections = expanded.map((r) => ({
-      id: r.annotationBaseId,
-      class: displayClassName(r.awpClassName),
-      category: r.category,
-      subtype: r.pipeType || null,
-      diameter: r.pipeDiameter || null,
-      level: r.spaceName || "Unassigned",
-      unit: r.unitName || null,
-      sheet: fileNameById.get(r.fileId) || r.fileId,
-      page: r.pageIndex + 1,
-    }));
+    // Compact rows: omit empty/redundant fields so a full-project payload stays lean.
+    const detections = expanded.map((r) => {
+      const d: Record<string, unknown> = {
+        id: r.annotationBaseId,
+        class: displayClassName(r.awpClassName),
+        level: r.spaceName || "Unassigned",
+        sheet: fileNameById.get(r.fileId) || r.fileId,
+        page: r.pageIndex + 1,
+      };
+      if (r.pipeType) d.subtype = r.pipeType;
+      if (r.pipeDiameter) d.diameter = r.pipeDiameter;
+      if (r.unitName) d.unit = r.unitName;
+      return d as any;
+    });
+
 
     const countsByClass: Record<string, number> = {};
     for (const d of detections) countsByClass[d.class] = (countsByClass[d.class] || 0) + 1;
@@ -8261,9 +8265,9 @@ function InstancesReportModal({
       appliesToLevels: s?.applies_to_levels || [],
     }));
 
-    // Aggregates are always complete; the raw detection rows are capped so a
-    // very large project doesn't blow up the per-request payload.
-    const MAX_DETECTION_ROWS = 600;
+    // All detections are sent - Gemini's context window plus prompt caching
+    // makes full fidelity affordable. The cap is only an extreme safety valve.
+    const MAX_DETECTION_ROWS = 10000;
     const truncated = detections.length > MAX_DETECTION_ROWS;
 
     return {
@@ -8278,12 +8282,13 @@ function InstancesReportModal({
       },
       spatialHierarchy: hierarchy,
       floorPlanPages: planPages,
-      detectionsTruncated: truncated,
       detectionsNote: truncated
         ? `Only the first ${MAX_DETECTION_ROWS} of ${detections.length} detection rows are listed. The totals above cover all detections - use them for any counting.`
-        : undefined,
+        : `All ${detections.length} detection rows for this project are listed below - the list is complete, so you can answer negative/exhaustive questions (e.g. levels with no detections of a class) definitively.`,
+      detectionsTruncated: truncated,
       detections: truncated ? detections.slice(0, MAX_DETECTION_ROWS) : detections,
     };
+
 
   }, [
     expanded,
