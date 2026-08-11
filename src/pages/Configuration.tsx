@@ -549,10 +549,7 @@ export default function Configuration() {
           </div>
         )}
 
-        <SurveyPagePromptSection />
-        <AnalyzePromptSection />
-        <SpaceHierarchyPromptSection />
-        <AskWadeSection />
+        <AIAgentsSection />
       </main>
 
       {/* Control Edit Modal */}
