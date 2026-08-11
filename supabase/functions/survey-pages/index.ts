@@ -140,9 +140,21 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const analysisRequestId: string | undefined = body?.analysisRequestId;
     const fileId: string | undefined = body?.fileId;
+    // Optional 1-based page numbers to survey. When present only these pages
+    // are sent to the model and only their sheets are updated.
+    const pageNumbers: number[] = Array.isArray(body?.pageNumbers)
+      ? Array.from(
+          new Set(
+            body.pageNumbers
+              .map((p: unknown) => Number(p))
+              .filter((p: number) => Number.isFinite(p) && p >= 1),
+          ),
+        ).sort((a, b) => (a as number) - (b as number)) as number[]
+      : [];
     if (!analysisRequestId || !fileId) {
       return json({ error: "analysisRequestId and fileId are required" }, 400);
     }
+
 
     // Load prompt.
     const { data: promptRow } = await admin
