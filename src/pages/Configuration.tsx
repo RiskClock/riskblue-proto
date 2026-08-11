@@ -559,16 +559,15 @@ interface AWPRowProps {
   awp: AWPItem;
   controls: { id: string; name: string; category: string }[];
   currentIds: string[];
-  hasChanges: boolean;
   onEditControls: () => void;
   onToggleSpan: (next: boolean) => void;
   promptCell: React.ReactNode;
 }
 
-function AWPRow({ awp, controls, currentIds, hasChanges, onEditControls, onToggleSpan, promptCell }: AWPRowProps) {
+function AWPRow({ awp, controls, currentIds, onEditControls, onToggleSpan, promptCell }: AWPRowProps) {
   const count = currentIds.length;
   return (
-    <TableRow className={hasChanges ? "bg-yellow-50/50" : ""}>
+    <TableRow>
       <TableCell className="font-medium py-2">{awp.name}</TableCell>
       <TableCell className="py-2">
         <div className="flex items-center gap-2">
