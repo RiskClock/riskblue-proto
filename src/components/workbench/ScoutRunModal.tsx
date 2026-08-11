@@ -10,7 +10,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -114,7 +113,7 @@ export const ScoutRunModal = ({
   useEffect(() => {
     if (!open) return;
     setStage("select");
-    setSelected(new Set());
+    setSelected(new Set(files.flatMap((f) => f.pages.map((p) => keyOf(f.id, p.page_index)))));
     setExpanded(new Set(files.map((f) => f.id)));
     setProgress(null);
     setSnapshots(new Map());
@@ -357,18 +356,18 @@ export const ScoutRunModal = ({
       <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>
-            {stage === "review" ? "Review Scout results" : "Run Scout"}
+            {stage === "review" ? "Review Scout results" : "Scout Agent"}
           </DialogTitle>
           <DialogDescription>
             {stage === "select"
-              ? "Choose the files and pages to survey."
+              ? "Choose the files and pages for Scout Agent to survey."
               : stage === "running"
                 ? "Scout is surveying the selected pages."
                 : "Uncheck any detection you do not want. Applying overwrites the bounding boxes on the checked pages."}
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0 -mx-2 px-2">
+        <div className="flex-1 min-h-0 overflow-y-auto -mx-2 px-2">
           {stage === "running" && (
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-sm text-muted-foreground">
               <Loader2 className="h-6 w-6 animate-spin" />
@@ -504,7 +503,7 @@ export const ScoutRunModal = ({
               ))}
             </div>
           )}
-        </ScrollArea>
+        </div>
 
         <DialogFooter className="gap-2">
           {stage === "select" && (
@@ -513,7 +512,7 @@ export const ScoutRunModal = ({
                 Cancel
               </Button>
               <Button onClick={runSurvey} disabled={totalSelected === 0}>
-                Survey {totalSelected} page{totalSelected === 1 ? "" : "s"}
+                Run Scout Agent
               </Button>
             </>
           )}
