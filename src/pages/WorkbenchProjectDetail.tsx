@@ -8226,6 +8226,13 @@ function InstancesReportModal({
     const countsByLevel: Record<string, number> = {};
     for (const d of detections) countsByLevel[d.level] = (countsByLevel[d.level] || 0) + 1;
 
+    const countsBySheetPage: Record<string, number> = {};
+    for (const d of detections) {
+      const k = `${d.sheet} p${d.page}`;
+      countsBySheetPage[k] = (countsBySheetPage[k] || 0) + 1;
+    }
+
+
     const planPages: any[] = [];
     for (const g of fileGroups) {
       for (const sh of g.sheets) {
