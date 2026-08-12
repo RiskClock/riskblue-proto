@@ -730,10 +730,7 @@ export function SpatialArchitectModal({
               Unmapped bboxes ({unmappedBboxes.length}) - annotations inside these
               floor plans will not be attributed to any level
             </div>
-            <div
-              className="max-h-32 overflow-y-auto overscroll-contain divide-y divide-amber-200/60"
-              onWheel={(e) => e.stopPropagation()}
-            >
+            <div className="divide-y divide-amber-200/60">
               {unmappedGroups.map((g) => (
                 <div
                   key={`${g.fileName}::${g.label}::${g.type}`}
@@ -759,6 +756,9 @@ export function SpatialArchitectModal({
             </div>
           </div>
         )}
+        </div>
+
+
 
 
 
