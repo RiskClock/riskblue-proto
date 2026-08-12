@@ -4857,7 +4857,9 @@ const isChildPlanType = (t: string) =>
                                     <span className="inline-block w-3.5 shrink-0" />
                                   )}
                                    <span
-                                     className="font-medium truncate basis-[220px] min-w-[160px] max-w-full"
+                                     className={`font-medium truncate max-w-full ${
+                                       singlePage ? "min-w-[160px]" : "min-w-0"
+                                     }`}
                                      title={row.name}
                                    >
                                      {row.name}
