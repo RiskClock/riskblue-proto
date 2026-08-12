@@ -404,10 +404,30 @@ export default function PromptRefineryDetail() {
       />
       <main className="container mx-auto px-6 py-8 space-y-4">
         <div className="flex items-center justify-between gap-2">
-          <Button variant="outline" size="sm" onClick={openManage}>
-            <Settings2 className="h-4 w-4 mr-2" /> Manage Datasets
-          </Button>
+          <div className="text-sm font-medium">
+            Overall F1:{" "}
+            <span className="tabular-nums">
+              {overallF1 == null ? "-" : `${overallF1.toFixed(1)}%`}
+            </span>
+          </div>
           <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant={view === "table" ? "default" : "outline"}
+                onClick={() => setView("table")}
+              >
+                Table
+              </Button>
+              <Button
+                size="sm"
+                variant={view === "graph" ? "default" : "outline"}
+                onClick={() => setView("graph")}
+              >
+                Graph
+              </Button>
+            </div>
+            <div className="h-6 w-px bg-border" />
             {METRICS.map((m) => (
               <Button
                 key={m.key}
@@ -421,63 +441,116 @@ export default function PromptRefineryDetail() {
           </div>
         </div>
 
-        <div className="rounded-md border bg-card overflow-auto">
-          <Table className="[&_td]:py-2 [&_th]:py-2">
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[320px]">Dataset</TableHead>
-                {Array.from({ length: columnCount }).map((_, i) => (
-                  <TableHead key={i} className="w-[100px] text-center tabular-nums">
-                    {iterations[i]?.iteration_number ?? i + 1}
-                  </TableHead>
+        {view === "table" ? (
+          <div ref={tableScrollRef} className="rounded-md border bg-card overflow-auto">
+            <Table className="[&_td]:py-2 [&_th]:py-2">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[320px] sticky left-0 z-20 bg-card">Dataset</TableHead>
+                  {Array.from({ length: columnCount }).map((_, i) => (
+                    <TableHead key={i} className="w-[100px] min-w-[100px] text-center tabular-nums">
+                      {iterations[i]?.iteration_number ?? i + 1}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loadingDatasets && (
+                  <TableRow>
+                    <TableCell colSpan={columnCount + 1} className="text-center text-muted-foreground py-10">
+                      <Loader2 className="h-4 w-4 animate-spin inline mr-2" /> Loading…
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!loadingDatasets && datasets.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={columnCount + 1} className="text-center text-muted-foreground py-10">
+                      No datasets yet. Add one to start evaluating.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {datasets.map((d) => (
+                  <TableRow key={d.id}>
+                    <TableCell className="font-medium truncate sticky left-0 z-10 bg-card">
+                      {d.name}
+                    </TableCell>
+                    {Array.from({ length: columnCount }).map((_, i) => {
+                      const it = iterations[i];
+                      const value = it ? resultMap.get(`${it.id}:${d.id}`)?.[metric] : null;
+                      return (
+                        <TableCell key={i} className="text-center tabular-nums text-muted-foreground">
+                          {value == null ? "-" : `${Number(value).toFixed(1)}%`}
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
                 ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loadingDatasets && (
-                <TableRow>
-                  <TableCell colSpan={columnCount + 1} className="text-center text-muted-foreground py-10">
-                    <Loader2 className="h-4 w-4 animate-spin inline mr-2" /> Loading…
-                  </TableCell>
-                </TableRow>
-              )}
-              {!loadingDatasets && datasets.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={columnCount + 1} className="text-center text-muted-foreground py-10">
-                    No datasets yet. Add one to start evaluating.
-                  </TableCell>
-                </TableRow>
-              )}
-              {datasets.map((d) => (
-                <TableRow key={d.id}>
-                  <TableCell className="font-medium truncate">{d.name}</TableCell>
-                  {Array.from({ length: columnCount }).map((_, i) => {
-                    const it = iterations[i];
-                    const value = it ? resultMap.get(`${it.id}:${d.id}`)?.[metric] : null;
-                    return (
-                      <TableCell key={i} className="text-center tabular-nums text-muted-foreground">
-                        {value == null ? "-" : `${Number(value).toFixed(1)}%`}
-                      </TableCell>
-                    );
-                  })}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <div className="rounded-md border bg-card p-4 h-[420px]">
+            {chartData.length === 0 || datasets.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-muted-foreground">
+                No iteration data to plot yet.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis
+                    dataKey="iteration"
+                    tick={{ fontSize: 12 }}
+                    label={{ value: "Iteration", position: "insideBottom", offset: -4, fontSize: 12 }}
+                  />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} unit="%" />
+                  <RechartsTooltip
+                    formatter={(v: any, name: string) => [
+                      v == null ? "-" : `${Number(v).toFixed(1)}%`,
+                      datasets.find((d) => d.id === name)?.name ?? name,
+                    ]}
+                    labelFormatter={(l) => `Iteration ${l}`}
+                  />
+                  <Legend
+                    formatter={(value) => datasets.find((d) => d.id === value)?.name ?? value}
+                    wrapperStyle={{ fontSize: 12 }}
+                  />
+                  {datasets.map((d, i) => (
+                    <Line
+                      key={d.id}
+                      type="linear"
+                      dataKey={d.id}
+                      name={d.id}
+                      stroke={LINE_COLORS[i % LINE_COLORS.length]}
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      connectNulls
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between gap-2">
+          <Button variant="outline" size="sm" onClick={openManage}>
+            <Settings2 className="h-4 w-4 mr-2" /> Manage Datasets
+          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              disabled={iterations.length === 0}
+              onClick={() => setResultOpen(true)}
+            >
+              Latest Iteration Result
+            </Button>
+            <Button onClick={openRunModal} disabled={datasets.length === 0}>
+              {iterations.length === 0 ? "Run First Iteration" : "Run Next Iteration"}
+            </Button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            disabled={iterations.length === 0}
-            onClick={() => setResultOpen(true)}
-          >
-            Latest Iteration Result
-          </Button>
-          <Button onClick={openRunModal} disabled={datasets.length === 0}>
-            {iterations.length === 0 ? "Run First Iteration" : "Run Next Iteration"}
-          </Button>
-        </div>
       </main>
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
