@@ -609,9 +609,10 @@ export function runPlacement(input: PlacementInput): PlacedLabel[] {
   const circleCands: LabelCandidate[][] = circleItems.map((it, i) =>
     generateCircleCandidates(
       { id: labeledCircles[i].id, cx: labeledCircles[i].cx, cy: labeledCircles[i].cy, r: labeledCircles[i].r, color: labeledCircles[i].color },
-      it.width, it.height, gap, pageSize,
+      it.width, it.height, gap, pageSize, ringScale,
     ),
   );
+
   const circleAnchors = circleItems.map((it) => it.anchor);
   const circleOwners = circleItems.map((it) => it.id);
   const rectObstaclesForCircles: RectInfo[] = [
