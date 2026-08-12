@@ -220,9 +220,20 @@ export default function PromptRefineryDetail() {
   );
 
   useLayoutEffect(() => {
-    const el = tableScrollRef.current;
-    if (el && view === "table") el.scrollLeft = el.scrollWidth;
-  }, [view, iterations.length, datasets.length]);
+    if (view !== "table") return;
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        const el = tableScrollRef.current;
+        if (el) el.scrollLeft = el.scrollWidth - el.clientWidth;
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+    };
+  }, [view, iterations.length, datasets.length, loadingDatasets, metric]);
+
 
 
   const refresh = () => {

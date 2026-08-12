@@ -596,8 +596,9 @@ export function SpatialArchitectModal({
           </TooltipProvider>
         </div>
 
-        {/* Levels list */}
-        <div className="flex-1 min-h-0 flex flex-col border rounded-md overflow-hidden">
+        {/* Single scroll body: levels list + unmapped bboxes */}
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1">
+        <div className="flex flex-col border rounded-md overflow-hidden">
           {/* Header */}
           <div className="grid grid-cols-[minmax(0,1fr)_70px_minmax(0,1.6fr)_128px] items-center gap-2 px-3 py-2 bg-muted/40 border-b text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             <div>Level name</div>
@@ -606,7 +607,8 @@ export function SpatialArchitectModal({
             <div className="text-right">Actions</div>
           </div>
 
-          <div className="flex-1 overflow-auto divide-y">
+          <div className="divide-y">
+
             {levels.length === 0 ? (
               <div className="p-6 text-sm text-muted-foreground text-center">
                 No levels yet. Click <strong>Build Spatial Model</strong> to
@@ -728,10 +730,7 @@ export function SpatialArchitectModal({
               Unmapped bboxes ({unmappedBboxes.length}) - annotations inside these
               floor plans will not be attributed to any level
             </div>
-            <div
-              className="max-h-32 overflow-y-auto overscroll-contain divide-y divide-amber-200/60"
-              onWheel={(e) => e.stopPropagation()}
-            >
+            <div className="divide-y divide-amber-200/60">
               {unmappedGroups.map((g) => (
                 <div
                   key={`${g.fileName}::${g.label}::${g.type}`}
@@ -757,6 +756,9 @@ export function SpatialArchitectModal({
             </div>
           </div>
         )}
+        </div>
+
+
 
 
 
