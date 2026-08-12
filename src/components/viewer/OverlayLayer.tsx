@@ -494,6 +494,7 @@ export const OverlayLayer = ({
   onOverlayDrag,
   exportScale = 1,
   syncPlacement = false,
+  fullSizeLabels = false,
   onPlacingChange,
 }: OverlayLayerProps) => {
   const [drag, setDrag] = useState<null | {
