@@ -404,6 +404,31 @@ export default function PromptRefinery() {
       </main>
 
       <NewSeedPromptModal open={newOpen} onOpenChange={setNewOpen} onCreated={refresh} />
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this prompt?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="font-mono">{deleteTarget?.prompt_key}</span> will be permanently
+              deleted. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                const target = deleteTarget;
+                setDeleteTarget(null);
+                if (target) await handleDelete(target);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
