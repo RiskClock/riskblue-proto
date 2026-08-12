@@ -600,7 +600,7 @@ export function SpatialArchitectModal({
         <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1">
         <div className="flex flex-col border rounded-md overflow-hidden">
           {/* Header */}
-          <div className="grid grid-cols-[minmax(0,1fr)_70px_minmax(0,1.6fr)_128px] items-center gap-2 px-3 py-2 bg-muted/40 border-b text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="sticky top-0 z-10 grid grid-cols-[minmax(0,1fr)_70px_minmax(0,1.6fr)_128px] items-center gap-2 px-3 py-2 bg-muted border-b text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             <div>Level name</div>
             <div className="text-center">Index</div>
             <div>Floor plans / schematic rows</div>
