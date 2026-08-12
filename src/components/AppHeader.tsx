@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, BarChart3, Shield, Coins, Users, KeyRound, UserCog, LayoutGrid, Info } from "lucide-react";
+import { LogOut, Settings, BarChart3, Shield, Coins, Users, KeyRound, UserCog, LayoutGrid, Info, FlaskConical } from "lucide-react";
 import { useBrandLogo } from "@/hooks/useBrandLogo";
 
 import { useCredits } from "@/hooks/useCredits";
