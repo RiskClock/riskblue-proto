@@ -2807,8 +2807,9 @@ const isChildPlanType = (t: string) =>
     fileId: string,
     page: number,
     types: string[] = PLAN_BADGE_TYPES,
+    maxBadgeChars = 150,
   ) => {
-    const MAX_BADGE_CHARS = 150;
+    const MAX_BADGE_CHARS = maxBadgeChars;
     const all = floorPlansByFile.get(fileId)?.get(page) ?? [];
 
     type Entry = {
