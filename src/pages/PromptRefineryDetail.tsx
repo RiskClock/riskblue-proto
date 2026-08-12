@@ -676,7 +676,7 @@ export default function PromptRefineryDetail() {
             </DialogDescription>
           </DialogHeader>
 
-          <RadioGroup value={refineTarget} onValueChange={setRefineTarget}>
+          <RadioGroup value={refineTarget} onValueChange={chooseRefineTarget}>
             <div className="rounded-md border overflow-auto max-h-[50vh]">
               <Table className="[&_td]:py-2 [&_th]:py-2">
                 <TableHeader>
