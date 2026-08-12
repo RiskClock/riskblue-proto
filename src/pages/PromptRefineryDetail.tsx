@@ -554,8 +554,12 @@ export default function PromptRefineryDetail() {
                   />
                   <Legend
                     formatter={(value) => datasets.find((d) => d.id === value)?.name ?? value}
-                    wrapperStyle={{ fontSize: 12 }}
+                    layout="vertical"
+                    align="left"
+                    verticalAlign="middle"
+                    wrapperStyle={{ fontSize: 12, paddingRight: 12, maxWidth: 200 }}
                   />
+
                   {datasets.map((d, i) => (
                     <Line
                       key={d.id}
