@@ -91,12 +91,13 @@ export function ManageFilesModal({
   }, [files]);
 
   // Recompute the request rollup counters from the surviving file rows.
-  const syncRequestTotals = async () => {
-    if (!requestId) return;
+  const syncRequestTotals = async (reqId?: string) => {
+    const id = reqId || requestId;
+    if (!id) return;
     const { data } = await supabase
       .from("analysis_request_files")
       .select("size_bytes")
-      .eq("analysis_request_id", requestId);
+      .eq("analysis_request_id", id);
     const rows = (data as any[]) || [];
     await supabase
       .from("analysis_requests")
@@ -104,20 +105,59 @@ export function ManageFilesModal({
         file_count: rows.length,
         total_size_bytes: rows.reduce((s, r) => s + (r.size_bytes || 0), 0),
       })
-      .eq("id", requestId);
+      .eq("id", id);
+  };
+
+  // Projects created without any files have no analysis request yet — create
+  // one on demand so uploads have somewhere to live.
+  const ensureRequestId = async (): Promise<string | null> => {
+    if (requestId) return requestId;
+    if (!projectId) return null;
+    const { data: existing } = await supabase
+      .from("analysis_requests")
+      .select("id")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (existing?.id) return existing.id as string;
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth?.user) return null;
+    const { data, error } = await supabase
+      .from("analysis_requests")
+      .insert({
+        project_id: projectId,
+        user_id: auth.user.id,
+        source_type: "manual_upload",
+        status: "copied",
+        file_count: 0,
+      } as any)
+      .select("id")
+      .single();
+    if (error) {
+      toast({
+        title: "Could not prepare upload",
+        description: (error as any)?.message,
+        variant: "destructive",
+      });
+      return null;
+    }
+    return data.id as string;
   };
 
   const handleAddFiles = async (list: FileList | null) => {
-    if (!list || list.length === 0 || !requestId || !projectId) return;
+    if (!list || list.length === 0 || !projectId) return;
     const picked = Array.from(list);
     setUploading(true);
     setUploadProgress({ done: 0, total: picked.length });
     let failures = 0;
     try {
+      const activeRequestId = await ensureRequestId();
+      if (!activeRequestId) return;
       const { extractPdfPageCount } = await import("@/lib/pdfProcessor");
       for (let i = 0; i < picked.length; i++) {
         const f = picked[i];
-        const path = `${projectId}/${requestId}/${toStorageSafeFileName(f.name)}`;
+        const path = `${projectId}/${activeRequestId}/${toStorageSafeFileName(f.name)}`;
         try {
           const { error: upErr } = await supabase.storage
             .from("uploaded-drawings")
@@ -133,7 +173,7 @@ export function ManageFilesModal({
             }
           }
           const { error: insErr } = await supabase.from("analysis_request_files").insert({
-            analysis_request_id: requestId,
+            analysis_request_id: activeRequestId,
             drive_file_id: `manual_${Date.now()}_${Math.random().toString(36).slice(2)}_${f.name}`,
             name: f.name,
             mime_type: f.type || "application/octet-stream",
@@ -150,7 +190,7 @@ export function ManageFilesModal({
         }
         setUploadProgress({ done: i + 1, total: picked.length });
       }
-      await syncRequestTotals();
+      await syncRequestTotals(activeRequestId);
       onChanged();
       toast({
         title: failures ? "Upload finished with errors" : "Files added",
@@ -332,7 +372,7 @@ export function ManageFilesModal({
                     variant="outline"
                     size="sm"
                     onClick={() => inputRef.current?.click()}
-                    disabled={uploading || !requestId}
+                    disabled={uploading || !projectId}
                   >
                     {uploading ? (
                       <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
