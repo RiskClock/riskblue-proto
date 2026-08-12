@@ -401,11 +401,30 @@ export default function PromptRefineryDetail() {
     }
   };
 
+  const refineTargetStorageKey = `refinery:refine-target:${promptId}`;
+
   const openRunModal = () => {
-    setRefineTarget(datasets[0]?.id ?? "");
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem(refineTargetStorageKey);
+    } catch {
+      saved = null;
+    }
+    const valid = saved && datasets.some((d) => d.id === saved) ? saved : null;
+    setRefineTarget(valid ?? latestIteration?.refinement_dataset_id ?? datasets[0]?.id ?? "");
     setEvalTargets(datasets.map((d) => d.id));
     setRunOpen(true);
   };
+
+  const chooseRefineTarget = (id: string) => {
+    setRefineTarget(id);
+    try {
+      localStorage.setItem(refineTargetStorageKey, id);
+    } catch {
+      /* ignore */
+    }
+  };
+
 
   if (!isAllowed) {
     return (
