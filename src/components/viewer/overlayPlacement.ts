@@ -641,5 +641,10 @@ export function runPlacement(input: PlacementInput): PlacedLabel[] {
       text: rectItems[i].text, kind: "rect",
     });
   }
+  // Final safety pass: the optimizer can settle for an overlapping placement
+  // when a dense cluster exhausts its candidates. Push circle labels apart so
+  // no pill ever covers another (docked rect labels stay fixed).
+  separateResidualOverlaps(out, pageSize);
+
   return out;
 }
