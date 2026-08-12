@@ -874,6 +874,7 @@ export const OverlayLayer = ({
           hovered={hoveredId === r.id}
           exportScale={exportScale}
           viewScale={viewScale}
+          fullSizeLabels={fullSizeLabels}
         />
       ))}
 
@@ -882,13 +883,17 @@ export const OverlayLayer = ({
       {/* Labels (above circles & rects). Positions chosen by the optimizer.
           Rendered at constant on-screen size by dividing font/padding by
           the current viewport zoom scale; anchored at the center of the
-          optimizer's chosen rect so labels stay put across zoom levels. */}
+          optimizer's chosen rect so labels stay put across zoom levels.
+          In `fullSizeLabels` (export) mode the pill is rendered at the
+          optimizer's reserved font/padding/height instead, so the exported
+          raster matches the reserved footprint exactly. */}
       {placedLabels.map((p) => {
         const s = Math.max(0.0001, viewScale);
         const sizing = labelSizingForZoom(viewScale);
-        const renderFont = (sizing.font / s) * exportScale;
-        const renderPadX = (sizing.padX / s) * exportScale;
-        const renderPadY = (1 / s) * exportScale;
+        const renderFont = fullSizeLabels ? fontPx : (sizing.font / s) * exportScale;
+        const renderPadX = fullSizeLabels ? padX : (sizing.padX / s) * exportScale;
+        const renderPadY = fullSizeLabels ? 0 : (1 / s) * exportScale;
+        const lineHeightPx = Math.round(renderFont * 1.25);
         const centerX = p.x + p.w / 2;
         const centerY = p.y + p.h / 2;
         return (
@@ -902,19 +907,28 @@ export const OverlayLayer = ({
             data-y={p.y}
             data-w={p.w}
             data-h={p.h}
-            data-font-px={fontPx}
+            data-font-px={renderFont}
             data-opacity={LABEL_OPACITY}
             className="absolute font-bold pointer-events-none text-center"
             style={{
               left: centerX,
               top: centerY,
               transform: "translate(-50%, -50%)",
-              lineHeight: `${Math.round(renderFont * 1.25)}px`,
+              lineHeight: `${lineHeightPx}px`,
               fontSize: renderFont,
               paddingLeft: renderPadX,
               paddingRight: renderPadX,
               paddingTop: renderPadY,
               paddingBottom: renderPadY,
+              ...(fullSizeLabels
+                ? {
+                    height: p.h,
+                    display: "flex",
+                    flexDirection: "column" as const,
+                    alignItems: "center" as const,
+                    justifyContent: "center" as const,
+                  }
+                : null),
               boxSizing: "border-box",
               borderRadius: 0,
               backgroundColor: p.color,
