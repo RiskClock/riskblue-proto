@@ -19,6 +19,8 @@ import ResetPassword from "./pages/ResetPassword";
 import SetupAccount from "./pages/SetupAccount";
 import InternalWorkbench from "./pages/InternalWorkbench";
 import WorkbenchProjectDetail from "./pages/WorkbenchProjectDetail";
+import PromptRefinery from "./pages/PromptRefinery";
+import PromptRefineryDetail from "./pages/PromptRefineryDetail";
 
 import UserManagement from "./pages/UserManagement";
 import Controls from "./pages/Controls";
