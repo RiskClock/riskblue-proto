@@ -172,15 +172,19 @@ function generateCircleCandidates(
   labelH: number,
   gap: number,
   bounds: { width: number; height: number },
+  ringScale = 1,
 ): LabelCandidate[] {
   const directions = 32;
   const out: LabelCandidate[] = [];
   const fallback: LabelCandidate[] = [];
-  // Absolute ring distances (in page CSS px) added to the circle radius.
-  // Tight inner ring keeps open areas compact; outer rings let dense labels escape.
-  const ringDistances = [20, 50, 100];
+  // Ring distances (page CSS px) added to the circle radius. They are scaled
+  // by `ringScale` so the search space grows in step with the label
+  // footprint — otherwise an export (labels 1.5x bigger on a larger page)
+  // has proportionally far less room to escape than the on-screen viewer.
+  const ringDistances = [20, 50, 100, 180].map((d) => d * ringScale);
   for (let ring = 0; ring < ringDistances.length; ring++) {
     const dist = c.r + gap + ringDistances[ring];
+
     for (let i = 0; i < directions; i++) {
       const angle = -Math.PI / 2 + (i * 2 * Math.PI) / directions;
       const cos = Math.cos(angle);
