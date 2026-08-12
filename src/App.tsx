@@ -79,6 +79,8 @@ const App = () => (
             <Route path="/workbench" element={<ProtectedRoute><InternalWorkbench /></ProtectedRoute>} />
             <Route path="/workbench/project/:projectId" element={<ProtectedRoute><WorkbenchProjectDetail /></ProtectedRoute>} />
 
+            <Route path="/prompt-refinery" element={<ProtectedRoute><PromptRefinery /></ProtectedRoute>} />
+            <Route path="/prompt-refinery/:promptId" element={<ProtectedRoute><PromptRefineryDetail /></ProtectedRoute>} />
             <Route path="/internal/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
             <Route path="/internal/viewer-test" element={<ProtectedRoute><InternalViewerTest /></ProtectedRoute>} />
             <Route path="/internal/activity" element={<ProtectedRoute><InternalActivity /></ProtectedRoute>} />
