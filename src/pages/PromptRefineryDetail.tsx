@@ -267,36 +267,52 @@ export default function PromptRefineryDetail() {
       }
 
       if (toAdd.length > 0) {
-        const { data: projRows } = await supabase
-          .from("projects")
-          .select("id, name")
-          .in("id", toAdd);
-        const names = new Map<string, string>();
-        for (const r of (projRows as any[]) ?? []) names.set(r.id, r.name || "Untitled project");
-
-        const { data: dsRows, error } = await supabase
+        // Reuse datasets previously created for these projects so historical
+        // iteration results are restored instead of starting from scratch.
+        const { data: existingRows } = await supabase
           .from("refinery_datasets" as any)
-          .insert(
-            toAdd.map((pid) => ({
-              name: names.get(pid) ?? "Dataset",
-              project_id: pid,
-              created_by: user?.id ?? null,
-            })) as any,
-          )
-          .select("id");
-        if (error) throw error;
+          .select("id, project_id")
+          .in("project_id", toAdd);
+        const existingByProject = new Map<string, string>();
+        for (const r of (existingRows as any[]) ?? []) {
+          if (!existingByProject.has(r.project_id)) existingByProject.set(r.project_id, r.id);
+        }
+
+        const missing = toAdd.filter((pid) => !existingByProject.has(pid));
+        if (missing.length > 0) {
+          const { data: projRows } = await supabase
+            .from("projects")
+            .select("id, name")
+            .in("id", missing);
+          const names = new Map<string, string>();
+          for (const r of (projRows as any[]) ?? []) names.set(r.id, r.name || "Untitled project");
+
+          const { data: dsRows, error } = await supabase
+            .from("refinery_datasets" as any)
+            .insert(
+              missing.map((pid) => ({
+                name: names.get(pid) ?? "Dataset",
+                project_id: pid,
+                created_by: user?.id ?? null,
+              })) as any,
+            )
+            .select("id, project_id");
+          if (error) throw error;
+          for (const d of (dsRows as any[]) ?? []) existingByProject.set(d.project_id, d.id);
+        }
 
         const { error: linkError } = await supabase
           .from("refinery_prompt_datasets" as any)
           .insert(
-            ((dsRows as any[]) ?? []).map((d, i) => ({
+            toAdd.map((pid, i) => ({
               prompt_id: promptId,
-              dataset_id: d.id,
+              dataset_id: existingByProject.get(pid),
               sort_order: datasets.length + i,
             })) as any,
           );
         if (linkError) throw linkError;
       }
+
 
       setAddOpen(false);
       refresh();
