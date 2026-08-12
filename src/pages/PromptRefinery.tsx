@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -305,9 +305,8 @@ export default function PromptRefinery() {
                 {grouped.map(([className, rows]) => {
                   const isOpen = !collapsed.has(className);
                   return (
-                    <>
+                    <Fragment key={className}>
                       <TableRow
-                        key={`group-${className}`}
                         className="cursor-pointer bg-muted/30 hover:bg-muted/50"
                         onClick={() => toggle(className)}
                       >
@@ -383,7 +382,7 @@ export default function PromptRefinery() {
                             </TableCell>
                           </TableRow>
                         ))}
-                    </>
+                    </Fragment>
                   );
                 })}
               </TableBody>
