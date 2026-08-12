@@ -499,13 +499,31 @@ export default function PromptRefineryDetail() {
                     </TableCell>
                     {Array.from({ length: columnCount }).map((_, i) => {
                       const it = iterations[i];
-                      const value = it ? resultMap.get(`${it.id}:${d.id}`)?.[metric] : null;
+                      const raw = it ? resultMap.get(`${it.id}:${d.id}`)?.[metric] : null;
+                      const value = raw == null ? null : Number(raw);
+                      let prev: number | null = null;
+                      for (let j = i - 1; j >= 0; j--) {
+                        const pv = resultMap.get(`${iterations[j].id}:${d.id}`)?.[metric];
+                        if (pv != null) {
+                          prev = Number(pv);
+                          break;
+                        }
+                      }
+                      const tone =
+                        value == null || prev == null
+                          ? "text-muted-foreground"
+                          : value > prev
+                          ? "text-success font-medium"
+                          : value < prev
+                          ? "text-destructive font-medium"
+                          : "text-muted-foreground";
                       return (
-                        <TableCell key={i} className="text-center tabular-nums text-muted-foreground">
-                          {value == null ? "-" : `${Number(value).toFixed(1)}%`}
+                        <TableCell key={i} className={`text-center tabular-nums ${tone}`}>
+                          {value == null ? "-" : `${value.toFixed(1)}%`}
                         </TableCell>
                       );
                     })}
+
                   </TableRow>
                 ))}
               </TableBody>
