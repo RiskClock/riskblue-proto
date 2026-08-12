@@ -267,36 +267,56 @@ export default function PromptRefineryDetail() {
       }
 
       if (toAdd.length > 0) {
-        const { data: projRows } = await supabase
-          .from("projects")
-          .select("id, name")
-          .in("id", toAdd);
-        const names = new Map<string, string>();
-        for (const r of (projRows as any[]) ?? []) names.set(r.id, r.name || "Untitled project");
-
-        const { data: dsRows, error } = await supabase
+        // Reuse datasets that already carry results for this prompt so removing
+        // and re-adding a project restores its historical values.
+        const knownDatasetIds = new Set(results.map((r) => r.dataset_id));
+        const { data: existingRows } = await supabase
           .from("refinery_datasets" as any)
-          .insert(
-            toAdd.map((pid) => ({
-              name: names.get(pid) ?? "Dataset",
-              project_id: pid,
-              created_by: user?.id ?? null,
-            })) as any,
-          )
-          .select("id");
-        if (error) throw error;
+          .select("id, project_id")
+          .in("project_id", toAdd);
+        const existingByProject = new Map<string, string>();
+        for (const r of (existingRows as any[]) ?? []) {
+          if (knownDatasetIds.has(r.id) && !existingByProject.has(r.project_id)) {
+            existingByProject.set(r.project_id, r.id);
+          }
+        }
+
+
+        const missing = toAdd.filter((pid) => !existingByProject.has(pid));
+        if (missing.length > 0) {
+          const { data: projRows } = await supabase
+            .from("projects")
+            .select("id, name")
+            .in("id", missing);
+          const names = new Map<string, string>();
+          for (const r of (projRows as any[]) ?? []) names.set(r.id, r.name || "Untitled project");
+
+          const { data: dsRows, error } = await supabase
+            .from("refinery_datasets" as any)
+            .insert(
+              missing.map((pid) => ({
+                name: names.get(pid) ?? "Dataset",
+                project_id: pid,
+                created_by: user?.id ?? null,
+              })) as any,
+            )
+            .select("id, project_id");
+          if (error) throw error;
+          for (const d of (dsRows as any[]) ?? []) existingByProject.set(d.project_id, d.id);
+        }
 
         const { error: linkError } = await supabase
           .from("refinery_prompt_datasets" as any)
           .insert(
-            ((dsRows as any[]) ?? []).map((d, i) => ({
+            toAdd.map((pid, i) => ({
               prompt_id: promptId,
-              dataset_id: d.id,
+              dataset_id: existingByProject.get(pid),
               sort_order: datasets.length + i,
             })) as any,
           );
         if (linkError) throw linkError;
       }
+
 
       setAddOpen(false);
       refresh();
@@ -381,11 +401,30 @@ export default function PromptRefineryDetail() {
     }
   };
 
+  const refineTargetStorageKey = `refinery:refine-target:${promptId}`;
+
   const openRunModal = () => {
-    setRefineTarget(datasets[0]?.id ?? "");
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem(refineTargetStorageKey);
+    } catch {
+      saved = null;
+    }
+    const valid = saved && datasets.some((d) => d.id === saved) ? saved : null;
+    setRefineTarget(valid ?? latestIteration?.refinement_dataset_id ?? datasets[0]?.id ?? "");
     setEvalTargets(datasets.map((d) => d.id));
     setRunOpen(true);
   };
+
+  const chooseRefineTarget = (id: string) => {
+    setRefineTarget(id);
+    try {
+      localStorage.setItem(refineTargetStorageKey, id);
+    } catch {
+      /* ignore */
+    }
+  };
+
 
   if (!isAllowed) {
     return (
@@ -416,7 +455,7 @@ export default function PromptRefineryDetail() {
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <span className="truncate font-mono">{prompt?.prompt_key ?? promptId}</span>
+            <span className="truncate">{prompt?.prompt_key ?? promptId}</span>
             {prompt?.class_name && (
               <span className="text-sm font-normal text-muted-foreground truncate">
                 {prompt.class_name}
@@ -499,13 +538,31 @@ export default function PromptRefineryDetail() {
                     </TableCell>
                     {Array.from({ length: columnCount }).map((_, i) => {
                       const it = iterations[i];
-                      const value = it ? resultMap.get(`${it.id}:${d.id}`)?.[metric] : null;
+                      const raw = it ? resultMap.get(`${it.id}:${d.id}`)?.[metric] : null;
+                      const value = raw == null ? null : Number(raw);
+                      let prev: number | null = null;
+                      for (let j = i - 1; j >= 0; j--) {
+                        const pv = resultMap.get(`${iterations[j].id}:${d.id}`)?.[metric];
+                        if (pv != null) {
+                          prev = Number(pv);
+                          break;
+                        }
+                      }
+                      const tone =
+                        value == null || prev == null
+                          ? "text-muted-foreground"
+                          : value > prev
+                          ? "text-success font-medium"
+                          : value < prev
+                          ? "text-destructive font-medium"
+                          : "text-muted-foreground";
                       return (
-                        <TableCell key={i} className="text-center tabular-nums text-muted-foreground">
-                          {value == null ? "-" : `${Number(value).toFixed(1)}%`}
+                        <TableCell key={i} className={`text-center tabular-nums ${tone}`}>
+                          {value == null ? "-" : `${value.toFixed(1)}%`}
                         </TableCell>
                       );
                     })}
+
                   </TableRow>
                 ))}
               </TableBody>
@@ -536,8 +593,12 @@ export default function PromptRefineryDetail() {
                   />
                   <Legend
                     formatter={(value) => datasets.find((d) => d.id === value)?.name ?? value}
-                    wrapperStyle={{ fontSize: 12 }}
+                    layout="vertical"
+                    align="left"
+                    verticalAlign="middle"
+                    wrapperStyle={{ fontSize: 12, paddingRight: 12, maxWidth: 200 }}
                   />
+
                   {datasets.map((d, i) => (
                     <Line
                       key={d.id}
@@ -615,7 +676,7 @@ export default function PromptRefineryDetail() {
             </DialogDescription>
           </DialogHeader>
 
-          <RadioGroup value={refineTarget} onValueChange={setRefineTarget}>
+          <RadioGroup value={refineTarget} onValueChange={chooseRefineTarget}>
             <div className="rounded-md border overflow-auto max-h-[50vh]">
               <Table className="[&_td]:py-2 [&_th]:py-2">
                 <TableHeader>

@@ -66,10 +66,17 @@ export function ProjectDatasetPicker({
 }) {
   const { data: options = [], isLoading } = useProjectDatasetOptions(className);
 
-  const eligibleCount = useMemo(
-    () => options.filter((o) => o.eligible).length,
+  const eligibleIds = useMemo(
+    () => options.filter((o) => o.eligible).map((o) => o.id),
     [options],
   );
+  const eligibleCount = eligibleIds.length;
+  const selectedEligible = useMemo(
+    () => eligibleIds.filter((id) => selected.includes(id)),
+    [eligibleIds, selected],
+  );
+  const allChecked = eligibleCount > 0 && selectedEligible.length === eligibleCount;
+  const someChecked = selectedEligible.length > 0 && !allChecked;
 
   const toggle = (id: string) => {
     onChange(
@@ -77,15 +84,29 @@ export function ProjectDatasetPicker({
     );
   };
 
+  const toggleAll = () => {
+    if (allChecked) onChange(selected.filter((id) => !eligibleIds.includes(id)));
+    else onChange(Array.from(new Set([...selected, ...eligibleIds])));
+  };
+
   return (
     <div className="rounded-md border">
       <div className="flex items-center justify-between px-3 py-2 border-b text-xs text-muted-foreground">
-        <span>{selected.length} selected</span>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <Checkbox
+            checked={allChecked ? true : someChecked ? "indeterminate" : false}
+            disabled={eligibleCount === 0}
+            onCheckedChange={toggleAll}
+          />
+          <span>{allChecked ? "Unselect all" : "Select all"}</span>
+          <span>· {selected.length} selected</span>
+        </label>
         <span>
           {eligibleCount} of {options.length} project
           {options.length === 1 ? "" : "s"} include this class
         </span>
       </div>
+
       <div className="max-h-72 overflow-y-auto divide-y">
         {isLoading && (
           <div className="py-8 text-center text-sm text-muted-foreground">
