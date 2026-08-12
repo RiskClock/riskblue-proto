@@ -55,6 +55,7 @@ export function NewSeedPromptModal({ open, onOpenChange, onCreated }: Props) {
   const [promptKey, setPromptKey] = useState<string>("");
   const [keyEdited, setKeyEdited] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [datasetProjectIds, setDatasetProjectIds] = useState<string[]>([]);
 
   const suggestedKey = useMemo(() => {
     if (!className) return "";
