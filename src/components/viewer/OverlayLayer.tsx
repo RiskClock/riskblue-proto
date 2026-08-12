@@ -41,6 +41,14 @@ interface OverlayLayerProps {
    */
   syncPlacement?: boolean;
   /**
+   * Export-only: render labels at the same MAX font/padding the placement
+   * optimizer reserved for them (instead of the zoom-interpolated size).
+   * This keeps the rendered pill identical to its reserved footprint, so
+   * the rasterizer never has to grow pills (which caused overlaps) and
+   * multi-line pills are tall enough for every line (no clipping).
+   */
+  fullSizeLabels?: boolean;
+  /**
    * Fired whenever the async placement pass starts (true) or finishes
    * (false). Consumers can use this to render a loading affordance on
    * side panels that let the user mutate annotations.
@@ -228,8 +236,10 @@ interface RectOverlayProps {
    * hugging the same physical region.
    */
   viewScale: number;
+  /** See OverlayLayerProps.fullSizeLabels. */
+  fullSizeLabels?: boolean;
 }
-const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewScale }: RectOverlayProps) {
+const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewScale, fullSizeLabels }: RectOverlayProps) {
   const s = Math.max(0.0001, viewScale);
   const borderPxScreen = (hovered ? 3 : 2) * exportScale;
   // Border thickness is expressed in page units so it scales with zoom, the
@@ -239,9 +249,13 @@ const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewSca
   // shares the box's top-left origin so it visually "sits on" the border.
   const label = r.label ?? "";
   const sizing = labelSizingForZoom(viewScale);
-  const fontCss = (sizing.font / s) * exportScale;
-  const padXCss = (sizing.padX / s) * exportScale;
-  const padYCss = (sizing.padY / s) * exportScale;
+  const fontCss = fullSizeLabels
+    ? LABEL_FONT_PX * exportScale
+    : (sizing.font / s) * exportScale;
+  const padXCss = fullSizeLabels
+    ? LABEL_PAD_X * exportScale
+    : (sizing.padX / s) * exportScale;
+  const padYCss = fullSizeLabels ? 2 * exportScale : (sizing.padY / s) * exportScale;
   const labelHCss = fontCss * 1.35 + padYCss * 2;
   const textColor = readableTextOn(r.color);
   return (
@@ -480,6 +494,7 @@ export const OverlayLayer = ({
   onOverlayDrag,
   exportScale = 1,
   syncPlacement = false,
+  fullSizeLabels = false,
   onPlacingChange,
 }: OverlayLayerProps) => {
   const [drag, setDrag] = useState<null | {
@@ -859,6 +874,7 @@ export const OverlayLayer = ({
           hovered={hoveredId === r.id}
           exportScale={exportScale}
           viewScale={viewScale}
+          fullSizeLabels={fullSizeLabels}
         />
       ))}
 
@@ -867,13 +883,17 @@ export const OverlayLayer = ({
       {/* Labels (above circles & rects). Positions chosen by the optimizer.
           Rendered at constant on-screen size by dividing font/padding by
           the current viewport zoom scale; anchored at the center of the
-          optimizer's chosen rect so labels stay put across zoom levels. */}
+          optimizer's chosen rect so labels stay put across zoom levels.
+          In `fullSizeLabels` (export) mode the pill is rendered at the
+          optimizer's reserved font/padding/height instead, so the exported
+          raster matches the reserved footprint exactly. */}
       {placedLabels.map((p) => {
         const s = Math.max(0.0001, viewScale);
         const sizing = labelSizingForZoom(viewScale);
-        const renderFont = (sizing.font / s) * exportScale;
-        const renderPadX = (sizing.padX / s) * exportScale;
-        const renderPadY = (1 / s) * exportScale;
+        const renderFont = fullSizeLabels ? fontPx : (sizing.font / s) * exportScale;
+        const renderPadX = fullSizeLabels ? padX : (sizing.padX / s) * exportScale;
+        const renderPadY = fullSizeLabels ? 0 : (1 / s) * exportScale;
+        const lineHeightPx = Math.round(renderFont * 1.25);
         const centerX = p.x + p.w / 2;
         const centerY = p.y + p.h / 2;
         return (
@@ -887,19 +907,28 @@ export const OverlayLayer = ({
             data-y={p.y}
             data-w={p.w}
             data-h={p.h}
-            data-font-px={fontPx}
+            data-font-px={renderFont}
             data-opacity={LABEL_OPACITY}
             className="absolute font-bold pointer-events-none text-center"
             style={{
               left: centerX,
               top: centerY,
               transform: "translate(-50%, -50%)",
-              lineHeight: `${Math.round(renderFont * 1.25)}px`,
+              lineHeight: `${lineHeightPx}px`,
               fontSize: renderFont,
               paddingLeft: renderPadX,
               paddingRight: renderPadX,
               paddingTop: renderPadY,
               paddingBottom: renderPadY,
+              ...(fullSizeLabels
+                ? {
+                    height: p.h,
+                    display: "flex",
+                    flexDirection: "column" as const,
+                    alignItems: "center" as const,
+                    justifyContent: "center" as const,
+                  }
+                : null),
               boxSizing: "border-box",
               borderRadius: 0,
               backgroundColor: p.color,

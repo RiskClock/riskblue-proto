@@ -261,29 +261,60 @@ export async function rasterizeViewerSurface(
     const h = r.height * outScale;
     const bg = div.getAttribute("data-color") || "#dc2626";
     const textColor = div.getAttribute("data-text-color") || "#ffffff";
-    const fontPx = Number(div.getAttribute("data-font-px") || "11") * outScale;
     const opacity = Number(div.getAttribute("data-opacity") || "0.7");
     const rawText = (div.textContent || "").trim();
     // Preserve multi-line labels (viewer renders newlines as <br>).
     const lines = rawText.split(/\r?\n/);
 
-    const fontStr = `bold ${fontPx}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+    // Trust the DOM: paint with the font size / line-height the pill was
+    // actually laid out with, so text can never overflow its own box.
+    const cs = getComputedStyle(div);
+    const domFontPx = parseFloat(cs.fontSize);
+    const attrFontPx = Number(div.getAttribute("data-font-px") || "0");
+    let fontPx =
+      (Number.isFinite(domFontPx) && domFontPx > 0 ? domFontPx : attrFontPx || 11) *
+      outScale;
+    const domLineH = parseFloat(cs.lineHeight);
+    let lineH =
+      (Number.isFinite(domLineH) && domLineH > 0 ? domLineH : parseFloat(cs.fontSize) * 1.25) *
+      outScale;
 
-    // Safety net: if canvas measures the text wider than the DOM pill (font
-    // fallback mismatch), grow the offscreen canvas so text isn't clipped.
-    // Composite is shifted left by half the extra so the pill remains
-    // centered on the DOM label position.
+    const padXCss = parseFloat(cs.paddingLeft);
+    const padX = (Number.isFinite(padXCss) ? padXCss : 4) * outScale;
+
+    const fontFor = (px: number) =>
+      `bold ${px}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+
+    // If canvas metrics still measure the text wider than the DOM pill
+    // (font fallback mismatch), shrink the drawn font rather than growing
+    // the pill — growing it would break the collision footprint the label
+    // optimizer reserved and cause neighbouring labels to overlap.
     const probe = document.createElement("canvas").getContext("2d")!;
-    probe.font = fontStr;
-    let maxTextW = 0;
-    for (const ln of lines) {
-      const tw = probe.measureText(ln).width;
-      if (tw > maxTextW) maxTextW = tw;
+    const measureMax = (px: number) => {
+      probe.font = fontFor(px);
+      let max = 0;
+      for (const ln of lines) {
+        const tw = probe.measureText(ln).width;
+        if (tw > max) max = tw;
+      }
+      return max;
+    };
+    const avail = Math.max(1, domW - padX * 2);
+    const measured = measureMax(fontPx);
+    if (measured > avail) {
+      const shrink = Math.max(0.5, avail / measured);
+      fontPx = fontPx * shrink;
+      lineH = lineH * shrink;
     }
-    const padX = 4 * outScale;
-    const needed = maxTextW + padX * 2;
-    const w = Math.max(domW, needed);
-    const drawX = tl.x - (w - domW) / 2;
+    // Never let the stacked lines exceed the pill height.
+    if (lines.length > 1 && lineH * lines.length > h) {
+      lineH = h / lines.length;
+      fontPx = Math.min(fontPx, lineH / 1.25);
+    }
+
+    const fontStr = fontFor(fontPx);
+    const w = domW;
+    const drawX = tl.x;
 
     const off = document.createElement("canvas");
     off.width = Math.max(1, Math.ceil(w));
@@ -302,7 +333,6 @@ export async function rasterizeViewerSurface(
     if (lines.length <= 1) {
       octx.fillText(rawText, w / 2, h / 2);
     } else {
-      const lineH = fontPx * 1.15;
       const totalH = lineH * lines.length;
       const startY = h / 2 - totalH / 2 + lineH / 2;
       for (let i = 0; i < lines.length; i++) {
