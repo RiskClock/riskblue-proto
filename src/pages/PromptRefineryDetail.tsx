@@ -90,6 +90,9 @@ export default function PromptRefineryDetail() {
   const isAllowed = (user?.email?.toLowerCase() ?? "") === REFINERY_ADMIN_EMAIL;
 
   const [metric, setMetric] = useState<MetricKey>("f1_score");
+  const [view, setView] = useState<"table" | "graph">("table");
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+
   const [addOpen, setAddOpen] = useState(false);
   const [pickedProjectIds, setPickedProjectIds] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
