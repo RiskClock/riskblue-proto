@@ -162,11 +162,11 @@ export default function PromptRefineryDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("projects")
-        .select("id, project_name")
+        .select("id, name")
         .order("created_at", { ascending: false })
         .limit(500);
       if (error) throw error;
-      return (data ?? []) as { id: string; project_name: string | null }[];
+      return (data ?? []) as { id: string; name: string | null }[];
     },
     enabled: isAllowed,
   });
@@ -198,7 +198,7 @@ export default function PromptRefineryDetail() {
 
   const addDataset = async () => {
     const project = projects.find((p) => p.id === addProjectId);
-    const name = addName.trim() || project?.project_name || "Dataset";
+    const name = addName.trim() || project?.name || "Dataset";
     if (!addProjectId) return;
     setSaving(true);
     const { data, error } = await supabase
@@ -369,7 +369,7 @@ export default function PromptRefineryDetail() {
                 onValueChange={(v) => {
                   setAddProjectId(v);
                   const p = projects.find((x) => x.id === v);
-                  if (!addName.trim()) setAddName(p?.project_name ?? "");
+                  if (!addName.trim()) setAddName(p?.name ?? "");
                 }}
               >
                 <SelectTrigger>
@@ -378,7 +378,7 @@ export default function PromptRefineryDetail() {
                 <SelectContent className="max-h-72">
                   {projects.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
-                      {p.project_name || "Untitled project"}
+                      {p.name || "Untitled project"}
                     </SelectItem>
                   ))}
                 </SelectContent>
