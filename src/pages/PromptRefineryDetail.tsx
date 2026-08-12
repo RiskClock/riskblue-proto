@@ -267,16 +267,20 @@ export default function PromptRefineryDetail() {
       }
 
       if (toAdd.length > 0) {
-        // Reuse datasets previously created for these projects so historical
-        // iteration results are restored instead of starting from scratch.
+        // Reuse datasets that already carry results for this prompt so removing
+        // and re-adding a project restores its historical values.
+        const knownDatasetIds = new Set(results.map((r) => r.dataset_id));
         const { data: existingRows } = await supabase
           .from("refinery_datasets" as any)
           .select("id, project_id")
           .in("project_id", toAdd);
         const existingByProject = new Map<string, string>();
         for (const r of (existingRows as any[]) ?? []) {
-          if (!existingByProject.has(r.project_id)) existingByProject.set(r.project_id, r.id);
+          if (knownDatasetIds.has(r.id) && !existingByProject.has(r.project_id)) {
+            existingByProject.set(r.project_id, r.id);
+          }
         }
+
 
         const missing = toAdd.filter((pid) => !existingByProject.has(pid));
         if (missing.length > 0) {
