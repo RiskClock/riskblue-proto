@@ -4657,8 +4657,14 @@ const isChildPlanType = (t: string) =>
 
 
               {pageInfoRows.length === 0 ? (
-                <div className="text-sm text-muted-foreground text-center py-6">
-                  {pageInfoLoading ? "Loading…" : "No files in this request."}
+                <div className="text-sm text-muted-foreground text-center py-6 space-y-3">
+                  <div>{pageInfoLoading ? "Loading…" : "No files in this request."}</div>
+                  {!pageInfoLoading && (
+                    <Button size="sm" variant="outline" onClick={() => setManageFilesOpen(true)}>
+                      <FolderOpen className="h-4 w-4 mr-2" />
+                      Manage Files
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="bg-card rounded-lg border relative [&>div]:overflow-visible">
