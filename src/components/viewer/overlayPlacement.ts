@@ -543,7 +543,62 @@ function optimizePlacements(
   return positions;
 }
 
+// ---- Residual overlap separation -----------------------------------------
+
+/**
+ * Relaxation pass that nudges overlapping label pills apart along their axis
+ * of least penetration. Rect (docked bbox) labels are treated as immovable;
+ * circle labels move and their leader anchors stay attached to the circle.
+ */
+function separateResidualOverlaps(
+  labels: PlacedLabel[],
+  bounds: { width: number; height: number },
+): void {
+  if (labels.length < 2) return;
+  const movable = labels.map((l) => l.kind === "circle");
+  const MAX_PASSES = 40;
+  for (let pass = 0; pass < MAX_PASSES; pass++) {
+    let moved = false;
+    for (let i = 0; i < labels.length; i++) {
+      for (let j = i + 1; j < labels.length; j++) {
+        const a = labels[i];
+        const b = labels[j];
+        if (!movable[i] && !movable[j]) continue;
+        const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+        const oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+        if (ox <= 0 || oy <= 0) continue;
+        moved = true;
+        const bothMove = movable[i] && movable[j];
+        const shareA = movable[i] ? (bothMove ? 0.5 : 1) : 0;
+        const shareB = movable[j] ? (bothMove ? 0.5 : 1) : 0;
+        const push = 1.02;
+        if (ox <= oy) {
+          const dir = a.x + a.w / 2 <= b.x + b.w / 2 ? -1 : 1;
+          a.x += dir * ox * shareA * push;
+          b.x -= dir * ox * shareB * push;
+        } else {
+          const dir = a.y + a.h / 2 <= b.y + b.h / 2 ? -1 : 1;
+          a.y += dir * oy * shareA * push;
+          b.y -= dir * oy * shareB * push;
+        }
+        for (const l of [a, b]) {
+          l.x = Math.max(2, Math.min(bounds.width - l.w - 2, l.x));
+          l.y = Math.max(2, Math.min(bounds.height - l.h - 2, l.y));
+        }
+      }
+    }
+    if (!moved) break;
+  }
+  // Refresh leader lengths from the final positions.
+  for (const l of labels) {
+    const ex = Math.max(l.x, Math.min(l.ax, l.x + l.w));
+    const ey = Math.max(l.y, Math.min(l.ay, l.y + l.h));
+    l.leader = Math.hypot(ex - l.ax, ey - l.ay);
+  }
+}
+
 // ---- Public entry point ---------------------------------------------------
+
 
 export function runPlacement(input: PlacementInput): PlacedLabel[] {
   const { pageSize, fontPx, padX, labelH, gap, charPx } = input;
