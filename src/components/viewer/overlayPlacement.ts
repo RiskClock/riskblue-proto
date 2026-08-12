@@ -47,7 +47,14 @@ export interface PlacementInput {
   labelH: number;
   gap: number;
   charPx: number;
+  /**
+   * Footprint scale of the labels relative to the on-screen baseline (the
+   * export renders pills at 1.5x). Candidate ring distances are multiplied by
+   * it so the escape room scales with the label size.
+   */
+  scale?: number;
 }
+
 
 export interface LabelCandidate {
   x: number;
@@ -172,15 +179,19 @@ function generateCircleCandidates(
   labelH: number,
   gap: number,
   bounds: { width: number; height: number },
+  ringScale = 1,
 ): LabelCandidate[] {
   const directions = 32;
   const out: LabelCandidate[] = [];
   const fallback: LabelCandidate[] = [];
-  // Absolute ring distances (in page CSS px) added to the circle radius.
-  // Tight inner ring keeps open areas compact; outer rings let dense labels escape.
-  const ringDistances = [20, 50, 100];
+  // Ring distances (page CSS px) added to the circle radius. They are scaled
+  // by `ringScale` so the search space grows in step with the label
+  // footprint — otherwise an export (labels 1.5x bigger on a larger page)
+  // has proportionally far less room to escape than the on-screen viewer.
+  const ringDistances = [20, 50, 100, 180].map((d) => d * ringScale);
   for (let ring = 0; ring < ringDistances.length; ring++) {
     const dist = c.r + gap + ringDistances[ring];
+
     for (let i = 0; i < directions; i++) {
       const angle = -Math.PI / 2 + (i * 2 * Math.PI) / directions;
       const cos = Math.cos(angle);
@@ -532,10 +543,67 @@ function optimizePlacements(
   return positions;
 }
 
+// ---- Residual overlap separation -----------------------------------------
+
+/**
+ * Relaxation pass that nudges overlapping label pills apart along their axis
+ * of least penetration. Rect (docked bbox) labels are treated as immovable;
+ * circle labels move and their leader anchors stay attached to the circle.
+ */
+function separateResidualOverlaps(
+  labels: PlacedLabel[],
+  bounds: { width: number; height: number },
+): void {
+  if (labels.length < 2) return;
+  const movable = labels.map((l) => l.kind === "circle");
+  const MAX_PASSES = 40;
+  for (let pass = 0; pass < MAX_PASSES; pass++) {
+    let moved = false;
+    for (let i = 0; i < labels.length; i++) {
+      for (let j = i + 1; j < labels.length; j++) {
+        const a = labels[i];
+        const b = labels[j];
+        if (!movable[i] && !movable[j]) continue;
+        const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+        const oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+        if (ox <= 0 || oy <= 0) continue;
+        moved = true;
+        const bothMove = movable[i] && movable[j];
+        const shareA = movable[i] ? (bothMove ? 0.5 : 1) : 0;
+        const shareB = movable[j] ? (bothMove ? 0.5 : 1) : 0;
+        const push = 1.02;
+        if (ox <= oy) {
+          const dir = a.x + a.w / 2 <= b.x + b.w / 2 ? -1 : 1;
+          a.x += dir * ox * shareA * push;
+          b.x -= dir * ox * shareB * push;
+        } else {
+          const dir = a.y + a.h / 2 <= b.y + b.h / 2 ? -1 : 1;
+          a.y += dir * oy * shareA * push;
+          b.y -= dir * oy * shareB * push;
+        }
+        for (const l of [a, b]) {
+          l.x = Math.max(2, Math.min(bounds.width - l.w - 2, l.x));
+          l.y = Math.max(2, Math.min(bounds.height - l.h - 2, l.y));
+        }
+      }
+    }
+    if (!moved) break;
+  }
+  // Refresh leader lengths from the final positions.
+  for (const l of labels) {
+    const ex = Math.max(l.x, Math.min(l.ax, l.x + l.w));
+    const ey = Math.max(l.y, Math.min(l.ay, l.y + l.h));
+    l.leader = Math.hypot(ex - l.ax, ey - l.ay);
+  }
+}
+
 // ---- Public entry point ---------------------------------------------------
+
 
 export function runPlacement(input: PlacementInput): PlacedLabel[] {
   const { pageSize, fontPx, padX, labelH, gap, charPx } = input;
+  const ringScale = Math.max(1, input.scale ?? 1);
+
   const labeledCircles = input.circles.filter((c) => !!c.label && !c.isDot);
   const labeledRects = input.rects.filter((r) => !!r.label);
   if (labeledCircles.length === 0 && labeledRects.length === 0) return [];
@@ -598,9 +666,10 @@ export function runPlacement(input: PlacementInput): PlacedLabel[] {
   const circleCands: LabelCandidate[][] = circleItems.map((it, i) =>
     generateCircleCandidates(
       { id: labeledCircles[i].id, cx: labeledCircles[i].cx, cy: labeledCircles[i].cy, r: labeledCircles[i].r, color: labeledCircles[i].color },
-      it.width, it.height, gap, pageSize,
+      it.width, it.height, gap, pageSize, ringScale,
     ),
   );
+
   const circleAnchors = circleItems.map((it) => it.anchor);
   const circleOwners = circleItems.map((it) => it.id);
   const rectObstaclesForCircles: RectInfo[] = [
@@ -627,5 +696,10 @@ export function runPlacement(input: PlacementInput): PlacedLabel[] {
       text: rectItems[i].text, kind: "rect",
     });
   }
+  // Final safety pass: the optimizer can settle for an overlapping placement
+  // when a dense cluster exhausts its candidates. Push circle labels apart so
+  // no pill ever covers another (docked rect labels stay fixed).
+  separateResidualOverlaps(out, pageSize);
+
   return out;
 }

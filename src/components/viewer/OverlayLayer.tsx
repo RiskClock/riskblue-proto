@@ -654,6 +654,8 @@ export const OverlayLayer = ({
     })),
     rects: rectObstacles,
     fontPx, padX, labelH, gap, charPx,
+    scale: exportScale,
+
   });
 
   // Synchronous branch — used by offscreen export capture, which rasterizes
