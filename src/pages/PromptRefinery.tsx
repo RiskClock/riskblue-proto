@@ -41,6 +41,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { NewSeedPromptModal, REFINERY_MODEL_OPTIONS } from "@/components/refinery/NewSeedPromptModal";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export interface RefineryPrompt {
   id: string;
@@ -84,6 +94,8 @@ export default function PromptRefinery() {
   const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
   const [filterModels, setFilterModels] = useState<string[]>([]);
   const [filterClasses, setFilterClasses] = useState<string[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<RefineryPrompt | null>(null);
+
 
   const { data: awpOptions = [] } = useAWPOptions();
 
@@ -372,7 +384,7 @@ export default function PromptRefinery() {
                                     <Copy className="h-4 w-4 mr-2" /> Duplicate
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
-                                    onClick={() => handleDelete(p)}
+                                    onClick={() => setDeleteTarget(p)}
                                     className="text-destructive focus:text-destructive"
                                   >
                                     <Trash2 className="h-4 w-4 mr-2" /> Delete
@@ -392,6 +404,31 @@ export default function PromptRefinery() {
       </main>
 
       <NewSeedPromptModal open={newOpen} onOpenChange={setNewOpen} onCreated={refresh} />
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this prompt?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="font-mono">{deleteTarget?.prompt_key}</span> will be permanently
+              deleted. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                const target = deleteTarget;
+                setDeleteTarget(null);
+                if (target) await handleDelete(target);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
