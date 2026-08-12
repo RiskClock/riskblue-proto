@@ -134,10 +134,12 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
                     <LayoutGrid className="h-4 w-4 mr-2" />
                     Workbench
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate("/prompt-refinery")} className="cursor-pointer">
-                    <FlaskConical className="h-4 w-4 mr-2" />
-                    Prompt Refinery
-                  </DropdownMenuItem>
+                  {isRefineryAdmin && (
+                    <DropdownMenuItem onClick={() => navigate("/prompt-refinery")} className="cursor-pointer">
+                      <FlaskConical className="h-4 w-4 mr-2" />
+                      Prompt Refinery
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onClick={() => navigate("/logs")} className="cursor-pointer">
                     <BarChart3 className="h-4 w-4 mr-2" />
                     Logs
