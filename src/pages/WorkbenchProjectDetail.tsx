@@ -4836,7 +4836,7 @@ const isChildPlanType = (t: string) =>
                               <TableCell
                                 className={`${stickyCellFirstBase} bg-card group-hover:bg-muted/50 py-1 text-sm`}
                               >
-                                <div className="flex items-center gap-2 min-w-0">
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
                                   {!singlePage && count > 0 ? (
                                     <button
                                       type="button"
