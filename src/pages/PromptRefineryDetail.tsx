@@ -5,12 +5,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
+import { REFINERY_ADMIN_EMAIL } from "@/pages/PromptRefinery";
 
 export default function PromptRefineryDetail() {
   const { promptId } = useParams<{ promptId: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
+  const isAllowed = (user?.email?.toLowerCase() ?? "") === REFINERY_ADMIN_EMAIL;
 
   const { data: prompt } = useQuery({
     queryKey: ["refinery-prompt", promptId],
@@ -23,10 +24,10 @@ export default function PromptRefineryDetail() {
       if (error) throw error;
       return data as any;
     },
-    enabled: isInternal && !!promptId,
+    enabled: isAllowed && !!promptId,
   });
 
-  if (!isInternal) {
+  if (!isAllowed) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -42,21 +43,27 @@ export default function PromptRefineryDetail() {
   return (
     <div className="min-h-screen bg-background">
       <AppHeader
-        title="Prompt Refinery"
-        leftContent={
-          <Button variant="ghost" size="sm" onClick={() => navigate("/prompt-refinery")}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
+        title={
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0"
+              onClick={() => navigate("/prompt-refinery")}
+              aria-label="Back"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <span className="truncate font-mono">{prompt?.prompt_key ?? promptId}</span>
+            {prompt?.class_name && (
+              <span className="text-sm font-normal text-muted-foreground truncate">
+                {prompt.class_name}
+              </span>
+            )}
+          </div>
         }
       />
       <main className="container mx-auto px-6 py-8 space-y-4">
-        <div>
-          <h1 className="text-xl font-semibold font-mono">{prompt?.prompt_key ?? promptId}</h1>
-          {prompt?.class_name && (
-            <p className="text-sm text-muted-foreground">{prompt.class_name}</p>
-          )}
-        </div>
         <div className="bg-card border rounded-lg p-12 text-center text-muted-foreground">
           Prompt refinement workspace coming soon.
         </div>

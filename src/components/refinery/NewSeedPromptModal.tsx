@@ -58,7 +58,7 @@ export function NewSeedPromptModal({ open, onOpenChange, onCreated }: Props) {
 
   const suggestedKey = useMemo(() => {
     if (!className) return "";
-    return slugifyPromptKey(`${className}-${format(new Date(), "yyyyMMdd-HHmm")}`);
+    return slugifyPromptKey(`${className}-${format(new Date(), "yyyyMMdd-HHmmss")}`);
   }, [className]);
 
   useEffect(() => {
