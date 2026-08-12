@@ -184,6 +184,35 @@ export default function PromptRefineryDetail() {
       .filter((g) => g.rows.length > 0 || resultMap.has(`${latestIteration.id}:${g.dataset.id}`));
   }, [latestIteration, datasets, resultMap]);
 
+  const overallF1 = useMemo(() => {
+    if (!latestIteration) return null;
+    const vals = datasets
+      .map((d) => resultMap.get(`${latestIteration.id}:${d.id}`)?.f1_score)
+      .filter((v): v is number => v != null)
+      .map(Number);
+    if (vals.length === 0) return null;
+    return vals.reduce((a, b) => a + b, 0) / vals.length;
+  }, [latestIteration, datasets, resultMap]);
+
+  const chartData = useMemo(
+    () =>
+      iterations.map((it) => {
+        const row: Record<string, any> = { iteration: it.iteration_number };
+        for (const d of datasets) {
+          const v = resultMap.get(`${it.id}:${d.id}`)?.[metric];
+          row[d.id] = v == null ? null : Number(v);
+        }
+        return row;
+      }),
+    [iterations, datasets, resultMap, metric],
+  );
+
+  useLayoutEffect(() => {
+    const el = tableScrollRef.current;
+    if (el && view === "table") el.scrollLeft = el.scrollWidth;
+  }, [view, iterations.length, datasets.length]);
+
+
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["refinery-prompt-datasets", promptId] });
     queryClient.invalidateQueries({ queryKey: ["refinery-iterations", promptId] });
