@@ -48,6 +48,18 @@ const METRICS: { key: MetricKey; label: string }[] = [
   { key: "recall_score", label: "Recall" },
 ];
 
+const LINE_COLORS = [
+  "#0ea5e9",
+  "#22c55e",
+  "#f59e0b",
+  "#ef4444",
+  "#8b5cf6",
+  "#14b8a6",
+  "#ec4899",
+  "#64748b",
+];
+
+
 interface DatasetRow {
   id: string;
   name: string;
