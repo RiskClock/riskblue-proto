@@ -41,6 +41,7 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
   const [infoOpen, setInfoOpen] = useState(false);
 
   const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
+  const isRefineryAdmin = (user?.email?.toLowerCase() ?? "") === "admin@riskclock.com";
 
   const isActive = (path: string) => location.pathname === path;
 
