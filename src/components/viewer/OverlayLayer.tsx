@@ -41,6 +41,14 @@ interface OverlayLayerProps {
    */
   syncPlacement?: boolean;
   /**
+   * Export-only: render labels at the same MAX font/padding the placement
+   * optimizer reserved for them (instead of the zoom-interpolated size).
+   * This keeps the rendered pill identical to its reserved footprint, so
+   * the rasterizer never has to grow pills (which caused overlaps) and
+   * multi-line pills are tall enough for every line (no clipping).
+   */
+  fullSizeLabels?: boolean;
+  /**
    * Fired whenever the async placement pass starts (true) or finishes
    * (false). Consumers can use this to render a loading affordance on
    * side panels that let the user mutate annotations.
