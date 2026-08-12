@@ -2248,6 +2248,195 @@ export type Database = {
           },
         ]
       }
+      refinery_datasets: {
+        Row: {
+          analysis_request_id: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          project_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          analysis_request_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          project_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          analysis_request_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          project_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "refinery_datasets_analysis_request_id_fkey"
+            columns: ["analysis_request_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refinery_datasets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      refinery_iteration_results: {
+        Row: {
+          created_at: string
+          dataset_id: string
+          diff: Json
+          f1_score: number | null
+          id: string
+          iteration_id: string
+          precision_score: number | null
+          recall_score: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          dataset_id: string
+          diff?: Json
+          f1_score?: number | null
+          id?: string
+          iteration_id: string
+          precision_score?: number | null
+          recall_score?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          dataset_id?: string
+          diff?: Json
+          f1_score?: number | null
+          id?: string
+          iteration_id?: string
+          precision_score?: number | null
+          recall_score?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "refinery_iteration_results_dataset_id_fkey"
+            columns: ["dataset_id"]
+            isOneToOne: false
+            referencedRelation: "refinery_datasets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refinery_iteration_results_iteration_id_fkey"
+            columns: ["iteration_id"]
+            isOneToOne: false
+            referencedRelation: "refinery_iterations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      refinery_iterations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          iteration_number: number
+          notes: string | null
+          prompt_id: string
+          refinement_dataset_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          iteration_number: number
+          notes?: string | null
+          prompt_id: string
+          refinement_dataset_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          iteration_number?: number
+          notes?: string | null
+          prompt_id?: string
+          refinement_dataset_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "refinery_iterations_prompt_id_fkey"
+            columns: ["prompt_id"]
+            isOneToOne: false
+            referencedRelation: "refinery_prompts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refinery_iterations_refinement_dataset_id_fkey"
+            columns: ["refinement_dataset_id"]
+            isOneToOne: false
+            referencedRelation: "refinery_datasets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      refinery_prompt_datasets: {
+        Row: {
+          created_at: string
+          dataset_id: string
+          id: string
+          prompt_id: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          dataset_id: string
+          id?: string
+          prompt_id: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          dataset_id?: string
+          id?: string
+          prompt_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "refinery_prompt_datasets_dataset_id_fkey"
+            columns: ["dataset_id"]
+            isOneToOne: false
+            referencedRelation: "refinery_datasets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refinery_prompt_datasets_prompt_id_fkey"
+            columns: ["prompt_id"]
+            isOneToOne: false
+            referencedRelation: "refinery_prompts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       refinery_prompts: {
         Row: {
           class_category: string | null
