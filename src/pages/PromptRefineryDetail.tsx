@@ -416,7 +416,7 @@ export default function PromptRefineryDetail() {
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <span className="truncate font-mono">{prompt?.prompt_key ?? promptId}</span>
+            <span className="truncate">{prompt?.prompt_key ?? promptId}</span>
             {prompt?.class_name && (
               <span className="text-sm font-normal text-muted-foreground truncate">
                 {prompt.class_name}
