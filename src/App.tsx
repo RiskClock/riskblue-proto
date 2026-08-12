@@ -19,6 +19,8 @@ import ResetPassword from "./pages/ResetPassword";
 import SetupAccount from "./pages/SetupAccount";
 import InternalWorkbench from "./pages/InternalWorkbench";
 import WorkbenchProjectDetail from "./pages/WorkbenchProjectDetail";
+import PromptRefinery from "./pages/PromptRefinery";
+import PromptRefineryDetail from "./pages/PromptRefineryDetail";
 
 import UserManagement from "./pages/UserManagement";
 import Controls from "./pages/Controls";
@@ -77,6 +79,8 @@ const App = () => (
             <Route path="/workbench" element={<ProtectedRoute><InternalWorkbench /></ProtectedRoute>} />
             <Route path="/workbench/project/:projectId" element={<ProtectedRoute><WorkbenchProjectDetail /></ProtectedRoute>} />
 
+            <Route path="/prompt-refinery" element={<ProtectedRoute><PromptRefinery /></ProtectedRoute>} />
+            <Route path="/prompt-refinery/:promptId" element={<ProtectedRoute><PromptRefineryDetail /></ProtectedRoute>} />
             <Route path="/internal/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
             <Route path="/internal/viewer-test" element={<ProtectedRoute><InternalViewerTest /></ProtectedRoute>} />
             <Route path="/internal/activity" element={<ProtectedRoute><InternalActivity /></ProtectedRoute>} />

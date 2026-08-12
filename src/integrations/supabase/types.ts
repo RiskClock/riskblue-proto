@@ -2248,6 +2248,51 @@ export type Database = {
           },
         ]
       }
+      refinery_prompts: {
+        Row: {
+          class_category: string | null
+          class_name: string
+          created_at: string
+          created_by: string | null
+          f1_score: number | null
+          id: string
+          last_refined_at: string | null
+          prompt_key: string
+          prompt_text: string | null
+          status: string
+          target_model: string | null
+          updated_at: string
+        }
+        Insert: {
+          class_category?: string | null
+          class_name: string
+          created_at?: string
+          created_by?: string | null
+          f1_score?: number | null
+          id?: string
+          last_refined_at?: string | null
+          prompt_key: string
+          prompt_text?: string | null
+          status?: string
+          target_model?: string | null
+          updated_at?: string
+        }
+        Update: {
+          class_category?: string | null
+          class_name?: string
+          created_at?: string
+          created_by?: string | null
+          f1_score?: number | null
+          id?: string
+          last_refined_at?: string | null
+          prompt_key?: string
+          prompt_text?: string | null
+          status?: string
+          target_model?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       report_exports: {
         Row: {
           analysis_request_id: string | null

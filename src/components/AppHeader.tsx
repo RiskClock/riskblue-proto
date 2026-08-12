@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, BarChart3, Shield, Coins, Users, KeyRound, UserCog, LayoutGrid, Info } from "lucide-react";
+import { LogOut, Settings, BarChart3, Shield, Coins, Users, KeyRound, UserCog, LayoutGrid, Info, FlaskConical } from "lucide-react";
 import { useBrandLogo } from "@/hooks/useBrandLogo";
 
 import { useCredits } from "@/hooks/useCredits";
@@ -132,6 +132,10 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
                   <DropdownMenuItem onClick={() => navigate("/workbench")} className="cursor-pointer">
                     <LayoutGrid className="h-4 w-4 mr-2" />
                     Workbench
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/prompt-refinery")} className="cursor-pointer">
+                    <FlaskConical className="h-4 w-4 mr-2" />
+                    Prompt Refinery
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate("/logs")} className="cursor-pointer">
                     <BarChart3 className="h-4 w-4 mr-2" />
