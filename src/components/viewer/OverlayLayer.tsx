@@ -236,8 +236,10 @@ interface RectOverlayProps {
    * hugging the same physical region.
    */
   viewScale: number;
+  /** See OverlayLayerProps.fullSizeLabels. */
+  fullSizeLabels?: boolean;
 }
-const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewScale }: RectOverlayProps) {
+const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewScale, fullSizeLabels }: RectOverlayProps) {
   const s = Math.max(0.0001, viewScale);
   const borderPxScreen = (hovered ? 3 : 2) * exportScale;
   // Border thickness is expressed in page units so it scales with zoom, the
@@ -247,9 +249,13 @@ const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewSca
   // shares the box's top-left origin so it visually "sits on" the border.
   const label = r.label ?? "";
   const sizing = labelSizingForZoom(viewScale);
-  const fontCss = (sizing.font / s) * exportScale;
-  const padXCss = (sizing.padX / s) * exportScale;
-  const padYCss = (sizing.padY / s) * exportScale;
+  const fontCss = fullSizeLabels
+    ? LABEL_FONT_PX * exportScale
+    : (sizing.font / s) * exportScale;
+  const padXCss = fullSizeLabels
+    ? LABEL_PAD_X * exportScale
+    : (sizing.padX / s) * exportScale;
+  const padYCss = fullSizeLabels ? 2 * exportScale : (sizing.padY / s) * exportScale;
   const labelHCss = fontCss * 1.35 + padYCss * 2;
   const textColor = readableTextOn(r.color);
   return (
