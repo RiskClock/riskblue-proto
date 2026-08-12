@@ -47,7 +47,14 @@ export interface PlacementInput {
   labelH: number;
   gap: number;
   charPx: number;
+  /**
+   * Footprint scale of the labels relative to the on-screen baseline (the
+   * export renders pills at 1.5x). Candidate ring distances are multiplied by
+   * it so the escape room scales with the label size.
+   */
+  scale?: number;
 }
+
 
 export interface LabelCandidate {
   x: number;
