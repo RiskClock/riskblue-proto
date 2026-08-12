@@ -520,7 +520,7 @@ export function SpatialArchitectModal({
       }}
     >
       <DialogContent
-        className="max-w-4xl max-h-[85vh] flex flex-col"
+        className="max-w-4xl max-h-[90vh] flex flex-col"
         onEscapeKeyDown={(e) => {
           if (isDirty && !confirmDiscardIfDirty()) e.preventDefault();
         }}
