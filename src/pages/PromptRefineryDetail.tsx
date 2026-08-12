@@ -1,15 +1,24 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ShieldAlert, Plus } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, ShieldAlert, Plus, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -28,44 +37,64 @@ import {
 } from "@/components/ui/dialog";
 import { REFINERY_ADMIN_EMAIL } from "@/pages/PromptRefinery";
 
-type MetricKey = "f1" | "precision" | "recall";
+type MetricKey = "f1_score" | "precision_score" | "recall_score";
 
 const METRICS: { key: MetricKey; label: string }[] = [
-  { key: "f1", label: "F1" },
-  { key: "precision", label: "Precision" },
-  { key: "recall", label: "Recall" },
+  { key: "f1_score", label: "F1" },
+  { key: "precision_score", label: "Precision" },
+  { key: "recall_score", label: "Recall" },
 ];
 
 interface DatasetRow {
   id: string;
   name: string;
-  /** metrics[iterationIndex] */
-  metrics: (Record<MetricKey, number> | null)[];
+  project_id: string | null;
+  analysis_request_id: string | null;
 }
 
-const INITIAL_DATASETS: DatasetRow[] = [
-  { id: "ds-1", name: "Golden Set A", metrics: [] },
-  { id: "ds-2", name: "Golden Set B", metrics: [] },
-];
+interface IterationRow {
+  id: string;
+  iteration_number: number;
+  refinement_dataset_id: string | null;
+  status: string;
+  created_at: string;
+}
+
+interface ResultRow {
+  iteration_id: string;
+  dataset_id: string;
+  f1_score: number | null;
+  precision_score: number | null;
+  recall_score: number | null;
+  diff: any;
+}
+
+interface DiffEntry {
+  file?: string;
+  page?: number | string;
+  detection?: string;
+  expected?: string;
+  actual?: string;
+  status?: string;
+}
 
 export default function PromptRefineryDetail() {
   const { promptId } = useParams<{ promptId: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const isAllowed = (user?.email?.toLowerCase() ?? "") === REFINERY_ADMIN_EMAIL;
 
-  const [metric, setMetric] = useState<MetricKey>("f1");
-  const [datasets, setDatasets] = useState<DatasetRow[]>(INITIAL_DATASETS);
+  const [metric, setMetric] = useState<MetricKey>("f1_score");
   const [addOpen, setAddOpen] = useState(false);
-  const [newName, setNewName] = useState("");
+  const [addProjectId, setAddProjectId] = useState("");
+  const [addName, setAddName] = useState("");
+  const [saving, setSaving] = useState(false);
   const [runOpen, setRunOpen] = useState(false);
-  const [refineTarget, setRefineTarget] = useState<string>(INITIAL_DATASETS[0]?.id ?? "");
-  const [evalTargets, setEvalTargets] = useState<string[]>(INITIAL_DATASETS.map((d) => d.id));
-
-  const iterationCount = useMemo(
-    () => datasets.reduce((max, d) => Math.max(max, d.metrics.length), 0),
-    [datasets],
-  );
+  const [refineTarget, setRefineTarget] = useState<string>("");
+  const [evalTargets, setEvalTargets] = useState<string[]>([]);
+  const [resultOpen, setResultOpen] = useState(false);
 
   const { data: prompt } = useQuery({
     queryKey: ["refinery-prompt", promptId],
@@ -81,19 +110,129 @@ export default function PromptRefineryDetail() {
     enabled: isAllowed && !!promptId,
   });
 
-  const addDataset = () => {
-    const name = newName.trim();
-    if (!name) return;
-    setDatasets((prev) => [
-      ...prev,
-      { id: `ds-${Date.now()}`, name, metrics: Array(iterationCount).fill(null) },
-    ]);
-    setNewName("");
+  const { data: datasets = [], isLoading: loadingDatasets } = useQuery({
+    queryKey: ["refinery-prompt-datasets", promptId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("refinery_prompt_datasets" as any)
+        .select("sort_order, created_at, dataset:refinery_datasets(*)")
+        .eq("prompt_id", promptId)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return ((data ?? []) as any[])
+        .map((r) => r.dataset)
+        .filter(Boolean) as DatasetRow[];
+    },
+    enabled: isAllowed && !!promptId,
+  });
+
+  const { data: iterations = [] } = useQuery({
+    queryKey: ["refinery-iterations", promptId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("refinery_iterations" as any)
+        .select("*")
+        .eq("prompt_id", promptId)
+        .order("iteration_number", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as unknown as IterationRow[];
+    },
+    enabled: isAllowed && !!promptId,
+  });
+
+  const iterationIds = iterations.map((i) => i.id);
+
+  const { data: results = [] } = useQuery({
+    queryKey: ["refinery-iteration-results", promptId, iterationIds.join(",")],
+    queryFn: async () => {
+      if (iterationIds.length === 0) return [] as ResultRow[];
+      const { data, error } = await supabase
+        .from("refinery_iteration_results" as any)
+        .select("*")
+        .in("iteration_id", iterationIds);
+      if (error) throw error;
+      return (data ?? []) as unknown as ResultRow[];
+    },
+    enabled: isAllowed && iterationIds.length > 0,
+  });
+
+  const { data: projects = [] } = useQuery({
+    queryKey: ["refinery-project-options"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("projects")
+        .select("id, project_name")
+        .order("created_at", { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      return (data ?? []) as { id: string; project_name: string | null }[];
+    },
+    enabled: isAllowed,
+  });
+
+  const resultMap = useMemo(() => {
+    const m = new Map<string, ResultRow>();
+    for (const r of results) m.set(`${r.iteration_id}:${r.dataset_id}`, r);
+    return m;
+  }, [results]);
+
+  const latestIteration = iterations[iterations.length - 1] ?? null;
+
+  const latestDiffs = useMemo(() => {
+    if (!latestIteration) return [] as { dataset: DatasetRow; rows: DiffEntry[] }[];
+    return datasets
+      .map((d) => {
+        const res = resultMap.get(`${latestIteration.id}:${d.id}`);
+        const rows: DiffEntry[] = Array.isArray(res?.diff?.detections)
+          ? res!.diff.detections
+          : [];
+        return { dataset: d, rows };
+      })
+      .filter((g) => g.rows.length > 0 || resultMap.has(`${latestIteration.id}:${g.dataset.id}`));
+  }, [latestIteration, datasets, resultMap]);
+
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["refinery-prompt-datasets", promptId] });
+  };
+
+  const addDataset = async () => {
+    const project = projects.find((p) => p.id === addProjectId);
+    const name = addName.trim() || project?.project_name || "Dataset";
+    if (!addProjectId) return;
+    setSaving(true);
+    const { data, error } = await supabase
+      .from("refinery_datasets" as any)
+      .insert({
+        name,
+        project_id: addProjectId,
+        created_by: user?.id ?? null,
+      } as any)
+      .select("id")
+      .single();
+    if (error || !data) {
+      setSaving(false);
+      toast({ title: "Could not add dataset", description: (error as any)?.message, variant: "destructive" });
+      return;
+    }
+    const { error: linkError } = await supabase.from("refinery_prompt_datasets" as any).insert({
+      prompt_id: promptId,
+      dataset_id: (data as any).id,
+      sort_order: datasets.length,
+    } as any);
+    setSaving(false);
+    if (linkError) {
+      toast({ title: "Could not add dataset", description: (linkError as any)?.message, variant: "destructive" });
+      return;
+    }
     setAddOpen(false);
+    setAddProjectId("");
+    setAddName("");
+    refresh();
   };
 
   const openRunModal = () => {
-    setRefineTarget((prev) => (datasets.some((d) => d.id === prev) ? prev : datasets[0]?.id ?? ""));
+    setRefineTarget(datasets[0]?.id ?? "");
     setEvalTargets(datasets.map((d) => d.id));
     setRunOpen(true);
   };
@@ -110,6 +249,8 @@ export default function PromptRefineryDetail() {
       </div>
     );
   }
+
+  const columnCount = Math.max(iterations.length, 1);
 
   return (
     <div className="min-h-screen bg-background">
@@ -157,30 +298,38 @@ export default function PromptRefineryDetail() {
           <Table className="[&_td]:py-2 [&_th]:py-2">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[280px]">Dataset</TableHead>
-                {Array.from({ length: Math.max(iterationCount, 1) }).map((_, i) => (
+                <TableHead className="w-[320px]">Dataset</TableHead>
+                {Array.from({ length: columnCount }).map((_, i) => (
                   <TableHead key={i} className="w-[100px] text-center tabular-nums">
-                    {i + 1}
+                    {iterations[i]?.iteration_number ?? i + 1}
                   </TableHead>
                 ))}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {datasets.length === 0 && (
+              {loadingDatasets && (
                 <TableRow>
-                  <TableCell colSpan={Math.max(iterationCount, 1) + 1} className="text-center text-muted-foreground py-10">
-                    No datasets yet.
+                  <TableCell colSpan={columnCount + 1} className="text-center text-muted-foreground py-10">
+                    <Loader2 className="h-4 w-4 animate-spin inline mr-2" /> Loading…
+                  </TableCell>
+                </TableRow>
+              )}
+              {!loadingDatasets && datasets.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={columnCount + 1} className="text-center text-muted-foreground py-10">
+                    No datasets yet. Add one to start evaluating.
                   </TableCell>
                 </TableRow>
               )}
               {datasets.map((d) => (
                 <TableRow key={d.id}>
                   <TableCell className="font-medium truncate">{d.name}</TableCell>
-                  {Array.from({ length: Math.max(iterationCount, 1) }).map((_, i) => {
-                    const value = d.metrics[i]?.[metric];
+                  {Array.from({ length: columnCount }).map((_, i) => {
+                    const it = iterations[i];
+                    const value = it ? resultMap.get(`${it.id}:${d.id}`)?.[metric] : null;
                     return (
                       <TableCell key={i} className="text-center tabular-nums text-muted-foreground">
-                        {value == null ? "-" : `${value.toFixed(1)}%`}
+                        {value == null ? "-" : `${Number(value).toFixed(1)}%`}
                       </TableCell>
                     );
                   })}
@@ -191,11 +340,15 @@ export default function PromptRefineryDetail() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" disabled={iterationCount === 0}>
+          <Button
+            variant="outline"
+            disabled={iterations.length === 0}
+            onClick={() => setResultOpen(true)}
+          >
             Latest Iteration Result
           </Button>
           <Button onClick={openRunModal} disabled={datasets.length === 0}>
-            {iterationCount === 0 ? "Run First Iteration" : "Run Next Iteration"}
+            {iterations.length === 0 ? "Run First Iteration" : "Run Next Iteration"}
           </Button>
         </div>
       </main>
@@ -204,23 +357,48 @@ export default function PromptRefineryDetail() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Add dataset</DialogTitle>
-            <DialogDescription>Give the dataset a name to track it in the iteration table.</DialogDescription>
+            <DialogDescription>
+              Pick an existing project to evaluate this prompt against.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="dataset-name">Dataset name</Label>
-            <Input
-              id="dataset-name"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addDataset()}
-              placeholder="e.g. Suite Riser Set"
-            />
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Project</Label>
+              <Select
+                value={addProjectId}
+                onValueChange={(v) => {
+                  setAddProjectId(v);
+                  const p = projects.find((x) => x.id === v);
+                  if (!addName.trim()) setAddName(p?.project_name ?? "");
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a project" />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.project_name || "Untitled project"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dataset-name">Dataset name</Label>
+              <Input
+                id="dataset-name"
+                value={addName}
+                onChange={(e) => setAddName(e.target.value)}
+                placeholder="Defaults to the project name"
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={addDataset} disabled={!newName.trim()}>
+            <Button onClick={addDataset} disabled={!addProjectId || saving}>
               Add
             </Button>
           </DialogFooter>
@@ -231,7 +409,7 @@ export default function PromptRefineryDetail() {
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {iterationCount === 0 ? "Run First Iteration" : "Run Next Iteration"}
+              {iterations.length === 0 ? "Run First Iteration" : "Run Next Iteration"}
             </DialogTitle>
             <DialogDescription>
               Pick one dataset to refine against and the datasets to evaluate on.
@@ -278,6 +456,87 @@ export default function PromptRefineryDetail() {
               Cancel
             </Button>
             <Button onClick={() => setRunOpen(false)}>Run</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={resultOpen} onOpenChange={setResultOpen}>
+        <DialogContent className="sm:max-w-4xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>
+              Iteration {latestIteration?.iteration_number ?? "-"} result
+            </DialogTitle>
+            <DialogDescription>
+              Per-detection differences for each dataset this iteration was evaluated against.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-6 pr-1">
+            {latestDiffs.length === 0 && (
+              <div className="text-center text-muted-foreground py-10">
+                No evaluation details recorded for this iteration yet.
+              </div>
+            )}
+            {latestDiffs.map(({ dataset, rows }) => {
+              const res = latestIteration
+                ? resultMap.get(`${latestIteration.id}:${dataset.id}`)
+                : undefined;
+              return (
+                <div key={dataset.id} className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{dataset.name}</span>
+                    {res && (
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        F1 {res.f1_score == null ? "-" : `${Number(res.f1_score).toFixed(1)}%`} ·
+                        {" "}P {res.precision_score == null ? "-" : `${Number(res.precision_score).toFixed(1)}%`} ·
+                        {" "}R {res.recall_score == null ? "-" : `${Number(res.recall_score).toFixed(1)}%`}
+                      </span>
+                    )}
+                  </div>
+                  <div className="rounded-md border overflow-auto">
+                    <Table className="[&_td]:py-2 [&_th]:py-2">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[180px]">File</TableHead>
+                          <TableHead className="w-[70px]">Page</TableHead>
+                          <TableHead>Detection</TableHead>
+                          <TableHead className="w-[120px]">Expected</TableHead>
+                          <TableHead className="w-[120px]">Actual</TableHead>
+                          <TableHead className="w-[110px]">Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {rows.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center text-muted-foreground py-6">
+                              No differences recorded.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                        {rows.map((r, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell className="truncate">{r.file ?? "-"}</TableCell>
+                            <TableCell className="tabular-nums">{r.page ?? "-"}</TableCell>
+                            <TableCell className="truncate">{r.detection ?? "-"}</TableCell>
+                            <TableCell className="truncate">{r.expected ?? "-"}</TableCell>
+                            <TableCell className="truncate">{r.actual ?? "-"}</TableCell>
+                            <TableCell>
+                              <Badge variant="secondary">{r.status ?? "diff"}</Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResultOpen(false)}>
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
