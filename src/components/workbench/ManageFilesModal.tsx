@@ -173,7 +173,7 @@ export function ManageFilesModal({
             }
           }
           const { error: insErr } = await supabase.from("analysis_request_files").insert({
-            analysis_request_id: requestId,
+            analysis_request_id: activeRequestId,
             drive_file_id: `manual_${Date.now()}_${Math.random().toString(36).slice(2)}_${f.name}`,
             name: f.name,
             mime_type: f.type || "application/octet-stream",
@@ -190,7 +190,7 @@ export function ManageFilesModal({
         }
         setUploadProgress({ done: i + 1, total: picked.length });
       }
-      await syncRequestTotals();
+      await syncRequestTotals(activeRequestId);
       onChanged();
       toast({
         title: failures ? "Upload finished with errors" : "Files added",
@@ -372,7 +372,7 @@ export function ManageFilesModal({
                     variant="outline"
                     size="sm"
                     onClick={() => inputRef.current?.click()}
-                    disabled={uploading || !requestId}
+                    disabled={uploading || !projectId}
                   >
                     {uploading ? (
                       <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
