@@ -384,7 +384,7 @@ export default function PromptRefinery() {
                                     <Copy className="h-4 w-4 mr-2" /> Duplicate
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
-                                    onClick={() => handleDelete(p)}
+                                    onClick={() => setDeleteTarget(p)}
                                     className="text-destructive focus:text-destructive"
                                   >
                                     <Trash2 className="h-4 w-4 mr-2" /> Delete
