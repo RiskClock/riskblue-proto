@@ -146,6 +146,7 @@ export async function captureOverlayOnly(
         pageSize,
         exportScale,
         syncPlacement: true,
+        fullSizeLabels: true,
       } as any),
     );
 
