@@ -94,6 +94,8 @@ export default function PromptRefinery() {
   const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
   const [filterModels, setFilterModels] = useState<string[]>([]);
   const [filterClasses, setFilterClasses] = useState<string[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<RefineryPrompt | null>(null);
+
 
   const { data: awpOptions = [] } = useAWPOptions();
 
