@@ -4856,18 +4856,21 @@ const isChildPlanType = (t: string) =>
                                   ) : (
                                     <span className="inline-block w-3.5 shrink-0" />
                                   )}
-                                  <span className="font-medium truncate min-w-0">
-                                    {row.name}
-                                  </span>
-                                  {!singlePage && count > 0 && (
-                                    <span className="text-xs text-muted-foreground shrink-0">
-                                      {count} pages
-                                    </span>
-                                  )}
-                                  {singlePage && !processingLock &&
-                                    (pageHasPlanBadges(row.id, 1)
-                                      ? renderPlanBadges(row.id, 1)
-                                      : renderSpaceBadge(row.name, 1))}
+                                   <span
+                                     className="font-medium truncate basis-[220px] min-w-[160px] max-w-full"
+                                     title={row.name}
+                                   >
+                                     {row.name}
+                                   </span>
+                                   {!singlePage && count > 0 && (
+                                     <span className="text-xs text-muted-foreground shrink-0">
+                                       {count} pages
+                                     </span>
+                                   )}
+                                   {singlePage && !processingLock &&
+                                     (pageHasPlanBadges(row.id, 1)
+                                       ? renderPlanBadges(row.id, 1, PLAN_BADGE_TYPES, 90)
+                                       : renderSpaceBadge(row.name, 1))}
                                 </div>
                               </TableCell>
                               {enabledCols.map((name) => {
