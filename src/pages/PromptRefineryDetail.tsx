@@ -512,23 +512,66 @@ export default function PromptRefineryDetail() {
                 {prompt.class_name}
               </span>
             )}
+            <Button variant="outline" size="sm" className="ml-2 shrink-0" onClick={openManage}>
+              <Settings2 className="h-4 w-4 mr-2" /> Manage Datasets
+            </Button>
           </div>
         }
       />
       <main className="container mx-auto px-6 py-8 space-y-4">
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-md border bg-card p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Prompt for next iteration</span>
-              <div className="flex items-center gap-1">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={savePromptText}
-                  disabled={savingText || !promptTextDirty}
+        <div className="flex gap-4 items-stretch">
+          {/* Iterations */}
+          <div className="w-[220px] shrink-0 space-y-2">
+            <div className="text-sm font-medium">Iterations</div>
+            <div className="h-[330px] overflow-y-auto space-y-1 pr-1">
+              <button
+                type="button"
+                onClick={() => setSelectedIterationId("draft")}
+                className={`w-full text-left rounded-md px-2 py-1.5 text-sm ${
+                  isDraftSelected ? "bg-accent text-accent-foreground" : "hover:bg-muted/60"
+                }`}
+              >
+                <div className="font-medium">Next iteration (draft)</div>
+                <div className="text-xs text-muted-foreground">Not run yet</div>
+              </button>
+              {[...iterations].reverse().map((it) => (
+                <button
+                  key={it.id}
+                  type="button"
+                  onClick={() => setSelectedIterationId(it.id)}
+                  className={`w-full text-left rounded-md px-2 py-1.5 text-sm ${
+                    selectedIterationId === it.id
+                      ? "bg-accent text-accent-foreground"
+                      : "hover:bg-muted/60"
+                  }`}
                 >
-                  <Save className="h-4 w-4 mr-1" /> {savingText ? "Saving…" : "Save"}
+                  <div className="font-medium tabular-nums">Iteration {it.iteration_number}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {new Date(it.created_at).toLocaleString()}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Prompt */}
+          <div className="w-[440px] shrink-0 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Prompt</span>
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant="outline" onClick={() => setChangesOpen(true)}>
+                  Changes
                 </Button>
+                {isDraftSelected && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={savePromptText}
+                    disabled={savingText || !promptTextDirty}
+                  >
+                    <Save className="h-4 w-4 mr-1" /> {savingText ? "Saving…" : "Save"}
+                  </Button>
+                )}
                 <Button
                   size="icon"
                   variant="ghost"
@@ -541,27 +584,35 @@ export default function PromptRefineryDetail() {
               </div>
             </div>
             <Textarea
-              value={promptText}
+              value={displayedPrompt}
+              readOnly={!isDraftSelected}
+              disabled={!isDraftSelected}
               onChange={(e) => {
                 setPromptTextDirty(true);
                 setPromptText(e.target.value);
               }}
               placeholder="Write the prompt to use for the next iteration…"
-              className="h-[220px] resize-none font-mono text-xs"
+              className="h-[330px] resize-none font-mono text-xs"
             />
+            <Button
+              className="w-full"
+              onClick={openRunModal}
+              disabled={!isDraftSelected || datasets.length === 0}
+            >
+              {iterations.length === 0 ? "Run First Iteration" : "Run Next Iteration"}
+            </Button>
           </div>
 
-          <div className="rounded-md border bg-card p-3 space-y-2">
-            <div className="text-sm font-medium">
-              Latest {METRICS.find((m) => m.key === metric)?.label} by project
-            </div>
-            {latestScores.length === 0 ? (
-              <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">
+          {/* Results */}
+          <div className="flex-1 min-w-0 space-y-2">
+            <div className="text-sm font-medium">Results</div>
+            {viewedScores.length === 0 ? (
+              <div className="h-[330px] flex items-center justify-center text-sm text-muted-foreground">
                 No datasets yet.
               </div>
             ) : (
-              <div className="h-[220px] overflow-y-auto grid grid-cols-2 xl:grid-cols-3 gap-2 content-start">
-                {latestScores.map((t) => (
+              <div className="h-[330px] overflow-y-auto grid grid-cols-2 xl:grid-cols-3 gap-2 content-start">
+                {viewedScores.map((t) => (
                   <div key={t.id} className="rounded-md border p-2">
                     <div className="text-xs text-muted-foreground truncate" title={t.name}>
                       {t.name}
@@ -573,26 +624,20 @@ export default function PromptRefineryDetail() {
                 ))}
               </div>
             )}
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={!isDraftSelected || !latestIteration}
+              onClick={() => {
+                setGeneratedPrompt(promptText);
+                setGenerateOpen(true);
+              }}
+            >
+              Generate Next Iteration
+            </Button>
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-2">
-          <Button variant="outline" size="sm" onClick={openManage}>
-            <Settings2 className="h-4 w-4 mr-2" /> Manage Datasets
-          </Button>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              disabled={iterations.length === 0}
-              onClick={() => setResultOpen(true)}
-            >
-              Latest Iteration Result
-            </Button>
-            <Button onClick={openRunModal} disabled={datasets.length === 0}>
-              {iterations.length === 0 ? "Run First Iteration" : "Run Next Iteration"}
-            </Button>
-          </div>
-        </div>
 
         <div className="flex items-center justify-between gap-2">
           <div className="text-sm font-medium">
