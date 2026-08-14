@@ -66,12 +66,33 @@ export function ProjectDatasetPicker({
   onChange: (ids: string[]) => void;
   emptyLabel?: string;
 }) {
-  const { data: options = [], isLoading } = useProjectDatasetOptions(className);
+  const { data: rows = [], isLoading } = useProjectClassRows();
+
+  const options: ProjectDatasetOption[] = useMemo(
+    () =>
+      rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        eligible: !!className && r.classes.includes(className),
+      })),
+    [rows, className],
+  );
 
   const eligibleIds = useMemo(
     () => options.filter((o) => o.eligible).map((o) => o.id),
     [options],
   );
+
+  // Never keep a project selected when its class isn't in the project's workbench.
+  useEffect(() => {
+    if (isLoading || options.length === 0) return;
+    const allowed = new Set(eligibleIds);
+    if (selected.some((id) => !allowed.has(id))) {
+      onChange(selected.filter((id) => allowed.has(id)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eligibleIds, isLoading, selected]);
+
   const eligibleCount = eligibleIds.length;
   const selectedEligible = useMemo(
     () => eligibleIds.filter((id) => selected.includes(id)),
