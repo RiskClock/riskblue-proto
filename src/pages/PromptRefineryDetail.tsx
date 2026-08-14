@@ -113,11 +113,15 @@ export default function PromptRefineryDetail() {
   const [runOpen, setRunOpen] = useState(false);
   const [refineTarget, setRefineTarget] = useState<string>("");
   const [evalTargets, setEvalTargets] = useState<string[]>([]);
-  const [resultOpen, setResultOpen] = useState(false);
   const [promptText, setPromptText] = useState("");
   const [promptTextDirty, setPromptTextDirty] = useState(false);
   const [promptFullscreen, setPromptFullscreen] = useState(false);
   const [savingText, setSavingText] = useState(false);
+  const [selectedIterationId, setSelectedIterationId] = useState<string>("draft");
+  const [changesOpen, setChangesOpen] = useState(false);
+  const [generateOpen, setGenerateOpen] = useState(false);
+  const [generatedPrompt, setGeneratedPrompt] = useState("");
+
 
   const { data: prompt } = useQuery({
     queryKey: ["refinery-prompt", promptId],
