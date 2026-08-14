@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,15 +11,21 @@ export interface ProjectDatasetOption {
   eligible: boolean;
 }
 
+interface ProjectClassRow {
+  id: string;
+  name: string;
+  classes: string[];
+}
+
 /**
- * Lists all projects and flags whether the given AWP class is selected in the
- * project's workbench columns (falling back to the classes picked at project
- * creation when no workbench preference row exists).
+ * Loads every project once (with the AWP classes selected in its workbench
+ * columns, falling back to the classes picked at project creation). Eligibility
+ * for a given class is derived client-side so changing the class never refetches.
  */
-export function useProjectDatasetOptions(className: string | null | undefined) {
+export function useProjectClassRows() {
   return useQuery({
-    queryKey: ["refinery-project-dataset-options", className ?? ""],
-    queryFn: async (): Promise<ProjectDatasetOption[]> => {
+    queryKey: ["refinery-project-dataset-rows"],
+    queryFn: async (): Promise<ProjectClassRow[]> => {
       const [projectsRes, prefsRes] = await Promise.all([
         supabase
           .from("projects")
@@ -35,23 +41,19 @@ export function useProjectDatasetOptions(className: string | null | undefined) {
         prefMap.set(String(row.id), (row.awp_class_names as string[]) || []);
       }
 
-      return ((projectsRes.data as any[]) ?? []).map((p) => {
-        const pref = prefMap.get(String(p.id));
-        const classes =
-          pref ??
-          [
+      return ((projectsRes.data as any[]) ?? []).map((p) => ({
+        id: p.id as string,
+        name: (p.name as string) || "Untitled project",
+        classes:
+          prefMap.get(String(p.id)) ?? [
             ...(((p.selected_awp_class_names as string[]) || [])),
             ...(((p.selected_other_classes as string[]) || [])),
-          ];
-        return {
-          id: p.id as string,
-          name: (p.name as string) || "Untitled project",
-          eligible: !!className && classes.includes(className),
-        };
-      });
+          ],
+      }));
     },
   });
 }
+
 
 export function ProjectDatasetPicker({
   className,
@@ -64,12 +66,33 @@ export function ProjectDatasetPicker({
   onChange: (ids: string[]) => void;
   emptyLabel?: string;
 }) {
-  const { data: options = [], isLoading } = useProjectDatasetOptions(className);
+  const { data: rows = [], isLoading } = useProjectClassRows();
+
+  const options: ProjectDatasetOption[] = useMemo(
+    () =>
+      rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        eligible: !!className && r.classes.includes(className),
+      })),
+    [rows, className],
+  );
 
   const eligibleIds = useMemo(
     () => options.filter((o) => o.eligible).map((o) => o.id),
     [options],
   );
+
+  // Never keep a project selected when its class isn't in the project's workbench.
+  useEffect(() => {
+    if (isLoading || options.length === 0) return;
+    const allowed = new Set(eligibleIds);
+    if (selected.some((id) => !allowed.has(id))) {
+      onChange(selected.filter((id) => allowed.has(id)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eligibleIds, isLoading, selected]);
+
   const eligibleCount = eligibleIds.length;
   const selectedEligible = useMemo(
     () => eligibleIds.filter((id) => selected.includes(id)),

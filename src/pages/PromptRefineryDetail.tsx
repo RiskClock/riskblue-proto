@@ -1,7 +1,7 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ShieldAlert, Settings2, Loader2 } from "lucide-react";
+import { ArrowLeft, ShieldAlert, Settings2, Loader2, Maximize2, Save } from "lucide-react";
 import {
   CartesianGrid,
   Legend,
@@ -19,6 +19,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -113,6 +114,10 @@ export default function PromptRefineryDetail() {
   const [refineTarget, setRefineTarget] = useState<string>("");
   const [evalTargets, setEvalTargets] = useState<string[]>([]);
   const [resultOpen, setResultOpen] = useState(false);
+  const [promptText, setPromptText] = useState("");
+  const [promptTextDirty, setPromptTextDirty] = useState(false);
+  const [promptFullscreen, setPromptFullscreen] = useState(false);
+  const [savingText, setSavingText] = useState(false);
 
   const { data: prompt } = useQuery({
     queryKey: ["refinery-prompt", promptId],
@@ -219,22 +224,68 @@ export default function PromptRefineryDetail() {
     [iterations, datasets, resultMap, metric],
   );
 
-  useLayoutEffect(() => {
-    if (view !== "table") return;
+  const scrollTableToEnd = useCallback(() => {
     let raf2 = 0;
     const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
         const el = tableScrollRef.current;
-        if (el) el.scrollLeft = el.scrollWidth - el.clientWidth;
+        if (el) el.scrollLeft = el.scrollWidth;
       });
     });
     return () => {
       cancelAnimationFrame(raf1);
       if (raf2) cancelAnimationFrame(raf2);
     };
-  }, [view, iterations.length, datasets.length, loadingDatasets, metric]);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (view !== "table") return;
+    if (loadingDatasets || datasets.length === 0) return;
+    const cleanup = scrollTableToEnd();
+    // A second pass once fonts/layout settle keeps the latest column visible.
+    const t = window.setTimeout(() => {
+      const el = tableScrollRef.current;
+      if (el) el.scrollLeft = el.scrollWidth;
+    }, 120);
+    return () => {
+      cleanup();
+      window.clearTimeout(t);
+    };
+  }, [view, iterations.length, datasets.length, results.length, loadingDatasets, metric, scrollTableToEnd]);
 
 
+
+  useEffect(() => {
+    if (prompt && !promptTextDirty) setPromptText((prompt as any).prompt_text ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prompt?.id, (prompt as any)?.prompt_text]);
+
+  const savePromptText = async () => {
+    setSavingText(true);
+    const { error } = await supabase
+      .from("refinery_prompts" as any)
+      .update({ prompt_text: promptText } as any)
+      .eq("id", promptId);
+    setSavingText(false);
+    if (error) {
+      toast({ title: "Could not save prompt", description: (error as any)?.message, variant: "destructive" });
+      return;
+    }
+    setPromptTextDirty(false);
+    queryClient.invalidateQueries({ queryKey: ["refinery-prompt", promptId] });
+    toast({ title: "Prompt saved" });
+  };
+
+  const latestScores = useMemo(
+    () =>
+      datasets.map((d) => {
+        const raw = latestIteration
+          ? resultMap.get(`${latestIteration.id}:${d.id}`)?.[metric]
+          : null;
+        return { id: d.id, name: d.name, value: raw == null ? null : Number(raw) };
+      }),
+    [datasets, latestIteration, resultMap, metric],
+  );
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["refinery-prompt-datasets", promptId] });
@@ -389,6 +440,11 @@ export default function PromptRefineryDetail() {
 
       setRunOpen(false);
       refresh();
+      setView("table");
+      window.setTimeout(() => {
+        const el = tableScrollRef.current;
+        if (el) el.scrollLeft = el.scrollWidth;
+      }, 300);
       toast({ title: `Iteration ${nextNumber} complete` });
     } catch (e) {
       toast({
@@ -455,7 +511,7 @@ export default function PromptRefineryDetail() {
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <span className="truncate">{prompt?.prompt_key ?? promptId}</span>
+            <span className="truncate">{prompt?.name ?? prompt?.prompt_key ?? promptId}</span>
             {prompt?.class_name && (
               <span className="text-sm font-normal text-muted-foreground truncate">
                 {prompt.class_name}
@@ -465,6 +521,84 @@ export default function PromptRefineryDetail() {
         }
       />
       <main className="container mx-auto px-6 py-8 space-y-4">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-md border bg-card p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Prompt for next iteration</span>
+              <div className="flex items-center gap-1">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={savePromptText}
+                  disabled={savingText || !promptTextDirty}
+                >
+                  <Save className="h-4 w-4 mr-1" /> {savingText ? "Saving…" : "Save"}
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8"
+                  onClick={() => setPromptFullscreen(true)}
+                  aria-label="Expand prompt"
+                >
+                  <Maximize2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <Textarea
+              value={promptText}
+              onChange={(e) => {
+                setPromptTextDirty(true);
+                setPromptText(e.target.value);
+              }}
+              placeholder="Write the prompt to use for the next iteration…"
+              className="h-[220px] resize-none font-mono text-xs"
+            />
+          </div>
+
+          <div className="rounded-md border bg-card p-3 space-y-2">
+            <div className="text-sm font-medium">
+              Latest {METRICS.find((m) => m.key === metric)?.label} by project
+            </div>
+            {latestScores.length === 0 ? (
+              <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">
+                No datasets yet.
+              </div>
+            ) : (
+              <div className="h-[220px] overflow-y-auto grid grid-cols-2 xl:grid-cols-3 gap-2 content-start">
+                {latestScores.map((t) => (
+                  <div key={t.id} className="rounded-md border p-2">
+                    <div className="text-xs text-muted-foreground truncate" title={t.name}>
+                      {t.name}
+                    </div>
+                    <div className="text-lg font-semibold tabular-nums">
+                      {t.value == null ? "-" : `${t.value.toFixed(1)}%`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <Button variant="outline" size="sm" onClick={openManage}>
+            <Settings2 className="h-4 w-4 mr-2" /> Manage Datasets
+          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              disabled={iterations.length === 0}
+              onClick={() => setResultOpen(true)}
+            >
+              Latest Iteration Result
+            </Button>
+            <Button onClick={openRunModal} disabled={datasets.length === 0}>
+              {iterations.length === 0 ? "Run First Iteration" : "Run Next Iteration"}
+            </Button>
+          </div>
+        </div>
+
         <div className="flex items-center justify-between gap-2">
           <div className="text-sm font-medium">
             Overall F1:{" "}
@@ -617,23 +751,6 @@ export default function PromptRefineryDetail() {
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-2">
-          <Button variant="outline" size="sm" onClick={openManage}>
-            <Settings2 className="h-4 w-4 mr-2" /> Manage Datasets
-          </Button>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              disabled={iterations.length === 0}
-              onClick={() => setResultOpen(true)}
-            >
-              Latest Iteration Result
-            </Button>
-            <Button onClick={openRunModal} disabled={datasets.length === 0}>
-              {iterations.length === 0 ? "Run First Iteration" : "Run Next Iteration"}
-            </Button>
-          </div>
-        </div>
 
       </main>
 
@@ -660,6 +777,33 @@ export default function PromptRefineryDetail() {
             </Button>
             <Button onClick={saveDatasets} disabled={saving}>
               {saving ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={promptFullscreen} onOpenChange={setPromptFullscreen}>
+        <DialogContent className="sm:max-w-5xl h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Prompt for next iteration</DialogTitle>
+            <DialogDescription>
+              {prompt?.name ?? prompt?.prompt_key ?? ""}
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={promptText}
+            onChange={(e) => {
+              setPromptTextDirty(true);
+              setPromptText(e.target.value);
+            }}
+            className="flex-1 min-h-0 resize-none font-mono text-sm"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPromptFullscreen(false)}>
+              Close
+            </Button>
+            <Button onClick={savePromptText} disabled={savingText || !promptTextDirty}>
+              {savingText ? "Saving…" : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>

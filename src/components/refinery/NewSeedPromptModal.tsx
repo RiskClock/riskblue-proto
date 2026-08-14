@@ -53,14 +53,15 @@ export function NewSeedPromptModal({ open, onOpenChange, onCreated }: Props) {
 
   const [className, setClassName] = useState<string>("");
   const [targetModel, setTargetModel] = useState<string>(REFINERY_MODEL_OPTIONS[0].value);
-  const [promptKey, setPromptKey] = useState<string>("");
-  const [keyEdited, setKeyEdited] = useState(false);
+  const [promptName, setPromptName] = useState<string>("");
+  const [description, setDescription] = useState<string>("");
+  const [nameEdited, setNameEdited] = useState(false);
   const [saving, setSaving] = useState(false);
   const [datasetProjectIds, setDatasetProjectIds] = useState<string[]>([]);
 
-  const suggestedKey = useMemo(() => {
+  const suggestedName = useMemo(() => {
     if (!className) return "";
-    return slugifyPromptKey(`${className}-${format(new Date(), "yyyyMMdd-HHmmss")}`);
+    return `${className} ${format(new Date(), "yyyy-MM-dd HH:mm")}`;
   }, [className]);
 
   useEffect(() => {
@@ -68,15 +69,16 @@ export function NewSeedPromptModal({ open, onOpenChange, onCreated }: Props) {
   }, [className]);
 
   useEffect(() => {
-    if (!keyEdited) setPromptKey(suggestedKey);
-  }, [suggestedKey, keyEdited]);
+    if (!nameEdited) setPromptName(suggestedName);
+  }, [suggestedName, nameEdited]);
 
   useEffect(() => {
     if (open) {
       setClassName("");
       setTargetModel(REFINERY_MODEL_OPTIONS[0].value);
-      setPromptKey("");
-      setKeyEdited(false);
+      setPromptName("");
+      setDescription("");
+      setNameEdited(false);
       setDatasetProjectIds([]);
     }
   }, [open]);
@@ -84,10 +86,15 @@ export function NewSeedPromptModal({ open, onOpenChange, onCreated }: Props) {
   const selectedOption = awpOptions.find((o) => o.name === className);
 
   const handleCreate = async () => {
-    if (!className || !promptKey) return;
+    if (!className || !promptName.trim()) return;
+    const promptKey = slugifyPromptKey(
+      `${promptName}-${format(new Date(), "yyyyMMdd-HHmmss")}`,
+    );
     setSaving(true);
     const { data: created, error } = await supabase.from("refinery_prompts" as any).insert({
       prompt_key: promptKey,
+      name: promptName.trim(),
+      description: description.trim() || null,
       class_name: className,
       class_category: selectedOption?.displayCategory ?? null,
       status: "draft",
@@ -135,7 +142,7 @@ export function NewSeedPromptModal({ open, onOpenChange, onCreated }: Props) {
     }
 
     setSaving(false);
-    toast({ title: "Seed prompt created", description: promptKey });
+    toast({ title: "Seed prompt created", description: promptName.trim() });
     onOpenChange(false);
     onCreated?.();
   };
@@ -194,19 +201,24 @@ export function NewSeedPromptModal({ open, onOpenChange, onCreated }: Props) {
           </div>
 
           <div className="space-y-2">
-            <Label>Prompt ID</Label>
+            <Label>Prompt Name</Label>
             <Input
-              value={promptKey}
-              placeholder="select-a-class-first"
+              value={promptName}
+              placeholder="Select a class first"
               onChange={(e) => {
-                setKeyEdited(true);
-                setPromptKey(slugifyPromptKey(e.target.value));
+                setNameEdited(true);
+                setPromptName(e.target.value);
               }}
-              className="font-mono"
             />
-            <p className="text-xs text-muted-foreground">
-              Lowercase only; spaces become dashes. Prefilled from class and time, editable.
-            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Description</Label>
+            <Input
+              value={description}
+              placeholder="Optional short description"
+              onChange={(e) => setDescription(e.target.value)}
+            />
           </div>
         </div>
 
@@ -214,7 +226,7 @@ export function NewSeedPromptModal({ open, onOpenChange, onCreated }: Props) {
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleCreate} disabled={!className || !promptKey || saving}>
+          <Button onClick={handleCreate} disabled={!className || !promptName.trim() || saving}>
             {saving ? "Creating…" : "Create Prompt"}
           </Button>
         </DialogFooter>
