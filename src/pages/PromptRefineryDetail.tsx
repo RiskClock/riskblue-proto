@@ -535,16 +535,18 @@ export default function PromptRefineryDetail() {
         }
       />
       <main className="container mx-auto px-6 py-8 space-y-4">
-        <div className="flex gap-4 items-stretch">
+        <div className="flex gap-4 h-[500px]">
           {/* Iterations */}
-          <div className="w-[220px] shrink-0 space-y-2">
-            <div className="text-sm font-medium">Iterations</div>
-            <div className="h-[330px] overflow-y-auto space-y-1 pr-1">
+          <div className="w-[220px] shrink-0 flex flex-col min-h-0">
+            <div className="h-8 flex items-center">
+              <span className="text-sm font-medium">Iterations</span>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto rounded-md border bg-card divide-y">
               <button
                 type="button"
                 onClick={() => setSelectedIterationId("draft")}
-                className={`w-full text-left rounded-md px-2 py-1.5 text-sm ${
-                  isDraftSelected ? "bg-accent text-accent-foreground" : "hover:bg-muted/60"
+                className={`w-full text-left px-3 py-2 text-sm ${
+                  isDraftSelected ? "bg-muted/60" : "hover:bg-muted/30"
                 }`}
               >
                 <div className="font-medium">Next iteration (draft)</div>
@@ -555,10 +557,8 @@ export default function PromptRefineryDetail() {
                   key={it.id}
                   type="button"
                   onClick={() => setSelectedIterationId(it.id)}
-                  className={`w-full text-left rounded-md px-2 py-1.5 text-sm ${
-                    selectedIterationId === it.id
-                      ? "bg-accent text-accent-foreground"
-                      : "hover:bg-muted/60"
+                  className={`w-full text-left px-3 py-2 text-sm ${
+                    selectedIterationId === it.id ? "bg-muted/60" : "hover:bg-muted/30"
                   }`}
                 >
                   <div className="font-medium tabular-nums">Iteration {it.iteration_number}</div>
@@ -571,17 +571,20 @@ export default function PromptRefineryDetail() {
           </div>
 
           {/* Prompt */}
-          <div className="w-[440px] shrink-0 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Prompt</span>
-              <div className="flex items-center gap-1">
-                <Button size="sm" variant="outline" onClick={() => setChangesOpen(true)}>
+          <div className="w-[440px] shrink-0 flex flex-col min-h-0">
+            <div className="h-8 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Prompt</span>
+                <Button size="sm" variant="outline" className="h-7" onClick={() => setChangesOpen(true)}>
                   Changes
                 </Button>
+              </div>
+              <div className="flex items-center gap-1">
                 {isDraftSelected && (
                   <Button
                     size="sm"
                     variant="ghost"
+                    className="h-7"
                     onClick={savePromptText}
                     disabled={savingText || !promptTextDirty}
                   >
@@ -591,7 +594,7 @@ export default function PromptRefineryDetail() {
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="h-8 w-8"
+                  className="h-7 w-7"
                   onClick={() => setPromptFullscreen(true)}
                   aria-label="Expand prompt"
                 >
@@ -599,60 +602,70 @@ export default function PromptRefineryDetail() {
                 </Button>
               </div>
             </div>
-            <Textarea
-              value={displayedPrompt}
-              readOnly={!isDraftSelected}
-              disabled={!isDraftSelected}
-              onChange={(e) => {
-                setPromptTextDirty(true);
-                setPromptText(e.target.value);
-              }}
-              placeholder="Write the prompt to use for the next iteration…"
-              className="h-[330px] resize-none font-mono text-xs"
-            />
-            <Button
-              className="w-full"
-              onClick={openRunModal}
-              disabled={!isDraftSelected || datasets.length === 0}
-            >
-              {iterations.length === 0 ? "Run First Iteration" : "Run Next Iteration"}
-            </Button>
+            <div className="flex-1 min-h-0 rounded-md border bg-card p-2 flex flex-col gap-2">
+              <Textarea
+                value={displayedPrompt}
+                readOnly={!isDraftSelected}
+                disabled={!isDraftSelected}
+                onChange={(e) => {
+                  setPromptTextDirty(true);
+                  setPromptText(e.target.value);
+                }}
+                placeholder="Write the prompt to use for the next iteration…"
+                className="flex-1 min-h-0 resize-none font-mono text-xs"
+              />
+              <Button
+                className="w-full shrink-0"
+                onClick={openRunModal}
+                disabled={!isDraftSelected || datasets.length === 0}
+              >
+                {iterations.length === 0 ? "Run First Iteration" : "Run Next Iteration"}
+              </Button>
+            </div>
           </div>
 
           {/* Results */}
-          <div className="flex-1 min-w-0 space-y-2">
-            <div className="text-sm font-medium">Results</div>
-            {viewedScores.length === 0 ? (
-              <div className="h-[330px] flex items-center justify-center text-sm text-muted-foreground">
-                No datasets yet.
-              </div>
-            ) : (
-              <div className="h-[330px] overflow-y-auto grid grid-cols-2 xl:grid-cols-3 gap-2 content-start">
-                {viewedScores.map((t) => (
-                  <div key={t.id} className="rounded-md border p-2">
-                    <div className="text-xs text-muted-foreground truncate" title={t.name}>
-                      {t.name}
+          <div className="flex-1 min-w-0 flex flex-col min-h-0">
+            <div className="h-8 flex items-center">
+              <span className="text-sm font-medium">Results</span>
+            </div>
+            <div className="flex-1 min-h-0 rounded-md border bg-card p-2 flex flex-col gap-2">
+              {viewedScores.length === 0 ? (
+                <div className="flex-1 min-h-0 flex items-center justify-center text-sm text-muted-foreground">
+                  No datasets yet.
+                </div>
+              ) : (
+                <div className="flex-1 min-h-0 overflow-y-auto grid grid-cols-2 xl:grid-cols-3 gap-2 content-start">
+                  {viewedScores.map((t) => (
+                    <div key={t.id} className="rounded-md border p-2">
+                      <div className="text-xs text-muted-foreground truncate" title={t.name}>
+                        {t.name}
+                      </div>
+                      <div className="text-lg font-semibold tabular-nums">
+                        {t.value == null ? "-" : `${t.value.toFixed(1)}%`}
+                      </div>
                     </div>
-                    <div className="text-lg font-semibold tabular-nums">
-                      {t.value == null ? "-" : `${t.value.toFixed(1)}%`}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            <Button
-              variant="outline"
-              className="w-full"
-              disabled={!isDraftSelected || !latestIteration}
-              onClick={() => {
-                setGeneratedPrompt(promptText);
-                setGenerateOpen(true);
-              }}
-            >
-              Generate Next Iteration
-            </Button>
+                  ))}
+                </div>
+              )}
+              <Button
+                variant="outline"
+                className="w-full shrink-0"
+                disabled={!isDraftSelected || !latestIteration}
+                onClick={() => {
+                  setGeneratedPrompt(promptText);
+                  setGenerateOpen(true);
+                }}
+              >
+                Generate Next Iteration
+              </Button>
+            </div>
           </div>
         </div>
+
+        <div className="h-px bg-border" />
+
+
 
 
         <div className="flex items-center justify-between gap-2">
