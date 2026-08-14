@@ -27,6 +27,7 @@ export function AskWadePanel({
   persistHistory = true,
   title = "Ask Wade",
   emptyHint,
+  onAssistantMessage,
 }: {
   projectId: string;
   onClose: () => void;
@@ -35,6 +36,8 @@ export function AskWadePanel({
   persistHistory?: boolean;
   title?: string;
   emptyHint?: string;
+  /** Called with each assistant reply, for callers that extract content from it. */
+  onAssistantMessage?: (content: string) => void;
 }) {
   const { toast } = useToast();
   const [messages, setMessages] = useState<WadeMessage[]>([]);
