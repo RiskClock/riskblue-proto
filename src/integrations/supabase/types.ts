@@ -2443,9 +2443,11 @@ export type Database = {
           class_name: string
           created_at: string
           created_by: string | null
+          description: string | null
           f1_score: number | null
           id: string
           last_refined_at: string | null
+          name: string | null
           prompt_key: string
           prompt_text: string | null
           status: string
@@ -2457,9 +2459,11 @@ export type Database = {
           class_name: string
           created_at?: string
           created_by?: string | null
+          description?: string | null
           f1_score?: number | null
           id?: string
           last_refined_at?: string | null
+          name?: string | null
           prompt_key: string
           prompt_text?: string | null
           status?: string
@@ -2471,9 +2475,11 @@ export type Database = {
           class_name?: string
           created_at?: string
           created_by?: string | null
+          description?: string | null
           f1_score?: number | null
           id?: string
           last_refined_at?: string | null
+          name?: string | null
           prompt_key?: string
           prompt_text?: string | null
           status?: string
