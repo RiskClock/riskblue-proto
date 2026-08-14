@@ -164,6 +164,7 @@ export function AskWadePanel({
       const answer = (data as any).response as string;
       
       setMessages((prev) => [...prev, { role: "user", content: text }, { role: "assistant", content: answer }]);
+      onAssistantMessage?.(answer);
       await persist("user", text);
       await persist("assistant", answer);
       sessionCountRef.current += 1;
