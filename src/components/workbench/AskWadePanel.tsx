@@ -24,7 +24,7 @@ export function AskWadePanel({
   projectId,
   onClose,
   buildContext,
-  persist = true,
+  persistHistory = true,
   title = "Ask Wade",
   emptyHint,
 }: {
@@ -32,7 +32,7 @@ export function AskWadePanel({
   onClose: () => void;
   buildContext: () => unknown;
   /** When false, the transcript is session-only (no database reads/writes). */
-  persist?: boolean;
+  persistHistory?: boolean;
   title?: string;
   emptyHint?: string;
 }) {
@@ -40,12 +40,12 @@ export function AskWadePanel({
   const [messages, setMessages] = useState<WadeMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [loading, setLoading] = useState(persist);
+  const [loading, setLoading] = useState(persistHistory);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (!persist) {
+    if (!persistHistory) {
       setLoading(false);
       return;
     }
@@ -63,7 +63,7 @@ export function AskWadePanel({
     return () => {
       cancelled = true;
     };
-  }, [projectId, persist]);
+  }, [projectId, persistHistory]);
 
 
   useEffect(() => {
