@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/dialog";
 import { REFINERY_ADMIN_EMAIL } from "@/pages/PromptRefinery";
 import { ProjectDatasetPicker } from "@/components/refinery/ProjectDatasetPicker";
+import { AskWadePanel } from "@/components/workbench/AskWadePanel";
 
 type MetricKey = "f1_score" | "precision_score" | "recall_score";
 
@@ -256,6 +257,13 @@ export default function PromptRefineryDetail() {
     queryClient.invalidateQueries({ queryKey: ["refinery-prompt", promptId] });
     toast({ title: "Prompt saved" });
   };
+
+  // Wade needs a project the user can read for its access check; the first
+  // dataset project stands in for the refinement conversation.
+  const wadeProjectId = useMemo(
+    () => datasets.find((d) => d.project_id)?.project_id ?? null,
+    [datasets],
+  );
 
   const isDraftSelected = selectedIterationId === "draft";
   const viewedIteration = useMemo(
@@ -489,6 +497,14 @@ export default function PromptRefineryDetail() {
       </div>
     );
   }
+
+  const buildWadeContext = () => ({
+    task: "prompt_refinement",
+    class_name: prompt?.class_name ?? null,
+    current_prompt: promptText,
+    latest_iteration: latestIteration?.iteration_number ?? null,
+    results: viewedScores.map((s) => ({ dataset: s.name, [metric]: s.value })),
+  });
 
   const columnCount = Math.max(iterations.length, 1);
 
