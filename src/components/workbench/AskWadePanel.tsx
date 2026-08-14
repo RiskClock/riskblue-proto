@@ -24,20 +24,31 @@ export function AskWadePanel({
   projectId,
   onClose,
   buildContext,
+  persistHistory = true,
+  title = "Ask Wade",
+  emptyHint,
 }: {
   projectId: string;
   onClose: () => void;
   buildContext: () => unknown;
+  /** When false, the transcript is session-only (no database reads/writes). */
+  persistHistory?: boolean;
+  title?: string;
+  emptyHint?: string;
 }) {
   const { toast } = useToast();
   const [messages, setMessages] = useState<WadeMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(persistHistory);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
+    if (!persistHistory) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       const { data } = await supabase
@@ -52,7 +63,8 @@ export function AskWadePanel({
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, persistHistory]);
+
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
@@ -68,7 +80,7 @@ export function AskWadePanel({
   useEffect(() => {
     return () => {
       const count = sessionCountRef.current;
-      if (count === 0) return;
+      if (count === 0 || !persistHistory) return;
       sessionCountRef.current = 0;
       void (async () => {
         try {
@@ -95,10 +107,11 @@ export function AskWadePanel({
         }
       })();
     };
-  }, [projectId]);
+  }, [projectId, persistHistory]);
 
 
   const persist = async (role: "user" | "assistant", content: string) => {
+    if (!persistHistory) return;
     const { data: auth } = await supabase.auth.getUser();
     await supabase.from("wade_chat_messages" as any).insert({
       project_id: projectId,
@@ -165,6 +178,11 @@ export function AskWadePanel({
   };
 
   const clearChat = async () => {
+    if (!persistHistory) {
+      setMessages([]);
+      inputRef.current?.focus();
+      return;
+    }
     const { error } = await supabase
       .from("wade_chat_messages" as any)
       .delete()
@@ -180,7 +198,7 @@ export function AskWadePanel({
   return (
     <div className="border rounded-md flex flex-col min-h-0 overflow-hidden">
       <div className="flex items-center justify-between border-b px-3 py-2 bg-muted/20">
-        <div className="text-sm font-semibold">Ask Wade</div>
+        <div className="text-sm font-semibold">{title}</div>
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
@@ -206,9 +224,9 @@ export function AskWadePanel({
             </div>
           ) : messages.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              Ask about detections, classes and subtypes, floor plans, levels and units, or
+              {emptyHint ?? `Ask about detections, classes and subtypes, floor plans, levels and units, or
               anything in this threat report. For example: "How many cold water instances are on
-              Level 6?" or "Which pages have no detections?"
+              Level 6?" or "Which pages have no detections?"`}
             </p>
           ) : (
             messages.map((m, i) => (

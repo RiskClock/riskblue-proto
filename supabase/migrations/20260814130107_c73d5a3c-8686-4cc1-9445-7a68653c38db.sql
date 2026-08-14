@@ -1,0 +1,1 @@
+ALTER TABLE public.refinery_iterations ADD COLUMN IF NOT EXISTS prompt_text text;
