@@ -983,15 +983,11 @@ export default function PromptRefineryDetail() {
       <Dialog open={generateOpen} onOpenChange={setGenerateOpen}>
         <DialogContent className="sm:max-w-6xl h-[85vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Generate next iteration</DialogTitle>
-            <DialogDescription>
-              Compare the current prompt with a newly generated one, and ask Wade about the
-              latest results.
-            </DialogDescription>
+            <DialogTitle>Generate Next Iteration</DialogTitle>
           </DialogHeader>
           <div className="flex-1 min-h-0 grid grid-cols-3 gap-3">
             <div className="flex flex-col min-h-0 gap-1">
-              <div className="text-xs font-medium text-muted-foreground">Current prompt</div>
+              <div className="text-xs font-medium text-muted-foreground">Previous Prompt</div>
               <Textarea
                 value={
                   (latestIteration as any)?.prompt_text ?? promptText
@@ -1001,7 +997,8 @@ export default function PromptRefineryDetail() {
               />
             </div>
             <div className="flex flex-col min-h-0 gap-1">
-              <div className="text-xs font-medium text-muted-foreground">Generated prompt</div>
+              <div className="text-xs font-medium text-muted-foreground">New Prompt</div>
+
               <Textarea
                 value={generatedPrompt}
                 onChange={(e) => setGeneratedPrompt(e.target.value)}
