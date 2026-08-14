@@ -55,6 +55,8 @@ import {
 export interface RefineryPrompt {
   id: string;
   prompt_key: string;
+  name?: string | null;
+  description?: string | null;
   class_name: string;
   class_category: string | null;
   status: "draft" | "production" | "archived";
@@ -128,7 +130,7 @@ export default function PromptRefinery() {
       if (filterModels.length && !filterModels.includes(p.target_model ?? "")) continue;
       if (
         q &&
-        !p.prompt_key.toLowerCase().includes(q) &&
+        !(p.name ?? p.prompt_key).toLowerCase().includes(q) &&
         !p.class_name.toLowerCase().includes(q) &&
         !modelLabel(p.target_model).toLowerCase().includes(q)
       )
@@ -162,7 +164,7 @@ export default function PromptRefinery() {
       toast({ title: "Delete failed", description: (error as any)?.message, variant: "destructive" });
       return;
     }
-    toast({ title: "Prompt deleted", description: p.prompt_key });
+    toast({ title: "Prompt deleted", description: p.name ?? p.prompt_key });
     refresh();
   };
 
@@ -352,8 +354,13 @@ export default function PromptRefinery() {
                             className="cursor-pointer"
                             onClick={() => navigate(`/prompt-refinery/${p.id}`)}
                           >
-                            <TableCell className="pl-12 font-mono text-sm truncate">
-                              {p.prompt_key}
+                            <TableCell className="pl-12 text-sm truncate">
+                              <div className="truncate">{p.name ?? p.prompt_key}</div>
+                              {p.description && (
+                                <div className="text-xs text-muted-foreground truncate">
+                                  {p.description}
+                                </div>
+                              )}
                             </TableCell>
                             <TableCell>
                               <Badge variant="secondary" className={STATUS_BADGE[p.status]}>
@@ -410,7 +417,7 @@ export default function PromptRefinery() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this prompt?</AlertDialogTitle>
             <AlertDialogDescription>
-              <span className="font-mono">{deleteTarget?.prompt_key}</span> will be permanently
+              <span className="font-medium">{deleteTarget?.name ?? deleteTarget?.prompt_key}</span> will be permanently
               deleted. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
