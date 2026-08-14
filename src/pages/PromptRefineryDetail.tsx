@@ -17,7 +17,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -83,15 +82,6 @@ interface ResultRow {
   precision_score: number | null;
   recall_score: number | null;
   diff: any;
-}
-
-interface DiffEntry {
-  file?: string;
-  page?: number | string;
-  detection?: string;
-  expected?: string;
-  actual?: string;
-  status?: string;
 }
 
 export default function PromptRefineryDetail() {
@@ -192,19 +182,6 @@ export default function PromptRefineryDetail() {
 
   const latestIteration = iterations[iterations.length - 1] ?? null;
 
-  const latestDiffs = useMemo(() => {
-    if (!latestIteration) return [] as { dataset: DatasetRow; rows: DiffEntry[] }[];
-    return datasets
-      .map((d) => {
-        const res = resultMap.get(`${latestIteration.id}:${d.id}`);
-        const rows: DiffEntry[] = Array.isArray(res?.diff?.detections)
-          ? res!.diff.detections
-          : [];
-        return { dataset: d, rows };
-      })
-      .filter((g) => g.rows.length > 0 || resultMap.has(`${latestIteration.id}:${g.dataset.id}`));
-  }, [latestIteration, datasets, resultMap]);
-
   const overallF1 = useMemo(() => {
     if (!latestIteration) return null;
     const vals = datasets
@@ -280,16 +257,29 @@ export default function PromptRefineryDetail() {
     toast({ title: "Prompt saved" });
   };
 
-  const latestScores = useMemo(
+  const isDraftSelected = selectedIterationId === "draft";
+  const viewedIteration = useMemo(
+    () => iterations.find((i) => i.id === selectedIterationId) ?? null,
+    [iterations, selectedIterationId],
+  );
+  const scoreIteration = isDraftSelected ? latestIteration : viewedIteration;
+
+  const viewedScores = useMemo(
     () =>
       datasets.map((d) => {
-        const raw = latestIteration
-          ? resultMap.get(`${latestIteration.id}:${d.id}`)?.[metric]
+        const raw = scoreIteration
+          ? resultMap.get(`${scoreIteration.id}:${d.id}`)?.[metric]
           : null;
         return { id: d.id, name: d.name, value: raw == null ? null : Number(raw) };
       }),
-    [datasets, latestIteration, resultMap, metric],
+    [datasets, scoreIteration, resultMap, metric],
   );
+
+  // The draft row holds the editable prompt; completed iterations show the
+  // snapshot of the prompt they were run with.
+  const displayedPrompt = isDraftSelected
+    ? promptText
+    : ((viewedIteration as any)?.prompt_text ?? "");
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["refinery-prompt-datasets", promptId] });
@@ -397,6 +387,7 @@ export default function PromptRefineryDetail() {
           prompt_id: promptId,
           iteration_number: nextNumber,
           refinement_dataset_id: refineTarget,
+          prompt_text: promptText,
           status: "completed",
           created_by: user?.id ?? null,
         } as any)
