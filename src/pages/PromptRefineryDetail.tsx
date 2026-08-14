@@ -501,10 +501,33 @@ export default function PromptRefineryDetail() {
   const buildWadeContext = () => ({
     task: "prompt_refinement",
     class_name: prompt?.class_name ?? null,
-    current_prompt: promptText,
+    instructions:
+      "Help improve the detection prompt. When you propose a revised prompt, output the FULL revised prompt inside a single ```prompt fenced code block so it can be applied to the New Prompt field automatically. Keep commentary outside the code block.",
+    previous_prompt: (latestIteration as any)?.prompt_text ?? promptText,
+    new_prompt: generatedPrompt,
     latest_iteration: latestIteration?.iteration_number ?? null,
-    results: viewedScores.map((s) => ({ dataset: s.name, [metric]: s.value })),
+    iterations: iterations.map((it) => ({
+      iteration: it.iteration_number,
+      run_at: it.created_at,
+      prompt_text: (it as any).prompt_text ?? null,
+      refinement_dataset:
+        datasets.find((d) => d.id === it.refinement_dataset_id)?.name ?? null,
+      results: datasets
+        .map((d) => {
+          const r = resultMap.get(`${it.id}:${d.id}`);
+          if (!r) return null;
+          return {
+            dataset: d.name,
+            f1: r.f1_score == null ? null : Number(r.f1_score),
+            precision: r.precision_score == null ? null : Number(r.precision_score),
+            recall: r.recall_score == null ? null : Number(r.recall_score),
+            diff: (r as any).diff ?? null,
+          };
+        })
+        .filter(Boolean),
+    })),
   });
+
 
   const columnCount = Math.max(iterations.length, 1);
 
