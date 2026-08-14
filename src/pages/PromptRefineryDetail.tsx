@@ -1013,10 +1013,15 @@ export default function PromptRefineryDetail() {
                       projectId={wadeProjectId}
                       persistHistory={false}
                       title="Ask Wade"
-                      emptyHint="Ask Wade how to improve this prompt based on the latest iteration results."
+                      emptyHint="Ask Wade how to improve this prompt based on the iteration results. Revised prompts are applied to New Prompt automatically."
                       onClose={() => setGenerateOpen(false)}
                     buildContext={buildWadeContext}
+                    onAssistantMessage={(content) => {
+                      const m = content.match(/```(?:prompt|text)?\n([\s\S]*?)```/);
+                      if (m?.[1]?.trim()) setGeneratedPrompt(m[1].trim());
+                    }}
                   />
+
                 </div>
               ) : (
                 <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground border rounded-md">
