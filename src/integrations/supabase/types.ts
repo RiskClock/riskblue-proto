@@ -2355,6 +2355,7 @@ export type Database = {
           iteration_number: number
           notes: string | null
           prompt_id: string
+          prompt_text: string | null
           refinement_dataset_id: string | null
           status: string
           updated_at: string
@@ -2366,6 +2367,7 @@ export type Database = {
           iteration_number: number
           notes?: string | null
           prompt_id: string
+          prompt_text?: string | null
           refinement_dataset_id?: string | null
           status?: string
           updated_at?: string
@@ -2377,6 +2379,7 @@ export type Database = {
           iteration_number?: number
           notes?: string | null
           prompt_id?: string
+          prompt_text?: string | null
           refinement_dataset_id?: string | null
           status?: string
           updated_at?: string
