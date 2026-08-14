@@ -975,17 +975,16 @@ export default function PromptRefineryDetail() {
             </div>
             <div className="min-h-0 flex">
               {wadeProjectId ? (
-                <div className="flex-1 min-h-0 flex">
-                  <div className="flex-1 min-h-0 flex flex-col">
-                    <AskWadePanel
+                <div className="flex-1 min-h-0 flex [&>div]:flex-1 [&>div]:min-h-0">
+                  <div className="hidden" />
+                  <AskWadePanel
                       projectId={wadeProjectId}
                       persistHistory={false}
                       title="Ask Wade"
                       emptyHint="Ask Wade how to improve this prompt based on the latest iteration results."
                       onClose={() => setGenerateOpen(false)}
-                      buildContext={buildWadeContext}
-                    />
-                  </div>
+                    buildContext={buildWadeContext}
+                  />
                 </div>
               ) : (
                 <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground border rounded-md">
