@@ -24,20 +24,31 @@ export function AskWadePanel({
   projectId,
   onClose,
   buildContext,
+  persist = true,
+  title = "Ask Wade",
+  emptyHint,
 }: {
   projectId: string;
   onClose: () => void;
   buildContext: () => unknown;
+  /** When false, the transcript is session-only (no database reads/writes). */
+  persist?: boolean;
+  title?: string;
+  emptyHint?: string;
 }) {
   const { toast } = useToast();
   const [messages, setMessages] = useState<WadeMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(persist);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
+    if (!persist) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       const { data } = await supabase
@@ -52,7 +63,8 @@ export function AskWadePanel({
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, persist]);
+
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
