@@ -1415,18 +1415,11 @@ export const FileViewerModal = ({
       setPast((p) => p.slice(0, -1));
       setFuture((f) => [...f, action]);
     } else {
-      // Re-insert deleted marker → DB will assign a new id
-      const row = await dbInsert({
-        awp_class_name: action.instance.awp_class_name,
-        nx: action.instance.nx,
-        ny: action.instance.ny,
-        page_index: action.instance.page_index,
-      });
+      // Re-insert deleted marker with its ORIGINAL id / number
+      const row = await dbRestore(action.instance);
       if (!row) return;
       setInstances((prev) => [...prev, row]);
-      remapHistoryId(action.instance.id, row.id);
       setPast((p) => p.slice(0, -1));
-      // Store the new row so a subsequent redo deletes the correct id
       setFuture((f) => [...f, { type: "delete", instance: row }]);
     }
   };
