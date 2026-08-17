@@ -977,6 +977,42 @@ export const FileViewerModal = ({
     [analysisRequestId, parentFileId, sheetId, toast, onInstancesChanged, instances],
   );
 
+  /**
+   * Re-insert a previously deleted marker with its ORIGINAL id, instance
+   * number and metadata so undo restores the exact same label (e.g. CW-004).
+   */
+  const dbRestore = useCallback(
+    async (row: DrawingInstanceRow): Promise<DrawingInstanceRow | null> => {
+      const { data, error } = await supabase
+        .from("drawing_instances" as any)
+        .insert({
+          id: row.id,
+          analysis_request_id: analysisRequestId!,
+          file_id: row.file_id ?? parentFileId!,
+          sheet_id: sheetId ?? null,
+          awp_class_name: row.awp_class_name,
+          nx: row.nx,
+          ny: row.ny,
+          page_index: row.page_index,
+          instance_number: row.instance_number ?? null,
+          metadata: (row as any).metadata ?? null,
+        } as any)
+        .select("id, awp_class_name, nx, ny, page_index, file_id, created_at, instance_number, metadata")
+        .single();
+      if (error) {
+        toast({
+          variant: "destructive",
+          title: "Could not restore marker",
+          description: getUserFriendlyError(error),
+        });
+        return null;
+      }
+      onInstancesChanged?.();
+      return (data as unknown) as DrawingInstanceRow;
+    },
+    [analysisRequestId, parentFileId, sheetId, toast, onInstancesChanged],
+  );
+
   const dbDelete = useCallback(
     async (id: string): Promise<boolean> => {
       const { error } = await supabase
