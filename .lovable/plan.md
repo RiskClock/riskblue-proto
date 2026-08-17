@@ -2,13 +2,12 @@
 
 All changes are in the drawing modal (`src/components/wizard/FileViewerModal.tsx`) plus the workbench page that opens it.
 
-## 1. Viewing mode turns on when a project becomes Processed
+## 1. Viewing mode defaults to on
 
-- Viewing mode preference becomes per project instead of one global browser flag.
-- The workbench passes the project's status into the drawing modal.
-- The first time a user opens a drawing for a project whose status is Processed, viewing mode starts ON and that "auto-enable already applied" fact is recorded per user + project.
-- After that the user's own on/off choice for that project wins — turning it off keeps it off, even on later opens.
-- Projects still in Processing keep today's behaviour.
+- Viewing mode starts ON for anyone who has never toggled it (no stored preference yet), so new accounts open drawings in viewing mode.
+- Once a user toggles it, their choice is remembered as it is today.
+- No dependence on project status.
+
 
 ## 2. Click an annotation row to pan and zoom to it
 
