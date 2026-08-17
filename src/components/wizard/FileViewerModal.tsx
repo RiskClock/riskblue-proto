@@ -24,7 +24,7 @@ import type {
   DocumentSourceDescriptor,
   OverlayInput,
 } from "@/components/viewer";
-import { inverseRotateNormalizedRect } from "@/components/viewer/viewerGeometry";
+import { inverseRotateNormalizedRect, rotateNormalizedRect } from "@/components/viewer/viewerGeometry";
 import {
   Tooltip,
   TooltipContent,
