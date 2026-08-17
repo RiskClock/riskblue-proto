@@ -1433,16 +1433,10 @@ export const FileViewerModal = ({
       setFuture((f) => f.slice(0, -1));
       setPast((p) => [...p, action]);
     } else if (action.type === "add") {
-      // Re-insert the previously undone add
-      const row = await dbInsert({
-        awp_class_name: action.instance.awp_class_name,
-        nx: action.instance.nx,
-        ny: action.instance.ny,
-        page_index: action.instance.page_index,
-      });
+      // Re-insert the previously undone add with its original id / number
+      const row = await dbRestore(action.instance);
       if (!row) return;
       setInstances((prev) => [...prev, row]);
-      remapHistoryId(action.instance.id, row.id);
       setFuture((f) => f.slice(0, -1));
       setPast((p) => [...p, { type: "add", instance: row }]);
     } else {
