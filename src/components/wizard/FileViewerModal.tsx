@@ -2223,23 +2223,41 @@ const DetectionsPanel = ({
   onFocusInstance,
 }: DetectionsPanelProps) => {
   const showPlanBadges = (floorPlans?.length ?? 0) > 0;
+  const allHidden =
+    awpClasses.length > 0 && awpClasses.every((c) => hiddenClasses.has(c.name));
+  const allExpanded =
+    awpClasses.length > 0 && awpClasses.every((c) => expanded.has(c.name));
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className={`px-3 py-2 ${withHeader ? "border-b" : ""} flex items-start justify-between gap-2`}>
-        <div>
-          <h4 className="text-sm font-medium">AWP classes</h4>
-          <p className="text-[11px] text-muted-foreground">
-            {viewingMode
-              ? "Viewing mode is on. Editing is locked."
-              : "Click the canvas to mark; click a marker to remove."}
-          </p>
-        </div>
+      <div className={`px-3 py-2 ${withHeader ? "border-b" : ""} flex items-center justify-between gap-2`}>
         <div className="flex items-center gap-1">
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={undo} disabled={viewingMode || pastLen === 0} aria-label="Undo" title="Undo">
             <Undo2 className="h-3.5 w-3.5" />
           </Button>
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={redo} disabled={viewingMode || futureLen === 0} aria-label="Redo" title="Redo">
             <Redo2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-[11px]"
+            onClick={() => setAllHidden(!allHidden)}
+          >
+            {allHidden ? "Show All" : "Hide All"}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-[11px]"
+            onClick={() =>
+              setExpanded(() =>
+                allExpanded ? new Set<string>() : new Set(awpClasses.map((c) => c.name)),
+              )
+            }
+          >
+            {allExpanded ? "Collapse All" : "Expand All"}
           </Button>
         </div>
       </div>
