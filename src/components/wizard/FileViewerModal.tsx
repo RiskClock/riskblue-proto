@@ -1598,6 +1598,7 @@ export const FileViewerModal = ({
   // unit reference. Filled dot, no border, no label. Click to delete.
   const unitMarkerOverlays: OverlayInput[] = useMemo(() => {
     if (readOnly) return [];
+    if (hiddenClasses.has(UNIT_MARKER_CLASS)) return [];
     const uc = awpClassColor("Unit Floor Plan");
     return instances
       .filter(
@@ -1614,7 +1615,7 @@ export const FileViewerModal = ({
         color: uc,
         variant: "dot" as const,
       }));
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, readOnly]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, readOnly, hiddenClasses]);
 
   const overlays = [
     ...detectionOverlays,
