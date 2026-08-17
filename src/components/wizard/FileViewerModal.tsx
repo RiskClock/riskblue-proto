@@ -1547,7 +1547,7 @@ export const FileViewerModal = ({
           label: instanceLabel(i),
         };
       });
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly, hiddenClasses]);
 
   // Floor-plan bbox overlays. Survey agent returns `xy_width_height_pct` as
   // [left, top, width, height] percentages (0..100) of the visible page.
