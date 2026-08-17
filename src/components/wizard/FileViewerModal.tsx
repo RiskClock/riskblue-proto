@@ -2275,23 +2275,37 @@ const DetectionsPanel = ({
             const isSelected = selectedClass === c.name;
             const isExpanded = expanded.has(c.name);
             const color = awpClassColor(c.name);
+            const isHidden = hiddenClasses.has(c.name);
             return (
               <div key={c.name} className="border-b last:border-b-0 min-w-0">
                 <div
                   className={`flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50 min-w-0 ${isSelected ? "bg-muted/40" : ""}`}
-                  onClick={() => setSelectedClass(c.name)}
+                  onClick={() => { if (!isHidden) setSelectedClass(c.name); }}
                 >
-                  <input
-                    type="radio"
-                    checked={isSelected}
-                    onChange={() => setSelectedClass(c.name)}
-                    onClick={(e) => { e.stopPropagation(); setSelectedClass(c.name); }}
-                    className="h-3.5 w-3.5 shrink-0"
-                  />
-                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                  <span className="font-mono text-xs text-muted-foreground shrink-0">{c.prefix ?? "-"}</span>
-                  <span className="flex-1 min-w-0 truncate" title={c.name}>{c.name}</span>
-                  <span className="text-xs tabular-nums text-muted-foreground shrink-0">{total}</span>
+                  <div className={isHidden ? "flex items-center gap-2 flex-1 min-w-0 opacity-40" : "flex items-center gap-2 flex-1 min-w-0"}>
+                    <input
+                      type="radio"
+                      checked={isSelected}
+                      disabled={isHidden}
+                      onChange={() => setSelectedClass(c.name)}
+                      onClick={(e) => { e.stopPropagation(); if (!isHidden) setSelectedClass(c.name); }}
+                      className="h-3.5 w-3.5 shrink-0"
+                    />
+                    <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                    <span className="font-mono text-xs text-muted-foreground shrink-0">{c.prefix ?? "-"}</span>
+                    <span className="flex-1 min-w-0 truncate" title={c.name}>{c.name}</span>
+                    <span className="text-xs tabular-nums text-muted-foreground shrink-0">{total}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleClassHidden(c.name);
+                    }}
+                    className="shrink-0 text-[11px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded hover:bg-muted"
+                  >
+                    {isHidden ? "Show" : "Hide"}
+                  </button>
                   <button
                     type="button"
                     onClick={(e) => {
