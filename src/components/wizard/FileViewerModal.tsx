@@ -444,9 +444,11 @@ export const FileViewerModal = ({
   // annotations by accident. Persisted across sessions.
   const [viewingMode, setViewingMode] = useState<boolean>(() => {
     try {
-      return localStorage.getItem("drawing-viewer:viewing-mode") === "1";
+      // Default ON: users who never toggled it start in viewing mode.
+      const stored = localStorage.getItem("drawing-viewer:viewing-mode");
+      return stored === null ? true : stored === "1";
     } catch {
-      return false;
+      return true;
     }
   });
   useEffect(() => {
