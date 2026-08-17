@@ -24,7 +24,7 @@ import type {
   DocumentSourceDescriptor,
   OverlayInput,
 } from "@/components/viewer";
-import { inverseRotateNormalizedRect } from "@/components/viewer/viewerGeometry";
+import { inverseRotateNormalizedRect, rotateNormalizedRect } from "@/components/viewer/viewerGeometry";
 import {
   Tooltip,
   TooltipContent,
@@ -444,9 +444,11 @@ export const FileViewerModal = ({
   // annotations by accident. Persisted across sessions.
   const [viewingMode, setViewingMode] = useState<boolean>(() => {
     try {
-      return localStorage.getItem("drawing-viewer:viewing-mode") === "1";
+      // Default ON: users who never toggled it start in viewing mode.
+      const stored = localStorage.getItem("drawing-viewer:viewing-mode");
+      return stored === null ? true : stored === "1";
     } catch {
-      return false;
+      return true;
     }
   });
   useEffect(() => {
@@ -495,6 +497,37 @@ export const FileViewerModal = ({
     if (onExpandedClassesChange) onExpandedClassesChange(next);
     else setLocalExpanded(next);
   };
+
+  // ---- Hidden annotation classes (per project, persisted) -----------------
+  const hiddenKey = persistKey
+    ? `drawing-viewer:hidden-classes:${persistKey}`
+    : null;
+  const [hiddenClasses, setHiddenClasses] = useState<Set<string>>(() => {
+    if (!hiddenKey || typeof window === "undefined") return new Set();
+    try {
+      const raw = window.localStorage.getItem(hiddenKey);
+      const arr = raw ? (JSON.parse(raw) as string[]) : [];
+      return new Set(Array.isArray(arr) ? arr : []);
+    } catch {
+      return new Set();
+    }
+  });
+  const updateHiddenClasses = useCallback(
+    (updater: (prev: Set<string>) => Set<string>) => {
+      setHiddenClasses((prev) => {
+        const next = updater(prev);
+        if (hiddenKey) {
+          try {
+            window.localStorage.setItem(hiddenKey, JSON.stringify([...next]));
+          } catch {
+            /* ignore */
+          }
+        }
+        return next;
+      });
+    },
+    [hiddenKey],
+  );
   const [instances, setInstances] = useState<DrawingInstanceRow[]>([]);
   const [loadingInstances, setLoadingInstances] = useState(false);
   const [past, setPast] = useState<HistoryAction[]>([]);
@@ -944,6 +977,42 @@ export const FileViewerModal = ({
     [analysisRequestId, parentFileId, sheetId, toast, onInstancesChanged, instances],
   );
 
+  /**
+   * Re-insert a previously deleted marker with its ORIGINAL id, instance
+   * number and metadata so undo restores the exact same label (e.g. CW-004).
+   */
+  const dbRestore = useCallback(
+    async (row: DrawingInstanceRow): Promise<DrawingInstanceRow | null> => {
+      const { data, error } = await supabase
+        .from("drawing_instances" as any)
+        .insert({
+          id: row.id,
+          analysis_request_id: analysisRequestId!,
+          file_id: row.file_id ?? parentFileId!,
+          sheet_id: sheetId ?? null,
+          awp_class_name: row.awp_class_name,
+          nx: row.nx,
+          ny: row.ny,
+          page_index: row.page_index,
+          instance_number: row.instance_number ?? null,
+          metadata: (row as any).metadata ?? null,
+        } as any)
+        .select("id, awp_class_name, nx, ny, page_index, file_id, created_at, instance_number, metadata")
+        .single();
+      if (error) {
+        toast({
+          variant: "destructive",
+          title: "Could not restore marker",
+          description: getUserFriendlyError(error),
+        });
+        return null;
+      }
+      onInstancesChanged?.();
+      return (data as unknown) as DrawingInstanceRow;
+    },
+    [analysisRequestId, parentFileId, sheetId, toast, onInstancesChanged],
+  );
+
   const dbDelete = useCallback(
     async (id: string): Promise<boolean> => {
       const { error } = await supabase
@@ -1316,20 +1385,35 @@ export const FileViewerModal = ({
   };
 
   /**
-   * Re-inserting a marker gives it a brand new DB id, so every other history
-   * entry that still points at the old id must be rewritten - otherwise later
-   * undo/redo steps target rows that no longer exist and the stack desyncs.
+   * Click an annotation row → jump to its page (when navigable) and zoom in
+   * close on the marker.
    */
-  const remapHistoryId = (oldId: string, newId: string) => {
-    const fix = (a: HistoryAction): HistoryAction => {
-      if (a.type === "move") return a.id === oldId ? { ...a, id: newId } : a;
-      return a.instance.id === oldId
-        ? { ...a, instance: { ...a.instance, id: newId } }
-        : a;
-    };
-    setPast((p) => p.map(fix));
-    setFuture((f) => f.map(fix));
-  };
+  const focusInstance = useCallback(
+    (inst: DrawingInstanceRow) => {
+      const targetPage = singlePageOnly ? currentPage : sheetId ? 1 : inst.page_index;
+      const needsPageChange = !singlePageOnly && !sheetId && inst.page_index !== currentPage;
+      if (needsPageChange) setCurrentPage(inst.page_index);
+      const run = () => {
+        const rot = (rotationByPage[targetPage] ?? 0) as 0 | 90 | 180 | 270;
+        const base = { nx: inst.nx, ny: inst.ny, nw: 0, nh: 0 };
+        const rect = rot === 0 ? base : rotateNormalizedRect(base, rot);
+        viewerApiRef.current?.fitToRect?.(rect, {
+          paddingRatio: 0.2,
+          maxScale: 4,
+          animate: true,
+        });
+      };
+      if (needsPageChange) {
+        // Let the new page render/layout before fitting.
+        setTimeout(() => requestAnimationFrame(run), 120);
+      } else {
+        requestAnimationFrame(run);
+      }
+    },
+    [singlePageOnly, sheetId, currentPage, rotationByPage],
+  );
+
+
 
   const undo = async () => {
     if (past.length === 0) return;
@@ -1346,18 +1430,11 @@ export const FileViewerModal = ({
       setPast((p) => p.slice(0, -1));
       setFuture((f) => [...f, action]);
     } else {
-      // Re-insert deleted marker → DB will assign a new id
-      const row = await dbInsert({
-        awp_class_name: action.instance.awp_class_name,
-        nx: action.instance.nx,
-        ny: action.instance.ny,
-        page_index: action.instance.page_index,
-      });
+      // Re-insert deleted marker with its ORIGINAL id / number
+      const row = await dbRestore(action.instance);
       if (!row) return;
       setInstances((prev) => [...prev, row]);
-      remapHistoryId(action.instance.id, row.id);
       setPast((p) => p.slice(0, -1));
-      // Store the new row so a subsequent redo deletes the correct id
       setFuture((f) => [...f, { type: "delete", instance: row }]);
     }
   };
@@ -1371,16 +1448,10 @@ export const FileViewerModal = ({
       setFuture((f) => f.slice(0, -1));
       setPast((p) => [...p, action]);
     } else if (action.type === "add") {
-      // Re-insert the previously undone add
-      const row = await dbInsert({
-        awp_class_name: action.instance.awp_class_name,
-        nx: action.instance.nx,
-        ny: action.instance.ny,
-        page_index: action.instance.page_index,
-      });
+      // Re-insert the previously undone add with its original id / number
+      const row = await dbRestore(action.instance);
       if (!row) return;
       setInstances((prev) => [...prev, row]);
-      remapHistoryId(action.instance.id, row.id);
       setFuture((f) => f.slice(0, -1));
       setPast((p) => [...p, { type: "add", instance: row }]);
     } else {
@@ -1499,6 +1570,7 @@ export const FileViewerModal = ({
         (i) =>
           i.file_id === parentFileId &&
           i.page_index === effectivePage &&
+          !hiddenClasses.has(i.awp_class_name) &&
           (!allowed || allowed.has(i.awp_class_name)),
       )
       .map((i) => {
@@ -1513,7 +1585,7 @@ export const FileViewerModal = ({
           label: instanceLabel(i),
         };
       });
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly, hiddenClasses]);
 
   // Floor-plan bbox overlays. Survey agent returns `xy_width_height_pct` as
   // [left, top, width, height] percentages (0..100) of the visible page.
@@ -1564,6 +1636,7 @@ export const FileViewerModal = ({
   // unit reference. Filled dot, no border, no label. Click to delete.
   const unitMarkerOverlays: OverlayInput[] = useMemo(() => {
     if (readOnly) return [];
+    if (hiddenClasses.has(UNIT_MARKER_CLASS)) return [];
     const uc = awpClassColor("Unit Floor Plan");
     return instances
       .filter(
@@ -1580,7 +1653,7 @@ export const FileViewerModal = ({
         color: uc,
         variant: "dot" as const,
       }));
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, readOnly]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, readOnly, hiddenClasses]);
 
   const overlays = [
     ...detectionOverlays,
@@ -1824,6 +1897,30 @@ export const FileViewerModal = ({
                     futureLen={future.length}
                     floorPlans={floorPlans}
                     floorPlanOverrides={effectiveFloorPlanOverrides}
+                    hiddenClasses={hiddenClasses}
+                    toggleClassHidden={(name) => {
+                      updateHiddenClasses((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(name)) next.delete(name);
+                        else {
+                          next.add(name);
+                          if (selectedClass === name) {
+                            const firstVisible = (awpClasses || []).find(
+                              (c) => !next.has(c.name),
+                            );
+                            setSelectedClass(firstVisible?.name ?? null);
+                          }
+                        }
+                        return next;
+                      });
+                    }}
+                    setAllHidden={(hidden) => {
+                      updateHiddenClasses(() =>
+                        hidden ? new Set((awpClasses || []).map((c) => c.name)) : new Set(),
+                      );
+                      if (hidden) setSelectedClass(null);
+                    }}
+                    onFocusInstance={focusInstance}
                   />
                 </TabsContent>
               </Tabs>
@@ -2094,6 +2191,11 @@ interface DetectionsPanelProps {
   withHeader?: boolean;
   floorPlans?: ParsedFloorPlan[];
   floorPlanOverrides?: Record<string, any>;
+  /** Classes whose annotations are hidden on the canvas. */
+  hiddenClasses: Set<string>;
+  toggleClassHidden: (name: string) => void;
+  setAllHidden: (hidden: boolean) => void;
+  onFocusInstance?: (i: DrawingInstanceRow) => void;
 }
 
 // Find the floor plan whose outline contains the normalized (0..1) point.
@@ -2139,25 +2241,47 @@ const DetectionsPanel = ({
   withHeader,
   floorPlans,
   floorPlanOverrides = {},
+  hiddenClasses,
+  toggleClassHidden,
+  setAllHidden,
+  onFocusInstance,
 }: DetectionsPanelProps) => {
   const showPlanBadges = (floorPlans?.length ?? 0) > 0;
+  const allHidden =
+    awpClasses.length > 0 && awpClasses.every((c) => hiddenClasses.has(c.name));
+  const allExpanded =
+    awpClasses.length > 0 && awpClasses.every((c) => expanded.has(c.name));
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className={`px-3 py-2 ${withHeader ? "border-b" : ""} flex items-start justify-between gap-2`}>
-        <div>
-          <h4 className="text-sm font-medium">AWP classes</h4>
-          <p className="text-[11px] text-muted-foreground">
-            {viewingMode
-              ? "Viewing mode is on. Editing is locked."
-              : "Click the canvas to mark; click a marker to remove."}
-          </p>
-        </div>
+      <div className={`px-3 py-2 ${withHeader ? "border-b" : ""} flex items-center justify-between gap-2`}>
         <div className="flex items-center gap-1">
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={undo} disabled={viewingMode || pastLen === 0} aria-label="Undo" title="Undo">
             <Undo2 className="h-3.5 w-3.5" />
           </Button>
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={redo} disabled={viewingMode || futureLen === 0} aria-label="Redo" title="Redo">
             <Redo2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-[11px]"
+            onClick={() => setAllHidden(!allHidden)}
+          >
+            {allHidden ? "Show All" : "Hide All"}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-[11px]"
+            onClick={() =>
+              setExpanded(() =>
+                allExpanded ? new Set<string>() : new Set(awpClasses.map((c) => c.name)),
+              )
+            }
+          >
+            {allExpanded ? "Collapse All" : "Expand All"}
           </Button>
         </div>
       </div>
@@ -2175,23 +2299,37 @@ const DetectionsPanel = ({
             const isSelected = selectedClass === c.name;
             const isExpanded = expanded.has(c.name);
             const color = awpClassColor(c.name);
+            const isHidden = hiddenClasses.has(c.name);
             return (
               <div key={c.name} className="border-b last:border-b-0 min-w-0">
                 <div
                   className={`flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50 min-w-0 ${isSelected ? "bg-muted/40" : ""}`}
-                  onClick={() => setSelectedClass(c.name)}
+                  onClick={() => { if (!isHidden) setSelectedClass(c.name); }}
                 >
-                  <input
-                    type="radio"
-                    checked={isSelected}
-                    onChange={() => setSelectedClass(c.name)}
-                    onClick={(e) => { e.stopPropagation(); setSelectedClass(c.name); }}
-                    className="h-3.5 w-3.5 shrink-0"
-                  />
-                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                  <span className="font-mono text-xs text-muted-foreground shrink-0">{c.prefix ?? "-"}</span>
-                  <span className="flex-1 min-w-0 truncate" title={c.name}>{c.name}</span>
-                  <span className="text-xs tabular-nums text-muted-foreground shrink-0">{total}</span>
+                  <div className={isHidden ? "flex items-center gap-2 flex-1 min-w-0 opacity-40" : "flex items-center gap-2 flex-1 min-w-0"}>
+                    <input
+                      type="radio"
+                      checked={isSelected}
+                      disabled={isHidden}
+                      onChange={() => setSelectedClass(c.name)}
+                      onClick={(e) => { e.stopPropagation(); if (!isHidden) setSelectedClass(c.name); }}
+                      className="h-3.5 w-3.5 shrink-0"
+                    />
+                    <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                    <span className="font-mono text-xs text-muted-foreground shrink-0">{c.prefix ?? "-"}</span>
+                    <span className="flex-1 min-w-0 truncate" title={c.name}>{c.name}</span>
+                    <span className="text-xs tabular-nums text-muted-foreground shrink-0">{total}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleClassHidden(c.name);
+                    }}
+                    className="shrink-0 text-[11px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded hover:bg-muted"
+                  >
+                    {isHidden ? "Show" : "Hide"}
+                  </button>
                   <button
                     type="button"
                     onClick={(e) => {
@@ -2232,7 +2370,11 @@ const DetectionsPanel = ({
                         const iPipeType = typeof iMeta.pipe_type === "string" ? iMeta.pipe_type.trim() : "";
                         const dotColor = awpClassColorForType(c.name, iPipeType);
                         return (
-                          <div key={i.id} className="flex items-center gap-2 text-[11px]">
+                          <div
+                            key={i.id}
+                            className={`flex items-center gap-2 text-[11px] rounded px-1 -mx-1 ${isHidden ? "opacity-40" : "cursor-pointer hover:bg-muted/60"}`}
+                            onClick={() => { if (!isHidden) onFocusInstance?.(i); }}
+                          >
                             <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
                             <span className="flex-1 min-w-0 font-mono truncate">
                               {instanceLabel(i)}
@@ -2261,8 +2403,8 @@ const DetectionsPanel = ({
                               );
                             })()}
                             <button
-                              onClick={() => handleDeleteFromList(i.id)}
-                              disabled={viewingMode}
+                              onClick={(e) => { e.stopPropagation(); handleDeleteFromList(i.id); }}
+                              disabled={viewingMode || isHidden}
                               className="shrink-0 text-muted-foreground hover:text-destructive px-1 disabled:opacity-40 disabled:pointer-events-none"
                               aria-label="Remove marker"
                             >
