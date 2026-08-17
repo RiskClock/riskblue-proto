@@ -2167,6 +2167,11 @@ interface DetectionsPanelProps {
   withHeader?: boolean;
   floorPlans?: ParsedFloorPlan[];
   floorPlanOverrides?: Record<string, any>;
+  /** Classes whose annotations are hidden on the canvas. */
+  hiddenClasses: Set<string>;
+  toggleClassHidden: (name: string) => void;
+  setAllHidden: (hidden: boolean) => void;
+  onFocusInstance?: (i: DrawingInstanceRow) => void;
 }
 
 // Find the floor plan whose outline contains the normalized (0..1) point.
