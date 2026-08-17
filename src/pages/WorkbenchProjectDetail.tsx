@@ -8234,8 +8234,12 @@ function InstancesReportModal({
             <Button
               variant={wadeOpen ? "secondary" : "outline"}
               onClick={() => setWadeOpen((v) => !v)}
+              className="gap-2"
             >
               Ask Wade
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-auto">
+                BETA
+              </Badge>
             </Button>
           </div>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close Threat Report</Button>
