@@ -1897,6 +1897,30 @@ export const FileViewerModal = ({
                     futureLen={future.length}
                     floorPlans={floorPlans}
                     floorPlanOverrides={effectiveFloorPlanOverrides}
+                    hiddenClasses={hiddenClasses}
+                    toggleClassHidden={(name) => {
+                      updateHiddenClasses((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(name)) next.delete(name);
+                        else {
+                          next.add(name);
+                          if (selectedClass === name) {
+                            const firstVisible = (awpClasses || []).find(
+                              (c) => !next.has(c.name),
+                            );
+                            setSelectedClass(firstVisible?.name ?? null);
+                          }
+                        }
+                        return next;
+                      });
+                    }}
+                    setAllHidden={(hidden) => {
+                      updateHiddenClasses(() =>
+                        hidden ? new Set((awpClasses || []).map((c) => c.name)) : new Set(),
+                      );
+                      if (hidden) setSelectedClass(null);
+                    }}
+                    onFocusInstance={focusInstance}
                   />
                 </TabsContent>
               </Tabs>
