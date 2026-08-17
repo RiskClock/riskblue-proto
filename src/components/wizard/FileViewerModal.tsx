@@ -2379,8 +2379,8 @@ const DetectionsPanel = ({
                               );
                             })()}
                             <button
-                              onClick={() => handleDeleteFromList(i.id)}
-                              disabled={viewingMode}
+                              onClick={(e) => { e.stopPropagation(); handleDeleteFromList(i.id); }}
+                              disabled={viewingMode || isHidden}
                               className="shrink-0 text-muted-foreground hover:text-destructive px-1 disabled:opacity-40 disabled:pointer-events-none"
                               aria-label="Remove marker"
                             >
