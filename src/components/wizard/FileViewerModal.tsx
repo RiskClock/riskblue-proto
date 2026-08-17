@@ -497,6 +497,37 @@ export const FileViewerModal = ({
     if (onExpandedClassesChange) onExpandedClassesChange(next);
     else setLocalExpanded(next);
   };
+
+  // ---- Hidden annotation classes (per project, persisted) -----------------
+  const hiddenKey = persistKey
+    ? `drawing-viewer:hidden-classes:${persistKey}`
+    : null;
+  const [hiddenClasses, setHiddenClasses] = useState<Set<string>>(() => {
+    if (!hiddenKey || typeof window === "undefined") return new Set();
+    try {
+      const raw = window.localStorage.getItem(hiddenKey);
+      const arr = raw ? (JSON.parse(raw) as string[]) : [];
+      return new Set(Array.isArray(arr) ? arr : []);
+    } catch {
+      return new Set();
+    }
+  });
+  const updateHiddenClasses = useCallback(
+    (updater: (prev: Set<string>) => Set<string>) => {
+      setHiddenClasses((prev) => {
+        const next = updater(prev);
+        if (hiddenKey) {
+          try {
+            window.localStorage.setItem(hiddenKey, JSON.stringify([...next]));
+          } catch {
+            /* ignore */
+          }
+        }
+        return next;
+      });
+    },
+    [hiddenKey],
+  );
   const [instances, setInstances] = useState<DrawingInstanceRow[]>([]);
   const [loadingInstances, setLoadingInstances] = useState(false);
   const [past, setPast] = useState<HistoryAction[]>([]);
