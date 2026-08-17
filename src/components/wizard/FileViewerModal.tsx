@@ -1532,6 +1532,7 @@ export const FileViewerModal = ({
         (i) =>
           i.file_id === parentFileId &&
           i.page_index === effectivePage &&
+          !hiddenClasses.has(i.awp_class_name) &&
           (!allowed || allowed.has(i.awp_class_name)),
       )
       .map((i) => {
