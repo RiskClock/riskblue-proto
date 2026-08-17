@@ -2217,6 +2217,10 @@ const DetectionsPanel = ({
   withHeader,
   floorPlans,
   floorPlanOverrides = {},
+  hiddenClasses,
+  toggleClassHidden,
+  setAllHidden,
+  onFocusInstance,
 }: DetectionsPanelProps) => {
   const showPlanBadges = (floorPlans?.length ?? 0) > 0;
   return (
