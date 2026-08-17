@@ -2346,7 +2346,11 @@ const DetectionsPanel = ({
                         const iPipeType = typeof iMeta.pipe_type === "string" ? iMeta.pipe_type.trim() : "";
                         const dotColor = awpClassColorForType(c.name, iPipeType);
                         return (
-                          <div key={i.id} className="flex items-center gap-2 text-[11px]">
+                          <div
+                            key={i.id}
+                            className={`flex items-center gap-2 text-[11px] rounded px-1 -mx-1 ${isHidden ? "opacity-40" : "cursor-pointer hover:bg-muted/60"}`}
+                            onClick={() => { if (!isHidden) onFocusInstance?.(i); }}
+                          >
                             <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
                             <span className="flex-1 min-w-0 font-mono truncate">
                               {instanceLabel(i)}
