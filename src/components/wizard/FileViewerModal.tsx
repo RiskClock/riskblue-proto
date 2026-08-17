@@ -2247,8 +2247,7 @@ const DetectionsPanel = ({
   onFocusInstance,
 }: DetectionsPanelProps) => {
   const showPlanBadges = (floorPlans?.length ?? 0) > 0;
-  const allHidden =
-    awpClasses.length > 0 && awpClasses.every((c) => hiddenClasses.has(c.name));
+  const anyHidden = awpClasses.some((c) => hiddenClasses.has(c.name));
   const allExpanded =
     awpClasses.length > 0 && awpClasses.every((c) => expanded.has(c.name));
   return (
@@ -2267,9 +2266,9 @@ const DetectionsPanel = ({
             size="sm"
             variant="ghost"
             className="h-7 px-2 text-[11px]"
-            onClick={() => setAllHidden(!allHidden)}
+            onClick={() => setAllHidden(!anyHidden)}
           >
-            {allHidden ? "Show All" : "Hide All"}
+            {anyHidden ? "Show All" : "Hide All"}
           </Button>
           <Button
             size="sm"
@@ -2326,7 +2325,11 @@ const DetectionsPanel = ({
                       e.stopPropagation();
                       toggleClassHidden(c.name);
                     }}
-                    className="shrink-0 text-[11px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded hover:bg-muted"
+                    className={
+                      isHidden
+                        ? "shrink-0 text-[11px] font-medium px-2 py-0.5 rounded border bg-primary text-primary-foreground hover:bg-primary/90"
+                        : "shrink-0 text-[11px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded hover:bg-muted"
+                    }
                   >
                     {isHidden ? "Show" : "Hide"}
                   </button>
