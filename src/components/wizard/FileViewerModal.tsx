@@ -1384,6 +1384,34 @@ export const FileViewerModal = ({
     return true;
   };
 
+  /**
+   * Click an annotation row → jump to its page (when navigable) and zoom in
+   * close on the marker.
+   */
+  const focusInstance = useCallback(
+    (inst: DrawingInstanceRow) => {
+      const targetPage = singlePageOnly ? currentPage : sheetId ? 1 : inst.page_index;
+      const needsPageChange = !singlePageOnly && !sheetId && inst.page_index !== currentPage;
+      if (needsPageChange) setCurrentPage(inst.page_index);
+      const run = () => {
+        const rot = (rotationByPage[targetPage] ?? 0) as 0 | 90 | 180 | 270;
+        const base = { nx: inst.nx, ny: inst.ny, nw: 0, nh: 0 };
+        const rect = rot === 0 ? base : rotateNormalizedRect(base, rot);
+        viewerApiRef.current?.fitToRect?.(rect, {
+          paddingRatio: 0.2,
+          maxScale: 4,
+          animate: true,
+        });
+      };
+      if (needsPageChange) {
+        // Let the new page render/layout before fitting.
+        setTimeout(() => requestAnimationFrame(run), 120);
+      } else {
+        requestAnimationFrame(run);
+      }
+    },
+    [singlePageOnly, sheetId, currentPage, rotationByPage],
+  );
 
 
 
