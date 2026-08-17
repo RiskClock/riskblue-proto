@@ -37,7 +37,8 @@ All changes are in the drawing modal (`src/components/wizard/FileViewerModal.tsx
 
 ## Technical notes
 
-- New props on `FileViewerModal`: project status and a project key already exists (`persistKey`) used for the per-project localStorage entries: viewing-mode preference, processed auto-enable marker, and hidden class set.
+- Viewing mode keeps its existing global localStorage key; a missing value now reads as "on" instead of "off".
+- Hidden classes are stored per project under the existing `persistKey`.
 - Hidden classes filter `instanceOverlays` (and the unit-marker overlays for the unit class) before they reach `DrawingViewer`.
 - Row click uses the existing `DrawingViewerApi.fitToRect` on a zero-size rect at the marker's `nx/ny` with a close max scale.
 - Undo of a delete uses an insert that supplies the stored `id` and `instance_number` explicitly rather than the auto-numbering path in `dbInsert`.
