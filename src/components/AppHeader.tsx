@@ -155,6 +155,15 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
               <div className="px-2 py-1.5 text-xs text-muted-foreground truncate">
                 Version {APP_VERSION}
               </div>
+              {updateAvailable && (
+                <DropdownMenuItem
+                  onClick={() => window.location.reload()}
+                  className="cursor-pointer text-xs text-primary focus:text-primary"
+                >
+                  Update available — reload
+                </DropdownMenuItem>
+              )}
+
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
