@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Command,
   CommandEmpty,
@@ -77,21 +77,37 @@ export function AnnotationMetadataPopover({
     };
   }, [open, onClose]);
 
+  const [measured, setMeasured] = useState<{ height: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!open || !anchor) {
+      setMeasured(null);
+      return;
+    }
+    const el = rootRef.current;
+    if (!el) return;
+    const h = el.getBoundingClientRect().height;
+    setMeasured((prev) => (prev && Math.abs(prev.height - h) < 1 ? prev : { height: h }));
+  }, [open, anchor, fields, activeKey]);
+
   if (!open || !anchor) return null;
 
   const POPOVER_WIDTH = 280;
-  const POPOVER_MAX_HEIGHT = 380;
   const pad = 10;
+  const gap = 14;
   const vw = typeof window === "undefined" ? 1280 : window.innerWidth;
   const vh = typeof window === "undefined" ? 1024 : window.innerHeight;
-  const left = Math.max(
-    pad,
-    Math.min(anchor.x + pad, vw - POPOVER_WIDTH - pad),
-  );
-  const top = Math.max(
-    pad,
-    Math.min(anchor.y + pad, vh - POPOVER_MAX_HEIGHT - pad),
-  );
+  // Measured height keeps small (delete-only) popovers glued to the marker
+  // instead of being pushed away by a fixed max-height clamp.
+  const height = measured?.height ?? 120;
+
+  let left = (anchor?.x ?? 0) + gap;
+  if (left + POPOVER_WIDTH + pad > vw) left = (anchor?.x ?? 0) - gap - POPOVER_WIDTH;
+  left = Math.max(pad, Math.min(left, vw - POPOVER_WIDTH - pad));
+
+  let top = (anchor?.y ?? 0) + gap;
+  if (top + height + pad > vh) top = (anchor?.y ?? 0) - gap - height;
+  top = Math.max(pad, Math.min(top, vh - height - pad));
+
 
   const activeField =
     fields.find((f) => f.key === activeKey) ?? fields[0] ?? null;
