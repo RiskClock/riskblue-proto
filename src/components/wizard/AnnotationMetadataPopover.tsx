@@ -77,6 +77,20 @@ export function AnnotationMetadataPopover({
     };
   }, [open, onClose]);
 
+  const [measured, setMeasured] = useState<{ height: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!open || !anchor) {
+      setMeasured(null);
+      return;
+    }
+    const el = rootRef.current;
+    if (!el) return;
+    const h = el.getBoundingClientRect().height;
+    setMeasured((prev) => (prev && Math.abs(prev.height - h) < 1 ? prev : { height: h }));
+  }, [open, anchor, fields, activeKey]);
+
+  if (!open || !anchor) return null;
+
   const POPOVER_WIDTH = 280;
   const pad = 10;
   const gap = 14;
