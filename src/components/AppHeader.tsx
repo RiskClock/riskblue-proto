@@ -42,6 +42,8 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  const updateAvailable = useUpdateAvailable();
+
 
   const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
   const isRefineryAdmin = (user?.email?.toLowerCase() ?? "") === "admin@riskclock.com";
