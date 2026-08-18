@@ -347,6 +347,8 @@ interface DragState {
 interface CircleOverlayProps {
   c: CircleInfo;
   hovered: boolean;
+  selected?: boolean;
+  pulsing?: boolean;
   exportScale: number;
   clickable: boolean;
   draggable: boolean;
@@ -363,11 +365,11 @@ interface CircleOverlayProps {
 }
 const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
   const {
-    c, hovered, exportScale, clickable, draggable, isDragging, dragDx, dragDy,
+    c, hovered, selected = false, pulsing = false, exportScale, clickable, draggable, isDragging, dragDx, dragDy,
     viewScale, pageWidth, pageHeight, dragRef, setDrag, onOverlayClick, onOverlayDrag,
   } = props;
 
-  const dotBaseAlpha = draggable ? 0.5 : (hovered ? 0.85 : 0.7);
+  const dotBaseAlpha = draggable ? 0.5 : (hovered || selected ? 0.85 : 0.7);
   const style: CSSProperties = c.isDot
     ? {
         position: "absolute",
@@ -392,7 +394,7 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
         // stays a constant pixel size regardless of ancestor CSS zoom
         // transforms. Keep the fill on the div so hit-testing works.
         borderRadius: "9999px",
-        backgroundColor: withAlpha(c.color, hovered ? 0.35 : 0.2),
+        backgroundColor: withAlpha(c.color, selected ? 0.45 : hovered ? 0.35 : 0.2),
         boxSizing: "border-box",
         pointerEvents: clickable || draggable ? "auto" : "none",
         cursor: draggable ? (isDragging ? "grabbing" : "grab") : clickable ? "pointer" : undefined,
@@ -439,7 +441,7 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
     if (clickable) onOverlayClick!(c.id);
   };
 
-  const strokePxScreen = (hovered ? 3 : CIRCLE_BORDER_PX_SCREEN) * exportScale;
+  const strokePxScreen = (selected ? 4 : hovered ? 3 : CIRCLE_BORDER_PX_SCREEN) * exportScale;
   const strokePxPage = strokePxScreen / Math.max(0.0001, viewScale);
 
   return (
@@ -461,6 +463,19 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
           : (e) => e.stopPropagation()
       }
     >
+      {pulsing ? (
+        <span
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: -c.r * 0.35,
+            borderRadius: "9999px",
+            backgroundColor: withAlpha(c.color, 0.45),
+            pointerEvents: "none",
+          }}
+          className="animate-ping"
+        />
+      ) : null}
       {!c.isDot ? (
         <svg
           width={c.r * 2}
@@ -492,6 +507,8 @@ export const OverlayLayer = ({
   overlays,
   pageSize,
   hoveredId,
+  selectedId,
+  pulsingId,
   viewScale = 1,
   defaultColor = "hsl(var(--destructive))",
   onOverlayClick,
@@ -852,6 +869,8 @@ export const OverlayLayer = ({
             key={c.id}
             c={c}
             hovered={hoveredId === c.id}
+            selected={selectedId === c.id}
+            pulsing={pulsingId === c.id}
             exportScale={exportScale}
             clickable={!!onOverlayClick}
             draggable={!!onOverlayDrag}
