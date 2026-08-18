@@ -71,7 +71,8 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <ExportProvider>
+          <VersionWatcher />
+
             <ExportProgressPanel />
             <PaymentTestModeBanner />
             <Routes>
