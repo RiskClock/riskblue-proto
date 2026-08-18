@@ -33,16 +33,20 @@ The browser caches `index.html` and the JS bundle. When a new build ships, a tab
 
 ## Options considered but not chosen
 
-- **Auto-reload without asking** — risks losing in-progress work (wizard forms, annotation edits). Rejected in favour of a prompt.
+- **Always auto-reload, even mid-session** — risks losing in-progress work (wizard forms, annotation edits). Auto-reload is limited to cold start only.
+- **Always toast, even on cold start** — the bad experience the user described: arrive after a week, immediately get nagged. Rejected.
 - **Service worker / PWA update flow** — adds a service worker to a project that has none, with real risk of new cache bugs. Not worth it for this problem.
-- **Cache-Control headers only** — helps, but does nothing for tabs that stay open for hours, which is the actual reported case.
+- **Cache-Control headers only** — helps, but does nothing for tabs that stay open for hours.
 
 ## Technical notes
 
 - New: `public/version.json`, `src/hooks/useVersionCheck.ts`.
 - Modified: `src/App.tsx` (mount the hook inside the router), `src/components/AppHeader.tsx` (update hint), `src/lib/appVersion.ts` (comment about keeping `version.json` in sync).
 - Guard the check with `import.meta.env.PROD` so it never fires in the editor preview.
-- Comparison is a simple string inequality plus a semver-ish "is newer" check, so a rollback does not spam prompts.
+- Cold-start check fires immediately on mount (not delayed) so the reload happens before the user interacts.
+- Loop guard: `sessionStorage["riskblue:reloaded-for"] = <version>`; if that key already equals the deployed version on a cold-start check, skip the reload and show the toast instead.
+- Comparison is a semver-aware "is strictly newer" check, so a rollback does not trigger reloads or prompts.
+
 
 ## Publish checklist going forward
 
