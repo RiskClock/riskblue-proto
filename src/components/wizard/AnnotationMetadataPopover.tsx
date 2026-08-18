@@ -77,7 +77,7 @@ export function AnnotationMetadataPopover({
     };
   }, [open, onClose]);
 
-  if (!open || !anchor || fields.length === 0) return null;
+  if (!open || !anchor) return null;
 
   const POPOVER_WIDTH = 280;
   const POPOVER_MAX_HEIGHT = 380;
@@ -94,7 +94,7 @@ export function AnnotationMetadataPopover({
   );
 
   const activeField =
-    fields.find((f) => f.key === activeKey) ?? fields[0];
+    fields.find((f) => f.key === activeKey) ?? fields[0] ?? null;
 
   return (
     <div
@@ -124,7 +124,7 @@ export function AnnotationMetadataPopover({
       {fields.length > 1 && (
         <div className="flex border-b bg-muted/40">
           {fields.map((f) => {
-            const isActive = f.key === activeField.key;
+            const isActive = f.key === activeField?.key;
             const hasValue = !!(f.currentValue && f.currentValue.trim());
             return (
               <button
@@ -147,11 +147,13 @@ export function AnnotationMetadataPopover({
           })}
         </div>
       )}
-      <FieldSection
-        key={activeField.key}
-        field={activeField}
-        onCommit={(next) => onCommit(activeField.key, next)}
-      />
+      {activeField && (
+        <FieldSection
+          key={activeField.key}
+          field={activeField}
+          onCommit={(next) => onCommit(activeField.key, next)}
+        />
+      )}
       <div className="border-t p-1.5 flex justify-start">
         <Button
           type="button"

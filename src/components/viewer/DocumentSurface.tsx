@@ -22,6 +22,8 @@ interface DocumentSurfaceProps {
   pageSize: { width: number; height: number };
   overlays?: NormalizedOverlay[];
   hoveredOverlayId?: string | null;
+  selectedOverlayId?: string | null;
+  pulsingOverlayId?: string | null;
   viewScale?: number;
   onCanvasClick?: (nx: number, ny: number) => void;
   onOverlayClick?: (overlayId: string) => void;
@@ -86,6 +88,8 @@ export const DocumentSurface = ({
   pageSize,
   overlays,
   hoveredOverlayId,
+  selectedOverlayId,
+  pulsingOverlayId,
   viewScale,
   onCanvasClick,
   onOverlayClick,
@@ -642,6 +646,8 @@ export const DocumentSurface = ({
           overlays={overlays}
           pageSize={pageSize}
           hoveredId={hoveredOverlayId}
+          selectedId={selectedOverlayId}
+          pulsingId={pulsingOverlayId}
           viewScale={viewScale}
           onOverlayClick={onOverlayClick}
           onOverlayDrag={onOverlayDrag}

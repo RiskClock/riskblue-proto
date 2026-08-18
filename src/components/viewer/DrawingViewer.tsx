@@ -58,6 +58,10 @@ export interface DrawingViewerProps {
   initialFit?: "page" | "selection" | "actual";
   initialFitOverlayId?: string;
   hoveredOverlayId?: string | null;
+  /** Overlay rendered with a persistent selection ring. */
+  selectedOverlayId?: string | null;
+  /** Overlay rendered with a temporary attention pulse. */
+  pulsingOverlayId?: string | null;
   minScale?: number;
   maxScale?: number;
   showToolbar?: boolean;
@@ -132,6 +136,8 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       initialFit = "page",
       initialFitOverlayId,
       hoveredOverlayId,
+      selectedOverlayId,
+      pulsingOverlayId,
       minScale = DEFAULT_MIN,
       maxScale = DEFAULT_MAX,
       showToolbar = true,
@@ -516,6 +522,8 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                     pageSize={pageCssSize}
                     overlays={normalizedByPage.get(activePage.pageNum) ?? []}
                     hoveredOverlayId={hoveredOverlayId}
+                    selectedOverlayId={selectedOverlayId}
+                    pulsingOverlayId={pulsingOverlayId}
                     viewScale={scale}
                     rotation={rotation}
                     onCanvasClick={
@@ -589,6 +597,8 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                           overlays={normalizedByPage.get(p.pageNum) ?? []}
 
                           hoveredOverlayId={hoveredOverlayId}
+                    selectedOverlayId={selectedOverlayId}
+                    pulsingOverlayId={pulsingOverlayId}
                           viewScale={scale}
                           onCanvasClick={
                             onCanvasClick

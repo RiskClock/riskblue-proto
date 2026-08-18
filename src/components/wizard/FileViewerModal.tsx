@@ -595,9 +595,27 @@ export const FileViewerModal = ({
   // pointerup then fires on the document surface and would create a new
   // marker. Skip canvas clicks for a short window after any popover close.
   const suppressCanvasClickUntilRef = useRef(0);
+  // Currently selected annotation (clicking a marker selects instead of
+  // deleting; Delete/Backspace removes the selection).
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
+  // Temporary attention pulse used when focusing an annotation from the list.
+  const [pulseInstanceId, setPulseInstanceId] = useState<string | null>(null);
+  const pulseTimerRef = useRef<number | null>(null);
+  const pulseInstance = useCallback((id: string) => {
+    if (pulseTimerRef.current) window.clearTimeout(pulseTimerRef.current);
+    setPulseInstanceId(id);
+    pulseTimerRef.current = window.setTimeout(() => {
+      setPulseInstanceId(null);
+      pulseTimerRef.current = null;
+    }, 2600);
+  }, []);
+  useEffect(() => () => {
+    if (pulseTimerRef.current) window.clearTimeout(pulseTimerRef.current);
+  }, []);
   const closeMetadataDialog = useCallback(() => {
     suppressCanvasClickUntilRef.current = Date.now() + 350;
     setMetadataDialog(null);
+    setSelectedInstanceId(null);
   }, []);
 
   const effectiveFloorPlanOverrides = useMemo(() => {
@@ -1321,39 +1339,28 @@ export const FileViewerModal = ({
 
 
 
-  const handleOverlayClick = async (overlayId: string) => {
+  /**
+   * Clicking a marker never deletes it. It selects the marker (highlight ring)
+   * and opens its popover, which carries the Delete action (plus metadata
+   * fields for classes that have them). Delete/Backspace removes the selection.
+   */
+  const handleOverlayClick = (overlayId: string) => {
     if (!sidebarEnabled) return;
-    // Unit-marker dot: click always deletes, regardless of placement mode.
-    if (overlayId.startsWith("um-")) {
-      const id = overlayId.slice(3);
-      const inst = instances.find((i) => i.id === id);
-      if (!inst) return;
-      const ok = await dbDelete(inst.id);
-      if (!ok) return;
-      setInstances((prev) => prev.filter((i) => i.id !== inst.id));
-      blurActive();
-      return;
-    }
-    const instId = overlayId.startsWith("inst-") ? overlayId.slice(5) : overlayId;
+    const instId = overlayId.startsWith("um-")
+      ? overlayId.slice(3)
+      : overlayId.startsWith("inst-")
+        ? overlayId.slice(5)
+        : overlayId;
     const inst = instances.find((i) => i.id === instId);
     if (!inst) return;
-    // DCW / FS: clicking an existing marker opens the metadata popover so the
-    // user can adjust diameter (or delete via the trash button).
-    if (hasMetaFields(inst.awp_class_name)) {
-      const anchor = anchorForNormalizedPoint(inst.nx, inst.ny);
-      if (anchor) setMetadataDialog({ instanceId: inst.id, anchor });
-      return;
-    }
-    // Other classes: keep legacy click-to-delete behavior.
-    const ok = await dbDelete(inst.id);
-    if (!ok) return;
-    setInstances((prev) => prev.filter((i) => i.id !== inst.id));
-    setPast((p) => [...p, { type: "delete", instance: inst }]);
-    setFuture([]);
+    setSelectedInstanceId(inst.id);
+    const anchor = anchorForNormalizedPoint(inst.nx, inst.ny);
+    if (anchor) setMetadataDialog({ instanceId: inst.id, anchor });
     blurActive();
   };
 
   const handleDeleteFromList = async (id: string) => {
+    setSelectedInstanceId((cur) => (cur === id ? null : cur));
     const inst = instances.find((i) => i.id === id);
     if (!inst) return;
     const ok = await dbDelete(id);
@@ -1363,6 +1370,30 @@ export const FileViewerModal = ({
     setFuture([]);
     blurActive();
   };
+
+  // Delete / Backspace removes the currently selected annotation.
+  const deleteRef = useRef(handleDeleteFromList);
+  deleteRef.current = handleDeleteFromList;
+  useEffect(() => {
+    if (!isOpen || !editingEnabled || !selectedInstanceId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName))
+      )
+        return;
+      e.preventDefault();
+      const id = selectedInstanceId;
+      setSelectedInstanceId(null);
+      setMetadataDialog(null);
+      void deleteRef.current(id);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [isOpen, editingEnabled, selectedInstanceId]);
 
   // ---- Undo / redo --------------------------------------------------------
   /** Apply a stored position to a marker (used by move undo/redo). */
@@ -1409,8 +1440,9 @@ export const FileViewerModal = ({
       } else {
         requestAnimationFrame(run);
       }
+      pulseInstance(inst.id);
     },
-    [singlePageOnly, sheetId, currentPage, rotationByPage],
+    [singlePageOnly, sheetId, currentPage, rotationByPage, pulseInstance],
   );
 
 
@@ -1725,6 +1757,20 @@ export const FileViewerModal = ({
                   ? detectionOverlays.find((o) =>
                       o.id.endsWith(`-${hoveredCode}`),
                     )?.id ?? null
+                  : null
+              }
+              selectedOverlayId={
+                selectedInstanceId
+                  ? instances.find((i) => i.id === selectedInstanceId)?.awp_class_name === UNIT_MARKER_CLASS
+                    ? `um-${selectedInstanceId}`
+                    : `inst-${selectedInstanceId}`
+                  : null
+              }
+              pulsingOverlayId={
+                pulseInstanceId
+                  ? instances.find((i) => i.id === pulseInstanceId)?.awp_class_name === UNIT_MARKER_CLASS
+                    ? `um-${pulseInstanceId}`
+                    : `inst-${pulseInstanceId}`
                   : null
               }
               initialFit="page"
@@ -2069,7 +2115,6 @@ export const FileViewerModal = ({
           const inst = instances.find((i) => i.id === metadataDialog.instanceId);
           if (!inst) return null;
           const defs = metaFieldsForClass(inst.awp_class_name);
-          if (defs.length === 0) return null;
           const meta =
             inst.metadata && typeof inst.metadata === "object"
               ? (inst.metadata as Record<string, any>)
@@ -2108,12 +2153,23 @@ export const FileViewerModal = ({
           const n = numberByInstanceId.get(inst.id) ?? 0;
           const prefix = prefixByClass.get(inst.awp_class_name) || "AWP";
           const marker = `${prefix}-${String(n).padStart(3, "0")}`;
-          const titleSuffix = defs.length > 1 ? "attributes" : defs[0].label.toLowerCase();
+          const titleSuffix =
+            defs.length === 0
+              ? null
+              : defs.length > 1
+                ? "attributes"
+                : defs[0].label.toLowerCase();
+          const isUnitMarker = inst.awp_class_name === UNIT_MARKER_CLASS;
+          const heading = isUnitMarker
+            ? "Unit floor plan marker"
+            : titleSuffix
+              ? `${marker} · ${titleSuffix}`
+              : marker;
           return (
             <AnnotationMetadataPopover
               open
               anchor={metadataDialog.anchor}
-              title={`${marker} · ${titleSuffix}`}
+              title={heading}
               fields={fields}
               onClose={closeMetadataDialog}
               onCommit={async (key, next) => {
@@ -2136,6 +2192,7 @@ export const FileViewerModal = ({
                 );
               }}
               onDelete={async () => {
+                setSelectedInstanceId(null);
                 const ok = await dbDelete(inst.id);
                 if (!ok) return;
                 setInstances((prev) => prev.filter((i) => i.id !== inst.id));
