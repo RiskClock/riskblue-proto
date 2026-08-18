@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
+import { toast as sonnerToast } from "sonner";
 import { APP_VERSION } from "@/lib/appVersion";
-import { toast } from "@/hooks/use-toast";
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000;
 const RELOAD_MARKER_KEY = "riskblue:reloaded-for";
@@ -22,6 +22,28 @@ export function isNewerVersion(candidate: string, current: string): boolean {
     if (av < bv) return false;
   }
   return false;
+}
+
+// Tiny module-level store so any component (e.g. AppHeader) can read the flag.
+let updateAvailable = false;
+const listeners = new Set<() => void>();
+
+function setUpdateAvailable(next: boolean) {
+  if (updateAvailable === next) return;
+  updateAvailable = next;
+  listeners.forEach((l) => l());
+}
+
+/** Read-only flag: is a newer deployed version available? */
+export function useUpdateAvailable(): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+    () => updateAvailable,
+    () => false,
+  );
 }
 
 async function fetchDeployedVersion(): Promise<string | null> {
@@ -57,48 +79,48 @@ function writeMarker(version: string) {
  * - Open tab: shows a non-intrusive "update available" toast instead of forcing a reload.
  */
 export function useVersionCheck() {
-  const [updateAvailable, setUpdateAvailable] = useState(false);
-  const promptedForRef = useRef<string | null>(null);
-
-  const promptReload = useCallback((version: string) => {
-    setUpdateAvailable(true);
-    if (promptedForRef.current === version) return;
-    promptedForRef.current = version;
-    toast({
-      title: "A new version of RiskBlue is available",
-      description: "Reload to get the latest updates.",
-      duration: Infinity,
-      action: undefined,
-      onOpenChange: undefined,
-    } as never);
-  }, []);
-
   useEffect(() => {
     if (!import.meta.env.PROD) return;
 
     let cancelled = false;
     let isColdStart = true;
+    let promptedFor: string | null = null;
+
+    const promptReload = (version: string) => {
+      setUpdateAvailable(true);
+      if (promptedFor === version) return;
+      promptedFor = version;
+      sonnerToast("A new version of RiskBlue is available", {
+        description: "Reload to get the latest updates.",
+        duration: Infinity,
+        action: {
+          label: "Reload",
+          onClick: () => window.location.reload(),
+        },
+      });
+    };
 
     const check = async () => {
+      const coldStart = isColdStart;
+      isColdStart = false;
+
       const deployed = await fetchDeployedVersion();
       if (cancelled || !deployed) return;
       if (!isNewerVersion(deployed, APP_VERSION)) return;
 
-      if (isColdStart) {
-        isColdStart = false;
-        // Loop guard: only self-heal once per deployed version.
-        if (readMarker() !== deployed) {
-          writeMarker(deployed);
-          window.location.reload();
-          return;
-        }
+      // Cold start: self-heal silently, but only once per deployed version
+      // so a misbehaving cache can never cause a reload loop.
+      if (coldStart && readMarker() !== deployed) {
+        writeMarker(deployed);
+        window.location.reload();
+        return;
       }
+
       promptReload(deployed);
     };
 
     // Cold-start check fires immediately, before the user interacts.
     void check();
-    isColdStart = false;
 
     const interval = window.setInterval(() => void check(), POLL_INTERVAL_MS);
     const onVisible = () => {
@@ -113,7 +135,5 @@ export function useVersionCheck() {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
     };
-  }, [promptReload]);
-
-  return { updateAvailable };
+  }, []);
 }
