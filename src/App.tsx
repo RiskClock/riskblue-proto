@@ -35,8 +35,15 @@ import { Loader2 } from "lucide-react";
 import { ExportProvider } from "./contexts/ExportContext";
 import { ExportProgressPanel } from "./components/export/ExportProgressPanel";
 import { PaymentTestModeBanner } from "./components/PaymentTestModeBanner";
+import { useVersionCheck } from "./hooks/useVersionCheck";
 
 const queryClient = new QueryClient();
+
+const VersionWatcher = () => {
+  useVersionCheck();
+  return null;
+};
+
 
 const FullScreenLoader = () => (
   <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-background">
@@ -64,7 +71,10 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+          <VersionWatcher />
           <ExportProvider>
+
+
             <ExportProgressPanel />
             <PaymentTestModeBanner />
             <Routes>

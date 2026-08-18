@@ -13,6 +13,8 @@ import {
 import { LogOut, Settings, BarChart3, Shield, Coins, Users, KeyRound, UserCog, LayoutGrid, Info, FlaskConical } from "lucide-react";
 import { useBrandLogo } from "@/hooks/useBrandLogo";
 import { APP_VERSION } from "@/lib/appVersion";
+import { useUpdateAvailable } from "@/hooks/useVersionCheck";
+
 
 import { useCredits } from "@/hooks/useCredits";
 import { BuyCreditsModal } from "@/components/BuyCreditsModal";
@@ -40,6 +42,8 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  const updateAvailable = useUpdateAvailable();
+
 
   const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
   const isRefineryAdmin = (user?.email?.toLowerCase() ?? "") === "admin@riskclock.com";
@@ -155,6 +159,15 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
               <div className="px-2 py-1.5 text-xs text-muted-foreground truncate">
                 Version {APP_VERSION}
               </div>
+              {updateAvailable && (
+                <DropdownMenuItem
+                  onClick={() => window.location.reload()}
+                  className="cursor-pointer text-xs text-primary focus:text-primary"
+                >
+                  Update available — reload
+                </DropdownMenuItem>
+              )}
+
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
