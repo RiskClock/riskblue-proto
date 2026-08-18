@@ -12,31 +12,41 @@ The browser caches `index.html` and the JS bundle. When a new build ships, a tab
    Add `public/version.json` containing `{ "version": "2.27.3" }`. It is a tiny static file, fetched with cache-busting (`fetch('/version.json?t=' + Date.now(), { cache: 'no-store' })`), so it always reflects the deployed build.
    This file must be updated together with `src/lib/appVersion.ts` on each publish. To avoid drift, both values are kept in one place and a short note in `appVersion.ts` states that the two must match.
 
-2. **A `useVersionCheck` hook**
-   Runs in the app shell and compares the deployed version with `APP_VERSION`:
-   - on app load (after a short delay)
-   - every 5 minutes
-   - whenever the tab regains focus / becomes visible (this catches the common case: user leaves a tab open overnight)
-   Silently ignores network failures and skips entirely in dev/preview.
+2. **A `useVersionCheck` hook with two distinct behaviours**
 
-3. **An update prompt**
-   When a newer version is detected, show a persistent (non-auto-dismissing) toast: "A new version of RiskBlue is available" with a **Reload** action. Reload performs `window.location.reload()`. Nothing is forced — the user is never interrupted mid-work. Once dismissed, it will not reappear for that same version in the session.
+   The right response depends on *when* the app notices it is stale:
 
-4. **Show staleness in the profile menu**
+   - **On fresh load (cold start)** — the user just arrived and has no work in progress, so there is nothing to protect. Instead of a toast, the app silently self-heals: it reloads once, bypassing the HTTP cache, before the user has begun anything. No prompt, no interruption. Someone returning after a week simply lands on the current version.
+   - **While the tab is already open** (periodic check every 5 minutes, or on tab refocus) — the user may be mid-work, so a reload cannot be forced. This is the only case that shows the update toast.
+
+   The check is skipped entirely in dev/preview and network failures are ignored silently.
+
+3. **Silent self-heal on cold start (must not loop)**
+   When the cold-start check finds a newer deployed version, the app sets a marker in `sessionStorage` (with the version it is reloading to) and calls `window.location.reload()`. If, after reloading, the running bundle is *still* stale for that same version — meaning the reload did not clear the cache — the app does not reload again. It falls back to the toast. This makes an infinite reload loop impossible even if a cache or CDN is misbehaving.
+
+4. **Update toast (open-tab case only)**
+   Persistent, non-auto-dismissing toast: "A new version of RiskBlue is available" with a **Reload** action calling `window.location.reload()`. Never forced. Once dismissed, it does not reappear for that same version in the session.
+
+5. **Show staleness in the profile menu**
    The existing "Version 2.27.3" line gets an "Update available" hint when a newer version is detected, so the user can reload at their convenience.
+
 
 ## Options considered but not chosen
 
-- **Auto-reload without asking** — risks losing in-progress work (wizard forms, annotation edits). Rejected in favour of a prompt.
+- **Always auto-reload, even mid-session** — risks losing in-progress work (wizard forms, annotation edits). Auto-reload is limited to cold start only.
+- **Always toast, even on cold start** — the bad experience the user described: arrive after a week, immediately get nagged. Rejected.
 - **Service worker / PWA update flow** — adds a service worker to a project that has none, with real risk of new cache bugs. Not worth it for this problem.
-- **Cache-Control headers only** — helps, but does nothing for tabs that stay open for hours, which is the actual reported case.
+- **Cache-Control headers only** — helps, but does nothing for tabs that stay open for hours.
 
 ## Technical notes
 
 - New: `public/version.json`, `src/hooks/useVersionCheck.ts`.
 - Modified: `src/App.tsx` (mount the hook inside the router), `src/components/AppHeader.tsx` (update hint), `src/lib/appVersion.ts` (comment about keeping `version.json` in sync).
 - Guard the check with `import.meta.env.PROD` so it never fires in the editor preview.
-- Comparison is a simple string inequality plus a semver-ish "is newer" check, so a rollback does not spam prompts.
+- Cold-start check fires immediately on mount (not delayed) so the reload happens before the user interacts.
+- Loop guard: `sessionStorage["riskblue:reloaded-for"] = <version>`; if that key already equals the deployed version on a cold-start check, skip the reload and show the toast instead.
+- Comparison is a semver-aware "is strictly newer" check, so a rollback does not trigger reloads or prompts.
+
 
 ## Publish checklist going forward
 
