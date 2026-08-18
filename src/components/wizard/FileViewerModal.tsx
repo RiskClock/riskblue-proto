@@ -1371,6 +1371,30 @@ export const FileViewerModal = ({
     blurActive();
   };
 
+  // Delete / Backspace removes the currently selected annotation.
+  const deleteRef = useRef(handleDeleteFromList);
+  deleteRef.current = handleDeleteFromList;
+  useEffect(() => {
+    if (!isOpen || !editingEnabled || !selectedInstanceId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName))
+      )
+        return;
+      e.preventDefault();
+      const id = selectedInstanceId;
+      setSelectedInstanceId(null);
+      setMetadataDialog(null);
+      void deleteRef.current(id);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [isOpen, editingEnabled, selectedInstanceId]);
+
   // ---- Undo / redo --------------------------------------------------------
   /** Apply a stored position to a marker (used by move undo/redo). */
   const applyMove = async (id: string, pos: { nx: number; ny: number }) => {
@@ -2168,6 +2192,7 @@ export const FileViewerModal = ({
                 );
               }}
               onDelete={async () => {
+                setSelectedInstanceId(null);
                 const ok = await dbDelete(inst.id);
                 if (!ok) return;
                 setInstances((prev) => prev.filter((i) => i.id !== inst.id));
