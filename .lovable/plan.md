@@ -6,6 +6,13 @@ Today `APP_VERSION` (2.27.3) is only displayed in the profile menu. It can also 
 
 The browser caches `index.html` and the JS bundle. When a new build ships, a tab that is already open (or one restored from bfcache/an aggressively cached HTML) keeps running the old bundle until a hard refresh. The fix is to compare the version baked into the running bundle against the version currently deployed on the server.
 
+## About the cache-header config file
+
+A hosting config file (`_headers`, `vercel.json`, `netlify.toml`, etc.) will not help here: Lovable hosting does not read deployment config files from the repo, so adding one would have no effect on the served headers. Lovable already serves `index.html` and other control files with revalidation-friendly cache headers — the exact behaviour requested — while hashed JS/CSS/image assets stay long-cached. Adding a file to restate this would be dead weight in the repo.
+
+What that server behaviour does not cover, and what this plan handles, is the two real failure modes: an intermediate/browser cache that ignores revalidation, and a tab left open for hours after a new build ships. The version check below is the app-level backstop for both.
+
+
 ## What to build
 
 1. **A version file the server always serves fresh**
