@@ -5628,6 +5628,32 @@ const isChildPlanType = (t: string) =>
                 files in this analysis.
               </DialogDescription>
             </DialogHeader>
+            {enabledCols.length > 0 && (
+              <div className="flex items-center justify-between border-b pb-2">
+                <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                  <Checkbox
+                    checked={
+                      cleanupChecked.size === enabledCols.length
+                        ? true
+                        : cleanupChecked.size > 0
+                          ? "indeterminate"
+                          : false
+                    }
+                    onCheckedChange={() =>
+                      setCleanupChecked((prev) =>
+                        prev.size === enabledCols.length
+                          ? new Set()
+                          : new Set(enabledCols),
+                      )
+                    }
+                  />
+                  <span>Select all</span>
+                </label>
+                <span className="text-xs text-muted-foreground">
+                  {cleanupChecked.size} of {enabledCols.length} selected
+                </span>
+              </div>
+            )}
             <div className="max-h-[50vh] overflow-auto space-y-2 py-2">
               {enabledCols.length === 0 ? (
                 <div className="text-sm text-muted-foreground">No classes selected.</div>
