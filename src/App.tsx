@@ -72,6 +72,8 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <VersionWatcher />
+          <ExportProvider>
+
 
             <ExportProgressPanel />
             <PaymentTestModeBanner />
