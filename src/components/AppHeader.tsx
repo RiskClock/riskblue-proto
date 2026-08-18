@@ -13,6 +13,8 @@ import {
 import { LogOut, Settings, BarChart3, Shield, Coins, Users, KeyRound, UserCog, LayoutGrid, Info, FlaskConical } from "lucide-react";
 import { useBrandLogo } from "@/hooks/useBrandLogo";
 import { APP_VERSION } from "@/lib/appVersion";
+import { useUpdateAvailable } from "@/hooks/useVersionCheck";
+
 
 import { useCredits } from "@/hooks/useCredits";
 import { BuyCreditsModal } from "@/components/BuyCreditsModal";
