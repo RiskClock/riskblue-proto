@@ -14,6 +14,10 @@ interface OverlayLayerProps {
   /** Page CSS size at scale = 1 (the size the surface img is rendered at). */
   pageSize: { width: number; height: number };
   hoveredId?: string | null;
+  /** Overlay rendered with a persistent selection ring. */
+  selectedId?: string | null;
+  /** Overlay rendered with a temporary attention pulse. */
+  pulsingId?: string | null;
   /** Current viewport zoom scale. Labels divide by this to stay constant on-screen. */
   viewScale?: number;
   defaultColor?: string;
