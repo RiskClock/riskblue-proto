@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LogOut, Settings, BarChart3, Shield, Coins, Users, KeyRound, UserCog, LayoutGrid, Info, FlaskConical } from "lucide-react";
 import { useBrandLogo } from "@/hooks/useBrandLogo";
+import { APP_VERSION } from "@/lib/appVersion";
 
 import { useCredits } from "@/hooks/useCredits";
 import { BuyCreditsModal } from "@/components/BuyCreditsModal";
@@ -151,6 +152,9 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
                 <LogOut className="h-4 w-4 mr-2" />
                 Logout
               </DropdownMenuItem>
+              <div className="px-2 py-1.5 text-xs text-muted-foreground truncate">
+                Version {APP_VERSION}
+              </div>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
