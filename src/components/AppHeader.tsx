@@ -151,6 +151,9 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
                 <LogOut className="h-4 w-4 mr-2" />
                 Logout
               </DropdownMenuItem>
+              <div className="px-2 py-1.5 text-xs text-muted-foreground truncate">
+                Version {APP_VERSION}
+              </div>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
