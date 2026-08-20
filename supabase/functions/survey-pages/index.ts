@@ -151,9 +151,28 @@ Deno.serve(async (req) => {
           ),
         ).sort((a, b) => (a as number) - (b as number)) as number[]
       : [];
+    // Page-scout options (drawing modal "Scout Page"):
+    //  - reuseCache: ride the file's existing Gemini context cache instead of
+    //    re-uploading the whole PDF.
+    //  - mergeMode: how the surveyed page's result folds into the stored
+    //    file-level survey_raw_response ("replace" swaps the page entry,
+    //    "append" concatenates its floor_plans onto the existing entry).
+    const reuseCache: boolean = body?.reuseCache === true;
+    const mergeModeRaw = body?.mergeMode;
+    const mergeMode: "replace" | "append" | null =
+      mergeModeRaw === "replace" || mergeModeRaw === "append" ? mergeModeRaw : null;
     if (!analysisRequestId || !fileId) {
       return json({ error: "analysisRequestId and fileId are required" }, 400);
     }
+    const isPageScout = pageNumbers.length > 0 && (reuseCache || mergeMode !== null);
+    const logTag = isPageScout ? "[survey-pages][page-scout]" : "[survey-pages]";
+    if (isPageScout) {
+      console.log(
+        `${logTag} ENTRY file=${fileId} pages=${pageNumbers.join(",")} ` +
+          `mergeMode=${mergeMode ?? "none"} reuseCache=${reuseCache}`,
+      );
+    }
+
 
 
     // Load prompt.
@@ -176,7 +195,9 @@ Deno.serve(async (req) => {
 
     const { data: fileRow, error: fileErr } = await admin
       .from("analysis_request_files")
-      .select("id, name, storage_path")
+      .select(
+        "id, name, storage_path, gemini_cache_id, gemini_cache_expires_at, survey_raw_response, survey_tokens",
+      )
       .eq("id", fileId)
       .eq("analysis_request_id", analysisRequestId)
       .maybeSingle();
@@ -184,7 +205,12 @@ Deno.serve(async (req) => {
     if (!fileRow) return json({ error: "File not found" }, 404);
     const fileName = (fileRow as any).name as string;
     const storagePath = (fileRow as any).storage_path as string | null;
+    const existingCacheId = ((fileRow as any).gemini_cache_id ?? null) as string | null;
+    const existingCacheExpiresAt = ((fileRow as any).gemini_cache_expires_at ?? null) as string | null;
+    const existingRawResponse = ((fileRow as any).survey_raw_response ?? null) as string | null;
+    const existingTokens = ((fileRow as any).survey_tokens ?? null) as any;
     if (!storagePath) return json({ error: `File "${fileName}" has no storage path` }, 400);
+
 
     const { data: sheets, error: sheetsErr } = await admin
       .from("analysis_request_sheets")
@@ -200,73 +226,123 @@ Deno.serve(async (req) => {
     const work = (async () => {
       const runStartedAt = Date.now();
       try {
-        const { data: blob, error: dlErr } = await admin.storage
-          .from(bucket)
-          .download(storagePath);
-        if (dlErr || !blob) throw new Error(`Could not download ${fileName}: ${dlErr?.message ?? "unknown"}`);
-        const bytes = new Uint8Array(await blob.arrayBuffer());
-
-        // Determine real PDF page count up-front so chunking covers the whole
-        // document even when the model omits total_pages and the sheets table
-        // hasn't been pre-populated.
-        let pdfPageCount = 0;
-        try {
-          const { PDFDocument } = await import("https://esm.sh/pdf-lib@1.17.1");
-          const doc = await PDFDocument.load(bytes, { updateMetadata: false });
-          pdfPageCount = doc.getPageCount();
-        } catch (e: any) {
-          console.warn(`[survey-pages] could not read pdf page count: ${e?.message ?? e}`);
-        }
-
-        console.log(`[survey-pages] req=${analysisRequestId} file=${fileName} bytes=${bytes.byteLength} pdfPages=${pdfPageCount}`);
-
         const ai = new GoogleGenAI({ apiKey });
 
-        // Upload PDF to Files API.
-        const pdfBlob = new Blob([bytes], { type: "application/pdf" });
-        const uploaded = await ai.files.upload({
-          file: pdfBlob,
-          config: { displayName: fileName, mimeType: "application/pdf" },
-        });
-        const fileUri = (uploaded as any)?.uri || (uploaded as any)?.name;
-        const fileMime = (uploaded as any)?.mimeType ?? "application/pdf";
-        if (!fileUri) throw new Error("Gemini upload returned no file URI");
-
-        // Wait for ACTIVE state if needed (caches.create requires ACTIVE files).
-        let fileState = (uploaded as any)?.state;
-        let pollCount = 0;
-        while (fileState && fileState !== "ACTIVE" && pollCount < 20) {
-          await new Promise((r) => setTimeout(r, 1000));
-          const fresh = await ai.files.get({ name: (uploaded as any).name });
-          fileState = (fresh as any)?.state;
-          pollCount++;
-        }
-
-        // Sterile, multi-purpose context cache - PDF only.
+        let pdfPageCount = 0;
+        let fileUri: string | null = null;
+        let fileMime = "application/pdf";
         let cacheName: string | null = null;
         let cacheExpiresAt: string | null = null;
-        try {
-          const cache = await ai.caches.create({
-            model: GEMINI_MODEL,
-            config: {
-              displayName: `sheet-analysis-${fileId}`,
-              contents: [
-                {
-                  role: "user",
-                  parts: [{ fileData: { fileUri, mimeType: fileMime } }],
-                },
-              ],
-              ttl: `${CACHE_TTL_SECONDS}s`,
-            },
+        // One of: reused | refreshed | recreated:<reason>
+        let cacheDecision = "recreated:default";
+
+        /** Download the PDF, upload it to the Files API and mint a fresh cache. */
+        const uploadAndCache = async (reason: string) => {
+          const { data: blob, error: dlErr } = await admin.storage
+            .from(bucket)
+            .download(storagePath);
+          if (dlErr || !blob) throw new Error(`Could not download ${fileName}: ${dlErr?.message ?? "unknown"}`);
+          const bytes = new Uint8Array(await blob.arrayBuffer());
+
+          // Determine real PDF page count up-front so chunking covers the whole
+          // document even when the model omits total_pages and the sheets table
+          // hasn't been pre-populated.
+          try {
+            const { PDFDocument } = await import("https://esm.sh/pdf-lib@1.17.1");
+            const doc = await PDFDocument.load(bytes, { updateMetadata: false });
+            pdfPageCount = doc.getPageCount();
+          } catch (e: any) {
+            console.warn(`[survey-pages] could not read pdf page count: ${e?.message ?? e}`);
+          }
+
+          console.log(
+            `${logTag} req=${analysisRequestId} file=${fileName} bytes=${bytes.byteLength} pdfPages=${pdfPageCount}`,
+          );
+
+          // Upload PDF to Files API.
+          const pdfBlob = new Blob([bytes], { type: "application/pdf" });
+          const uploaded = await ai.files.upload({
+            file: pdfBlob,
+            config: { displayName: fileName, mimeType: "application/pdf" },
           });
-          cacheName = (cache as any)?.name ?? null;
-          cacheExpiresAt = new Date(Date.now() + CACHE_TTL_SECONDS * 1000).toISOString();
-          console.log(`[survey-pages] cache created: ${cacheName}`);
-        } catch (cacheErr: any) {
-          // Common failure: PDF doesn't meet the model's minimum cached-token
-          // threshold. Fall back to direct generateContent.
-          console.warn(`[survey-pages] cache create failed, falling back: ${cacheErr?.message ?? cacheErr}`);
+          fileUri = (uploaded as any)?.uri || (uploaded as any)?.name;
+          fileMime = (uploaded as any)?.mimeType ?? "application/pdf";
+          if (!fileUri) throw new Error("Gemini upload returned no file URI");
+
+          // Wait for ACTIVE state if needed (caches.create requires ACTIVE files).
+          let fileState = (uploaded as any)?.state;
+          let pollCount = 0;
+          while (fileState && fileState !== "ACTIVE" && pollCount < 20) {
+            await new Promise((r) => setTimeout(r, 1000));
+            const fresh = await ai.files.get({ name: (uploaded as any).name });
+            fileState = (fresh as any)?.state;
+            pollCount++;
+          }
+
+          // Sterile, multi-purpose context cache - PDF only.
+          try {
+            const cache = await ai.caches.create({
+              model: GEMINI_MODEL,
+              config: {
+                displayName: `sheet-analysis-${fileId}`,
+                contents: [
+                  {
+                    role: "user",
+                    parts: [{ fileData: { fileUri, mimeType: fileMime } }],
+                  },
+                ],
+                ttl: `${CACHE_TTL_SECONDS}s`,
+              },
+            });
+            cacheName = (cache as any)?.name ?? null;
+            cacheExpiresAt = new Date(Date.now() + CACHE_TTL_SECONDS * 1000).toISOString();
+            console.log(`${logTag} cache=recreated reason=${reason} id=${cacheName}`);
+          } catch (cacheErr: any) {
+            // Common failure: PDF doesn't meet the model's minimum cached-token
+            // threshold. Fall back to direct generateContent.
+            console.warn(`${logTag} cache create failed, falling back: ${cacheErr?.message ?? cacheErr}`);
+          }
+          cacheDecision = `recreated:${reason}`;
+        };
+
+        // Page scouts try to ride the warm cache on the file row: no storage
+        // download, no Files API upload, no caches.create. Only the tiny
+        // page-scoped instruction is sent, billed at the cached-token rate.
+        let reusedCache = false;
+        if (reuseCache) {
+          const expiresMs = existingCacheExpiresAt ? Date.parse(existingCacheExpiresAt) : NaN;
+          const remainingMs = Number.isFinite(expiresMs) ? expiresMs - Date.now() : -1;
+          if (existingCacheId && remainingMs > 60_000) {
+            cacheName = existingCacheId;
+            cacheExpiresAt = existingCacheExpiresAt;
+            reusedCache = true;
+            cacheDecision = "reused";
+            console.log(
+              `${logTag} cache=reused id=${cacheName} remainingTtl=${Math.round(remainingMs / 1000)}s ` +
+                `(no PDF upload)`,
+            );
+            // Push the TTL back out so a working session keeps hitting it.
+            try {
+              await ai.caches.update({
+                name: cacheName,
+                config: { ttl: `${CACHE_TTL_SECONDS}s` },
+              });
+              cacheExpiresAt = new Date(Date.now() + CACHE_TTL_SECONDS * 1000).toISOString();
+              cacheDecision = "refreshed";
+              console.log(`${logTag} cache=refreshed id=${cacheName} newExpiry=${cacheExpiresAt}`);
+            } catch (ttlErr: any) {
+              console.warn(`${logTag} cache TTL refresh failed (continuing): ${ttlErr?.message ?? ttlErr}`);
+            }
+          } else {
+            console.log(
+              `${logTag} cache=miss reason=${existingCacheId ? "expired" : "absent"} — falling back to upload`,
+            );
+          }
         }
+        if (!reusedCache) {
+          await uploadAndCache(reuseCache ? "cache-miss" : "full-run");
+        }
+
 
         // Run survey. gemini-3.5 rejects systemInstruction alongside
         // cachedContent ("CachedContent can not be used with GenerateContent
@@ -380,12 +456,30 @@ Deno.serve(async (req) => {
           // parallel. No discovery chunk needed.
           const hint = Math.max(initialCeiling, ...pageNumbers);
           console.log(
-            `[survey-pages] chunking file=${fileName} selectedPages=${pageNumbers.join(",")} hint=${hint}`,
+            `${logTag} chunking file=${fileName} selectedPages=${pageNumbers.join(",")} hint=${hint} ` +
+              `cache=${cacheDecision}`,
           );
-          allChunks = await Promise.all(
-            pageNumbers.map((p) => runChunk(p, p, hint)),
-          );
+          try {
+            allChunks = await Promise.all(
+              pageNumbers.map((p) => runChunk(p, p, hint)),
+            );
+          } catch (chunkErr: any) {
+            const msg = String(chunkErr?.message ?? chunkErr);
+            const cacheGone =
+              reusedCache &&
+              /not found|NOT_FOUND|PERMISSION_DENIED|CachedContent|cachedContent|INVALID_ARGUMENT/i.test(msg);
+            if (!cacheGone) throw chunkErr;
+            console.warn(
+              `${logTag} reused cache rejected by Gemini (${msg}) — recreating from the PDF and retrying once`,
+            );
+            cacheName = null;
+            await uploadAndCache("cache-rejected");
+            allChunks = await Promise.all(
+              pageNumbers.map((p) => runChunk(p, p, hint)),
+            );
+          }
         } else {
+
         const firstEnd = Math.min(CHUNK_SIZE, initialCeiling);
         const firstChunk = await runChunk(1, firstEnd, initialCeiling);
 
@@ -430,6 +524,66 @@ Deno.serve(async (req) => {
         const rawText = JSON.stringify(combined, null, 2);
         const parsed = combined;
         const pageItems = flattenSurveyPages(parsed);
+
+        // ---- Page-scout merge -------------------------------------------
+        // A page-scoped run must never clobber the other pages already stored
+        // in survey_raw_response. Fold the fresh page(s) into the existing
+        // document server-side instead of overwriting it wholesale.
+        let finalRawText = rawText;
+        let mergeStats: any = null;
+        const mergedItemByPage = new Map<number, any>();
+        if (mergeMode && pageNumbers.length > 0) {
+          const priorItems = flattenSurveyPages(extractJsonArray(existingRawResponse ?? "") ?? []);
+          const byPage = new Map<number, any>();
+          for (const it of priorItems) {
+            const p = pageValue(it);
+            if (p != null) byPage.set(p, it);
+          }
+          const pagesBefore = byPage.size;
+          const freshByPage = new Map<number, any>();
+          for (const it of pageItems) {
+            const p = pageValue(it);
+            if (p != null) freshByPage.set(p, it);
+          }
+
+          const perPage: any[] = [];
+          for (const page of pageNumbers) {
+            const fresh = freshByPage.get(page) ?? null;
+            const prior = byPage.get(page) ?? null;
+            const priorPlans = Array.isArray(prior?.floor_plans) ? prior.floor_plans : [];
+            const freshPlans = Array.isArray(fresh?.floor_plans) ? fresh.floor_plans : [];
+            let next: any = prior;
+            if (fresh) {
+              next = mergeMode === "append"
+                ? { ...(prior ?? {}), ...fresh, floor_plans: [...priorPlans, ...freshPlans] }
+                : fresh;
+            }
+            if (next) {
+              byPage.set(page, next);
+              mergedItemByPage.set(page, next);
+            }
+            perPage.push({
+              page,
+              priorPlans: priorPlans.length,
+              modelPlans: freshPlans.length,
+              written: Array.isArray(next?.floor_plans) ? next.floor_plans.length : 0,
+            });
+          }
+
+          const mergedArray = Array.from(byPage.entries())
+            .sort((a, b) => a[0] - b[0])
+            .map(([, v]) => v);
+          finalRawText = JSON.stringify(mergedArray, null, 2);
+          mergeStats = { mode: mergeMode, pagesBefore, pagesAfter: byPage.size, perPage };
+          console.log(
+            `${logTag} merge mode=${mergeMode} pagesBefore=${pagesBefore} pagesAfter=${byPage.size} ` +
+              `(other pages untouched) ` +
+              perPage
+                .map((p) => `p${p.page}[prior=${p.priorPlans} model=${p.modelPlans} written=${p.written}]`)
+                .join(" "),
+          );
+        }
+
 
 
         let totalPages = 0;
@@ -479,6 +633,10 @@ Deno.serve(async (req) => {
           if (page == null) continue;
           itemByPage.set(page, item);
         }
+        // Merged (append/replace) results win for the scouted pages so the
+        // sheet row and survey_raw_response stay in sync.
+        for (const [page, item] of mergedItemByPage) itemByPage.set(page, item);
+
 
         const selectedSet = new Set(pageNumbers);
         const updates: Array<{ id: string; content: string }> = [];
@@ -564,10 +722,37 @@ Deno.serve(async (req) => {
               perChunk: chunkTelemetry,
             };
 
+        // Keep a rolling audit trail of page scouts on the file row so runs
+        // can be verified after the fact (cache decision, tokens, merge).
+        if (isPageScout) {
+          const priorScouts = Array.isArray(existingTokens?.pageScouts) ? existingTokens.pageScouts : [];
+          (tokensAgg as any).pageScouts = [
+            ...priorScouts.slice(-19),
+            {
+              at: new Date().toISOString(),
+              pages: pageNumbers,
+              cache: cacheDecision,
+              cacheId: cacheName,
+              mergeMode,
+              merge: mergeStats,
+              tokens: hasUsage
+                ? { prompt: promptSum, cached: cachedSum, candidates: candidatesSum, total: totalSum }
+                : null,
+              durationMs: Date.now() - runStartedAt,
+            },
+          ];
+          console.log(
+            `${logTag} DONE pages=${pageNumbers.join(",")} cache=${cacheDecision} ` +
+              `tokens(prompt=${promptSum}, cached=${cachedSum}, total=${totalSum}) ` +
+              `savedUpload=${cacheDecision === "reused" || cacheDecision === "refreshed"} ` +
+              `durationMs=${Date.now() - runStartedAt}`,
+          );
+        }
+
         await admin
           .from("analysis_request_files")
           .update({
-            survey_raw_response: rawText,
+            survey_raw_response: finalRawText,
             survey_raw_updated_at: new Date().toISOString(),
             gemini_cache_id: cacheName,
             gemini_cache_expires_at: cacheExpiresAt,
@@ -576,16 +761,22 @@ Deno.serve(async (req) => {
           } as any)
           .eq("id", fileId);
       } catch (err: any) {
-        console.error(`[survey-pages] background fatal for ${fileName}:`, err?.message ?? err);
-        await admin
-          .from("analysis_request_files")
-          .update({
-            survey_raw_response: `ERROR: ${err?.message ?? String(err)}`,
-            survey_raw_updated_at: new Date().toISOString(),
-          } as any)
-          .eq("id", fileId);
+        console.error(`${logTag} background fatal for ${fileName}:`, err?.message ?? err);
+        if (isPageScout) {
+          // Never destroy the file-level survey because one page scout failed.
+          console.warn(`${logTag} preserving existing survey_raw_response after failure`);
+        } else {
+          await admin
+            .from("analysis_request_files")
+            .update({
+              survey_raw_response: `ERROR: ${err?.message ?? String(err)}`,
+              survey_raw_updated_at: new Date().toISOString(),
+            } as any)
+            .eq("id", fileId);
+        }
       }
     })();
+
 
     // @ts-ignore - EdgeRuntime is provided by Supabase Edge runtime.
     if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {

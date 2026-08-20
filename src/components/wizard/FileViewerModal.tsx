@@ -16,9 +16,11 @@ import {
   Loader2,
   Pencil,
   Plus,
+  Radar,
   Redo2,
   Undo2,
 } from "lucide-react";
+
 import { DrawingViewer } from "@/components/viewer";
 import type {
   DocumentSourceDescriptor,
@@ -258,7 +260,18 @@ interface FileViewerModalProps {
    *  keyed by AWP class name (e.g. { "Cold Water": ["MCE","PB"] }). Values
    *  are merged into the popover suggestion list before existing values. */
   preseededTypesByClass?: Record<string, string[]>;
+  /** Survey a single page with the Scout agent (internal users only).
+   *  `mode` decides whether existing boxes on the page are replaced or kept.
+   *  Resolves with a summary plus a `discard` callback that rolls the page
+   *  back to its pre-scout state (review-before-commit). */
+  onScoutPage?: (args: {
+    page: number;
+    mode: "replace" | "append";
+  }) => Promise<{ before: number; after: number; discard: () => Promise<void> } | void>;
+  /** Whether the Scout Page control is available to this user. */
+  canScoutPage?: boolean;
 }
+
 
 
 const BOUNDING_BOX_COLOR = "#39FF14"; // legacy detections (green)
@@ -315,6 +328,8 @@ export const FileViewerModal = ({
   onAssignAnnotation,
   readOnly = false,
   preseededTypesByClass,
+  onScoutPage,
+  canScoutPage = false,
 }: FileViewerModalProps) => {
 
   const { toast } = useToast();
@@ -327,6 +342,13 @@ export const FileViewerModal = ({
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
   const [downloadIncludeOverlays, setDownloadIncludeOverlays] = useState(true);
   const [downloadBusy, setDownloadBusy] = useState(false);
+  // --- Scout Page (single-page survey) -------------------------------
+  const [scoutBusy, setScoutBusy] = useState(false);
+  const [scoutModeOpen, setScoutModeOpen] = useState(false);
+  const [scoutReview, setScoutReview] = useState<
+    { before: number; after: number; discard: () => Promise<void> } | null
+  >(null);
+
 
   // Tracks whether OverlayLayer's label-placement optimizer is currently
   // running. Placement is deferred to a microtask on the interactive
@@ -1077,6 +1099,31 @@ export const FileViewerModal = ({
   // full multi-page parent PDF, instances live on whatever page the user is
   // currently on.
   const effectivePage = sheetId ? pageIndex : currentPage;
+
+  // --- Scout Page ---------------------------------------------------------
+  // Surveys just this page with the Scout agent. When boxes already exist the
+  // user first picks replace vs. add; the result is shown as a review banner
+  // that can be discarded.
+  const runScoutPage = useCallback(
+    async (mode: "replace" | "append") => {
+      if (!onScoutPage || scoutBusy) return;
+      setScoutBusy(true);
+      setScoutReview(null);
+      try {
+        const res = await onScoutPage({ page: effectivePage, mode });
+        if (res) setScoutReview(res);
+      } finally {
+        setScoutBusy(false);
+      }
+    },
+    [onScoutPage, scoutBusy, effectivePage],
+  );
+
+  const handleScoutPageClick = useCallback(() => {
+    if ((floorPlans?.length ?? 0) > 0) setScoutModeOpen(true);
+    else void runScoutPage("append");
+  }, [floorPlans, runScoutPage]);
+
   // After mutating annotations, drop focus from the just-clicked overlay/list
   // button. Otherwise Radix's DismissableLayer treats the first scrim click as
   // "refocus the previously focused element" and the user has to click a
@@ -1889,6 +1936,26 @@ export const FileViewerModal = ({
                     allLevelPlans={allLevelPlans ?? []}
                     allLevelPlanOverrides={allLevelPlanOverrides}
                     overrides={effectiveFloorPlanOverrides}
+                    onScoutPage={
+                      onScoutPage && canScoutPage && !viewingMode
+                        ? handleScoutPageClick
+                        : undefined
+                    }
+                    scoutBusy={scoutBusy}
+                    scoutReview={scoutReview}
+                    onScoutKeep={() => setScoutReview(null)}
+                    onScoutDiscard={async () => {
+                      const review = scoutReview;
+                      if (!review) return;
+                      setScoutBusy(true);
+                      try {
+                        await review.discard();
+                        setScoutReview(null);
+                      } finally {
+                        setScoutBusy(false);
+                      }
+                    }}
+
 
                     onSaveOverride={viewingMode ? undefined : onSaveFloorPlanOverride}
                     onEditFloors={viewingMode ? undefined : onEditFloors}
@@ -2078,7 +2145,43 @@ export const FileViewerModal = ({
           </AlertDialogContent>
         </AlertDialog>
 
+        {/* Scout Page: replace vs. add when the page already has boxes */}
+        <AlertDialog open={scoutModeOpen} onOpenChange={setScoutModeOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Scout This Page</AlertDialogTitle>
+              <AlertDialogDescription>
+                This page already has {floorPlans?.length ?? 0} bounding box
+                {(floorPlans?.length ?? 0) === 1 ? "" : "es"}. Replace them with
+                the new results, or keep them and add whatever Scout finds?
+                Other pages are never affected.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setScoutModeOpen(false);
+                  void runScoutPage("append");
+                }}
+              >
+                Add to Existing
+              </Button>
+              <AlertDialogAction
+                onClick={() => {
+                  setScoutModeOpen(false);
+                  void runScoutPage("replace");
+                }}
+              >
+                Replace Results
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {/* Delete plan confirmation */}
+
         <AlertDialog
           open={!!confirmDelete}
           onOpenChange={(o) => {
@@ -2548,6 +2651,13 @@ interface FloorPlansPanelProps {
    *  and the row should scroll into view. Parent clears via onFocusHandled. */
   focusNamePlanId?: string | null;
   onFocusHandled?: () => void;
+  /** Scout this page with the survey agent (internal users only). */
+  onScoutPage?: () => void;
+  scoutBusy?: boolean;
+  /** Set after a scout run so the user can keep or discard the results. */
+  scoutReview?: { before: number; after: number; discard: () => Promise<void> } | null;
+  onScoutKeep?: () => void;
+  onScoutDiscard?: () => void | Promise<void>;
 }
 
 const FloorPlansPanel = ({
@@ -2573,7 +2683,13 @@ const FloorPlansPanel = ({
   viewingMode = false,
   focusNamePlanId,
   onFocusHandled,
+  onScoutPage,
+  scoutBusy = false,
+  scoutReview = null,
+  onScoutKeep,
+  onScoutDiscard,
 }: FloorPlansPanelProps) => {
+
 
   // For a unit floor plan, list the pages of level plans that reference it.
   // Level plans reference units by human-readable identifier. Match against
@@ -2671,8 +2787,51 @@ const FloorPlansPanel = ({
 
   return (
     <div className="h-full flex flex-col min-h-0">
+      {onScoutPage && (
+        <div className="px-2 pb-2 shrink-0">
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full h-7 text-xs"
+            onClick={onScoutPage}
+            disabled={scoutBusy}
+          >
+            {scoutBusy ? (
+              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <Radar className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            {scoutBusy ? "Scouting page…" : "Scout Page"}
+          </Button>
+        </div>
+      )}
+      {scoutReview && (
+        <div className="mx-2 mb-2 shrink-0 rounded-md border border-primary/40 bg-primary/5 p-2 space-y-2">
+          <div className="text-[11px] text-foreground">
+            Scout found{" "}
+            <span className="font-medium">{scoutReview.after}</span> floor plan
+            {scoutReview.after === 1 ? "" : "s"} on this page (was{" "}
+            {scoutReview.before}). Review below.
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" className="h-6 text-[11px] flex-1" onClick={onScoutKeep} disabled={scoutBusy}>
+              Keep
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 text-[11px] flex-1"
+              onClick={() => void onScoutDiscard?.()}
+              disabled={scoutBusy}
+            >
+              Discard
+            </Button>
+          </div>
+        </div>
+      )}
       <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2">
         {/* Orphaned bucket - markers whose center falls outside every plan bbox. */}
+
         {orphaned.length > 0 && (
           <div className="border border-dashed rounded-md p-2 space-y-1 bg-muted/20">
             <div className="text-[11px] font-medium text-muted-foreground">
