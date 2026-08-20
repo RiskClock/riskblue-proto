@@ -18,6 +18,9 @@ type ActivityAction =
   | "workbench_clear_all"
   | "workbench_scout_rerun"
   | "workbench_scout_rerun_confirmed_overwrite"
+  | "workbench_scout_page"
+  | "workbench_scout_page_replace"
+
   | "workbench_download_drawings_zip"
   | "workbench_download_annotated_pdf"
   | "workbench_download_threat_report"
