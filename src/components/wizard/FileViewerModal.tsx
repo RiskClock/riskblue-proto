@@ -258,7 +258,18 @@ interface FileViewerModalProps {
    *  keyed by AWP class name (e.g. { "Cold Water": ["MCE","PB"] }). Values
    *  are merged into the popover suggestion list before existing values. */
   preseededTypesByClass?: Record<string, string[]>;
+  /** Survey a single page with the Scout agent (internal users only).
+   *  `mode` decides whether existing boxes on the page are replaced or kept.
+   *  Resolves with a summary plus a `discard` callback that rolls the page
+   *  back to its pre-scout state (review-before-commit). */
+  onScoutPage?: (args: {
+    page: number;
+    mode: "replace" | "append";
+  }) => Promise<{ before: number; after: number; discard: () => Promise<void> } | void>;
+  /** Whether the Scout Page control is available to this user. */
+  canScoutPage?: boolean;
 }
+
 
 
 const BOUNDING_BOX_COLOR = "#39FF14"; // legacy detections (green)
