@@ -586,6 +586,53 @@ Deno.serve(async (req) => {
           );
         }
 
+        // ---- Sanity guard on page-scout output ---------------------------
+        // A model that stops looking at the page emits template geometry:
+        // identically sized boxes on a perfectly regular grid, and/or an
+        // orientation that contradicts the page dimensions it just reported.
+        // We still write the result (the user reviews it), but flag it.
+        const scoutWarnings: Array<{ page: number; reasons: string[] }> = [];
+        if (isPageScout) {
+          for (const page of pageNumbers) {
+            const item = pageItems.find((it) => pageValue(it) === page);
+            if (!item) continue;
+            const plans = Array.isArray((item as any)?.floor_plans) ? (item as any).floor_plans : [];
+            const reasons: string[] = [];
+
+            const boxes = plans
+              .map((p: any) => (Array.isArray(p?.xy_width_height_pct) ? p.xy_width_height_pct : null))
+              .filter(Boolean) as number[][];
+            if (boxes.length >= 3) {
+              const sizes = new Set(boxes.map((b) => `${b[2]}x${b[3]}`));
+              if (sizes.size === 1) reasons.push("all boxes identical in size");
+              const allIntegers = boxes.every((b) => b.every((n) => Number.isInteger(n)));
+              if (allIntegers) reasons.push("all coordinates are whole numbers");
+            }
+
+            const dims = (item as any)?.page_dimensions_pt;
+            const orientation = String((item as any)?.visual_orientation ?? "").toLowerCase();
+            const w = Number(dims?.width), h = Number(dims?.height);
+            if (Number.isFinite(w) && Number.isFinite(h) && orientation) {
+              const actual = w >= h ? "landscape" : "portrait";
+              if (orientation !== actual) {
+                reasons.push(`reported ${orientation} for a ${actual} page (${w}x${h}pt)`);
+              }
+            }
+
+            if (reasons.length) {
+              scoutWarnings.push({ page, reasons });
+              console.warn(
+                `${logTag} SUSPICIOUS page=${page} plans=${plans.length} — ${reasons.join("; ")}`,
+              );
+            }
+          }
+          if (scoutWarnings.length === 0) {
+            console.log(`${logTag} sanity check passed pages=${pageNumbers.join(",")}`);
+          }
+        }
+
+
+
 
 
         let totalPages = 0;
