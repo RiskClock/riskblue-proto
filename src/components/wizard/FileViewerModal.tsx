@@ -2798,11 +2798,11 @@ const FloorPlansPanel = ({
   return (
     <div className="h-full flex flex-col min-h-0">
       {onScoutPage && (
-        <div className="px-2 pb-2 shrink-0">
+        <div className="px-2 pb-2 shrink-0 flex items-center gap-1">
           <Button
             size="sm"
             variant="outline"
-            className="w-full h-7 text-xs"
+            className="flex-1 h-7 text-xs"
             onClick={onScoutPage}
             disabled={scoutBusy}
           >
@@ -2811,10 +2811,25 @@ const FloorPlansPanel = ({
             ) : (
               <Radar className="h-3.5 w-3.5 mr-1.5" />
             )}
-            {scoutBusy ? "Scouting page…" : "Scout Page"}
+            {scoutBusy
+              ? `Scouting page${scoutPageNumber ? ` ${scoutPageNumber}` : ""}…`
+              : `Scout Page${scoutPageNumber ? ` ${scoutPageNumber}` : ""}`}
           </Button>
+          {onScoutDebug && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 w-7 p-0 shrink-0"
+              onClick={onScoutDebug}
+              aria-label="Scout debug"
+              title="Scout debug"
+            >
+              <Bug className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
       )}
+
       {scoutReview && (
         <div className="mx-2 mb-2 shrink-0 rounded-md border border-primary/40 bg-primary/5 p-2 space-y-2">
           <div className="text-[11px] text-foreground">
