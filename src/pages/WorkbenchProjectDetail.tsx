@@ -5241,7 +5241,8 @@ const isChildPlanType = (t: string) =>
             pageIndex={activeSheet.page_index}
             awpClasses={enabledCols.map((name) => ({
               name,
-              prefix: optionByName.get(name)?.idPrefix ?? null,
+              prefix: aliasPrefixMap[name] || optionByName.get(name)?.idPrefix || null,
+              label: aliasMap[name] || name,
               analysisCount:
                 fileCountLookup.get(`${activeSheet.parent_file_id}::${name}`) || 0,
             }))}
@@ -5277,7 +5278,8 @@ const isChildPlanType = (t: string) =>
             pageIndex={1}
             awpClasses={enabledCols.map((name) => ({
               name,
-              prefix: optionByName.get(name)?.idPrefix ?? null,
+              prefix: aliasPrefixMap[name] || optionByName.get(name)?.idPrefix || null,
+              label: aliasMap[name] || name,
               analysisCount:
                 fileCountLookup.get(`${activeFile.id}::${name}`) || 0,
             }))}
@@ -5440,7 +5442,8 @@ const isChildPlanType = (t: string) =>
             singlePageOnly
             awpClasses={enabledCols.map((name) => ({
               name,
-              prefix: optionByName.get(name)?.idPrefix ?? null,
+              prefix: aliasPrefixMap[name] || optionByName.get(name)?.idPrefix || null,
+              label: aliasMap[name] || name,
               analysisCount:
                 fileCountLookup.get(`${activePageView.file.id}::${name}`) || 0,
             }))}
@@ -6836,7 +6839,8 @@ function InstancesReportModal({
         continue; // emit later as a single consolidated instance
       }
       const opt = optionByName.get(inst.awp_class_name);
-      const prefix = opt?.idPrefix || inst.awp_class_name.slice(0, 3).toUpperCase();
+      // Per-project alias acronym wins so displayed IDs match the renamed class.
+      const prefix = displayPrefix(inst.awp_class_name);
       const category = opt?.category || "Other";
       const num = inst.instance_number ?? 0;
       const padded = String(num).padStart(3, "0");
@@ -6953,7 +6957,7 @@ function InstancesReportModal({
     }
 
     return rows;
-  }, [instances, optionByName, fileNameById, pageSpaceMap, pageSpaceUnitMap, pageUnitPlansMap, pageLevelPlansMap, enabledClassSet, consolidationByAnnId]);
+  }, [instances, optionByName, displayPrefix, fileNameById, pageSpaceMap, pageSpaceUnitMap, pageUnitPlansMap, pageLevelPlansMap, enabledClassSet, consolidationByAnnId]);
 
 
   const levelNames = useMemo(() => {
@@ -7997,7 +8001,7 @@ function InstancesReportModal({
       };
       const classEntries: ClassEntry[] = classCols.flatMap((c) => {
         const base = displayClassName(c.name);
-        const basePrefix = optionByName.get(c.name)?.idPrefix || "";
+        const basePrefix = displayPrefix(c.name);
         if (!isTypedClassName(c.name)) {
           return [{
             key: c.name,

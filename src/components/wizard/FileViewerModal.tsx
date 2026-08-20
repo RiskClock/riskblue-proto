@@ -82,6 +82,11 @@ interface SystemDetection {
 export interface AwpClassOption {
   name: string;
   prefix: string | null;
+  /**
+   * Per-project display name (class alias). Falls back to `name` when the
+   * project hasn't renamed the class.
+   */
+  label?: string | null;
   /** Triage count derived from analysis (per file for this drawing). */
   analysisCount: number;
 }
@@ -2628,7 +2633,7 @@ const DetectionsPanel = ({
                     />
                     <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
                     <span className="font-mono text-xs text-muted-foreground shrink-0">{c.prefix ?? "-"}</span>
-                    <span className="flex-1 min-w-0 truncate" title={c.name}>{c.name}</span>
+                    <span className="flex-1 min-w-0 truncate" title={c.label || c.name}>{c.label || c.name}</span>
                     <span className="text-xs tabular-nums text-muted-foreground shrink-0">{total}</span>
                   </div>
                   <button
