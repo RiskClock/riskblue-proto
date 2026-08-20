@@ -16,9 +16,11 @@ import {
   Loader2,
   Pencil,
   Plus,
+  Radar,
   Redo2,
   Undo2,
 } from "lucide-react";
+
 import { DrawingViewer } from "@/components/viewer";
 import type {
   DocumentSourceDescriptor,
