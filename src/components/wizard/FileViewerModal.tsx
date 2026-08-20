@@ -2751,8 +2751,51 @@ const FloorPlansPanel = ({
 
   return (
     <div className="h-full flex flex-col min-h-0">
+      {onScoutPage && (
+        <div className="px-2 pb-2 shrink-0">
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full h-7 text-xs"
+            onClick={onScoutPage}
+            disabled={scoutBusy}
+          >
+            {scoutBusy ? (
+              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <Radar className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            {scoutBusy ? "Scouting page…" : "Scout Page"}
+          </Button>
+        </div>
+      )}
+      {scoutReview && (
+        <div className="mx-2 mb-2 shrink-0 rounded-md border border-primary/40 bg-primary/5 p-2 space-y-2">
+          <div className="text-[11px] text-foreground">
+            Scout found{" "}
+            <span className="font-medium">{scoutReview.after}</span> floor plan
+            {scoutReview.after === 1 ? "" : "s"} on this page (was{" "}
+            {scoutReview.before}). Review below.
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" className="h-6 text-[11px] flex-1" onClick={onScoutKeep} disabled={scoutBusy}>
+              Keep
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 text-[11px] flex-1"
+              onClick={() => void onScoutDiscard?.()}
+              disabled={scoutBusy}
+            >
+              Discard
+            </Button>
+          </div>
+        </div>
+      )}
       <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2">
         {/* Orphaned bucket - markers whose center falls outside every plan bbox. */}
+
         {orphaned.length > 0 && (
           <div className="border border-dashed rounded-md p-2 space-y-1 bg-muted/20">
             <div className="text-[11px] font-medium text-muted-foreground">
