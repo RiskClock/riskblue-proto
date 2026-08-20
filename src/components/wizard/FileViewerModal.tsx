@@ -2613,6 +2613,13 @@ interface FloorPlansPanelProps {
    *  and the row should scroll into view. Parent clears via onFocusHandled. */
   focusNamePlanId?: string | null;
   onFocusHandled?: () => void;
+  /** Scout this page with the survey agent (internal users only). */
+  onScoutPage?: () => void;
+  scoutBusy?: boolean;
+  /** Set after a scout run so the user can keep or discard the results. */
+  scoutReview?: { before: number; after: number; discard: () => Promise<void> } | null;
+  onScoutKeep?: () => void;
+  onScoutDiscard?: () => void | Promise<void>;
 }
 
 const FloorPlansPanel = ({
@@ -2638,7 +2645,13 @@ const FloorPlansPanel = ({
   viewingMode = false,
   focusNamePlanId,
   onFocusHandled,
+  onScoutPage,
+  scoutBusy = false,
+  scoutReview = null,
+  onScoutKeep,
+  onScoutDiscard,
 }: FloorPlansPanelProps) => {
+
 
   // For a unit floor plan, list the pages of level plans that reference it.
   // Level plans reference units by human-readable identifier. Match against
