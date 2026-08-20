@@ -195,7 +195,9 @@ Deno.serve(async (req) => {
 
     const { data: fileRow, error: fileErr } = await admin
       .from("analysis_request_files")
-      .select("id, name, storage_path")
+      .select(
+        "id, name, storage_path, gemini_cache_id, gemini_cache_expires_at, survey_raw_response, survey_tokens",
+      )
       .eq("id", fileId)
       .eq("analysis_request_id", analysisRequestId)
       .maybeSingle();
@@ -203,7 +205,12 @@ Deno.serve(async (req) => {
     if (!fileRow) return json({ error: "File not found" }, 404);
     const fileName = (fileRow as any).name as string;
     const storagePath = (fileRow as any).storage_path as string | null;
+    const existingCacheId = ((fileRow as any).gemini_cache_id ?? null) as string | null;
+    const existingCacheExpiresAt = ((fileRow as any).gemini_cache_expires_at ?? null) as string | null;
+    const existingRawResponse = ((fileRow as any).survey_raw_response ?? null) as string | null;
+    const existingTokens = ((fileRow as any).survey_tokens ?? null) as any;
     if (!storagePath) return json({ error: `File "${fileName}" has no storage path` }, 400);
+
 
     const { data: sheets, error: sheetsErr } = await admin
       .from("analysis_request_sheets")
