@@ -372,11 +372,13 @@ Deno.serve(async (req) => {
             maxOutputTokens: MAX_OUTPUT_TOKENS,
           };
           if (/gemini-(2\.[5-9]|[3-9]\.)/i.test(GEMINI_MODEL)) {
-            // Gemini 2.5+/3.x Flash can spend most of maxOutputTokens on
-            // hidden thinking tokens, then truncate a tiny visible JSON body
-            // with MAX_TOKENS. Scout is extraction-only, so disable thinking.
-            genConfig.thinkingConfig = { thinkingBudget: 0 };
+            // Dynamic thinking (-1): the model decides how much reasoning a
+            // page needs. Thinking was previously disabled (budget 0), which
+            // made dense schematic pages come back with template-looking,
+            // evenly-spaced boxes instead of real detections.
+            genConfig.thinkingConfig = { thinkingBudget: -1 };
           }
+
 
           if (cacheName) genConfig.cachedContent = cacheName;
           else genConfig.systemInstruction = systemPrompt;
