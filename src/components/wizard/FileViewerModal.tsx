@@ -267,7 +267,7 @@ interface FileViewerModalProps {
   onScoutPage?: (args: {
     page: number;
     mode: "replace" | "append";
-  }) => Promise<{ before: number; after: number; discard: () => Promise<void> } | void>;
+  }) => Promise<{ before: number; after: number; warnings?: string[]; discard: () => Promise<void> } | void>;
   /** Whether the Scout Page control is available to this user. */
   canScoutPage?: boolean;
 }
@@ -346,7 +346,7 @@ export const FileViewerModal = ({
   const [scoutBusy, setScoutBusy] = useState(false);
   const [scoutModeOpen, setScoutModeOpen] = useState(false);
   const [scoutReview, setScoutReview] = useState<
-    { before: number; after: number; discard: () => Promise<void> } | null
+    { before: number; after: number; warnings?: string[]; discard: () => Promise<void> } | null
   >(null);
 
 
@@ -2152,10 +2152,12 @@ export const FileViewerModal = ({
               <AlertDialogTitle>Scout This Page</AlertDialogTitle>
               <AlertDialogDescription>
                 This page already has {floorPlans?.length ?? 0} bounding box
-                {(floorPlans?.length ?? 0) === 1 ? "" : "es"}. Replace them with
-                the new results, or keep them and add whatever Scout finds?
-                Other pages are never affected.
+                {(floorPlans?.length ?? 0) === 1 ? "" : "es"}. Replacing clears
+                all of them on this page — including any you drew or edited by
+                hand — and keeps only what Scout finds. Adding keeps them and
+                appends the new results. Other pages are never affected.
               </AlertDialogDescription>
+
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -2655,7 +2657,7 @@ interface FloorPlansPanelProps {
   onScoutPage?: () => void;
   scoutBusy?: boolean;
   /** Set after a scout run so the user can keep or discard the results. */
-  scoutReview?: { before: number; after: number; discard: () => Promise<void> } | null;
+  scoutReview?: { before: number; after: number; warnings?: string[]; discard: () => Promise<void> } | null;
   onScoutKeep?: () => void;
   onScoutDiscard?: () => void | Promise<void>;
 }
@@ -2813,6 +2815,13 @@ const FloorPlansPanel = ({
             {scoutReview.after === 1 ? "" : "s"} on this page (was{" "}
             {scoutReview.before}). Review below.
           </div>
+          {(scoutReview.warnings?.length ?? 0) > 0 && (
+            <div className="text-[11px] text-destructive">
+              These results look unreliable ({scoutReview.warnings!.join("; ")}).
+              Check them before keeping.
+            </div>
+          )}
+
           <div className="flex gap-2">
             <Button size="sm" className="h-6 text-[11px] flex-1" onClick={onScoutKeep} disabled={scoutBusy}>
               Keep
