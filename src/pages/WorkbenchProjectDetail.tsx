@@ -5248,6 +5248,9 @@ const isChildPlanType = (t: string) =>
             sheetId={activeSheetIdForPage}
             pageIndex={activePageView.page}
             floorPlans={activePageFloorPlans}
+            canScoutPage={canManage && !processingLock}
+            onScoutPage={handleScoutPage}
+
             allUnitPlans={activeFileAllUnitPlans}
             allLevelPlans={activeFileAllLevelPlans}
             allLevelPlanOverrides={activeFileAllLevelPlanOverrides}
