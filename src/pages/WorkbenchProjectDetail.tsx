@@ -6839,7 +6839,8 @@ function InstancesReportModal({
         continue; // emit later as a single consolidated instance
       }
       const opt = optionByName.get(inst.awp_class_name);
-      const prefix = opt?.idPrefix || inst.awp_class_name.slice(0, 3).toUpperCase();
+      // Per-project alias acronym wins so displayed IDs match the renamed class.
+      const prefix = displayPrefix(inst.awp_class_name);
       const category = opt?.category || "Other";
       const num = inst.instance_number ?? 0;
       const padded = String(num).padStart(3, "0");
