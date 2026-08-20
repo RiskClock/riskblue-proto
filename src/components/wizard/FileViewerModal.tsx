@@ -267,7 +267,7 @@ interface FileViewerModalProps {
   onScoutPage?: (args: {
     page: number;
     mode: "replace" | "append";
-  }) => Promise<{ before: number; after: number; discard: () => Promise<void> } | void>;
+  }) => Promise<{ before: number; after: number; warnings?: string[]; discard: () => Promise<void> } | void>;
   /** Whether the Scout Page control is available to this user. */
   canScoutPage?: boolean;
 }
@@ -346,7 +346,7 @@ export const FileViewerModal = ({
   const [scoutBusy, setScoutBusy] = useState(false);
   const [scoutModeOpen, setScoutModeOpen] = useState(false);
   const [scoutReview, setScoutReview] = useState<
-    { before: number; after: number; discard: () => Promise<void> } | null
+    { before: number; after: number; warnings?: string[]; discard: () => Promise<void> } | null
   >(null);
 
 
