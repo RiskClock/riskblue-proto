@@ -8001,7 +8001,7 @@ function InstancesReportModal({
       };
       const classEntries: ClassEntry[] = classCols.flatMap((c) => {
         const base = displayClassName(c.name);
-        const basePrefix = optionByName.get(c.name)?.idPrefix || "";
+        const basePrefix = displayPrefix(c.name);
         if (!isTypedClassName(c.name)) {
           return [{
             key: c.name,
