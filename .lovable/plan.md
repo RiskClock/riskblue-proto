@@ -52,5 +52,5 @@ The previous page-2 survey entry was overwritten and is not recoverable from the
 
 ## Technical notes
 
-- Backend: `supabase/functions/survey-pages/index.ts` — merge block (~535-585) for the override clearing, `runChunk` (~365-430) for the thinking-budget/page-scoping experiment, plus the new sanity check before persisting.
+- Backend: `supabase/functions/survey-pages/index.ts` — merge block (~535-585) for the override clearing, `runChunk` (~365-380) for `thinkingBudget: 0` → `-1`, plus the new sanity check before persisting. The upload/cache path is unchanged: full file, always.
 - Frontend: `src/components/wizard/FileViewerModal.tsx` (confirm dialog copy, counts, review banner) and `src/pages/WorkbenchProjectDetail.tsx` (`handleScoutPage` snapshot/rollback must now include the page's `floor_plan_overrides`).
