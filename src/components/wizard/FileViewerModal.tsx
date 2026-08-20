@@ -2813,6 +2813,13 @@ const FloorPlansPanel = ({
             {scoutReview.after === 1 ? "" : "s"} on this page (was{" "}
             {scoutReview.before}). Review below.
           </div>
+          {(scoutReview.warnings?.length ?? 0) > 0 && (
+            <div className="text-[11px] text-destructive">
+              These results look unreliable ({scoutReview.warnings!.join("; ")}).
+              Check them before keeping.
+            </div>
+          )}
+
           <div className="flex gap-2">
             <Button size="sm" className="h-6 text-[11px] flex-1" onClick={onScoutKeep} disabled={scoutBusy}>
               Keep
