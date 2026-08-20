@@ -2152,10 +2152,12 @@ export const FileViewerModal = ({
               <AlertDialogTitle>Scout This Page</AlertDialogTitle>
               <AlertDialogDescription>
                 This page already has {floorPlans?.length ?? 0} bounding box
-                {(floorPlans?.length ?? 0) === 1 ? "" : "es"}. Replace them with
-                the new results, or keep them and add whatever Scout finds?
-                Other pages are never affected.
+                {(floorPlans?.length ?? 0) === 1 ? "" : "es"}. Replacing clears
+                all of them on this page — including any you drew or edited by
+                hand — and keeps only what Scout finds. Adding keeps them and
+                appends the new results. Other pages are never affected.
               </AlertDialogDescription>
+
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
