@@ -6957,7 +6957,7 @@ function InstancesReportModal({
     }
 
     return rows;
-  }, [instances, optionByName, fileNameById, pageSpaceMap, pageSpaceUnitMap, pageUnitPlansMap, pageLevelPlansMap, enabledClassSet, consolidationByAnnId]);
+  }, [instances, optionByName, displayPrefix, fileNameById, pageSpaceMap, pageSpaceUnitMap, pageUnitPlansMap, pageLevelPlansMap, enabledClassSet, consolidationByAnnId]);
 
 
   const levelNames = useMemo(() => {
