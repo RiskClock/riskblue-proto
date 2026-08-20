@@ -525,6 +525,66 @@ Deno.serve(async (req) => {
         const parsed = combined;
         const pageItems = flattenSurveyPages(parsed);
 
+        // ---- Page-scout merge -------------------------------------------
+        // A page-scoped run must never clobber the other pages already stored
+        // in survey_raw_response. Fold the fresh page(s) into the existing
+        // document server-side instead of overwriting it wholesale.
+        let finalRawText = rawText;
+        let mergeStats: any = null;
+        const mergedItemByPage = new Map<number, any>();
+        if (mergeMode && pageNumbers.length > 0) {
+          const priorItems = flattenSurveyPages(extractJsonArray(existingRawResponse ?? "") ?? []);
+          const byPage = new Map<number, any>();
+          for (const it of priorItems) {
+            const p = pageValue(it);
+            if (p != null) byPage.set(p, it);
+          }
+          const pagesBefore = byPage.size;
+          const freshByPage = new Map<number, any>();
+          for (const it of pageItems) {
+            const p = pageValue(it);
+            if (p != null) freshByPage.set(p, it);
+          }
+
+          const perPage: any[] = [];
+          for (const page of pageNumbers) {
+            const fresh = freshByPage.get(page) ?? null;
+            const prior = byPage.get(page) ?? null;
+            const priorPlans = Array.isArray(prior?.floor_plans) ? prior.floor_plans : [];
+            const freshPlans = Array.isArray(fresh?.floor_plans) ? fresh.floor_plans : [];
+            let next: any = prior;
+            if (fresh) {
+              next = mergeMode === "append"
+                ? { ...(prior ?? {}), ...fresh, floor_plans: [...priorPlans, ...freshPlans] }
+                : fresh;
+            }
+            if (next) {
+              byPage.set(page, next);
+              mergedItemByPage.set(page, next);
+            }
+            perPage.push({
+              page,
+              priorPlans: priorPlans.length,
+              modelPlans: freshPlans.length,
+              written: Array.isArray(next?.floor_plans) ? next.floor_plans.length : 0,
+            });
+          }
+
+          const mergedArray = Array.from(byPage.entries())
+            .sort((a, b) => a[0] - b[0])
+            .map(([, v]) => v);
+          finalRawText = JSON.stringify(mergedArray, null, 2);
+          mergeStats = { mode: mergeMode, pagesBefore, pagesAfter: byPage.size, perPage };
+          console.log(
+            `${logTag} merge mode=${mergeMode} pagesBefore=${pagesBefore} pagesAfter=${byPage.size} ` +
+              `(other pages untouched) ` +
+              perPage
+                .map((p) => `p${p.page}[prior=${p.priorPlans} model=${p.modelPlans} written=${p.written}]`)
+                .join(" "),
+          );
+        }
+
+
 
         let totalPages = 0;
         if (parsed) {
