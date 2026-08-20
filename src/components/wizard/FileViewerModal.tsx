@@ -326,6 +326,8 @@ export const FileViewerModal = ({
   onAssignAnnotation,
   readOnly = false,
   preseededTypesByClass,
+  onScoutPage,
+  canScoutPage = false,
 }: FileViewerModalProps) => {
 
   const { toast } = useToast();
@@ -338,6 +340,13 @@ export const FileViewerModal = ({
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
   const [downloadIncludeOverlays, setDownloadIncludeOverlays] = useState(true);
   const [downloadBusy, setDownloadBusy] = useState(false);
+  // --- Scout Page (single-page survey) -------------------------------
+  const [scoutBusy, setScoutBusy] = useState(false);
+  const [scoutModeOpen, setScoutModeOpen] = useState(false);
+  const [scoutReview, setScoutReview] = useState<
+    { before: number; after: number; discard: () => Promise<void> } | null
+  >(null);
+
 
   // Tracks whether OverlayLayer's label-placement optimizer is currently
   // running. Placement is deferred to a microtask on the interactive
