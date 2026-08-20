@@ -2655,7 +2655,7 @@ interface FloorPlansPanelProps {
   onScoutPage?: () => void;
   scoutBusy?: boolean;
   /** Set after a scout run so the user can keep or discard the results. */
-  scoutReview?: { before: number; after: number; discard: () => Promise<void> } | null;
+  scoutReview?: { before: number; after: number; warnings?: string[]; discard: () => Promise<void> } | null;
   onScoutKeep?: () => void;
   onScoutDiscard?: () => void | Promise<void>;
 }
