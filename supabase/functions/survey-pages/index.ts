@@ -200,73 +200,123 @@ Deno.serve(async (req) => {
     const work = (async () => {
       const runStartedAt = Date.now();
       try {
-        const { data: blob, error: dlErr } = await admin.storage
-          .from(bucket)
-          .download(storagePath);
-        if (dlErr || !blob) throw new Error(`Could not download ${fileName}: ${dlErr?.message ?? "unknown"}`);
-        const bytes = new Uint8Array(await blob.arrayBuffer());
-
-        // Determine real PDF page count up-front so chunking covers the whole
-        // document even when the model omits total_pages and the sheets table
-        // hasn't been pre-populated.
-        let pdfPageCount = 0;
-        try {
-          const { PDFDocument } = await import("https://esm.sh/pdf-lib@1.17.1");
-          const doc = await PDFDocument.load(bytes, { updateMetadata: false });
-          pdfPageCount = doc.getPageCount();
-        } catch (e: any) {
-          console.warn(`[survey-pages] could not read pdf page count: ${e?.message ?? e}`);
-        }
-
-        console.log(`[survey-pages] req=${analysisRequestId} file=${fileName} bytes=${bytes.byteLength} pdfPages=${pdfPageCount}`);
-
         const ai = new GoogleGenAI({ apiKey });
 
-        // Upload PDF to Files API.
-        const pdfBlob = new Blob([bytes], { type: "application/pdf" });
-        const uploaded = await ai.files.upload({
-          file: pdfBlob,
-          config: { displayName: fileName, mimeType: "application/pdf" },
-        });
-        const fileUri = (uploaded as any)?.uri || (uploaded as any)?.name;
-        const fileMime = (uploaded as any)?.mimeType ?? "application/pdf";
-        if (!fileUri) throw new Error("Gemini upload returned no file URI");
-
-        // Wait for ACTIVE state if needed (caches.create requires ACTIVE files).
-        let fileState = (uploaded as any)?.state;
-        let pollCount = 0;
-        while (fileState && fileState !== "ACTIVE" && pollCount < 20) {
-          await new Promise((r) => setTimeout(r, 1000));
-          const fresh = await ai.files.get({ name: (uploaded as any).name });
-          fileState = (fresh as any)?.state;
-          pollCount++;
-        }
-
-        // Sterile, multi-purpose context cache - PDF only.
+        let pdfPageCount = 0;
+        let fileUri: string | null = null;
+        let fileMime = "application/pdf";
         let cacheName: string | null = null;
         let cacheExpiresAt: string | null = null;
-        try {
-          const cache = await ai.caches.create({
-            model: GEMINI_MODEL,
-            config: {
-              displayName: `sheet-analysis-${fileId}`,
-              contents: [
-                {
-                  role: "user",
-                  parts: [{ fileData: { fileUri, mimeType: fileMime } }],
-                },
-              ],
-              ttl: `${CACHE_TTL_SECONDS}s`,
-            },
+        // One of: reused | refreshed | recreated:<reason>
+        let cacheDecision = "recreated:default";
+
+        /** Download the PDF, upload it to the Files API and mint a fresh cache. */
+        const uploadAndCache = async (reason: string) => {
+          const { data: blob, error: dlErr } = await admin.storage
+            .from(bucket)
+            .download(storagePath);
+          if (dlErr || !blob) throw new Error(`Could not download ${fileName}: ${dlErr?.message ?? "unknown"}`);
+          const bytes = new Uint8Array(await blob.arrayBuffer());
+
+          // Determine real PDF page count up-front so chunking covers the whole
+          // document even when the model omits total_pages and the sheets table
+          // hasn't been pre-populated.
+          try {
+            const { PDFDocument } = await import("https://esm.sh/pdf-lib@1.17.1");
+            const doc = await PDFDocument.load(bytes, { updateMetadata: false });
+            pdfPageCount = doc.getPageCount();
+          } catch (e: any) {
+            console.warn(`[survey-pages] could not read pdf page count: ${e?.message ?? e}`);
+          }
+
+          console.log(
+            `${logTag} req=${analysisRequestId} file=${fileName} bytes=${bytes.byteLength} pdfPages=${pdfPageCount}`,
+          );
+
+          // Upload PDF to Files API.
+          const pdfBlob = new Blob([bytes], { type: "application/pdf" });
+          const uploaded = await ai.files.upload({
+            file: pdfBlob,
+            config: { displayName: fileName, mimeType: "application/pdf" },
           });
-          cacheName = (cache as any)?.name ?? null;
-          cacheExpiresAt = new Date(Date.now() + CACHE_TTL_SECONDS * 1000).toISOString();
-          console.log(`[survey-pages] cache created: ${cacheName}`);
-        } catch (cacheErr: any) {
-          // Common failure: PDF doesn't meet the model's minimum cached-token
-          // threshold. Fall back to direct generateContent.
-          console.warn(`[survey-pages] cache create failed, falling back: ${cacheErr?.message ?? cacheErr}`);
+          fileUri = (uploaded as any)?.uri || (uploaded as any)?.name;
+          fileMime = (uploaded as any)?.mimeType ?? "application/pdf";
+          if (!fileUri) throw new Error("Gemini upload returned no file URI");
+
+          // Wait for ACTIVE state if needed (caches.create requires ACTIVE files).
+          let fileState = (uploaded as any)?.state;
+          let pollCount = 0;
+          while (fileState && fileState !== "ACTIVE" && pollCount < 20) {
+            await new Promise((r) => setTimeout(r, 1000));
+            const fresh = await ai.files.get({ name: (uploaded as any).name });
+            fileState = (fresh as any)?.state;
+            pollCount++;
+          }
+
+          // Sterile, multi-purpose context cache - PDF only.
+          try {
+            const cache = await ai.caches.create({
+              model: GEMINI_MODEL,
+              config: {
+                displayName: `sheet-analysis-${fileId}`,
+                contents: [
+                  {
+                    role: "user",
+                    parts: [{ fileData: { fileUri, mimeType: fileMime } }],
+                  },
+                ],
+                ttl: `${CACHE_TTL_SECONDS}s`,
+              },
+            });
+            cacheName = (cache as any)?.name ?? null;
+            cacheExpiresAt = new Date(Date.now() + CACHE_TTL_SECONDS * 1000).toISOString();
+            console.log(`${logTag} cache=recreated reason=${reason} id=${cacheName}`);
+          } catch (cacheErr: any) {
+            // Common failure: PDF doesn't meet the model's minimum cached-token
+            // threshold. Fall back to direct generateContent.
+            console.warn(`${logTag} cache create failed, falling back: ${cacheErr?.message ?? cacheErr}`);
+          }
+          cacheDecision = `recreated:${reason}`;
+        };
+
+        // Page scouts try to ride the warm cache on the file row: no storage
+        // download, no Files API upload, no caches.create. Only the tiny
+        // page-scoped instruction is sent, billed at the cached-token rate.
+        let reusedCache = false;
+        if (reuseCache) {
+          const expiresMs = existingCacheExpiresAt ? Date.parse(existingCacheExpiresAt) : NaN;
+          const remainingMs = Number.isFinite(expiresMs) ? expiresMs - Date.now() : -1;
+          if (existingCacheId && remainingMs > 60_000) {
+            cacheName = existingCacheId;
+            cacheExpiresAt = existingCacheExpiresAt;
+            reusedCache = true;
+            cacheDecision = "reused";
+            console.log(
+              `${logTag} cache=reused id=${cacheName} remainingTtl=${Math.round(remainingMs / 1000)}s ` +
+                `(no PDF upload)`,
+            );
+            // Push the TTL back out so a working session keeps hitting it.
+            try {
+              await ai.caches.update({
+                name: cacheName,
+                config: { ttl: `${CACHE_TTL_SECONDS}s` },
+              });
+              cacheExpiresAt = new Date(Date.now() + CACHE_TTL_SECONDS * 1000).toISOString();
+              cacheDecision = "refreshed";
+              console.log(`${logTag} cache=refreshed id=${cacheName} newExpiry=${cacheExpiresAt}`);
+            } catch (ttlErr: any) {
+              console.warn(`${logTag} cache TTL refresh failed (continuing): ${ttlErr?.message ?? ttlErr}`);
+            }
+          } else {
+            console.log(
+              `${logTag} cache=miss reason=${existingCacheId ? "expired" : "absent"} — falling back to upload`,
+            );
+          }
         }
+        if (!reusedCache) {
+          await uploadAndCache(reuseCache ? "cache-miss" : "full-run");
+        }
+
 
         // Run survey. gemini-3.5 rejects systemInstruction alongside
         // cachedContent ("CachedContent can not be used with GenerateContent
