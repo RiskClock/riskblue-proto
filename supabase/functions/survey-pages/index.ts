@@ -456,12 +456,30 @@ Deno.serve(async (req) => {
           // parallel. No discovery chunk needed.
           const hint = Math.max(initialCeiling, ...pageNumbers);
           console.log(
-            `[survey-pages] chunking file=${fileName} selectedPages=${pageNumbers.join(",")} hint=${hint}`,
+            `${logTag} chunking file=${fileName} selectedPages=${pageNumbers.join(",")} hint=${hint} ` +
+              `cache=${cacheDecision}`,
           );
-          allChunks = await Promise.all(
-            pageNumbers.map((p) => runChunk(p, p, hint)),
-          );
+          try {
+            allChunks = await Promise.all(
+              pageNumbers.map((p) => runChunk(p, p, hint)),
+            );
+          } catch (chunkErr: any) {
+            const msg = String(chunkErr?.message ?? chunkErr);
+            const cacheGone =
+              reusedCache &&
+              /not found|NOT_FOUND|PERMISSION_DENIED|CachedContent|cachedContent|INVALID_ARGUMENT/i.test(msg);
+            if (!cacheGone) throw chunkErr;
+            console.warn(
+              `${logTag} reused cache rejected by Gemini (${msg}) — recreating from the PDF and retrying once`,
+            );
+            cacheName = null;
+            await uploadAndCache("cache-rejected");
+            allChunks = await Promise.all(
+              pageNumbers.map((p) => runChunk(p, p, hint)),
+            );
+          }
         } else {
+
         const firstEnd = Math.min(CHUNK_SIZE, initialCeiling);
         const firstChunk = await runChunk(1, firstEnd, initialCeiling);
 
