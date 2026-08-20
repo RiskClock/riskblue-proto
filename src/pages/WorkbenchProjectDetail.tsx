@@ -643,6 +643,100 @@ export default function WorkbenchProjectDetail() {
     return () => { cancelled = true; };
   }, [activePageView]);
 
+  // ---------------------------------------------------------------
+  // Scout a single page from the drawing modal.
+  // The edge function reuses the file's warm Gemini context cache (no PDF
+  // re-upload) and merges the page result into survey_raw_response server
+  // side, so other pages are untouched. A snapshot is kept so the user can
+  // discard the run after reviewing it.
+  // ---------------------------------------------------------------
+  const handleScoutPage = useCallback(
+    async ({ page, mode }: { page: number; mode: "replace" | "append" }) => {
+      const fileId = activePageView?.file.id;
+      const reqId = requestIdRef.current;
+      if (!fileId || !reqId || !projectId) return;
+
+      const { data: baseline } = await supabase
+        .from("analysis_request_files")
+        .select("survey_raw_response, survey_raw_updated_at")
+        .eq("id", fileId)
+        .maybeSingle();
+      const snapshot = ((baseline as any)?.survey_raw_response ?? null) as string | null;
+      const baselineUpdatedAt = (baseline as any)?.survey_raw_updated_at ?? null;
+      const before = (parseSurveyFloorPlans(snapshot).get(page) ?? []).length;
+
+      const lock = await acquireAgentLock(projectId, "Scout", reqId);
+      if (!lock.ok) {
+        toast({
+          variant: "destructive",
+          title: lock.busy ? "Another agent is running" : "Scout unavailable",
+          description: lock.message,
+        });
+        return;
+      }
+      const stopHeartbeat = startAgentHeartbeat(lock.runId);
+      try {
+        const { data, error } = await supabase.functions.invoke("survey-pages", {
+          body: {
+            analysisRequestId: reqId,
+            fileId,
+            pageNumbers: [page],
+            reuseCache: true,
+            mergeMode: mode,
+          },
+        });
+        if (error) throw await normalizeFunctionError(error);
+        if ((data as any)?.error) throw new Error((data as any).error);
+
+        let finalRaw: string | null = null;
+        for (let attempts = 0; attempts < 150; attempts++) {
+          await new Promise((r) => setTimeout(r, 2000));
+          const { data: poll } = await supabase
+            .from("analysis_request_files")
+            .select("survey_raw_response, survey_raw_updated_at")
+            .eq("id", fileId)
+            .maybeSingle();
+          const updatedAt = (poll as any)?.survey_raw_updated_at ?? null;
+          if (updatedAt && updatedAt !== baselineUpdatedAt) {
+            finalRaw = ((poll as any)?.survey_raw_response ?? "") as string;
+            if (finalRaw.startsWith("ERROR: ")) throw new Error(finalRaw.slice(7));
+            break;
+          }
+        }
+        if (finalRaw == null) throw new Error("Timed out waiting for Scout on this page.");
+
+        setActiveFileSurveyRaw(finalRaw);
+        const after = (parseSurveyFloorPlans(finalRaw).get(page) ?? []).length;
+        await releaseAgentLock(lock.runId, "completed");
+        void logActivity(
+          mode === "replace" ? "workbench_scout_page_replace" : "workbench_scout_page",
+          projectId,
+          { fileId, page, before, after },
+        );
+
+        return {
+          before,
+          after,
+          discard: async () => {
+            await supabase
+              .from("analysis_request_files")
+              .update({ survey_raw_response: snapshot } as any)
+              .eq("id", fileId);
+            setActiveFileSurveyRaw(snapshot);
+          },
+        };
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        await releaseAgentLock(lock.runId, "failed", message);
+        toast({ variant: "destructive", title: "Scout failed", description: message });
+      } finally {
+        stopHeartbeat();
+      }
+    },
+    [activePageView, projectId, toast, logActivity],
+  );
+
+
   const activeFileFloorPlansByPage = useMemo(
     () => parseSurveyFloorPlans(activeFileSurveyRaw),
     [activeFileSurveyRaw],
