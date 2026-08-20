@@ -5442,7 +5442,8 @@ const isChildPlanType = (t: string) =>
             singlePageOnly
             awpClasses={enabledCols.map((name) => ({
               name,
-              prefix: optionByName.get(name)?.idPrefix ?? null,
+              prefix: aliasPrefixMap[name] || optionByName.get(name)?.idPrefix || null,
+              label: aliasMap[name] || name,
               analysisCount:
                 fileCountLookup.get(`${activePageView.file.id}::${name}`) || 0,
             }))}
