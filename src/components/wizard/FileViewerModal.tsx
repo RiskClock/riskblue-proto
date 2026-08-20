@@ -1126,6 +1126,48 @@ export const FileViewerModal = ({
     else void runScoutPage("append");
   }, [floorPlans, runScoutPage]);
 
+  // --- Scout debug (internal) ---------------------------------------------
+  // Reads the scout run history kept on the file row by the survey-pages
+  // function (`survey_tokens.pageScouts`, last 20 runs) plus the raw response.
+  const [scoutDebugOpen, setScoutDebugOpen] = useState(false);
+  const [scoutDebugLoading, setScoutDebugLoading] = useState(false);
+  const [scoutDebugRuns, setScoutDebugRuns] = useState<any[]>([]);
+  const [scoutDebugRaw, setScoutDebugRaw] = useState<{
+    text: string;
+    at: string | null;
+  } | null>(null);
+  const [scoutRawOpen, setScoutRawOpen] = useState(false);
+
+  useEffect(() => {
+    if (!scoutDebugOpen) return;
+    const target = parentFileId ?? fileId;
+    if (!target) return;
+    let cancelled = false;
+    (async () => {
+      setScoutDebugLoading(true);
+      try {
+        const { data } = await supabase
+          .from("analysis_request_files")
+          .select("survey_tokens, survey_raw_response, survey_raw_updated_at")
+          .eq("id", target)
+          .maybeSingle();
+        if (cancelled) return;
+        const scouts = (data as any)?.survey_tokens?.pageScouts;
+        setScoutDebugRuns(Array.isArray(scouts) ? [...scouts].reverse() : []);
+        setScoutDebugRaw({
+          text: ((data as any)?.survey_raw_response ?? "") as string,
+          at: ((data as any)?.survey_raw_updated_at ?? null) as string | null,
+        });
+      } finally {
+        if (!cancelled) setScoutDebugLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [scoutDebugOpen, parentFileId, fileId]);
+
+
   // After mutating annotations, drop focus from the just-clicked overlay/list
   // button. Otherwise Radix's DismissableLayer treats the first scrim click as
   // "refocus the previously focused element" and the user has to click a
