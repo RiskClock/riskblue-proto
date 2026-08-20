@@ -36,16 +36,15 @@ Fix: make "Replace" mean *replace what is on the page*. On replace, also clear t
 
 Stored page-2 output: 7 `typical_detail_block` entries with boxes at `[27,4,15,10]`, `[44,4,15,10]`, `[60,4,15,10]`… — evenly stepped, all identical size, all round numbers. It also reports `visual_orientation: "portrait"` for a 1224×792 landscape sheet. Neighbouring pages (3, 4, 5) from the full run all start with a real `level_floor_plan`. The prior page-2 result was a single plan. This is a model that stopped looking at the page and emitted a plausible-looking grid.
 
-Two contributing factors visible in the code (`supabase/functions/survey-pages/index.ts`):
+Confirmed in the code (`supabase/functions/survey-pages/index.ts`, `runChunk`): for any `gemini-2.5+/3.x` model — which includes the `gemini-2.5-flash` this run used — the config sets `thinkingConfig = { thinkingBudget: 0 }`, i.e. thinking is fully disabled today. Zero thinking on a dense schematic is exactly the regime where a schema-constrained model fills the array with template values; `candidates=1221` tokens for 7 detections is a very cheap answer.
 
-- `thinkingConfig.thinkingBudget = 0` is applied to `gemini-2.5-flash`. Zero thinking on a dense schematic is exactly the regime where a schema-constrained model fills the array with template values. `candidates=1221` tokens for 7 detections is a very cheap answer.
-- Single-page runs send the whole 31-page cached PDF plus "process only page 2". The model has to find page 2 inside the cache; the wrong orientation reading suggests it may not have locked onto the right page at all.
+Fix:
 
-Plan for this half:
+1. Change the thinking budget from `0` to `-1` (dynamic thinking) so the model decides how much reasoning a page needs. This applies to Scout runs generally, page scouts and full runs alike, so single-page results stay comparable with the rest of the file.
+2. Keep sending the full file. Page scouts continue to upload/cache the entire PDF and scope only the instruction to the requested page — no single-page extraction — so a later re-run can ride the warm cache instead of re-uploading.
+3. Add a sanity guard on page-scout results before they are written: flag a page whose boxes are all identical in size or perfectly evenly spaced, or whose reported orientation contradicts the stored page dimensions. Surface it in the review banner as "results look unreliable" rather than silently writing them.
+4. Re-run page 2 after the change and compare the stored output against the page; log finish reason, thinking token count, orientation and box coordinates so the improvement is verifiable.
 
-1. Reproduce first: re-run page 2 twice, once as-is and once with a small thinking budget, and compare the stored output against the page. Log the finish reason, orientation and box coordinates each time. Do not change defaults before the comparison shows which factor matters.
-2. Based on that, either give page scouts a non-zero thinking budget, or send the single page as its own extracted PDF/raster instead of the whole-document cache for page-scoped runs (still reusing the cache for full runs).
-3. Add a sanity guard on page-scout results before they are written: reject/flag a page whose boxes are all identical in size or perfectly evenly spaced, and whose reported orientation contradicts the stored page dimensions. Surface it in the review banner as "results look unreliable" rather than silently writing them.
 
 ## Recovering page 2 now
 
@@ -53,5 +52,5 @@ The previous page-2 survey entry was overwritten and is not recoverable from the
 
 ## Technical notes
 
-- Backend: `supabase/functions/survey-pages/index.ts` — merge block (~535-585) for the override clearing, `runChunk` (~365-430) for the thinking-budget/page-scoping experiment, plus the new sanity check before persisting.
+- Backend: `supabase/functions/survey-pages/index.ts` — merge block (~535-585) for the override clearing, `runChunk` (~365-380) for `thinkingBudget: 0` → `-1`, plus the new sanity check before persisting. The upload/cache path is unchanged: full file, always.
 - Frontend: `src/components/wizard/FileViewerModal.tsx` (confirm dialog copy, counts, review banner) and `src/pages/WorkbenchProjectDetail.tsx` (`handleScoutPage` snapshot/rollback must now include the page's `floor_plan_overrides`).
