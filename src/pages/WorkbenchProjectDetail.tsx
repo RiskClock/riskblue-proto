@@ -645,10 +645,12 @@ export default function WorkbenchProjectDetail() {
 
   // ---------------------------------------------------------------
   // Scout a single page from the drawing modal.
-  // The edge function reuses the file's warm Gemini context cache (no PDF
-  // re-upload) and merges the page result into survey_raw_response server
-  // side, so other pages are untouched. A snapshot is kept so the user can
-  // discard the run after reviewing it.
+  // The edge function reuses the file's warm Gemini context cache (the whole
+  // PDF is always what's cached/uploaded — only the instruction is scoped to
+  // the page) and merges the page result into survey_raw_response server
+  // side, so other pages are untouched. "Replace" also clears the page's
+  // manual floor-plan overrides, because those render as boxes too. A
+  // snapshot of both stores is kept so the run can be discarded.
   // ---------------------------------------------------------------
   const handleScoutPage = useCallback(
     async ({ page, mode }: { page: number; mode: "replace" | "append" }) => {
@@ -663,7 +665,18 @@ export default function WorkbenchProjectDetail() {
         .maybeSingle();
       const snapshot = ((baseline as any)?.survey_raw_response ?? null) as string | null;
       const baselineUpdatedAt = (baseline as any)?.survey_raw_updated_at ?? null;
-      const before = (parseSurveyFloorPlans(snapshot).get(page) ?? []).length;
+
+      // Boxes on the page = survey plans (minus deletions) + manual additions.
+      const overridesSnapshot: Record<string, any> = { ...activeFloorPlanOverrides };
+      const countPageBoxes = (raw: string | null, ovr: Record<string, any>) => {
+        const deleted = getDeletedPlanIds(ovr);
+        const survey = (parseSurveyFloorPlans(raw).get(page) ?? []).filter(
+          (fp) => !deleted.has(fp.plan_id),
+        ).length;
+        const added = getAddedUnitPlans(ovr, page).filter((e) => !deleted.has(e.plan_id)).length;
+        return survey + added;
+      };
+      const before = countPageBoxes(snapshot, overridesSnapshot);
 
       const lock = await acquireAgentLock(projectId, "Scout", reqId);
       if (!lock.ok) {
@@ -689,39 +702,90 @@ export default function WorkbenchProjectDetail() {
         if ((data as any)?.error) throw new Error((data as any).error);
 
         let finalRaw: string | null = null;
+        let warnings: string[] = [];
         for (let attempts = 0; attempts < 150; attempts++) {
           await new Promise((r) => setTimeout(r, 2000));
           const { data: poll } = await supabase
             .from("analysis_request_files")
-            .select("survey_raw_response, survey_raw_updated_at")
+            .select("survey_raw_response, survey_raw_updated_at, survey_tokens")
             .eq("id", fileId)
             .maybeSingle();
           const updatedAt = (poll as any)?.survey_raw_updated_at ?? null;
           if (updatedAt && updatedAt !== baselineUpdatedAt) {
             finalRaw = ((poll as any)?.survey_raw_response ?? "") as string;
             if (finalRaw.startsWith("ERROR: ")) throw new Error(finalRaw.slice(7));
+            const scouts = (poll as any)?.survey_tokens?.pageScouts;
+            const last = Array.isArray(scouts) ? scouts[scouts.length - 1] : null;
+            const w = Array.isArray(last?.warnings) ? last.warnings : [];
+            warnings = w.flatMap((entry: any) =>
+              Array.isArray(entry?.reasons) ? entry.reasons : [],
+            );
             break;
           }
         }
         if (finalRaw == null) throw new Error("Timed out waiting for Scout on this page.");
 
+        // Replace means "replace what is on this page": drop the manual
+        // overrides for this page too, otherwise hand-drawn boxes survive.
+        let overridesAfter = overridesSnapshot;
+        if (mode === "replace" && activeSheetIdForPage) {
+          const pagePlanIds = new Set<string>([
+            ...(parseSurveyFloorPlans(snapshot).get(page) ?? []).map((fp) => fp.plan_id),
+            ...(parseSurveyFloorPlans(finalRaw).get(page) ?? []).map((fp) => fp.plan_id),
+            ...getAddedUnitPlans(overridesSnapshot, page).map((e) => e.plan_id),
+          ]);
+          const next: Record<string, any> = {};
+          for (const [key, value] of Object.entries(overridesSnapshot)) {
+            if (key === "__added_unit_plans") {
+              const kept = (Array.isArray(value) ? value : []).filter(
+                (e: any) => e?.page_number !== page,
+              );
+              if (kept.length) next[key] = kept;
+              continue;
+            }
+            if (key === "__deleted_plan_ids") {
+              const kept = (Array.isArray(value) ? value : []).filter(
+                (id: any) => !pagePlanIds.has(id),
+              );
+              if (kept.length) next[key] = kept;
+              continue;
+            }
+            if (pagePlanIds.has(key)) continue;
+            next[key] = value;
+          }
+          await supabase
+            .from("analysis_request_sheets")
+            .update({ floor_plan_overrides: next } as any)
+            .eq("id", activeSheetIdForPage);
+          overridesAfter = next;
+          setActiveFloorPlanOverrides(next);
+        }
+
         setActiveFileSurveyRaw(finalRaw);
-        const after = (parseSurveyFloorPlans(finalRaw).get(page) ?? []).length;
+        const after = countPageBoxes(finalRaw, overridesAfter);
         await releaseAgentLock(lock.runId, "completed");
         void logActivity(
           mode === "replace" ? "workbench_scout_page_replace" : "workbench_scout_page",
           projectId,
-          { fileId, page, before, after },
+          { fileId, page, before, after, warnings },
         );
 
         return {
           before,
           after,
+          warnings,
           discard: async () => {
             await supabase
               .from("analysis_request_files")
               .update({ survey_raw_response: snapshot } as any)
               .eq("id", fileId);
+            if (mode === "replace" && activeSheetIdForPage) {
+              await supabase
+                .from("analysis_request_sheets")
+                .update({ floor_plan_overrides: overridesSnapshot } as any)
+                .eq("id", activeSheetIdForPage);
+              setActiveFloorPlanOverrides(overridesSnapshot);
+            }
             setActiveFileSurveyRaw(snapshot);
           },
         };
@@ -733,8 +797,9 @@ export default function WorkbenchProjectDetail() {
         stopHeartbeat();
       }
     },
-    [activePageView, projectId, toast, logActivity],
+    [activePageView, projectId, toast, logActivity, activeFloorPlanOverrides, activeSheetIdForPage],
   );
+
 
 
   const activeFileFloorPlansByPage = useMemo(
