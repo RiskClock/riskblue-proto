@@ -2691,6 +2691,9 @@ const FloorPlansPanel = ({
   focusNamePlanId,
   onFocusHandled,
   onScoutPage,
+  scoutPageNumber,
+  onScoutDebug,
+
   scoutBusy = false,
   scoutReview = null,
   onScoutKeep,
