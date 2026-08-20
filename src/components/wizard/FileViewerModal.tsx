@@ -1985,7 +1985,12 @@ export const FileViewerModal = ({
                         ? handleScoutPageClick
                         : undefined
                     }
+                    scoutPageNumber={effectivePage}
+                    onScoutDebug={
+                      canScoutPage ? () => setScoutDebugOpen(true) : undefined
+                    }
                     scoutBusy={scoutBusy}
+
                     scoutReview={scoutReview}
                     onScoutKeep={() => setScoutReview(null)}
                     onScoutDiscard={async () => {
