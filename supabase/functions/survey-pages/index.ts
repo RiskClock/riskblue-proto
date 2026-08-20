@@ -722,10 +722,37 @@ Deno.serve(async (req) => {
               perChunk: chunkTelemetry,
             };
 
+        // Keep a rolling audit trail of page scouts on the file row so runs
+        // can be verified after the fact (cache decision, tokens, merge).
+        if (isPageScout) {
+          const priorScouts = Array.isArray(existingTokens?.pageScouts) ? existingTokens.pageScouts : [];
+          (tokensAgg as any).pageScouts = [
+            ...priorScouts.slice(-19),
+            {
+              at: new Date().toISOString(),
+              pages: pageNumbers,
+              cache: cacheDecision,
+              cacheId: cacheName,
+              mergeMode,
+              merge: mergeStats,
+              tokens: hasUsage
+                ? { prompt: promptSum, cached: cachedSum, candidates: candidatesSum, total: totalSum }
+                : null,
+              durationMs: Date.now() - runStartedAt,
+            },
+          ];
+          console.log(
+            `${logTag} DONE pages=${pageNumbers.join(",")} cache=${cacheDecision} ` +
+              `tokens(prompt=${promptSum}, cached=${cachedSum}, total=${totalSum}) ` +
+              `savedUpload=${cacheDecision === "reused" || cacheDecision === "refreshed"} ` +
+              `durationMs=${Date.now() - runStartedAt}`,
+          );
+        }
+
         await admin
           .from("analysis_request_files")
           .update({
-            survey_raw_response: rawText,
+            survey_raw_response: finalRawText,
             survey_raw_updated_at: new Date().toISOString(),
             gemini_cache_id: cacheName,
             gemini_cache_expires_at: cacheExpiresAt,
@@ -734,16 +761,22 @@ Deno.serve(async (req) => {
           } as any)
           .eq("id", fileId);
       } catch (err: any) {
-        console.error(`[survey-pages] background fatal for ${fileName}:`, err?.message ?? err);
-        await admin
-          .from("analysis_request_files")
-          .update({
-            survey_raw_response: `ERROR: ${err?.message ?? String(err)}`,
-            survey_raw_updated_at: new Date().toISOString(),
-          } as any)
-          .eq("id", fileId);
+        console.error(`${logTag} background fatal for ${fileName}:`, err?.message ?? err);
+        if (isPageScout) {
+          // Never destroy the file-level survey because one page scout failed.
+          console.warn(`${logTag} preserving existing survey_raw_response after failure`);
+        } else {
+          await admin
+            .from("analysis_request_files")
+            .update({
+              survey_raw_response: `ERROR: ${err?.message ?? String(err)}`,
+              survey_raw_updated_at: new Date().toISOString(),
+            } as any)
+            .eq("id", fileId);
+        }
       }
     })();
+
 
     // @ts-ignore - EdgeRuntime is provided by Supabase Edge runtime.
     if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
