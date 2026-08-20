@@ -2145,7 +2145,43 @@ export const FileViewerModal = ({
           </AlertDialogContent>
         </AlertDialog>
 
+        {/* Scout Page: replace vs. add when the page already has boxes */}
+        <AlertDialog open={scoutModeOpen} onOpenChange={setScoutModeOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Scout This Page</AlertDialogTitle>
+              <AlertDialogDescription>
+                This page already has {floorPlans?.length ?? 0} bounding box
+                {(floorPlans?.length ?? 0) === 1 ? "" : "es"}. Replace them with
+                the new results, or keep them and add whatever Scout finds?
+                Other pages are never affected.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setScoutModeOpen(false);
+                  void runScoutPage("append");
+                }}
+              >
+                Add to Existing
+              </Button>
+              <AlertDialogAction
+                onClick={() => {
+                  setScoutModeOpen(false);
+                  void runScoutPage("replace");
+                }}
+              >
+                Replace Results
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {/* Delete plan confirmation */}
+
         <AlertDialog
           open={!!confirmDelete}
           onOpenChange={(o) => {
