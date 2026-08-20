@@ -1097,6 +1097,31 @@ export const FileViewerModal = ({
   // full multi-page parent PDF, instances live on whatever page the user is
   // currently on.
   const effectivePage = sheetId ? pageIndex : currentPage;
+
+  // --- Scout Page ---------------------------------------------------------
+  // Surveys just this page with the Scout agent. When boxes already exist the
+  // user first picks replace vs. add; the result is shown as a review banner
+  // that can be discarded.
+  const runScoutPage = useCallback(
+    async (mode: "replace" | "append") => {
+      if (!onScoutPage || scoutBusy) return;
+      setScoutBusy(true);
+      setScoutReview(null);
+      try {
+        const res = await onScoutPage({ page: effectivePage, mode });
+        if (res) setScoutReview(res);
+      } finally {
+        setScoutBusy(false);
+      }
+    },
+    [onScoutPage, scoutBusy, effectivePage],
+  );
+
+  const handleScoutPageClick = useCallback(() => {
+    if ((floorPlans?.length ?? 0) > 0) setScoutModeOpen(true);
+    else void runScoutPage("append");
+  }, [floorPlans, runScoutPage]);
+
   // After mutating annotations, drop focus from the just-clicked overlay/list
   // button. Otherwise Radix's DismissableLayer treats the first scrim click as
   // "refocus the previously focused element" and the user has to click a
