@@ -633,6 +633,10 @@ Deno.serve(async (req) => {
           if (page == null) continue;
           itemByPage.set(page, item);
         }
+        // Merged (append/replace) results win for the scouted pages so the
+        // sheet row and survey_raw_response stay in sync.
+        for (const [page, item] of mergedItemByPage) itemByPage.set(page, item);
+
 
         const selectedSet = new Set(pageNumbers);
         const updates: Array<{ id: string; content: string }> = [];
