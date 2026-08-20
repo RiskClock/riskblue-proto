@@ -82,6 +82,11 @@ interface SystemDetection {
 export interface AwpClassOption {
   name: string;
   prefix: string | null;
+  /**
+   * Per-project display name (class alias). Falls back to `name` when the
+   * project hasn't renamed the class.
+   */
+  label?: string | null;
   /** Triage count derived from analysis (per file for this drawing). */
   analysisCount: number;
 }
