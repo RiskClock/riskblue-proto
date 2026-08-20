@@ -2655,11 +2655,16 @@ interface FloorPlansPanelProps {
   onFocusHandled?: () => void;
   /** Scout this page with the survey agent (internal users only). */
   onScoutPage?: () => void;
+  /** Page number shown on the Scout button label. */
+  scoutPageNumber?: number;
+  /** Opens the in-app scout debug dialog (internal users only). */
+  onScoutDebug?: () => void;
   scoutBusy?: boolean;
   /** Set after a scout run so the user can keep or discard the results. */
   scoutReview?: { before: number; after: number; warnings?: string[]; discard: () => Promise<void> } | null;
   onScoutKeep?: () => void;
   onScoutDiscard?: () => void | Promise<void>;
+
 }
 
 const FloorPlansPanel = ({
