@@ -10,8 +10,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
+  Bug,
   ChevronDown,
   ChevronRight,
+
   GripVertical,
   Loader2,
   Pencil,
@@ -1124,6 +1126,48 @@ export const FileViewerModal = ({
     else void runScoutPage("append");
   }, [floorPlans, runScoutPage]);
 
+  // --- Scout debug (internal) ---------------------------------------------
+  // Reads the scout run history kept on the file row by the survey-pages
+  // function (`survey_tokens.pageScouts`, last 20 runs) plus the raw response.
+  const [scoutDebugOpen, setScoutDebugOpen] = useState(false);
+  const [scoutDebugLoading, setScoutDebugLoading] = useState(false);
+  const [scoutDebugRuns, setScoutDebugRuns] = useState<any[]>([]);
+  const [scoutDebugRaw, setScoutDebugRaw] = useState<{
+    text: string;
+    at: string | null;
+  } | null>(null);
+  const [scoutRawOpen, setScoutRawOpen] = useState(false);
+
+  useEffect(() => {
+    if (!scoutDebugOpen) return;
+    const target = parentFileId ?? fileId;
+    if (!target) return;
+    let cancelled = false;
+    (async () => {
+      setScoutDebugLoading(true);
+      try {
+        const { data } = await supabase
+          .from("analysis_request_files")
+          .select("survey_tokens, survey_raw_response, survey_raw_updated_at")
+          .eq("id", target)
+          .maybeSingle();
+        if (cancelled) return;
+        const scouts = (data as any)?.survey_tokens?.pageScouts;
+        setScoutDebugRuns(Array.isArray(scouts) ? [...scouts].reverse() : []);
+        setScoutDebugRaw({
+          text: ((data as any)?.survey_raw_response ?? "") as string,
+          at: ((data as any)?.survey_raw_updated_at ?? null) as string | null,
+        });
+      } finally {
+        if (!cancelled) setScoutDebugLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [scoutDebugOpen, parentFileId, fileId]);
+
+
   // After mutating annotations, drop focus from the just-clicked overlay/list
   // button. Otherwise Radix's DismissableLayer treats the first scrim click as
   // "refocus the previously focused element" and the user has to click a
@@ -1941,7 +1985,12 @@ export const FileViewerModal = ({
                         ? handleScoutPageClick
                         : undefined
                     }
+                    scoutPageNumber={effectivePage}
+                    onScoutDebug={
+                      canScoutPage ? () => setScoutDebugOpen(true) : undefined
+                    }
                     scoutBusy={scoutBusy}
+
                     scoutReview={scoutReview}
                     onScoutKeep={() => setScoutReview(null)}
                     onScoutDiscard={async () => {
@@ -2144,6 +2193,107 @@ export const FileViewerModal = ({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Scout debug: recent scout runs for this file (internal only) */}
+        <Dialog open={scoutDebugOpen} onOpenChange={setScoutDebugOpen}>
+          <DialogContent className="max-w-[680px] w-[680px] max-h-[80vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle>Scout Debug</DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 min-h-0 overflow-auto space-y-2">
+              {scoutDebugLoading ? (
+                <div className="text-xs text-muted-foreground p-4 text-center">
+                  Loading…
+                </div>
+              ) : scoutDebugRuns.length === 0 ? (
+                <div className="text-xs text-muted-foreground border rounded-md p-4 text-center">
+                  No scout runs recorded for this file yet.
+                </div>
+              ) : (
+                <ul className="divide-y border rounded-md">
+                  {scoutDebugRuns.map((run, i) => {
+                    const pages: number[] = Array.isArray(run?.pages) ? run.pages : [];
+                    const isCurrent = pages.includes(effectivePage);
+                    const warnings: string[] = Array.isArray(run?.warnings)
+                      ? run.warnings.flatMap((w: any) =>
+                          Array.isArray(w?.reasons) ? w.reasons : typeof w === "string" ? [w] : [],
+                        )
+                      : [];
+                    const t = run?.tokens;
+                    return (
+                      <li
+                        key={`${run?.at ?? i}-${i}`}
+                        className={`px-3 py-2 ${isCurrent ? "bg-primary/5" : ""}`}
+                      >
+                        <div className="text-xs font-medium">
+                          {run?.at ? new Date(run.at).toLocaleString() : "—"}
+                          {isCurrent ? (
+                            <span className="ml-2 text-[10px] text-primary">
+                              this page
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {pages.length
+                            ? `page${pages.length === 1 ? "" : "s"} ${pages.join(", ")}`
+                            : "all pages"}
+                          {" · "}
+                          {run?.mergeMode === "replace" ? "Replace" : "Append"}
+                          {run?.cache ? ` · cache ${run.cache}` : ""}
+                          {run?.durationMs
+                            ? ` · ${(run.durationMs / 1000).toFixed(1)}s`
+                            : ""}
+                        </div>
+                        {t ? (
+                          <div className="text-[10px] text-muted-foreground">
+                            in {Number(t.prompt ?? 0).toLocaleString()} · cached{" "}
+                            {Number(t.cached ?? 0).toLocaleString()} · out{" "}
+                            {Number(t.candidates ?? 0).toLocaleString()} · total{" "}
+                            {Number(t.total ?? 0).toLocaleString()}
+                          </div>
+                        ) : null}
+                        {warnings.length > 0 && (
+                          <div className="text-[11px] text-destructive">
+                            {warnings.join("; ")}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+            <div className="flex items-center justify-between gap-2 pt-2">
+              <div className="text-[11px] text-muted-foreground">
+                {scoutDebugRaw?.at
+                  ? `Raw response updated ${new Date(scoutDebugRaw.at).toLocaleString()}`
+                  : "No raw response stored"}
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!scoutDebugRaw?.text?.trim()}
+                onClick={() => setScoutRawOpen(true)}
+              >
+                View raw response
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={scoutRawOpen} onOpenChange={setScoutRawOpen}>
+          <DialogContent className="max-w-[80vw] w-[80vw] h-[80vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="truncate">
+                Scout raw response · {fileName}
+              </DialogTitle>
+            </DialogHeader>
+            <pre className="font-mono text-xs flex-1 min-h-0 overflow-auto whitespace-pre-wrap border rounded-md p-3">
+              {scoutDebugRaw?.text ?? ""}
+            </pre>
+          </DialogContent>
+        </Dialog>
+
 
         {/* Scout Page: replace vs. add when the page already has boxes */}
         <AlertDialog open={scoutModeOpen} onOpenChange={setScoutModeOpen}>
@@ -2655,11 +2805,16 @@ interface FloorPlansPanelProps {
   onFocusHandled?: () => void;
   /** Scout this page with the survey agent (internal users only). */
   onScoutPage?: () => void;
+  /** Page number shown on the Scout button label. */
+  scoutPageNumber?: number;
+  /** Opens the in-app scout debug dialog (internal users only). */
+  onScoutDebug?: () => void;
   scoutBusy?: boolean;
   /** Set after a scout run so the user can keep or discard the results. */
   scoutReview?: { before: number; after: number; warnings?: string[]; discard: () => Promise<void> } | null;
   onScoutKeep?: () => void;
   onScoutDiscard?: () => void | Promise<void>;
+
 }
 
 const FloorPlansPanel = ({
@@ -2686,6 +2841,9 @@ const FloorPlansPanel = ({
   focusNamePlanId,
   onFocusHandled,
   onScoutPage,
+  scoutPageNumber,
+  onScoutDebug,
+
   scoutBusy = false,
   scoutReview = null,
   onScoutKeep,
@@ -2790,11 +2948,11 @@ const FloorPlansPanel = ({
   return (
     <div className="h-full flex flex-col min-h-0">
       {onScoutPage && (
-        <div className="px-2 pb-2 shrink-0">
+        <div className="px-2 pb-2 shrink-0 flex items-center gap-1">
           <Button
             size="sm"
             variant="outline"
-            className="w-full h-7 text-xs"
+            className="flex-1 h-7 text-xs"
             onClick={onScoutPage}
             disabled={scoutBusy}
           >
@@ -2803,10 +2961,25 @@ const FloorPlansPanel = ({
             ) : (
               <Radar className="h-3.5 w-3.5 mr-1.5" />
             )}
-            {scoutBusy ? "Scouting page…" : "Scout Page"}
+            {scoutBusy
+              ? `Scouting page${scoutPageNumber ? ` ${scoutPageNumber}` : ""}…`
+              : `Scout Page${scoutPageNumber ? ` ${scoutPageNumber}` : ""}`}
           </Button>
+          {onScoutDebug && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 w-7 p-0 shrink-0"
+              onClick={onScoutDebug}
+              aria-label="Scout debug"
+              title="Scout debug"
+            >
+              <Bug className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
       )}
+
       {scoutReview && (
         <div className="mx-2 mb-2 shrink-0 rounded-md border border-primary/40 bg-primary/5 p-2 space-y-2">
           <div className="text-[11px] text-foreground">
