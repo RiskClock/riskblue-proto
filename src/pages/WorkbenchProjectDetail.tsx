@@ -5278,7 +5278,8 @@ const isChildPlanType = (t: string) =>
             pageIndex={1}
             awpClasses={enabledCols.map((name) => ({
               name,
-              prefix: optionByName.get(name)?.idPrefix ?? null,
+              prefix: aliasPrefixMap[name] || optionByName.get(name)?.idPrefix || null,
+              label: aliasMap[name] || name,
               analysisCount:
                 fileCountLookup.get(`${activeFile.id}::${name}`) || 0,
             }))}
