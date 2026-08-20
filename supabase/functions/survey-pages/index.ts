@@ -784,6 +784,7 @@ Deno.serve(async (req) => {
               cacheId: cacheName,
               mergeMode,
               merge: mergeStats,
+              warnings: scoutWarnings.length ? scoutWarnings : null,
               tokens: hasUsage
                 ? { prompt: promptSum, cached: cachedSum, candidates: candidatesSum, total: totalSum }
                 : null,
