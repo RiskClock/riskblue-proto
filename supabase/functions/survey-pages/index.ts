@@ -151,9 +151,28 @@ Deno.serve(async (req) => {
           ),
         ).sort((a, b) => (a as number) - (b as number)) as number[]
       : [];
+    // Page-scout options (drawing modal "Scout Page"):
+    //  - reuseCache: ride the file's existing Gemini context cache instead of
+    //    re-uploading the whole PDF.
+    //  - mergeMode: how the surveyed page's result folds into the stored
+    //    file-level survey_raw_response ("replace" swaps the page entry,
+    //    "append" concatenates its floor_plans onto the existing entry).
+    const reuseCache: boolean = body?.reuseCache === true;
+    const mergeModeRaw = body?.mergeMode;
+    const mergeMode: "replace" | "append" | null =
+      mergeModeRaw === "replace" || mergeModeRaw === "append" ? mergeModeRaw : null;
     if (!analysisRequestId || !fileId) {
       return json({ error: "analysisRequestId and fileId are required" }, 400);
     }
+    const isPageScout = pageNumbers.length > 0 && (reuseCache || mergeMode !== null);
+    const logTag = isPageScout ? "[survey-pages][page-scout]" : "[survey-pages]";
+    if (isPageScout) {
+      console.log(
+        `${logTag} ENTRY file=${fileId} pages=${pageNumbers.join(",")} ` +
+          `mergeMode=${mergeMode ?? "none"} reuseCache=${reuseCache}`,
+      );
+    }
+
 
 
     // Load prompt.
