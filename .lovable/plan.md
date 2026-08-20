@@ -33,3 +33,18 @@ Frontend (`src/components/wizard/FileViewerModal.tsx`, plus a new small `ScoutPa
 - Invoke `survey-pages` with `{ analysisRequestId, fileId, pageNumbers: [page], mergeMode, reuseCache: true }`, then poll `analysis_request_files.survey_raw_updated_at` for the change (same pattern as the existing modal).
 - Parse the fresh response with `parseSurveyFloorPlans` for the review list; on Apply, refetch the page's plans so the canvas re-renders with the new boxes; on Discard, restore the pre-run `survey_raw_response` snapshot.
 - Reuse existing dialog/checkbox primitives; no new design tokens.
+
+## Traceability
+
+Since most of the change is under the hood, every page scout leaves a readable trail you can ask me to check afterwards.
+
+Edge function logs, all prefixed `[survey-pages][page-scout]`, one run per line group:
+- Entry: file id, page number, `mergeMode`, `reuseCache` flag.
+- Cache decision: `cache=reused` (with cache id and remaining TTL), `cache=refreshed` (new expiry), `cache=recreated` (why: missing, expired, or rejected by Gemini) — this is the line that proves the PDF was not re-uploaded.
+- Model call: model name, prompt/cached/candidate token counts and the cache-hit percentage, duration.
+- Merge: how many plans existed on the page before, how many the model returned, how many were written, and confirmation that other pages were untouched (page count before/after).
+- Any fallback or error path logs the reason explicitly rather than failing silently.
+
+Persisted trace (queryable, survives log retention):
+- The run's telemetry is stored on the file row in `survey_tokens` under a `pageScouts` array — one entry per page scout with timestamp, page, merge mode, cache decision, token totals and duration.
+- The destructive actions are logged through the existing activity logger as `workbench_scout_page` (and `workbench_scout_page_replace` when replacing), with page number and detection counts in the metadata, so they also show up in the project's activity history.
