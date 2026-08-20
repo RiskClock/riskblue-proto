@@ -1934,6 +1934,26 @@ export const FileViewerModal = ({
                     allLevelPlans={allLevelPlans ?? []}
                     allLevelPlanOverrides={allLevelPlanOverrides}
                     overrides={effectiveFloorPlanOverrides}
+                    onScoutPage={
+                      onScoutPage && canScoutPage && !viewingMode
+                        ? handleScoutPageClick
+                        : undefined
+                    }
+                    scoutBusy={scoutBusy}
+                    scoutReview={scoutReview}
+                    onScoutKeep={() => setScoutReview(null)}
+                    onScoutDiscard={async () => {
+                      const review = scoutReview;
+                      if (!review) return;
+                      setScoutBusy(true);
+                      try {
+                        await review.discard();
+                        setScoutReview(null);
+                      } finally {
+                        setScoutBusy(false);
+                      }
+                    }}
+
 
                     onSaveOverride={viewingMode ? undefined : onSaveFloorPlanOverride}
                     onEditFloors={viewingMode ? undefined : onEditFloors}
