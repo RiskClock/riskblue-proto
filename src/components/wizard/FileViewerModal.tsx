@@ -21,7 +21,6 @@ import {
   Radar,
   Redo2,
   Tag,
-  TagIconOff,
   Undo2,
 } from "lucide-react";
 
@@ -1860,11 +1859,7 @@ export const FileViewerModal = ({
                     className="h-7 px-2 flex-shrink-0"
                     onClick={() => setShowLabels((v) => !v)}
                   >
-                    {showLabels ? (
-                      <Tag className="h-3.5 w-3.5" />
-                    ) : (
-                      <TagIconOff className="h-3.5 w-3.5" />
-                    )}
+                    <Tag className={`h-3.5 w-3.5 ${showLabels ? "" : "opacity-50"}`} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
