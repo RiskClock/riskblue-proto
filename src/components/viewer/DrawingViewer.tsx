@@ -117,7 +117,10 @@ export interface DrawingViewerProps {
    * on side panels while placement blocks the overlay from being final.
    */
   onPlacingChange?: (isPlacing: boolean) => void;
+  /** Master switch for annotation labels + leader lines (viewer only). */
+  showLabels?: boolean;
 }
+
 
 
 
