@@ -107,6 +107,9 @@ const LOD_NEIGHBORHOOD_PX = 80;
 const LOD_MAX_NEIGHBORS = 3;
 /** Zoom is quantized to this step so smooth pinch-zoom doesn't rerun placement. */
 const LOD_SCALE_QUANTIZE = 0.1;
+/** Extra margin (fraction of the visible span) added around the viewport
+ *  before culling placement inputs, so labels don't pop in at the edge. */
+const VIEWPORT_BUFFER_RATIO = 0.2;
 
 
 /** Interpolate label sizing based on the current viewport zoom scale. */
