@@ -53,7 +53,14 @@ export interface PlacementInput {
    * it so the escape room scales with the label size.
    */
   scale?: number;
+  /**
+   * Circle ids suppressed by the viewer's density LOD. They are skipped by
+   * candidate generation / optimization entirely (and produce no placed
+   * label), but remain obstacles so surviving labels avoid drawing over them.
+   */
+  lodHiddenIds?: string[];
 }
+
 
 
 export interface LabelCandidate {
