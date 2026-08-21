@@ -15,7 +15,7 @@ Today `runPlacement` sees every annotation and every obstacle on the page, so wh
 
 - The viewer computes the currently visible region of the page in normalized document coordinates, expanded by a 20% buffer on each axis so labels don't pop in at the screen edge.
 - Before placement runs, both targets (labeled circles, labeled rects) and obstacles (all circles, rect footprints) are filtered to those intersecting the buffered viewport. Anything outside is not placed and not treated as an obstacle.
-- The LOD density pass uses the same culled set, so density is judged from what's on screen.
+- The LOD density pass keeps using every anchor on the page (not the culled set), so anchors near the viewport edge still see off-screen neighbours and labels don't pop in incorrectly. Culling applies only to what is fed into placement.
 - The visible-region value used by these passes is updated on a 150ms debounce, so panning and zooming recalculate once the gesture settles rather than every frame.
 - When the viewport rect is unavailable (export capture, stacked-page layout, first paint before measurement), culling is skipped and behavior falls back to today's full-page placement.
 
