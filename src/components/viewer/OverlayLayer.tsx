@@ -427,7 +427,10 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
         // stays a constant pixel size regardless of ancestor CSS zoom
         // transforms. Keep the fill on the div so hit-testing works.
         borderRadius: "9999px",
-        backgroundColor: withAlpha(c.color, selected ? 0.45 : hovered ? 0.35 : 0.2),
+        backgroundColor: withAlpha(
+          c.color,
+          selected ? 0.45 : hovered ? 0.35 : denseOpaque ? 1 : 0.2,
+        ),
         boxSizing: "border-box",
         pointerEvents: clickable || draggable ? "auto" : "none",
         cursor: draggable ? (isDragging ? "grabbing" : "grab") : clickable ? "pointer" : undefined,
