@@ -117,7 +117,10 @@ export interface DrawingViewerProps {
    * on side panels while placement blocks the overlay from being final.
    */
   onPlacingChange?: (isPlacing: boolean) => void;
+  /** Master switch for annotation labels + leader lines (viewer only). */
+  showLabels?: boolean;
 }
+
 
 
 
@@ -163,6 +166,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       onToggleViewingMode,
       hideRotationIndicator = false,
       onPlacingChange,
+      showLabels = true,
     },
 
 
@@ -580,6 +584,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                     }
                     editorColor={editorColor}
                     onPlacingChange={onPlacingChange}
+                    showLabels={showLabels}
                   />
                 ) : (
 
@@ -606,6 +611,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                               : undefined
                           }
                           onOverlayClick={onOverlayClick}
+                          showLabels={showLabels}
                           onRenderedSizeChange={onActivePageRenderedSizeChange}
                         />
                       );

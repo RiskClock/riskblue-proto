@@ -1,4 +1,5 @@
 import { CSSProperties, PointerEvent as ReactPointerEvent, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import RBush from "rbush";
 import type { NormalizedOverlay } from "./viewerGeometry";
 import { readableTextOn } from "@/lib/awpColor";
 import {
@@ -6,6 +7,7 @@ import {
   runPlacement,
   type PlacedLabel,
 } from "./overlayPlacementClient";
+
 
 
 
@@ -58,7 +60,14 @@ interface OverlayLayerProps {
    * side panels that let the user mutate annotations.
    */
   onPlacingChange?: (isPlacing: boolean) => void;
+  /**
+   * Viewer-only master switch for annotation labels + leader lines. When
+   * false, only the anchor dots render. Bounding-box (rect) labels are
+   * unaffected. Defaults to true.
+   */
+  showLabels?: boolean;
 }
+
 
 const MIN_CIRCLE_DIAMETER_CSS = 24;
 
@@ -81,6 +90,17 @@ const LABEL_ZOOM_MIN = 1.2;
 const LABEL_ZOOM_MAX = 3.0;
 const CIRCLE_BORDER_PX_SCREEN = 2;
 const LEADER_STROKE_PX_SCREEN = 1.25;
+
+// ---- Level of Detail (LOD) tunables ---------------------------------------
+// Labels are only drawn where the annotation has room on screen. For each
+// labeled anchor we query a screen-space square around it (converted to page
+// units via the current zoom) against an rbush of all anchors; too many
+// neighbours inside it => "low detail" (dot only, no label / leader line).
+const LOD_NEIGHBORHOOD_PX = 80;
+const LOD_MAX_NEIGHBORS = 3;
+/** Zoom is quantized to this step so smooth pinch-zoom doesn't rerun placement. */
+const LOD_SCALE_QUANTIZE = 0.1;
+
 
 /** Interpolate label sizing based on the current viewport zoom scale. */
 function labelSizingForZoom(viewScale: number) {
@@ -517,6 +537,8 @@ export const OverlayLayer = ({
   syncPlacement = false,
   fullSizeLabels = false,
   onPlacingChange,
+  showLabels = true,
+
 }: OverlayLayerProps) => {
   const [drag, setDrag] = useState<null | {
     id: string;
@@ -665,6 +687,47 @@ export const OverlayLayer = ({
       });
     }
   }
+  // ---- Local density LOD ---------------------------------------------------
+  // Quantized zoom so a smooth pinch/scroll doesn't retrigger placement.
+  const lodScale = useMemo(() => {
+    const s = Math.max(0.0001, viewScale);
+    return Math.max(LOD_SCALE_QUANTIZE, Math.round(s / LOD_SCALE_QUANTIZE) * LOD_SCALE_QUANTIZE);
+  }, [viewScale]);
+
+  /**
+   * Ids of labeled annotations that sit in a crowded neighbourhood at the
+   * current zoom. They render as anchor dots only and are skipped entirely by
+   * the placement optimizer. Disabled for the export path (syncPlacement).
+   */
+  const lodHiddenIds = useMemo(() => {
+    const hidden = new Set<string>();
+    if (syncPlacement || exportScale > 1) return hidden;
+    const labeled = circles.filter((c) => !!c.label && !c.isDot);
+    if (labeled.length <= 1) return hidden;
+    const idx = new RBush<{ minX: number; minY: number; maxX: number; maxY: number; id: string }>();
+    idx.load(
+      labeled.map((c) => ({ minX: c.cx, minY: c.cy, maxX: c.cx, maxY: c.cy, id: c.id })),
+    );
+    // Screen-space neighbourhood converted into page units.
+    const half = LOD_NEIGHBORHOOD_PX / 2 / lodScale;
+    for (const c of labeled) {
+      const near = idx.search({
+        minX: c.cx - half,
+        minY: c.cy - half,
+        maxX: c.cx + half,
+        maxY: c.cy + half,
+      });
+      if (near.length - 1 > LOD_MAX_NEIGHBORS) hidden.add(c.id);
+    }
+    return hidden;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [circleLayoutKey, lodScale, syncPlacement, exportScale]);
+
+  const lodHiddenKey = useMemo(
+    () => Array.from(lodHiddenIds).sort().join("|"),
+    [lodHiddenIds],
+  );
+
   const buildPlacementInput = () => ({
     pageSize,
     circles: circles.map((c) => ({
@@ -676,7 +739,7 @@ export const OverlayLayer = ({
     rects: rectObstacles,
     fontPx, padX, labelH, gap, charPx,
     scale: exportScale,
-
+    lodHiddenIds: Array.from(lodHiddenIds),
   });
 
   // Synchronous branch — used by offscreen export capture, which rasterizes
@@ -692,7 +755,7 @@ export const OverlayLayer = ({
   const [asyncPlaced, setAsyncPlaced] = useState<PlacedLabel[]>([]);
   useEffect(() => {
     if (syncPlacement) return;
-    const hasLabels = circles.some((c) => !!c.label && !c.isDot);
+    const hasLabels = showLabels && circles.some((c) => !!c.label && !c.isDot && !lodHiddenIds.has(c.id));
     if (!hasLabels) {
       setAsyncPlaced([]);
       onPlacingChangeRef.current?.(false);
@@ -713,7 +776,7 @@ export const OverlayLayer = ({
     );
     return () => ticket.cancel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncPlacement, circleLayoutKey, rectLayoutKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx]);
+  }, [syncPlacement, showLabels, circleLayoutKey, rectLayoutKey, lodHiddenKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx]);
 
 
   // On unmount, ensure the parent's "placing" flag doesn't stay stuck on.
@@ -723,7 +786,25 @@ export const OverlayLayer = ({
     };
   }, []);
 
-  const placedLabels: PlacedLabel[] = syncPlacement ? (syncPlaced ?? []) : asyncPlaced;
+  const placedLabels: PlacedLabel[] = !showLabels
+    ? []
+    : syncPlacement
+      ? (syncPlaced ?? [])
+      : asyncPlaced;
+
+  /**
+   * A hovered / selected annotation that LOD suppressed still deserves its
+   * label. It's rendered as a simple pill docked to the anchor (outside the
+   * optimizer, so hovering never retriggers a placement pass).
+   */
+  const focusFallbackCircle = useMemo(() => {
+    if (!showLabels) return null;
+    const focusId = hoveredId || selectedId;
+    if (!focusId || !lodHiddenIds.has(focusId)) return null;
+    if (placedLabels.some((p) => p.id === focusId)) return null;
+    return circles.find((c) => c.id === focusId && !!c.label) ?? null;
+  }, [showLabels, hoveredId, selectedId, lodHiddenIds, placedLabels, circles]);
+
 
   // After labels render, measure their actual bounding boxes and snap every
   // leader line endpoint flush to the visible label edge. This guarantees
@@ -966,6 +1047,40 @@ export const OverlayLayer = ({
           </div>
         );
       })}
+
+      {/* LOD fallback: hovered / selected annotation in a dense cluster keeps
+          its label, docked just outside the anchor dot. */}
+      {focusFallbackCircle ? (() => {
+        const c = focusFallbackCircle;
+        const s = Math.max(0.0001, viewScale);
+        const sizing = labelSizingForZoom(viewScale);
+        return (
+          <div
+            key={`label-focus-${c.id}`}
+            className="absolute font-bold pointer-events-none text-center"
+            style={{
+              left: c.cx + c.r + 4 / s,
+              top: c.cy,
+              transform: "translate(0, -50%)",
+              lineHeight: `${Math.round((sizing.font / s) * 1.25)}px`,
+              fontSize: sizing.font / s,
+              paddingLeft: sizing.padX / s,
+              paddingRight: sizing.padX / s,
+              paddingTop: 1 / s,
+              paddingBottom: 1 / s,
+              boxSizing: "border-box",
+              backgroundColor: c.color,
+              color: readableTextOn(c.color),
+              opacity: LABEL_OPACITY,
+              whiteSpace: "pre",
+            }}
+          >
+            {c.label}
+          </div>
+        );
+      })() : null}
+
+
 
     </div>
   );

@@ -20,6 +20,7 @@ import {
   Plus,
   Radar,
   Redo2,
+  Tag,
   Undo2,
 } from "lucide-react";
 
@@ -277,6 +278,8 @@ interface FileViewerModalProps {
   }) => Promise<{ before: number; after: number; warnings?: string[]; discard: () => Promise<void> } | void>;
   /** Whether the Scout Page control is available to this user. */
   canScoutPage?: boolean;
+  /** Internal users get the annotation label visibility toggle. */
+  isInternal?: boolean;
 }
 
 
@@ -337,6 +340,7 @@ export const FileViewerModal = ({
   preseededTypesByClass,
   onScoutPage,
   canScoutPage = false,
+  isInternal = false,
 }: FileViewerModalProps) => {
 
   const { toast } = useToast();
@@ -490,6 +494,23 @@ export const FileViewerModal = ({
       /* ignore */
     }
   }, [viewingMode]);
+
+  // Internal-only master switch for annotation labels + leader lines.
+  const [showLabels, setShowLabels] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem("drawing-viewer:show-labels");
+      return stored === null ? true : stored === "1";
+    } catch {
+      return true;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("drawing-viewer:show-labels", showLabels ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [showLabels]);
   const editingEnabled = sidebarEnabled && !viewingMode;
 
 
@@ -1828,6 +1849,24 @@ export const FileViewerModal = ({
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="truncate flex items-center gap-2 min-w-0">
             <span className="truncate">{fileName}</span>
+            {isInternal && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant={showLabels ? "secondary" : "outline"}
+                    size="sm"
+                    className="h-7 px-2 flex-shrink-0"
+                    onClick={() => setShowLabels((v) => !v)}
+                  >
+                    <Tag className={`h-3.5 w-3.5 ${showLabels ? "" : "opacity-50"}`} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  {showLabels ? "Hide annotation labels" : "Show annotation labels"}
+                </TooltipContent>
+              </Tooltip>
+            )}
             {titleAccessory}
           </DialogTitle>
         </DialogHeader>
@@ -1845,6 +1884,7 @@ export const FileViewerModal = ({
               onRotate={handleRotate}
               onDownload={() => setDownloadDialogOpen(true)}
 
+              showLabels={showLabels}
               onPageChange={singlePageOnly ? () => {} : setCurrentPage}
               hidePageNav={singlePageOnly}
               overlays={overlays}

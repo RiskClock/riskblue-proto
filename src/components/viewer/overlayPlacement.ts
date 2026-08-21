@@ -53,7 +53,14 @@ export interface PlacementInput {
    * it so the escape room scales with the label size.
    */
   scale?: number;
+  /**
+   * Circle ids suppressed by the viewer's density LOD. They are skipped by
+   * candidate generation / optimization entirely (and produce no placed
+   * label), but remain obstacles so surviving labels avoid drawing over them.
+   */
+  lodHiddenIds?: string[];
 }
+
 
 
 export interface LabelCandidate {
@@ -604,7 +611,11 @@ export function runPlacement(input: PlacementInput): PlacedLabel[] {
   const { pageSize, fontPx, padX, labelH, gap, charPx } = input;
   const ringScale = Math.max(1, input.scale ?? 1);
 
-  const labeledCircles = input.circles.filter((c) => !!c.label && !c.isDot);
+  const lodHidden = new Set(input.lodHiddenIds ?? []);
+  const labeledCircles = input.circles.filter(
+    (c) => !!c.label && !c.isDot && !lodHidden.has(c.id),
+  );
+
   const labeledRects = input.rects.filter((r) => !!r.label);
   if (labeledCircles.length === 0 && labeledRects.length === 0) return [];
 

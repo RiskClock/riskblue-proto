@@ -5316,6 +5316,7 @@ const isChildPlanType = (t: string) =>
             pageIndex={activePageView.page}
             floorPlans={activePageFloorPlans}
             canScoutPage={canManage && !processingLock}
+            isInternal={isInternal}
             onScoutPage={handleScoutPage}
 
             allUnitPlans={activeFileAllUnitPlans}
