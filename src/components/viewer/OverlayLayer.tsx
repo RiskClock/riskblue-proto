@@ -537,6 +537,8 @@ export const OverlayLayer = ({
   syncPlacement = false,
   fullSizeLabels = false,
   onPlacingChange,
+  showLabels = true,
+
 }: OverlayLayerProps) => {
   const [drag, setDrag] = useState<null | {
     id: string;
