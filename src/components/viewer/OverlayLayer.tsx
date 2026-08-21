@@ -835,7 +835,7 @@ export const OverlayLayer = ({
     );
     return () => ticket.cancel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncPlacement, showLabels, circleLayoutKey, rectLayoutKey, lodHiddenKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx]);
+  }, [syncPlacement, showLabels, circleLayoutKey, rectLayoutKey, lodHiddenKey, cullKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx]);
 
 
   // On unmount, ensure the parent's "placing" flag doesn't stay stuck on.
