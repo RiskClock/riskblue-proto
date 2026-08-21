@@ -166,6 +166,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       onToggleViewingMode,
       hideRotationIndicator = false,
       onPlacingChange,
+      showLabels = true,
     },
 
 
@@ -583,6 +584,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                     }
                     editorColor={editorColor}
                     onPlacingChange={onPlacingChange}
+                    showLabels={showLabels}
                   />
                 ) : (
 
@@ -609,6 +611,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                               : undefined
                           }
                           onOverlayClick={onOverlayClick}
+                          showLabels={showLabels}
                           onRenderedSizeChange={onActivePageRenderedSizeChange}
                         />
                       );

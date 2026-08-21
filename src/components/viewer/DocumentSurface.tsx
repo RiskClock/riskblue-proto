@@ -55,6 +55,8 @@ interface DocumentSurfaceProps {
   syncPlacement?: boolean;
   /** Forwarded to OverlayLayer.onPlacingChange. */
   onPlacingChange?: (isPlacing: boolean) => void;
+  /** Forwarded to OverlayLayer.showLabels. */
+  showLabels?: boolean;
 }
 
 
@@ -103,6 +105,7 @@ export const DocumentSurface = ({
   rotation = 0,
   syncPlacement,
   onPlacingChange,
+  showLabels = true,
 }: DocumentSurfaceProps) => {
   const downRef = useRef<{ x: number; y: number } | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -653,6 +656,7 @@ export const DocumentSurface = ({
           onOverlayDrag={onOverlayDrag}
           syncPlacement={syncPlacement}
           onPlacingChange={onPlacingChange}
+          showLabels={showLabels}
         />
       )}
       {polyPoints ? renderPolygonEditor() : renderEditor()}
