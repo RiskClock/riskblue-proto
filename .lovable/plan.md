@@ -28,6 +28,6 @@ Today `runPlacement` sees every annotation and every obstacle on the page, so wh
 - `src/components/viewer/OverlayLayer.tsx`
   - New constants next to the LOD block: `VIEWPORT_BUFFER_RATIO = 0.2`.
   - New prop `viewportRect`. Derive a page-pixel cull rect (normalized rect times `pageSize`, inflated by the buffer); memoize on the rect's rounded values so tiny jitter doesn't retrigger.
-  - Compute `visibleCircleIds` / culled `rectObstacles`; feed the culled sets into both the `lodHiddenIds` density memo and `buildPlacementInput`, and add the cull-rect key to the async placement effect deps. The sync/export path ignores `viewportRect`.
+  - Leave the `lodHiddenIds` density memo as-is: the anchor rbush is still built from all labeled circles on the page. Compute `visibleCircleIds` / culled `rectObstacles` separately and feed only those into `buildPlacementInput`, and add the cull-rect key to the async placement effect deps. The sync/export path ignores `viewportRect`.
   - Circles outside the cull rect are excluded from placement input entirely (their dots still render; only labels are affected).
   - Pass a `denseOpaque` flag into `CircleOverlay` for LOD-suppressed anchors and use `withAlpha(color, 1)` for its fill.
