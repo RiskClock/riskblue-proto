@@ -66,6 +66,13 @@ interface OverlayLayerProps {
    * unaffected. Defaults to true.
    */
   showLabels?: boolean;
+  /**
+   * Currently visible region of the page in normalized (0..1) page coords.
+   * When provided (viewer only), label placement is restricted to the
+   * annotations/obstacles intersecting this rect (plus a buffer) so labels
+   * don't dodge off-screen geometry. Omitted / null => no culling.
+   */
+  viewportRect?: { nx: number; ny: number; nw: number; nh: number } | null;
 }
 
 
@@ -100,6 +107,9 @@ const LOD_NEIGHBORHOOD_PX = 80;
 const LOD_MAX_NEIGHBORS = 3;
 /** Zoom is quantized to this step so smooth pinch-zoom doesn't rerun placement. */
 const LOD_SCALE_QUANTIZE = 0.1;
+/** Extra margin (fraction of the visible span) added around the viewport
+ *  before culling placement inputs, so labels don't pop in at the edge. */
+const VIEWPORT_BUFFER_RATIO = 0.2;
 
 
 /** Interpolate label sizing based on the current viewport zoom scale. */
@@ -382,11 +392,14 @@ interface CircleOverlayProps {
   setDrag: (d: DragState | null) => void;
   onOverlayClick?: (id: string) => void;
   onOverlayDrag?: (id: string, nx: number, ny: number) => void;
+  /** LOD suppressed this anchor's label — render it as a solid dot. */
+  denseOpaque?: boolean;
 }
 const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
   const {
     c, hovered, selected = false, pulsing = false, exportScale, clickable, draggable, isDragging, dragDx, dragDy,
     viewScale, pageWidth, pageHeight, dragRef, setDrag, onOverlayClick, onOverlayDrag,
+    denseOpaque = false,
   } = props;
 
   const dotBaseAlpha = draggable ? 0.5 : (hovered || selected ? 0.85 : 0.7);
@@ -414,7 +427,10 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
         // stays a constant pixel size regardless of ancestor CSS zoom
         // transforms. Keep the fill on the div so hit-testing works.
         borderRadius: "9999px",
-        backgroundColor: withAlpha(c.color, selected ? 0.45 : hovered ? 0.35 : 0.2),
+        backgroundColor: withAlpha(
+          c.color,
+          selected ? 0.45 : hovered ? 0.35 : denseOpaque ? 1 : 0.2,
+        ),
         boxSizing: "border-box",
         pointerEvents: clickable || draggable ? "auto" : "none",
         cursor: draggable ? (isDragging ? "grabbing" : "grab") : clickable ? "pointer" : undefined,
@@ -538,6 +554,8 @@ export const OverlayLayer = ({
   fullSizeLabels = false,
   onPlacingChange,
   showLabels = true,
+  viewportRect = null,
+
 
 }: OverlayLayerProps) => {
   const [drag, setDrag] = useState<null | {
@@ -728,15 +746,56 @@ export const OverlayLayer = ({
     [lodHiddenIds],
   );
 
+  // ---- Viewport culling for the placement pass -----------------------------
+  // Only annotations/obstacles near the visible region participate in
+  // placement, so labels never dodge geometry the user can't see. The export
+  // (sync) path always places the whole page.
+  const cullRect = useMemo(() => {
+    if (syncPlacement || exportScale > 1) return null;
+    if (!viewportRect) return null;
+    const { nx, ny, nw, nh } = viewportRect;
+    if (!(nw > 0) || !(nh > 0)) return null;
+    const bx = nw * VIEWPORT_BUFFER_RATIO;
+    const by = nh * VIEWPORT_BUFFER_RATIO;
+    return {
+      x1: (nx - bx) * pageSize.width,
+      y1: (ny - by) * pageSize.height,
+      x2: (nx + nw + bx) * pageSize.width,
+      y2: (ny + nh + by) * pageSize.height,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    syncPlacement,
+    exportScale,
+    pageSize.width,
+    pageSize.height,
+    viewportRect ? Math.round(viewportRect.nx * 1000) : -1,
+    viewportRect ? Math.round(viewportRect.ny * 1000) : -1,
+    viewportRect ? Math.round(viewportRect.nw * 1000) : -1,
+    viewportRect ? Math.round(viewportRect.nh * 1000) : -1,
+  ]);
+
+  const cullKey = cullRect
+    ? `${Math.round(cullRect.x1)}:${Math.round(cullRect.y1)}:${Math.round(cullRect.x2)}:${Math.round(cullRect.y2)}`
+    : "none";
+
+  const intersectsCull = (x1: number, y1: number, x2: number, y2: number) =>
+    !cullRect ||
+    (x2 >= cullRect.x1 && x1 <= cullRect.x2 && y2 >= cullRect.y1 && y1 <= cullRect.y2);
+
   const buildPlacementInput = () => ({
     pageSize,
-    circles: circles.map((c) => ({
-      id: c.id, cx: c.cx, cy: c.cy, r: c.r, color: c.color,
-      label: c.label, isDot: c.isDot,
-      measuredWidthPx:
-        c.label && !c.isDot ? measureLabelWidthPx(c.label, fontPx) : undefined,
-    })),
-    rects: rectObstacles,
+    circles: circles
+      .filter((c) => intersectsCull(c.cx - c.r, c.cy - c.r, c.cx + c.r, c.cy + c.r))
+      .map((c) => ({
+        id: c.id, cx: c.cx, cy: c.cy, r: c.r, color: c.color,
+        label: c.label, isDot: c.isDot,
+        measuredWidthPx:
+          c.label && !c.isDot ? measureLabelWidthPx(c.label, fontPx) : undefined,
+      })),
+    rects: rectObstacles.filter((r) =>
+      intersectsCull(r.x, r.y, r.x + r.w, r.y + r.h),
+    ),
     fontPx, padX, labelH, gap, charPx,
     scale: exportScale,
     lodHiddenIds: Array.from(lodHiddenIds),
@@ -776,7 +835,7 @@ export const OverlayLayer = ({
     );
     return () => ticket.cancel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncPlacement, showLabels, circleLayoutKey, rectLayoutKey, lodHiddenKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx]);
+  }, [syncPlacement, showLabels, circleLayoutKey, rectLayoutKey, lodHiddenKey, cullKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx]);
 
 
   // On unmount, ensure the parent's "placing" flag doesn't stay stuck on.
@@ -965,6 +1024,7 @@ export const OverlayLayer = ({
             setDrag={setDrag}
             onOverlayClick={onOverlayClick}
             onOverlayDrag={onOverlayDrag}
+            denseOpaque={showLabels && lodHiddenIds.has(c.id)}
           />
         );
       })}

@@ -176,6 +176,13 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
     const wrapperRef = useRef<ReactZoomPanPinchRef>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [scale, setScale] = useState(1);
+    // Debounced visible page region (normalized 0..1) used by OverlayLayer to
+    // cull label placement to what's on screen. Updated once a pan/zoom
+    // gesture settles rather than on every frame.
+    const [visibleRect, setVisibleRect] = useState<
+      { nx: number; ny: number; nw: number; nh: number } | null
+    >(null);
+    const visibleRectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
     const fitOnceRef = useRef(false);
 
@@ -316,14 +323,45 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
 
 
     // Adaptive reraster on settle (panning/zooming stop) - and track scale via onTransform.
+    const scheduleVisibleRect = (state: {
+      scale: number;
+      positionX: number;
+      positionY: number;
+    }) => {
+      if (visibleRectTimer.current) clearTimeout(visibleRectTimer.current);
+      visibleRectTimer.current = setTimeout(() => {
+        const s = state.scale || 1;
+        const pw = pageCssSize.width;
+        const ph = pageCssSize.height;
+        if (pw === 0 || ph === 0 || viewportSize.width === 0 || viewportSize.height === 0) {
+          setVisibleRect(null);
+          return;
+        }
+        setVisibleRect({
+          nx: -state.positionX / (s * pw),
+          ny: -state.positionY / (s * ph),
+          nw: viewportSize.width / (s * pw),
+          nh: viewportSize.height / (s * ph),
+        });
+      }, 150);
+    };
+
+    useEffect(() => {
+      return () => {
+        if (visibleRectTimer.current) clearTimeout(visibleRectTimer.current);
+      };
+    }, []);
+
     const handleTransform = (
       _ref: ReactZoomPanPinchRef,
       state: { scale: number; positionX: number; positionY: number }
     ) => {
       setScale(state.scale);
+      scheduleVisibleRect(state);
     };
     const handleSettle = (ref: ReactZoomPanPinchRef) => {
       const s = ref.state.scale;
+      scheduleVisibleRect(ref.state);
       if (isPdf && activePage) {
         scheduleReraster(activePage.pageNum, s);
       }
@@ -529,6 +567,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                     selectedOverlayId={selectedOverlayId}
                     pulsingOverlayId={pulsingOverlayId}
                     viewScale={scale}
+                    viewportRect={visibleRect}
                     rotation={rotation}
                     onCanvasClick={
                       onCanvasClick
