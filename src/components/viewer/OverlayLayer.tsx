@@ -1024,6 +1024,7 @@ export const OverlayLayer = ({
             setDrag={setDrag}
             onOverlayClick={onOverlayClick}
             onOverlayDrag={onOverlayDrag}
+            denseOpaque={showLabels && lodHiddenIds.has(c.id)}
           />
         );
       })}
