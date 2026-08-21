@@ -66,6 +66,13 @@ interface OverlayLayerProps {
    * unaffected. Defaults to true.
    */
   showLabels?: boolean;
+  /**
+   * Currently visible region of the page in normalized (0..1) page coords.
+   * When provided (viewer only), label placement is restricted to the
+   * annotations/obstacles intersecting this rect (plus a buffer) so labels
+   * don't dodge off-screen geometry. Omitted / null => no culling.
+   */
+  viewportRect?: { nx: number; ny: number; nw: number; nh: number } | null;
 }
 
 
