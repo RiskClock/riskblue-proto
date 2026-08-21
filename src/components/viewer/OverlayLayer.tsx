@@ -687,6 +687,47 @@ export const OverlayLayer = ({
       });
     }
   }
+  // ---- Local density LOD ---------------------------------------------------
+  // Quantized zoom so a smooth pinch/scroll doesn't retrigger placement.
+  const lodScale = useMemo(() => {
+    const s = Math.max(0.0001, viewScale);
+    return Math.max(LOD_SCALE_QUANTIZE, Math.round(s / LOD_SCALE_QUANTIZE) * LOD_SCALE_QUANTIZE);
+  }, [viewScale]);
+
+  /**
+   * Ids of labeled annotations that sit in a crowded neighbourhood at the
+   * current zoom. They render as anchor dots only and are skipped entirely by
+   * the placement optimizer. Disabled for the export path (syncPlacement).
+   */
+  const lodHiddenIds = useMemo(() => {
+    const hidden = new Set<string>();
+    if (syncPlacement || exportScale > 1) return hidden;
+    const labeled = circles.filter((c) => !!c.label && !c.isDot);
+    if (labeled.length <= 1) return hidden;
+    const idx = new RBush<{ minX: number; minY: number; maxX: number; maxY: number; id: string }>();
+    idx.load(
+      labeled.map((c) => ({ minX: c.cx, minY: c.cy, maxX: c.cx, maxY: c.cy, id: c.id })),
+    );
+    // Screen-space neighbourhood converted into page units.
+    const half = LOD_NEIGHBORHOOD_PX / 2 / lodScale;
+    for (const c of labeled) {
+      const near = idx.search({
+        minX: c.cx - half,
+        minY: c.cy - half,
+        maxX: c.cx + half,
+        maxY: c.cy + half,
+      });
+      if (near.length - 1 > LOD_MAX_NEIGHBORS) hidden.add(c.id);
+    }
+    return hidden;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [circleLayoutKey, lodScale, syncPlacement, exportScale]);
+
+  const lodHiddenKey = useMemo(
+    () => Array.from(lodHiddenIds).sort().join("|"),
+    [lodHiddenIds],
+  );
+
   const buildPlacementInput = () => ({
     pageSize,
     circles: circles.map((c) => ({
@@ -698,7 +739,7 @@ export const OverlayLayer = ({
     rects: rectObstacles,
     fontPx, padX, labelH, gap, charPx,
     scale: exportScale,
-
+    lodHiddenIds: Array.from(lodHiddenIds),
   });
 
   // Synchronous branch — used by offscreen export capture, which rasterizes
@@ -714,7 +755,7 @@ export const OverlayLayer = ({
   const [asyncPlaced, setAsyncPlaced] = useState<PlacedLabel[]>([]);
   useEffect(() => {
     if (syncPlacement) return;
-    const hasLabels = circles.some((c) => !!c.label && !c.isDot);
+    const hasLabels = showLabels && circles.some((c) => !!c.label && !c.isDot && !lodHiddenIds.has(c.id));
     if (!hasLabels) {
       setAsyncPlaced([]);
       onPlacingChangeRef.current?.(false);
@@ -735,7 +776,7 @@ export const OverlayLayer = ({
     );
     return () => ticket.cancel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncPlacement, circleLayoutKey, rectLayoutKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx]);
+  }, [syncPlacement, showLabels, circleLayoutKey, rectLayoutKey, lodHiddenKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx]);
 
 
   // On unmount, ensure the parent's "placing" flag doesn't stay stuck on.
@@ -745,7 +786,25 @@ export const OverlayLayer = ({
     };
   }, []);
 
-  const placedLabels: PlacedLabel[] = syncPlacement ? (syncPlaced ?? []) : asyncPlaced;
+  const placedLabels: PlacedLabel[] = !showLabels
+    ? []
+    : syncPlacement
+      ? (syncPlaced ?? [])
+      : asyncPlaced;
+
+  /**
+   * A hovered / selected annotation that LOD suppressed still deserves its
+   * label. It's rendered as a simple pill docked to the anchor (outside the
+   * optimizer, so hovering never retriggers a placement pass).
+   */
+  const focusFallbackCircle = useMemo(() => {
+    if (!showLabels) return null;
+    const focusId = hoveredId || selectedId;
+    if (!focusId || !lodHiddenIds.has(focusId)) return null;
+    if (placedLabels.some((p) => p.id === focusId)) return null;
+    return circles.find((c) => c.id === focusId && !!c.label) ?? null;
+  }, [showLabels, hoveredId, selectedId, lodHiddenIds, placedLabels, circles]);
+
 
   // After labels render, measure their actual bounding boxes and snap every
   // leader line endpoint flush to the visible label edge. This guarantees
