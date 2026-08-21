@@ -60,7 +60,14 @@ interface OverlayLayerProps {
    * side panels that let the user mutate annotations.
    */
   onPlacingChange?: (isPlacing: boolean) => void;
+  /**
+   * Viewer-only master switch for annotation labels + leader lines. When
+   * false, only the anchor dots render. Bounding-box (rect) labels are
+   * unaffected. Defaults to true.
+   */
+  showLabels?: boolean;
 }
+
 
 const MIN_CIRCLE_DIAMETER_CSS = 24;
 
