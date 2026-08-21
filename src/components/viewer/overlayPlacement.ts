@@ -611,7 +611,11 @@ export function runPlacement(input: PlacementInput): PlacedLabel[] {
   const { pageSize, fontPx, padX, labelH, gap, charPx } = input;
   const ringScale = Math.max(1, input.scale ?? 1);
 
-  const labeledCircles = input.circles.filter((c) => !!c.label && !c.isDot);
+  const lodHidden = new Set(input.lodHiddenIds ?? []);
+  const labeledCircles = input.circles.filter(
+    (c) => !!c.label && !c.isDot && !lodHidden.has(c.id),
+  );
+
   const labeledRects = input.rects.filter((r) => !!r.label);
   if (labeledCircles.length === 0 && labeledRects.length === 0) return [];
 
