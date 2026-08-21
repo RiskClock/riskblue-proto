@@ -91,6 +91,17 @@ const LABEL_ZOOM_MAX = 3.0;
 const CIRCLE_BORDER_PX_SCREEN = 2;
 const LEADER_STROKE_PX_SCREEN = 1.25;
 
+// ---- Level of Detail (LOD) tunables ---------------------------------------
+// Labels are only drawn where the annotation has room on screen. For each
+// labeled anchor we query a screen-space square around it (converted to page
+// units via the current zoom) against an rbush of all anchors; too many
+// neighbours inside it => "low detail" (dot only, no label / leader line).
+const LOD_NEIGHBORHOOD_PX = 80;
+const LOD_MAX_NEIGHBORS = 3;
+/** Zoom is quantized to this step so smooth pinch-zoom doesn't rerun placement. */
+const LOD_SCALE_QUANTIZE = 0.1;
+
+
 /** Interpolate label sizing based on the current viewport zoom scale. */
 function labelSizingForZoom(viewScale: number) {
   const s = Math.max(0.0001, viewScale);
