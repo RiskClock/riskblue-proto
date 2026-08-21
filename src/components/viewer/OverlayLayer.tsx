@@ -1048,6 +1048,40 @@ export const OverlayLayer = ({
         );
       })}
 
+      {/* LOD fallback: hovered / selected annotation in a dense cluster keeps
+          its label, docked just outside the anchor dot. */}
+      {focusFallbackCircle ? (() => {
+        const c = focusFallbackCircle;
+        const s = Math.max(0.0001, viewScale);
+        const sizing = labelSizingForZoom(viewScale);
+        return (
+          <div
+            key={`label-focus-${c.id}`}
+            className="absolute font-bold pointer-events-none text-center"
+            style={{
+              left: c.cx + c.r + 4 / s,
+              top: c.cy,
+              transform: "translate(0, -50%)",
+              lineHeight: `${Math.round((sizing.font / s) * 1.25)}px`,
+              fontSize: sizing.font / s,
+              paddingLeft: sizing.padX / s,
+              paddingRight: sizing.padX / s,
+              paddingTop: 1 / s,
+              paddingBottom: 1 / s,
+              boxSizing: "border-box",
+              backgroundColor: c.color,
+              color: readableTextOn(c.color),
+              opacity: LABEL_OPACITY,
+              whiteSpace: "pre",
+            }}
+          >
+            {c.label}
+          </div>
+        );
+      })() : null}
+
+
+
     </div>
   );
 };
