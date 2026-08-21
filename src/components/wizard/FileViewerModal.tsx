@@ -20,6 +20,8 @@ import {
   Plus,
   Radar,
   Redo2,
+  Tag,
+  TagIconOff,
   Undo2,
 } from "lucide-react";
 
@@ -493,6 +495,23 @@ export const FileViewerModal = ({
       /* ignore */
     }
   }, [viewingMode]);
+
+  // Internal-only master switch for annotation labels + leader lines.
+  const [showLabels, setShowLabels] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem("drawing-viewer:show-labels");
+      return stored === null ? true : stored === "1";
+    } catch {
+      return true;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("drawing-viewer:show-labels", showLabels ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [showLabels]);
   const editingEnabled = sidebarEnabled && !viewingMode;
 
 
