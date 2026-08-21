@@ -15,7 +15,7 @@ Today `runPlacement` sees every annotation and every obstacle on the page, so wh
 
 - The viewer computes the currently visible region of the page in normalized document coordinates, expanded by a 20% buffer on each axis so labels don't pop in at the screen edge.
 - Before placement runs, both targets (labeled circles, labeled rects) and obstacles (all circles, rect footprints) are filtered to those intersecting the buffered viewport. Anything outside is not placed and not treated as an obstacle.
-- The LOD density pass uses the same culled set, so density is judged from what's on screen.
+- The LOD density pass keeps using every anchor on the page (not the culled set), so anchors near the viewport edge still see off-screen neighbours and labels don't pop in incorrectly. Culling applies only to what is fed into placement.
 - The visible-region value used by these passes is updated on a 150ms debounce, so panning and zooming recalculate once the gesture settles rather than every frame.
 - When the viewport rect is unavailable (export capture, stacked-page layout, first paint before measurement), culling is skipped and behavior falls back to today's full-page placement.
 
@@ -28,6 +28,6 @@ Today `runPlacement` sees every annotation and every obstacle on the page, so wh
 - `src/components/viewer/OverlayLayer.tsx`
   - New constants next to the LOD block: `VIEWPORT_BUFFER_RATIO = 0.2`.
   - New prop `viewportRect`. Derive a page-pixel cull rect (normalized rect times `pageSize`, inflated by the buffer); memoize on the rect's rounded values so tiny jitter doesn't retrigger.
-  - Compute `visibleCircleIds` / culled `rectObstacles`; feed the culled sets into both the `lodHiddenIds` density memo and `buildPlacementInput`, and add the cull-rect key to the async placement effect deps. The sync/export path ignores `viewportRect`.
+  - Leave the `lodHiddenIds` density memo as-is: the anchor rbush is still built from all labeled circles on the page. Compute `visibleCircleIds` / culled `rectObstacles` separately and feed only those into `buildPlacementInput`, and add the cull-rect key to the async placement effect deps. The sync/export path ignores `viewportRect`.
   - Circles outside the cull rect are excluded from placement input entirely (their dots still render; only labels are affected).
   - Pass a `denseOpaque` flag into `CircleOverlay` for LOD-suppressed anchors and use `withAlpha(color, 1)` for its fill.
