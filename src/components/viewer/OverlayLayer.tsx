@@ -746,15 +746,56 @@ export const OverlayLayer = ({
     [lodHiddenIds],
   );
 
+  // ---- Viewport culling for the placement pass -----------------------------
+  // Only annotations/obstacles near the visible region participate in
+  // placement, so labels never dodge geometry the user can't see. The export
+  // (sync) path always places the whole page.
+  const cullRect = useMemo(() => {
+    if (syncPlacement || exportScale > 1) return null;
+    if (!viewportRect) return null;
+    const { nx, ny, nw, nh } = viewportRect;
+    if (!(nw > 0) || !(nh > 0)) return null;
+    const bx = nw * VIEWPORT_BUFFER_RATIO;
+    const by = nh * VIEWPORT_BUFFER_RATIO;
+    return {
+      x1: (nx - bx) * pageSize.width,
+      y1: (ny - by) * pageSize.height,
+      x2: (nx + nw + bx) * pageSize.width,
+      y2: (ny + nh + by) * pageSize.height,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    syncPlacement,
+    exportScale,
+    pageSize.width,
+    pageSize.height,
+    viewportRect ? Math.round(viewportRect.nx * 1000) : -1,
+    viewportRect ? Math.round(viewportRect.ny * 1000) : -1,
+    viewportRect ? Math.round(viewportRect.nw * 1000) : -1,
+    viewportRect ? Math.round(viewportRect.nh * 1000) : -1,
+  ]);
+
+  const cullKey = cullRect
+    ? `${Math.round(cullRect.x1)}:${Math.round(cullRect.y1)}:${Math.round(cullRect.x2)}:${Math.round(cullRect.y2)}`
+    : "none";
+
+  const intersectsCull = (x1: number, y1: number, x2: number, y2: number) =>
+    !cullRect ||
+    (x2 >= cullRect.x1 && x1 <= cullRect.x2 && y2 >= cullRect.y1 && y1 <= cullRect.y2);
+
   const buildPlacementInput = () => ({
     pageSize,
-    circles: circles.map((c) => ({
-      id: c.id, cx: c.cx, cy: c.cy, r: c.r, color: c.color,
-      label: c.label, isDot: c.isDot,
-      measuredWidthPx:
-        c.label && !c.isDot ? measureLabelWidthPx(c.label, fontPx) : undefined,
-    })),
-    rects: rectObstacles,
+    circles: circles
+      .filter((c) => intersectsCull(c.cx - c.r, c.cy - c.r, c.cx + c.r, c.cy + c.r))
+      .map((c) => ({
+        id: c.id, cx: c.cx, cy: c.cy, r: c.r, color: c.color,
+        label: c.label, isDot: c.isDot,
+        measuredWidthPx:
+          c.label && !c.isDot ? measureLabelWidthPx(c.label, fontPx) : undefined,
+      })),
+    rects: rectObstacles.filter((r) =>
+      intersectsCull(r.x, r.y, r.x + r.w, r.y + r.h),
+    ),
     fontPx, padX, labelH, gap, charPx,
     scale: exportScale,
     lodHiddenIds: Array.from(lodHiddenIds),
