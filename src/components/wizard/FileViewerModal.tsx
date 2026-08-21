@@ -277,6 +277,8 @@ interface FileViewerModalProps {
   }) => Promise<{ before: number; after: number; warnings?: string[]; discard: () => Promise<void> } | void>;
   /** Whether the Scout Page control is available to this user. */
   canScoutPage?: boolean;
+  /** Internal users get the annotation label visibility toggle. */
+  isInternal?: boolean;
 }
 
 
@@ -337,6 +339,7 @@ export const FileViewerModal = ({
   preseededTypesByClass,
   onScoutPage,
   canScoutPage = false,
+  isInternal = false,
 }: FileViewerModalProps) => {
 
   const { toast } = useToast();
@@ -1828,6 +1831,28 @@ export const FileViewerModal = ({
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="truncate flex items-center gap-2 min-w-0">
             <span className="truncate">{fileName}</span>
+            {isInternal && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant={showLabels ? "secondary" : "outline"}
+                    size="sm"
+                    className="h-7 px-2 flex-shrink-0"
+                    onClick={() => setShowLabels((v) => !v)}
+                  >
+                    {showLabels ? (
+                      <Tag className="h-3.5 w-3.5" />
+                    ) : (
+                      <TagIconOff className="h-3.5 w-3.5" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  {showLabels ? "Hide annotation labels" : "Show annotation labels"}
+                </TooltipContent>
+              </Tooltip>
+            )}
             {titleAccessory}
           </DialogTitle>
         </DialogHeader>
@@ -1845,6 +1870,7 @@ export const FileViewerModal = ({
               onRotate={handleRotate}
               onDownload={() => setDownloadDialogOpen(true)}
 
+              showLabels={showLabels}
               onPageChange={singlePageOnly ? () => {} : setCurrentPage}
               hidePageNav={singlePageOnly}
               overlays={overlays}
