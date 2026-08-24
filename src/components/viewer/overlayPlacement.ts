@@ -799,7 +799,7 @@ function separateResidualOverlaps(
 const CLUSTER_DEFAULT_PROXIMITY = 60;
 /** Radial ring step as a multiple of the label height. */
 const RADIAL_STEP_FACTOR = 1.15;
-const RADIAL_MAX_STEPS = 16;
+const RADIAL_MAX_STEPS = 20;
 /** Clusters larger than this are split along their longer axis. */
 const MAX_CLUSTER_SIZE = 30;
 
@@ -808,13 +808,23 @@ const RADIAL_ANGLE_OFFSETS_DEG = [0, 4, -4, 8, -8, 14, -14, 22, -22];
 /** Minimum angular separation (degrees) between consecutive cluster members. */
 const MIN_ANGULAR_GAP_DEG = 2;
 const ISOLATED_RING_STEPS = 10;
-const ISOLATED_DIRECTIONS_DEG = [0, -90, 180, 90, -45, 45, -135, 135];
+const ISOLATED_DIRECTIONS_DEG = [
+  0, -90, 180, 90, -45, 45, -135, 135, -22.5, 22.5, -157.5, 157.5,
+];
 /** Weight of the "distance moved from the previous frame" term. */
 const INERTIA_WEIGHT = 0.6;
 /** A previous position is only replaced when the new one is this much cheaper. */
 const HYSTERESIS_RATIO = 0.25;
 /** Breathing room reserved between label pills. */
 const LABEL_SAFETY_PAD = 4;
+/** Soft-constraint costs (page px equivalents), never hard rejections. */
+const SOFT_RECT_PENALTY = 40;
+const LEADER_CROSS_PENALTY = 220;
+const DOT_PENALTY = 160;
+/** Last-resort spiral: rings and directions probed against hard obstacles only. */
+const LAST_RESORT_RINGS = 26;
+const LAST_RESORT_DIRECTIONS = 16;
+
 
 export interface PlacementResult {
   placed: PlacedLabel[];
