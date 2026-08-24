@@ -891,9 +891,15 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
   }));
 
   // ---- Obstacle indexes
+  // Hard: docked bbox label footprints + retained fixed labels + bounds.
+  // Soft: bbox interiors (they routinely span the whole sheet, so treating
+  // them as hard would suppress nearly every label).
+  const softRectIds = new Set(input.softRectIds ?? []);
+  const hardRects = input.rects.filter((r) => !softRectIds.has(r.id));
+  const softRects = input.rects.filter((r) => softRectIds.has(r.id));
   const hardIdx = new RBush<RectEntry>();
   hardIdx.load([
-    ...input.rects.map((r) => ({
+    ...hardRects.map((r) => ({
       ...bboxOfRect(r),
       r: { x: r.x, y: r.y, w: r.w, h: r.h, hard: true } as RectInfo,
     })),
@@ -902,6 +908,13 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
       r: { x: r.x, y: r.y, w: r.w, h: r.h, hard: true } as RectInfo,
     })),
   ]);
+  const softIdx = new RBush<RectEntry>();
+  softIdx.load(
+    softRects.map((r) => ({
+      ...bboxOfRect(r),
+      r: { x: r.x, y: r.y, w: r.w, h: r.h } as RectInfo,
+    })),
+  );
   const circleIdx = new RBush<CircleEntry>();
   circleIdx.load(
     input.circles.map((c) => ({
@@ -938,6 +951,13 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
     return false;
   };
 
+  const hitsSoftRect = (b: Box) => {
+    for (const e of softIdx.search(bboxOfRect(b))) {
+      if (rectsOverlap(b, e.r, 0)) return true;
+    }
+    return false;
+  };
+
   const hitsDot = (b: Box, ownerId: string) => {
     for (const e of circleIdx.search(bboxOfRect(b))) {
       if (e.c.id === ownerId) continue;
@@ -954,6 +974,7 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
     }
     return false;
   };
+
 
   const out: PlacedLabel[] = [];
   const suppressed: string[] = [];
