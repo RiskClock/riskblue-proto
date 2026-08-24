@@ -1044,7 +1044,29 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
     }
     clusters.push(members);
   }
+  // A single huge blob would push every label onto one enormous ring, most of
+  // which falls outside the viewport. Split oversized clusters along their
+  // longer axis (median) until each fan stays local.
+  const splitOversized = (members: ClusterTarget[]): ClusterTarget[][] => {
+    if (members.length <= MAX_CLUSTER_SIZE) return [members];
+    const xs = members.map((m) => m.cx);
+    const ys = members.map((m) => m.cy);
+    const spanX = Math.max(...xs) - Math.min(...xs);
+    const spanY = Math.max(...ys) - Math.min(...ys);
+    const sorted = members
+      .slice()
+      .sort((a, b) => (spanX >= spanY ? a.cx - b.cx : a.cy - b.cy));
+    const mid = Math.floor(sorted.length / 2);
+    return [
+      ...splitOversized(sorted.slice(0, mid)),
+      ...splitOversized(sorted.slice(mid)),
+    ];
+  };
+  const splitClusters = clusters.flatMap(splitOversized);
+  clusters.length = 0;
+  clusters.push(...splitClusters);
   clusters.sort((a, b) => b.length - a.length);
+
 
   const boxAt = (t: ClusterTarget, cx: number, cy: number): Box => ({
     x: cx - t.w / 2,
