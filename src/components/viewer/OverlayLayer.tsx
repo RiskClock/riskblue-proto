@@ -851,7 +851,7 @@ export const OverlayLayer = ({
   // opening a viewer with many annotations doesn't block paint or input.
   const [asyncPlaced, setAsyncPlaced] = useState<PlacedLabel[]>([]);
   const placementCacheRef = useRef<Map<string, PlacedLabel>>(new Map());
-  const placementStructureKey = `${circleLayoutKey}::${rectLayoutKey}::${lodScale}::${pageSize.width}x${pageSize.height}`;
+  const placementStructureKey = `${circleLayoutKey}::${rectLayoutKey}::${lodScale}::${placementSizingKey}::${pageSize.width}x${pageSize.height}`;
   const lastPlacementStructureKeyRef = useRef(placementStructureKey);
   useEffect(() => {
     if (syncPlacement) return;
@@ -913,7 +913,7 @@ export const OverlayLayer = ({
     );
     return () => ticket.cancel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncPlacement, showLabels, placementStructureKey, cullKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx]);
+  }, [syncPlacement, showLabels, placementStructureKey, cullKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx, placementSizingKey]);
 
 
   // On unmount, ensure the parent's "placing" flag doesn't stay stuck on.
