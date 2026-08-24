@@ -414,6 +414,8 @@ interface CircleOverlayProps {
   setDrag: (d: DragState | null) => void;
   onOverlayClick?: (id: string) => void;
   onOverlayDrag?: (id: string, nx: number, ny: number) => void;
+  /** Hover in/out of this anchor (null on leave). */
+  onHoverChange?: (id: string | null) => void;
   /** LOD suppressed this anchor's label — render it as a solid dot. */
   denseOpaque?: boolean;
 }
@@ -421,6 +423,7 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
   const {
     c, hovered, selected = false, pulsing = false, exportScale, clickable, draggable, isDragging, dragDx, dragDy,
     viewScale, pageWidth, pageHeight, dragRef, setDrag, onOverlayClick, onOverlayDrag,
+    onHoverChange,
     denseOpaque = false,
   } = props;
 
