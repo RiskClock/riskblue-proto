@@ -502,8 +502,12 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
     if (clickable) onOverlayClick!(c.id);
   };
 
-  const strokePxScreen = (selected ? 4 : hovered ? 3 : CIRCLE_BORDER_PX_SCREEN) * exportScale;
+  // Hover / selection add 1px on top of the resting baseline.
+  const strokePxScreen =
+    (selected ? CIRCLE_BORDER_PX_SCREEN + 2 : hovered ? CIRCLE_BORDER_PX_SCREEN + 1 : CIRCLE_BORDER_PX_SCREEN) *
+    exportScale;
   const strokePxPage = strokePxScreen / Math.max(0.0001, viewScale);
+  const borderAlpha = hovered || selected ? 1 : 0.5;
 
   return (
     <div
@@ -515,6 +519,8 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
       data-cy={c.cy}
       data-radius={c.r}
       style={style}
+      onPointerEnter={onHoverChange ? () => onHoverChange(c.id) : undefined}
+      onPointerLeave={onHoverChange ? () => onHoverChange(null) : undefined}
       onPointerDown={draggable ? onPointerDown : clickable ? stop : undefined}
       onPointerMove={draggable ? onPointerMove : undefined}
       onPointerUp={draggable ? onPointerUp : clickable ? stop : undefined}
