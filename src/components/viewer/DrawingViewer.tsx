@@ -572,6 +572,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                     pulsingOverlayId={pulsingOverlayId}
                     viewScale={scale}
                     viewportRect={visibleRect}
+                    placementScale={settledScale}
                     rotation={rotation}
                     onCanvasClick={
                       onCanvasClick
