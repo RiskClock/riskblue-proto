@@ -660,7 +660,7 @@ function separateResidualOverlaps(
   // optimizer reserves; the final unpadded phase guarantees a strictly
   // non-overlapping layout even when the dense case can't reach the padding.
   const PADDED_PASSES = 30;
-  const TOTAL_PASSES = 60;
+  const TOTAL_PASSES = 120;
   for (let pass = 0; pass < TOTAL_PASSES; pass++) {
     const gap = pass < PADDED_PASSES ? pad : 0;
     let moved = false;
