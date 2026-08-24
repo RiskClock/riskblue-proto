@@ -1287,9 +1287,9 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
       let usedAngle: number | null = null;
       const chosen = chooseByRings(t, function* () {
         for (let k = 0; k <= RADIAL_MAX_STEPS; k++) {
-          const dist = baseDist + step * (k + 0.6);
           const ring: Box[] = [];
           for (const a of angles) {
+            const dist = baseDist + step * (k + 0.6) + halfExtent(t, a);
             ring.push(boxAt(t, ccx + Math.cos(a) * dist, ccy + Math.sin(a) * dist));
           }
           yield ring;
