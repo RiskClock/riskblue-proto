@@ -82,6 +82,14 @@ export interface PlacementInput {
   clusterProximity?: number;
   /** Previous frame's label rects, used as an anti-jitter seed. */
   previousLabels?: Array<{ id: string; x: number; y: number; w: number; h: number }>;
+  /**
+   * Rect ids (cluster strategy only) whose area is a *soft* obstacle: labels
+   * may sit inside them at a small cost. Used for bounding-box interiors,
+   * which often span the whole sheet. Their docked label footprints stay hard.
+   */
+  softRectIds?: string[];
+
+
 
 }
 
@@ -791,7 +799,7 @@ function separateResidualOverlaps(
 const CLUSTER_DEFAULT_PROXIMITY = 60;
 /** Radial ring step as a multiple of the label height. */
 const RADIAL_STEP_FACTOR = 1.15;
-const RADIAL_MAX_STEPS = 16;
+const RADIAL_MAX_STEPS = 20;
 /** Clusters larger than this are split along their longer axis. */
 const MAX_CLUSTER_SIZE = 30;
 
@@ -800,13 +808,23 @@ const RADIAL_ANGLE_OFFSETS_DEG = [0, 4, -4, 8, -8, 14, -14, 22, -22];
 /** Minimum angular separation (degrees) between consecutive cluster members. */
 const MIN_ANGULAR_GAP_DEG = 2;
 const ISOLATED_RING_STEPS = 10;
-const ISOLATED_DIRECTIONS_DEG = [0, -90, 180, 90, -45, 45, -135, 135];
+const ISOLATED_DIRECTIONS_DEG = [
+  0, -90, 180, 90, -45, 45, -135, 135, -22.5, 22.5, -157.5, 157.5,
+];
 /** Weight of the "distance moved from the previous frame" term. */
 const INERTIA_WEIGHT = 0.6;
 /** A previous position is only replaced when the new one is this much cheaper. */
 const HYSTERESIS_RATIO = 0.25;
 /** Breathing room reserved between label pills. */
 const LABEL_SAFETY_PAD = 4;
+/** Soft-constraint costs (page px equivalents), never hard rejections. */
+const SOFT_RECT_PENALTY = 40;
+const CLUSTER_LEADER_CROSS_PENALTY = 220;
+const DOT_PENALTY = 160;
+/** Last-resort spiral: rings and directions probed against hard obstacles only. */
+const LAST_RESORT_RINGS = 26;
+const LAST_RESORT_DIRECTIONS = 16;
+
 
 export interface PlacementResult {
   placed: PlacedLabel[];
@@ -873,9 +891,15 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
   }));
 
   // ---- Obstacle indexes
+  // Hard: docked bbox label footprints + retained fixed labels + bounds.
+  // Soft: bbox interiors (they routinely span the whole sheet, so treating
+  // them as hard would suppress nearly every label).
+  const softRectIds = new Set(input.softRectIds ?? []);
+  const hardRects = input.rects.filter((r) => !softRectIds.has(r.id));
+  const softRects = input.rects.filter((r) => softRectIds.has(r.id));
   const hardIdx = new RBush<RectEntry>();
   hardIdx.load([
-    ...input.rects.map((r) => ({
+    ...hardRects.map((r) => ({
       ...bboxOfRect(r),
       r: { x: r.x, y: r.y, w: r.w, h: r.h, hard: true } as RectInfo,
     })),
@@ -884,6 +908,13 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
       r: { x: r.x, y: r.y, w: r.w, h: r.h, hard: true } as RectInfo,
     })),
   ]);
+  const softIdx = new RBush<RectEntry>();
+  softIdx.load(
+    softRects.map((r) => ({
+      ...bboxOfRect(r),
+      r: { x: r.x, y: r.y, w: r.w, h: r.h } as RectInfo,
+    })),
+  );
   const circleIdx = new RBush<CircleEntry>();
   circleIdx.load(
     input.circles.map((c) => ({
@@ -920,6 +951,13 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
     return false;
   };
 
+  const hitsSoftRect = (b: Box) => {
+    for (const e of softIdx.search(bboxOfRect(b))) {
+      if (rectsOverlap(b, e.r, 0)) return true;
+    }
+    return false;
+  };
+
   const hitsDot = (b: Box, ownerId: string) => {
     for (const e of circleIdx.search(bboxOfRect(b))) {
       if (e.c.id === ownerId) continue;
@@ -936,6 +974,7 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
     }
     return false;
   };
+
 
   const out: PlacedLabel[] = [];
   const suppressed: string[] = [];
@@ -990,16 +1029,33 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
     return cost;
   };
 
-  /** Tier 0 = clear of everything, tier 1 = only overlaps foreign dots. */
-  const tierOf = (t: ClusterTarget, b: Box): 0 | 1 | -1 => {
-    if (!fitsBounds(b)) return -1;
-    if (hitsHardOrLabel(b)) return -1;
-    const bx = b.x + b.w / 2;
-    const by = b.y + b.h / 2;
-    const crosses = leaderCrosses(t.cx, t.cy, bx, by);
-    const onDot = hitsDot(b, t.id);
-    if (crosses) return -1;
-    return onDot ? 1 : 0;
+  /**
+   * Evaluate a candidate. `null` = hard failure (out of bounds, over a hard
+   * obstacle or an already-placed label). Otherwise the base cost plus soft
+   * penalties, with `clean` set when no soft constraint was violated.
+   */
+  const evaluate = (
+    t: ClusterTarget,
+    b: Box,
+  ): { cost: number; clean: boolean } | null => {
+    if (!fitsBounds(b)) return null;
+    if (hitsHardOrLabel(b)) return null;
+    let cost = costOf(t, b);
+    let clean = true;
+    if (hitsSoftRect(b)) {
+      cost += SOFT_RECT_PENALTY;
+      // A bbox interior is a very weak constraint — don't let it dominate.
+      // `clean` stays true so labels are happily placed inside bboxes.
+    }
+    if (hitsDot(b, t.id)) {
+      cost += DOT_PENALTY;
+      clean = false;
+    }
+    if (leaderCrosses(t.cx, t.cy, b.x + b.w / 2, b.y + b.h / 2)) {
+      cost += CLUSTER_LEADER_CROSS_PENALTY;
+      clean = false;
+    }
+    return { cost, clean };
   };
 
   // ---- Pass 0: retain still-valid previous positions (anti-jitter).
@@ -1010,12 +1066,14 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
       remaining.push(t);
       continue;
     }
-    if (tierOf(t, p) === 0) {
+    const ev = evaluate(t, p);
+    if (ev && ev.clean) {
       commit(t, p);
     } else {
       remaining.push(t);
     }
   }
+
 
   // ---- Cluster the remaining anchors (connected components within `proximity`).
   const anchorIdx = new RBush<BBoxEntry & { i: number }>();
@@ -1079,9 +1137,10 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
   });
 
   /**
-   * Pick the cheapest acceptable candidate, preferring tier 0. Scans ring by
-   * ring and stops at the first ring that yields anything, so labels stay as
-   * close to their anchor as the free space allows.
+   * Pick the cheapest acceptable candidate, preferring "clean" slots (no soft
+   * violation). Scans ring by ring and stops at the first ring that yields a
+   * clean slot, so labels stay as close to their anchor as free space allows.
+   * Penalized slots are kept as a global fallback.
    */
   const chooseByRings = (
     t: ClusterTarget,
@@ -1091,19 +1150,19 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
     for (const ring of ringCandidates()) {
       let best: { b: Box; cost: number } | null = null;
       for (const b of ring) {
-        const tier = tierOf(t, b);
-        if (tier === -1) continue;
-        const cost = costOf(t, b);
-        if (tier === 0) {
-          if (!best || cost < best.cost) best = { b, cost };
-        } else if (!fallback || cost < fallback.cost) {
-          fallback = { b, cost };
+        const ev = evaluate(t, b);
+        if (!ev) continue;
+        if (ev.clean) {
+          if (!best || ev.cost < best.cost) best = { b, cost: ev.cost };
+        } else if (!fallback || ev.cost < fallback.cost) {
+          fallback = { b, cost: ev.cost };
         }
       }
       if (best) return best.b;
     }
     return fallback ? fallback.b : null;
   };
+
 
   const toRad = (deg: number) => (deg * Math.PI) / 180;
 
@@ -1122,14 +1181,38 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
       }
     });
 
+  /**
+   * Last resort: expanding spiral around the anchor, checked against hard
+   * obstacles and bounds only. Soft violations (bbox interiors, foreign dots,
+   * leader crossings) are accepted rather than hiding the label.
+   */
+  const placeLastResort = (t: ClusterTarget): Box | null => {
+    const step = Math.max(6, t.h * RADIAL_STEP_FACTOR);
+    let best: { b: Box; cost: number } | null = null;
+    for (let k = 1; k <= LAST_RESORT_RINGS; k++) {
+      const dist = t.r + gap + step * k;
+      for (let d = 0; d < LAST_RESORT_DIRECTIONS; d++) {
+        const a = (d / LAST_RESORT_DIRECTIONS) * Math.PI * 2;
+        const b = boxAt(t, t.cx + Math.cos(a) * dist, t.cy + Math.sin(a) * dist);
+        if (!fitsBounds(b)) continue;
+        if (hitsHardOrLabel(b)) continue;
+        const cost = costOf(t, b);
+        if (!best || cost < best.cost) best = { b, cost };
+      }
+      if (best) return best.b;
+    }
+    return best ? best.b : null;
+  };
+
   for (const members of clusters) {
     if (members.length === 1) {
       const t = members[0];
-      const chosen = placeIsolated(t);
+      const chosen = placeIsolated(t) ?? placeLastResort(t);
       if (chosen) commit(t, chosen);
       else suppressed.push(t.id);
       continue;
     }
+
 
     // Cluster centroid + radius.
     let sx = 0;
@@ -1174,7 +1257,7 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
           yield ring;
         }
       });
-      const final = chosen ?? placeIsolated(t);
+      const final = chosen ?? placeIsolated(t) ?? placeLastResort(t);
       if (final) {
         commit(t, final);
         usedAngle = Math.atan2(final.y + final.h / 2 - ccy, final.x + final.w / 2 - ccx);

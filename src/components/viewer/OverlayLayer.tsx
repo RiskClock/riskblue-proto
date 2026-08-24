@@ -692,8 +692,12 @@ export const OverlayLayer = ({
   const rectObstacles: {
     id: string; x: number; y: number; w: number; h: number; color: string; label?: string;
   }[] = [];
+  // Bbox interiors are *soft* obstacles for the cluster strategy — they often
+  // span the whole sheet, so treating them as hard would hide every label.
+  const softRectIds: string[] = [];
   for (const r of rects) {
     rectObstacles.push({ id: r.id, x: r.x, y: r.y, w: r.w, h: r.h, color: r.color });
+    softRectIds.push(r.id);
     if (r.label) {
       const measuredW = measureLabelWidthPx(r.label, fontPx);
       const w = (measuredW ?? r.label.length * charPx) + padX * 2 + 4;
@@ -708,6 +712,7 @@ export const OverlayLayer = ({
       });
     }
   }
+
   // ---- Local density LOD ---------------------------------------------------
   // Quantized zoom so a smooth pinch/scroll doesn't retrigger placement.
   const lodScale = useMemo(() => {
@@ -775,6 +780,27 @@ export const OverlayLayer = ({
       y2 >= visibleBounds.y &&
       y1 <= visibleBounds.y + visibleBounds.height);
 
+  // The viewer renders pills at a constant on-screen size, so their page-unit
+  // footprint shrinks as you zoom in. Reserve exactly what will be drawn,
+  // otherwise at high zoom the engine reserves several times the real area and
+  // fabricates collisions. Export/sync keeps the full-size reservation.
+  const placementSizing = useMemo(() => {
+    if (syncPlacement) {
+      return { fontPx, padX, labelH, charPx };
+    }
+    const s = Math.max(0.1, lodScale);
+    const sizing = labelSizingForZoom(lodScale);
+    const pFont = (sizing.font / s) * exportScale;
+    return {
+      fontPx: pFont,
+      padX: (sizing.padX / s) * exportScale,
+      labelH: ((sizing.font * 1.35 + sizing.padY * 2) / s) * exportScale,
+      charPx: pFont * 0.82,
+    };
+  }, [syncPlacement, fontPx, padX, labelH, charPx, lodScale, exportScale]);
+
+  const placementSizingKey = `${placementSizing.fontPx.toFixed(3)}:${placementSizing.labelH.toFixed(3)}`;
+
   const buildPlacementInput = (opts?: {
     placementTargetIds?: string[];
     fixedLabels?: PlacedLabel[];
@@ -788,12 +814,18 @@ export const OverlayLayer = ({
         id: c.id, cx: c.cx, cy: c.cy, r: c.r, color: c.color,
         label: c.label, isDot: c.isDot,
         measuredWidthPx:
-          c.label && !c.isDot ? measureLabelWidthPx(c.label, fontPx) : undefined,
+          c.label && !c.isDot
+            ? measureLabelWidthPx(c.label, placementSizing.fontPx)
+            : undefined,
       })),
     rects: rectObstacles.filter((r) =>
       intersectsCull(r.x, r.y, r.x + r.w, r.y + r.h),
     ),
-    fontPx, padX, labelH, gap, charPx,
+    fontPx: placementSizing.fontPx,
+    padX: placementSizing.padX,
+    labelH: placementSizing.labelH,
+    gap,
+    charPx: placementSizing.charPx,
     scale: exportScale,
     placementTargetIds: opts?.placementTargetIds,
     fixedLabels: opts?.fixedLabels?.map(({ x, y, w, h }) => ({ x, y, w, h })),
@@ -803,7 +835,9 @@ export const OverlayLayer = ({
     strategy: (syncPlacement ? "legacy" : "cluster") as "legacy" | "cluster",
     clusterProximity: CLUSTER_PROXIMITY_PX / Math.max(0.1, lodScale),
     previousLabels: opts?.previousLabels?.map(({ id, x, y, w, h }) => ({ id, x, y, w, h })),
+    softRectIds: syncPlacement ? undefined : softRectIds,
   });
+
 
   // Synchronous branch — used by offscreen export capture, which rasterizes
   // on the next animation frame and can't wait for a worker roundtrip.
@@ -817,7 +851,7 @@ export const OverlayLayer = ({
   // opening a viewer with many annotations doesn't block paint or input.
   const [asyncPlaced, setAsyncPlaced] = useState<PlacedLabel[]>([]);
   const placementCacheRef = useRef<Map<string, PlacedLabel>>(new Map());
-  const placementStructureKey = `${circleLayoutKey}::${rectLayoutKey}::${lodScale}::${pageSize.width}x${pageSize.height}`;
+  const placementStructureKey = `${circleLayoutKey}::${rectLayoutKey}::${lodScale}::${placementSizingKey}::${pageSize.width}x${pageSize.height}`;
   const lastPlacementStructureKeyRef = useRef(placementStructureKey);
   useEffect(() => {
     if (syncPlacement) return;
@@ -879,7 +913,7 @@ export const OverlayLayer = ({
     );
     return () => ticket.cancel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncPlacement, showLabels, placementStructureKey, cullKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx]);
+  }, [syncPlacement, showLabels, placementStructureKey, cullKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx, placementSizingKey]);
 
 
   // On unmount, ensure the parent's "placing" flag doesn't stay stuck on.
