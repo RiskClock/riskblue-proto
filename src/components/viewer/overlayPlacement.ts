@@ -1058,6 +1058,13 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
     if (hitsHardOrLabel(b)) return null;
     let cost = costOf(t, b);
     let clean = true;
+    if (minLeader > 0) {
+      // Measure from the pill's nearest edge: a box whose edge sits on the
+      // anchor hides the detection point even if its centre is far away.
+      const ex = Math.max(b.x, Math.min(t.cx, b.x + b.w));
+      const ey = Math.max(b.y, Math.min(t.cy, b.y + b.h));
+      if (Math.hypot(ex - t.cx, ey - t.cy) < minLeader + t.r - 1) clean = false;
+    }
     if (hitsSoftRect(b)) {
       cost += SOFT_RECT_PENALTY;
       // A bbox interior is a very weak constraint — don't let it dominate.
