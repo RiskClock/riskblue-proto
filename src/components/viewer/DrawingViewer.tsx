@@ -183,6 +183,9 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       { nx: number; ny: number; nw: number; nh: number } | null
     >(null);
     const visibleRectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Zoom scale published only once a gesture settles. Label placement uses
+    // this so the optimizer doesn't rerun on every wheel/pinch frame.
+    const [settledScale, setSettledScale] = useState(1);
     const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
     const fitOnceRef = useRef(false);
 
