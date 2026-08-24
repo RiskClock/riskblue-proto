@@ -332,6 +332,7 @@ function candidateCost(
   leaderIdx: RBush<LeaderEntry>,
   anchors: Anchor[],
   ownerIds: (string | null)[],
+  leaderSoftCap?: number,
 ): number {
   const self = anchors[selfIdx];
   const ownerId = ownerIds[selfIdx];
@@ -343,6 +344,14 @@ function candidateCost(
   const belowPenalty = Math.max(0, dy) * 1.5;
   const rightPenalty = Math.max(0, dx) * 0.75;
   let cost = cand.leader + horizontalOffset * 0.5 + belowPenalty + rightPenalty;
+  // Soft quadratic cap on leader length (viewer only). Past the threshold the
+  // cost grows fast, so a distant anchor prefers a nearer slot over dragging a
+  // long line into the crowded middle of the viewport.
+  if (leaderSoftCap && cand.leader > leaderSoftCap) {
+    const over = (cand.leader - leaderSoftCap) / 40;
+    cost += over * over * 1000;
+  }
+
 
   // Safety buffer: inflate the candidate's footprint by 6px on every side
   // (12px total) when checking label-to-label overlaps. This forces the
