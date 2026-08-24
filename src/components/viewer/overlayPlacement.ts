@@ -793,7 +793,7 @@ const CLUSTER_DEFAULT_PROXIMITY = 60;
 const RADIAL_STEP_FACTOR = 1.15;
 const RADIAL_MAX_STEPS = 16;
 /** Clusters larger than this are split along their longer axis. */
-const MAX_CLUSTER_SIZE = 20;
+const MAX_CLUSTER_SIZE = 14;
 
 /** Angular wiggle (degrees) allowed around a member's own centroid ray. */
 const RADIAL_ANGLE_OFFSETS_DEG = [0, 4, -4, 8, -8, 14, -14, 22, -22];
