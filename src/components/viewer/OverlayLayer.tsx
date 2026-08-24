@@ -1183,6 +1183,11 @@ export const OverlayLayer = ({
           const y2 = labelCy - uy * tEdge;
           const leaderLen = Math.hypot(x2 - x1, y2 - y1);
           if (leaderLen < 0.5) return null;
+          const isHovered = effectiveHoverId === p.id;
+          const leaderStroke =
+            ((LEADER_STROKE_PX_SCREEN + (isHovered ? 1 : 0)) * exportScale) /
+            Math.max(0.0001, viewScale);
+          const leaderOpacity = isHovered ? 1 : LABEL_OPACITY;
           return (
             <line
               ref={(el) => { if (el) leaderRefMap.current.set(p.id, el); }}
@@ -1195,13 +1200,13 @@ export const OverlayLayer = ({
               x2={x2}
               y2={y2}
               stroke={p.color}
-              strokeWidth={(LEADER_STROKE_PX_SCREEN * exportScale) / Math.max(0.0001, viewScale)}
+              strokeWidth={leaderStroke}
               vectorEffect="non-scaling-stroke"
               style={{
                 vectorEffect: "non-scaling-stroke",
-                strokeWidth: (LEADER_STROKE_PX_SCREEN * exportScale) / Math.max(0.0001, viewScale),
+                strokeWidth: leaderStroke,
               }}
-              opacity={LABEL_OPACITY}
+              opacity={leaderOpacity}
             />
           );
         })}
