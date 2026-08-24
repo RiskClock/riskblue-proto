@@ -777,8 +777,6 @@ export const OverlayLayer = ({
     if (!visibleBounds) return null;
     const bx = visibleBounds.width * VIEWPORT_BUFFER_RATIO;
     const by = visibleBounds.height * VIEWPORT_BUFFER_RATIO;
-    const bx = nw * VIEWPORT_BUFFER_RATIO;
-    const by = nh * VIEWPORT_BUFFER_RATIO;
     return {
       x1: Math.max(0, visibleBounds.x - bx),
       y1: Math.max(0, visibleBounds.y - by),
