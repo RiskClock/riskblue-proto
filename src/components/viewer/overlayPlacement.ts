@@ -1137,9 +1137,10 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
   });
 
   /**
-   * Pick the cheapest acceptable candidate, preferring tier 0. Scans ring by
-   * ring and stops at the first ring that yields anything, so labels stay as
-   * close to their anchor as the free space allows.
+   * Pick the cheapest acceptable candidate, preferring "clean" slots (no soft
+   * violation). Scans ring by ring and stops at the first ring that yields a
+   * clean slot, so labels stay as close to their anchor as free space allows.
+   * Penalized slots are kept as a global fallback.
    */
   const chooseByRings = (
     t: ClusterTarget,
@@ -1149,19 +1150,19 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
     for (const ring of ringCandidates()) {
       let best: { b: Box; cost: number } | null = null;
       for (const b of ring) {
-        const tier = tierOf(t, b);
-        if (tier === -1) continue;
-        const cost = costOf(t, b);
-        if (tier === 0) {
-          if (!best || cost < best.cost) best = { b, cost };
-        } else if (!fallback || cost < fallback.cost) {
-          fallback = { b, cost };
+        const ev = evaluate(t, b);
+        if (!ev) continue;
+        if (ev.clean) {
+          if (!best || ev.cost < best.cost) best = { b, cost: ev.cost };
+        } else if (!fallback || ev.cost < fallback.cost) {
+          fallback = { b, cost: ev.cost };
         }
       }
       if (best) return best.b;
     }
     return fallback ? fallback.b : null;
   };
+
 
   const toRad = (deg: number) => (deg * Math.PI) / 180;
 
