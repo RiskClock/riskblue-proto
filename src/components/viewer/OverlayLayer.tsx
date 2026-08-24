@@ -750,19 +750,17 @@ export const OverlayLayer = ({
   // Only annotations/obstacles near the visible region participate in
   // placement, so labels never dodge geometry the user can't see. The export
   // (sync) path always places the whole page.
-  const cullRect = useMemo(() => {
+  const visibleBounds = useMemo(() => {
     if (syncPlacement || exportScale > 1) return null;
     if (!viewportRect) return null;
     const { nx, ny, nw, nh } = viewportRect;
     if (!(nw > 0) || !(nh > 0)) return null;
-    const bx = nw * VIEWPORT_BUFFER_RATIO;
-    const by = nh * VIEWPORT_BUFFER_RATIO;
-    return {
-      x1: (nx - bx) * pageSize.width,
-      y1: (ny - by) * pageSize.height,
-      x2: (nx + nw + bx) * pageSize.width,
-      y2: (ny + nh + by) * pageSize.height,
-    };
+    const x1 = Math.max(0, nx * pageSize.width);
+    const y1 = Math.max(0, ny * pageSize.height);
+    const x2 = Math.min(pageSize.width, (nx + nw) * pageSize.width);
+    const y2 = Math.min(pageSize.height, (ny + nh) * pageSize.height);
+    if (x2 <= x1 || y2 <= y1) return null;
+    return { x: x1, y: y1, width: x2 - x1, height: y2 - y1 };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     syncPlacement,
@@ -775,6 +773,18 @@ export const OverlayLayer = ({
     viewportRect ? Math.round(viewportRect.nh * 1000) : -1,
   ]);
 
+  const cullRect = useMemo(() => {
+    if (!visibleBounds) return null;
+    const bx = visibleBounds.width * VIEWPORT_BUFFER_RATIO;
+    const by = visibleBounds.height * VIEWPORT_BUFFER_RATIO;
+    return {
+      x1: Math.max(0, visibleBounds.x - bx),
+      y1: Math.max(0, visibleBounds.y - by),
+      x2: Math.min(pageSize.width, visibleBounds.x + visibleBounds.width + bx),
+      y2: Math.min(pageSize.height, visibleBounds.y + visibleBounds.height + by),
+    };
+  }, [visibleBounds, pageSize.width, pageSize.height]);
+
   const cullKey = cullRect
     ? `${Math.round(cullRect.x1)}:${Math.round(cullRect.y1)}:${Math.round(cullRect.x2)}:${Math.round(cullRect.y2)}`
     : "none";
@@ -783,8 +793,19 @@ export const OverlayLayer = ({
     !cullRect ||
     (x2 >= cullRect.x1 && x1 <= cullRect.x2 && y2 >= cullRect.y1 && y1 <= cullRect.y2);
 
-  const buildPlacementInput = () => ({
+  const intersectsVisible = (x1: number, y1: number, x2: number, y2: number) =>
+    !visibleBounds ||
+    (x2 >= visibleBounds.x &&
+      x1 <= visibleBounds.x + visibleBounds.width &&
+      y2 >= visibleBounds.y &&
+      y1 <= visibleBounds.y + visibleBounds.height);
+
+  const buildPlacementInput = (opts?: {
+    placementTargetIds?: string[];
+    fixedLabels?: PlacedLabel[];
+  }) => ({
     pageSize,
+    bounds: visibleBounds ?? undefined,
     circles: circles
       .filter((c) => intersectsCull(c.cx - c.r, c.cy - c.r, c.cx + c.r, c.cy + c.r))
       .map((c) => ({
@@ -799,6 +820,8 @@ export const OverlayLayer = ({
     fontPx, padX, labelH, gap, charPx,
     scale: exportScale,
     lodHiddenIds: Array.from(lodHiddenIds),
+    placementTargetIds: opts?.placementTargetIds,
+    fixedLabels: opts?.fixedLabels?.map(({ x, y, w, h }) => ({ x, y, w, h })),
   });
 
   // Synchronous branch — used by offscreen export capture, which rasterizes
@@ -812,19 +835,53 @@ export const OverlayLayer = ({
   // Async branch — pushes the heavy optimizer pass into a Web Worker so
   // opening a viewer with many annotations doesn't block paint or input.
   const [asyncPlaced, setAsyncPlaced] = useState<PlacedLabel[]>([]);
+  const placementCacheRef = useRef<Map<string, PlacedLabel>>(new Map());
+  const placementStructureKey = `${circleLayoutKey}::${rectLayoutKey}::${lodHiddenKey}::${lodScale}::${pageSize.width}x${pageSize.height}`;
+  const lastPlacementStructureKeyRef = useRef(placementStructureKey);
   useEffect(() => {
     if (syncPlacement) return;
-    const hasLabels = showLabels && circles.some((c) => !!c.label && !c.isDot && !lodHiddenIds.has(c.id));
+    if (lastPlacementStructureKeyRef.current !== placementStructureKey) {
+      placementCacheRef.current.clear();
+      lastPlacementStructureKeyRef.current = placementStructureKey;
+    }
+    const targetIds = circles
+      .filter((c) =>
+        !!c.label &&
+        !c.isDot &&
+        !lodHiddenIds.has(c.id) &&
+        intersectsVisible(c.cx, c.cy, c.cx, c.cy),
+      )
+      .map((c) => c.id);
+    const targetIdSet = new Set(targetIds);
+    const fitsVisibleBounds = (p: PlacedLabel) =>
+      !visibleBounds ||
+      (p.x >= visibleBounds.x &&
+        p.y >= visibleBounds.y &&
+        p.x + p.w <= visibleBounds.x + visibleBounds.width &&
+        p.y + p.h <= visibleBounds.y + visibleBounds.height);
+    const retained = Array.from(placementCacheRef.current.values()).filter(
+      (p) => targetIdSet.has(p.id) && fitsVisibleBounds(p),
+    );
+    setAsyncPlaced(retained);
+    const retainedIds = new Set(retained.map((p) => p.id));
+    const missingIds = targetIds.filter((id) => !retainedIds.has(id));
+    const hasLabels = showLabels && targetIds.length > 0;
     if (!hasLabels) {
       setAsyncPlaced([]);
       onPlacingChangeRef.current?.(false);
       return;
     }
+    if (missingIds.length === 0) {
+      onPlacingChangeRef.current?.(false);
+      return;
+    }
     onPlacingChangeRef.current?.(true);
     const ticket = requestPlacement(
-      buildPlacementInput(),
+      buildPlacementInput({ placementTargetIds: missingIds, fixedLabels: retained }),
       (placed) => {
-        setAsyncPlaced(placed);
+        const cache = placementCacheRef.current;
+        for (const p of placed) cache.set(p.id, p);
+        setAsyncPlaced([...retained, ...placed]);
         onPlacingChangeRef.current?.(false);
       },
       (err) => {
@@ -835,7 +892,7 @@ export const OverlayLayer = ({
     );
     return () => ticket.cancel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncPlacement, showLabels, circleLayoutKey, rectLayoutKey, lodHiddenKey, cullKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx]);
+  }, [syncPlacement, showLabels, placementStructureKey, cullKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx]);
 
 
   // On unmount, ensure the parent's "placing" flag doesn't stay stuck on.

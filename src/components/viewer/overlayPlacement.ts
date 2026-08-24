@@ -40,6 +40,8 @@ export interface RectInput {
 
 export interface PlacementInput {
   pageSize: { width: number; height: number };
+  /** Optional page-space rectangle that every generated label must fit inside. */
+  bounds?: { x: number; y: number; width: number; height: number };
   circles: CircleInput[];
   rects: RectInput[];
   fontPx: number;
@@ -59,6 +61,10 @@ export interface PlacementInput {
    * label), but remain obstacles so surviving labels avoid drawing over them.
    */
   lodHiddenIds?: string[];
+  /** When provided, only these circle ids receive newly generated labels. */
+  placementTargetIds?: string[];
+  /** Existing viewer labels that must remain fixed and act as obstacles. */
+  fixedLabels?: Array<{ x: number; y: number; w: number; h: number }>;
 }
 
 
@@ -93,6 +99,7 @@ interface RectInfo {
   y: number;
   w: number;
   h: number;
+  hard?: boolean;
 }
 interface Anchor {
   cx: number;
@@ -173,10 +180,14 @@ function clampCand(
   h: number,
   ax: number,
   ay: number,
-  bounds: { width: number; height: number },
+  bounds: { x: number; y: number; width: number; height: number },
 ): LabelCandidate {
-  const cx = Math.max(2, Math.min(bounds.width - w - 2, lx));
-  const cy = Math.max(2, Math.min(bounds.height - h - 2, ly));
+  const minX = bounds.x + 2;
+  const minY = bounds.y + 2;
+  const maxX = Math.max(minX, bounds.x + bounds.width - w - 2);
+  const maxY = Math.max(minY, bounds.y + bounds.height - h - 2);
+  const cx = Math.max(minX, Math.min(maxX, lx));
+  const cy = Math.max(minY, Math.min(maxY, ly));
   return { x: cx, y: cy, w, h, ax, ay, leader: 0 };
 }
 
@@ -185,7 +196,7 @@ function generateCircleCandidates(
   labelW: number,
   labelH: number,
   gap: number,
-  bounds: { width: number; height: number },
+  bounds: { x: number; y: number; width: number; height: number },
   ringScale = 1,
 ): LabelCandidate[] {
   const directions = 32;
@@ -207,8 +218,12 @@ function generateCircleCandidates(
       const labelCy = c.cy + sin * dist;
       let lx = labelCx - labelW / 2;
       let ly = labelCy - labelH / 2;
-      lx = Math.max(2, Math.min(bounds.width - labelW - 2, lx));
-      ly = Math.max(2, Math.min(bounds.height - labelH - 2, ly));
+      const minX = bounds.x + 2;
+      const minY = bounds.y + 2;
+      const maxX = Math.max(minX, bounds.x + bounds.width - labelW - 2);
+      const maxY = Math.max(minY, bounds.y + bounds.height - labelH - 2);
+      lx = Math.max(minX, Math.min(maxX, lx));
+      ly = Math.max(minY, Math.min(maxY, ly));
       const ax = c.cx + cos * c.r;
       const ay = c.cy + sin * c.r;
       const ex = Math.max(lx, Math.min(c.cx, lx + labelW));
@@ -230,7 +245,7 @@ function generateRectCandidates(
   labelW: number,
   labelH: number,
   gap: number,
-  bounds: { width: number; height: number },
+  bounds: { x: number; y: number; width: number; height: number },
 ): LabelCandidate[] {
   const out: LabelCandidate[] = [];
   const rings = 3;
@@ -355,7 +370,9 @@ function candidateCost(
 
   const rectHits = rectIdx.search(candBBox);
   for (const rh of rectHits) {
-    if (rectsOverlap(cand, rh.r)) cost += RECT_PENALTY;
+    if (rectsOverlap(cand, rh.r)) {
+      cost += rh.r.hard ? OVERLAP_PENALTY : RECT_PENALTY;
+    }
   }
 
   if (self && ownerId) {
@@ -559,7 +576,7 @@ function optimizePlacements(
  */
 function separateResidualOverlaps(
   labels: PlacedLabel[],
-  bounds: { width: number; height: number },
+  bounds: { x: number; y: number; width: number; height: number },
 ): void {
   if (labels.length < 2) return;
   const movable = labels.map((l) => l.kind === "circle");
@@ -589,8 +606,12 @@ function separateResidualOverlaps(
           b.y -= dir * oy * shareB * push;
         }
         for (const l of [a, b]) {
-          l.x = Math.max(2, Math.min(bounds.width - l.w - 2, l.x));
-          l.y = Math.max(2, Math.min(bounds.height - l.h - 2, l.y));
+          const minX = bounds.x + 2;
+          const minY = bounds.y + 2;
+          const maxX = Math.max(minX, bounds.x + bounds.width - l.w - 2);
+          const maxY = Math.max(minY, bounds.y + bounds.height - l.h - 2);
+          l.x = Math.max(minX, Math.min(maxX, l.x));
+          l.y = Math.max(minY, Math.min(maxY, l.y));
         }
       }
     }
@@ -609,11 +630,19 @@ function separateResidualOverlaps(
 
 export function runPlacement(input: PlacementInput): PlacedLabel[] {
   const { pageSize, fontPx, padX, labelH, gap, charPx } = input;
+  const bounds = input.bounds ?? { x: 0, y: 0, width: pageSize.width, height: pageSize.height };
   const ringScale = Math.max(1, input.scale ?? 1);
 
   const lodHidden = new Set(input.lodHiddenIds ?? []);
+  const placementTargets = input.placementTargetIds
+    ? new Set(input.placementTargetIds)
+    : null;
   const labeledCircles = input.circles.filter(
-    (c) => !!c.label && !c.isDot && !lodHidden.has(c.id),
+    (c) =>
+      !!c.label &&
+      !c.isDot &&
+      !lodHidden.has(c.id) &&
+      (!placementTargets || placementTargets.has(c.id)),
   );
 
   const labeledRects = input.rects.filter((r) => !!r.label);
@@ -647,7 +676,10 @@ export function runPlacement(input: PlacementInput): PlacedLabel[] {
     return Math.ceil(longest * charPx) + padX * 2 + 4;
   };
 
-  const rectFootprints: RectInfo[] = input.rects.map((r) => ({ x: r.x, y: r.y, w: r.w, h: r.h }));
+  const rectFootprints: RectInfo[] = [
+    ...input.rects.map((r) => ({ x: r.x, y: r.y, w: r.w, h: r.h })),
+    ...(input.fixedLabels ?? []).map((r) => ({ ...r, hard: true })),
+  ];
   const allCircles: CircleInfo[] = input.circles.map((c) => ({
     id: c.id, cx: c.cx, cy: c.cy, r: c.r, color: c.color, label: c.label,
   }));
@@ -659,7 +691,7 @@ export function runPlacement(input: PlacementInput): PlacedLabel[] {
     width: widthFor(r.label!, r.measuredWidthPx), height: heightFor(r.label!),
   }));
   const rectCands: LabelCandidate[][] = rectItems.map((it, i) =>
-    generateRectCandidates(labeledRects[i], it.width, it.height, gap, pageSize),
+    generateRectCandidates(labeledRects[i], it.width, it.height, gap, bounds),
   );
   const rectAnchors = rectItems.map((it) => it.anchor);
   const rectOwners = rectItems.map(() => null as string | null);
@@ -677,7 +709,7 @@ export function runPlacement(input: PlacementInput): PlacedLabel[] {
   const circleCands: LabelCandidate[][] = circleItems.map((it, i) =>
     generateCircleCandidates(
       { id: labeledCircles[i].id, cx: labeledCircles[i].cx, cy: labeledCircles[i].cy, r: labeledCircles[i].r, color: labeledCircles[i].color },
-      it.width, it.height, gap, pageSize, ringScale,
+      it.width, it.height, gap, bounds, ringScale,
     ),
   );
 
@@ -710,7 +742,7 @@ export function runPlacement(input: PlacementInput): PlacedLabel[] {
   // Final safety pass: the optimizer can settle for an overlapping placement
   // when a dense cluster exhausts its candidates. Push circle labels apart so
   // no pill ever covers another (docked rect labels stay fixed).
-  separateResidualOverlaps(out, pageSize);
+  separateResidualOverlaps(out, bounds);
 
   return out;
 }
