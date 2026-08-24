@@ -1282,6 +1282,11 @@ export const OverlayLayer = ({
         const lineHeightPx = Math.round(renderFont * 1.25);
         const centerX = p.x + p.w / 2;
         const centerY = p.y + p.h / 2;
+        // Viewer-only: the pill is hover-interactive and forwards clicks to the
+        // same selection handler the anchor dot uses.
+        const interactive = !fullSizeLabels && !syncPlacement && p.kind === "circle";
+        const isHovered = interactive && effectiveHoverId === p.id;
+        const outlinePx = ((LABEL_BORDER_PX_SCREEN + 1) * exportScale) / s;
         return (
           <div
             ref={(el) => { if (el) labelRefMap.current.set(p.id, el); }}
@@ -1295,7 +1300,16 @@ export const OverlayLayer = ({
             data-h={p.h}
             data-font-px={renderFont}
             data-opacity={LABEL_OPACITY}
-            className="absolute font-bold pointer-events-none text-center"
+            className="absolute font-bold text-center"
+            onPointerEnter={interactive ? () => setLocalHoverId(p.id) : undefined}
+            onPointerLeave={interactive ? () => setLocalHoverId(null) : undefined}
+            onPointerDown={interactive && onOverlayClick ? (e) => e.stopPropagation() : undefined}
+            onPointerUp={interactive && onOverlayClick ? (e) => e.stopPropagation() : undefined}
+            onClick={
+              interactive && onOverlayClick
+                ? (e) => { e.stopPropagation(); onOverlayClick(p.id); }
+                : undefined
+            }
             style={{
               left: centerX,
               top: centerY,
@@ -1319,8 +1333,13 @@ export const OverlayLayer = ({
               borderRadius: 0,
               backgroundColor: p.color,
               color: readableTextOn(p.color),
-              opacity: LABEL_OPACITY,
+              opacity: isHovered ? 1 : LABEL_OPACITY,
               whiteSpace: "pre",
+              pointerEvents: interactive ? "auto" : "none",
+              cursor: interactive && onOverlayClick ? "pointer" : undefined,
+              ...(isHovered
+                ? { outline: `${outlinePx}px solid ${readableTextOn(p.color)}`, outlineOffset: 0 }
+                : null),
             }}
           >
             {p.text}
