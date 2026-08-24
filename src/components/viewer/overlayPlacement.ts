@@ -99,6 +99,7 @@ interface RectInfo {
   y: number;
   w: number;
   h: number;
+  hard?: boolean;
 }
 interface Anchor {
   cx: number;
@@ -369,7 +370,9 @@ function candidateCost(
 
   const rectHits = rectIdx.search(candBBox);
   for (const rh of rectHits) {
-    if (rectsOverlap(cand, rh.r)) cost += RECT_PENALTY;
+    if (rectsOverlap(cand, rh.r)) {
+      cost += rh.r.hard ? OVERLAP_PENALTY : RECT_PENALTY;
+    }
   }
 
   if (self && ownerId) {
@@ -675,7 +678,7 @@ export function runPlacement(input: PlacementInput): PlacedLabel[] {
 
   const rectFootprints: RectInfo[] = [
     ...input.rects.map((r) => ({ x: r.x, y: r.y, w: r.w, h: r.h })),
-    ...(input.fixedLabels ?? []),
+    ...(input.fixedLabels ?? []).map((r) => ({ ...r, hard: true })),
   ];
   const allCircles: CircleInfo[] = input.circles.map((c) => ({
     id: c.id, cx: c.cx, cy: c.cy, r: c.r, color: c.color, label: c.label,
