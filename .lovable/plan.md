@@ -35,6 +35,6 @@ Hover on either the anchor dot or its label pill highlights the pair:
 
 ## Technical notes
 
-- `src/components/viewer/OverlayLayer.tsx` — density LOD pass (rbush, screen-radius neighbor count), `lowDetailIds` set feeding `denseOpaque` and excluded from `placementTargetIds`; new stroke constants; hover state shared between `CircleOverlay` and the label pill; label pill `pointerEvents` for hover with click pass-through.
+- `src/components/viewer/OverlayLayer.tsx` — density LOD pass (rbush, screen-radius neighbor count), `lowDetailIds` set feeding `denseOpaque` and excluded from `placementTargetIds`; new stroke constants; hover state shared between `CircleOverlay` and the label pill; label pill gets `pointerEvents: auto` plus its own pointer/click handlers that call the same `onOverlayClick(id)` path as the anchor dot.
 - `src/components/viewer/overlayPlacement.ts` — accept a low-detail exclusion list; validation-based retention so only invalid labels are re-placed on zoom (position cache no longer invalidated wholesale by the zoom component of the structure key).
 - Export/capture paths (`threatReportPageCapture.ts` and the sync placement branch) pick up the new stroke widths; the density LOD stays viewer-only unless labels are toggled off.
