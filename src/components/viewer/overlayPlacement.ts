@@ -1262,7 +1262,8 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
       if (angles.length === 0) angles.push(Math.max(angle, lowerBound === -Infinity ? angle : lowerBound));
 
       const step = Math.max(6, t.h * RADIAL_STEP_FACTOR);
-      const baseDist = Math.max(radius + gap, Math.hypot(t.cx - ccx, t.cy - ccy) + t.r + gap);
+      const baseDist =
+        Math.max(radius + gap, Math.hypot(t.cx - ccx, t.cy - ccy) + t.r + gap) + minLeader;
       let usedAngle: number | null = null;
       const chosen = chooseByRings(t, function* () {
         for (let k = 0; k <= RADIAL_MAX_STEPS; k++) {
