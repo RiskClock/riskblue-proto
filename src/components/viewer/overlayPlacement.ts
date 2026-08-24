@@ -819,7 +819,7 @@ const HYSTERESIS_RATIO = 0.25;
 const LABEL_SAFETY_PAD = 4;
 /** Soft-constraint costs (page px equivalents), never hard rejections. */
 const SOFT_RECT_PENALTY = 40;
-const LEADER_CROSS_PENALTY = 220;
+const CLUSTER_LEADER_CROSS_PENALTY = 220;
 const DOT_PENALTY = 160;
 /** Last-resort spiral: rings and directions probed against hard obstacles only. */
 const LAST_RESORT_RINGS = 26;
