@@ -699,6 +699,63 @@ function separateResidualOverlaps(
     if (!moved) break;
   }
 
+  // Last resort: a pill still overlapping after relaxation is stuck in a local
+  // minimum (a cycle of mutual pushes). Relocate it with an outward spiral
+  // search around its anchor, taking the nearest slot that is free of other
+  // pills and of foreign dots.
+  const overlapsAnything = (self: number, x: number, y: number): boolean => {
+    const a = { x, y, w: boxes[self].w, h: boxes[self].h };
+    for (let k = 0; k < boxes.length; k++) {
+      if (k === self) continue;
+      const b = boxes[k];
+      if (
+        Math.min(a.x + a.w, b.x + b.w) > Math.max(a.x, b.x) &&
+        Math.min(a.y + a.h, b.y + b.h) > Math.max(a.y, b.y)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+  for (let i = 0; i < labels.length; i++) {
+    const l = labels[i];
+    if (l.kind !== "circle") continue;
+    if (!overlapsAnything(i, l.x, l.y)) continue;
+    let best: { x: number; y: number } | null = null;
+    let bestD = Infinity;
+    for (let ring = 1; ring <= 14 && !best; ring++) {
+      const dist = ring * 18;
+      for (let a = 0; a < 24; a++) {
+        const ang = (a / 24) * Math.PI * 2;
+        const cx = l.ax + Math.cos(ang) * dist - l.w / 2;
+        const cy = l.ay + Math.sin(ang) * dist - l.h / 2;
+        const nx = Math.max(bounds.x + 2, Math.min(bounds.x + bounds.width - l.w - 2, cx));
+        const ny = Math.max(bounds.y + 2, Math.min(bounds.y + bounds.height - l.h - 2, cy));
+        if (overlapsAnything(i, nx, ny)) continue;
+        const probe = { ...l, x: nx, y: ny } as PlacedLabel;
+        if (circles.length > 0) {
+          const box = { x: nx, y: ny, w: l.w, h: l.h };
+          const onDot = circleIdx
+            .search(bboxOfRect(box))
+            .some((ch) => ch.c.id !== l.id && rectIntersectsCircle(box, ch.c));
+          if (onDot) continue;
+        }
+        const d = Math.hypot(nx + l.w / 2 - l.ax, ny + l.h / 2 - l.ay);
+        if (d < bestD) {
+          bestD = d;
+          best = { x: probe.x, y: probe.y };
+        }
+      }
+      if (best) break;
+    }
+    if (best) {
+      l.x = best.x;
+      l.y = best.y;
+    }
+  }
+
+
+
 
   // Refresh leader lengths from the final positions.
   for (const l of labels) {
