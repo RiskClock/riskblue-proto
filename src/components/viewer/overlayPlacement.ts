@@ -450,6 +450,7 @@ function optimizePlacements(
   anchors: Anchor[],
   ownerIds: (string | null)[],
   rand: () => number,
+  leaderSoftCap?: number,
 ): LabelCandidate[] {
   const circleIdx = new RBush<CircleEntry>();
   circleIdx.load(circles.map((c) => ({ ...bboxOfCircle(c), c })));
@@ -459,7 +460,7 @@ function optimizePlacements(
   const runOnce = (seed: LabelCandidate[]): { positions: LabelCandidate[]; totalCost: number } => {
     const positions = seed.slice();
     let labelIdx = buildLabelIdx(positions);
-    let leaderIdx = buildLeaderIdx(positions, anchors, ownerIds);
+    let leaderIdx = buildLeaderIdx(positions, anchors, ownerIds, leaderSoftCap);
     const labelEntries: LabelEntry[] = positions.map((p, i) => ({ ...bboxOfRect(p), idx: i }));
     const leaderEntries: (LeaderEntry | null)[] = positions.map((p, i) => {
       if (!ownerIds[i]) return null;
@@ -485,9 +486,9 @@ function optimizePlacements(
         if (oldLeader) leaderIdx.remove(oldLeader);
 
         let bestCand = positions[i];
-        let bestCost = candidateCost(bestCand, i, positions, circleIdx, rectIdx, labelIdx, leaderIdx, anchors, ownerIds);
+        let bestCost = candidateCost(bestCand, i, positions, circleIdx, rectIdx, labelIdx, leaderIdx, anchors, ownerIds, leaderSoftCap);
         for (const cand of candidatesPerLabel[i]) {
-          const cost = candidateCost(cand, i, positions, circleIdx, rectIdx, labelIdx, leaderIdx, anchors, ownerIds);
+          const cost = candidateCost(cand, i, positions, circleIdx, rectIdx, labelIdx, leaderIdx, anchors, ownerIds, leaderSoftCap);
           if (cost < bestCost - 0.01) {
             bestCost = cost;
             bestCand = cand;
@@ -513,7 +514,7 @@ function optimizePlacements(
       }
       if (!improved) break;
       labelIdx = buildLabelIdx(positions);
-      leaderIdx = buildLeaderIdx(positions, anchors, ownerIds);
+      leaderIdx = buildLeaderIdx(positions, anchors, ownerIds, leaderSoftCap);
       for (let k = 0; k < positions.length; k++) {
         labelEntries[k] = { ...bboxOfRect(positions[k]), idx: k };
         if (ownerIds[k] && anchors[k]) {
@@ -530,7 +531,7 @@ function optimizePlacements(
 
     let total = 0;
     for (let i = 0; i < positions.length; i++) {
-      total += candidateCost(positions[i], i, positions, circleIdx, rectIdx, labelIdx, leaderIdx, anchors, ownerIds);
+      total += candidateCost(positions[i], i, positions, circleIdx, rectIdx, labelIdx, leaderIdx, anchors, ownerIds, leaderSoftCap);
     }
     return { positions, totalCost: total };
   };
