@@ -581,25 +581,52 @@ function optimizePlacements(
 
 /**
  * Relaxation pass that nudges overlapping label pills apart along their axis
- * of least penetration. Rect (docked bbox) labels are treated as immovable;
- * circle labels move and their leader anchors stay attached to the circle.
+ * of least penetration. Rect (docked bbox) labels and any retained/fixed
+ * labels from the viewer's pan cache are immovable; circle labels move and
+ * their leader anchors stay attached to the circle. A final repair loop pushes
+ * pills off foreign annotation dots.
  */
 function separateResidualOverlaps(
   labels: PlacedLabel[],
   bounds: { x: number; y: number; width: number; height: number },
+  opts?: {
+    fixedLabels?: Array<{ x: number; y: number; w: number; h: number }>;
+    circles?: CircleInfo[];
+    pad?: number;
+  },
 ): void {
-  if (labels.length < 2) return;
-  const movable = labels.map((l) => l.kind === "circle");
+  const pad = opts?.pad ?? 6;
+  interface Box { x: number; y: number; w: number; h: number }
+  const fixed: Box[] = (opts?.fixedLabels ?? []).map((r) => ({ ...r }));
+  // Movable circle pills first, then the immovable set (rect labels + fixed).
+  const boxes: Box[] = [...labels, ...fixed];
+  const movable = [
+    ...labels.map((l) => l.kind === "circle"),
+    ...fixed.map(() => false),
+  ];
+  if (boxes.length < 2 && !(opts?.circles?.length)) return;
+
+  const clamp = (l: Box) => {
+    const minX = bounds.x + 2;
+    const minY = bounds.y + 2;
+    const maxX = Math.max(minX, bounds.x + bounds.width - l.w - 2);
+    const maxY = Math.max(minY, bounds.y + bounds.height - l.h - 2);
+    l.x = Math.max(minX, Math.min(maxX, l.x));
+    l.y = Math.max(minY, Math.min(maxY, l.y));
+  };
+
   const MAX_PASSES = 40;
   for (let pass = 0; pass < MAX_PASSES; pass++) {
     let moved = false;
-    for (let i = 0; i < labels.length; i++) {
-      for (let j = i + 1; j < labels.length; j++) {
-        const a = labels[i];
-        const b = labels[j];
+    for (let i = 0; i < boxes.length; i++) {
+      for (let j = i + 1; j < boxes.length; j++) {
         if (!movable[i] && !movable[j]) continue;
-        const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
-        const oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+        const a = boxes[i];
+        const b = boxes[j];
+        // Use the same breathing room the optimizer reserves, so the final
+        // layout matches the reserved footprint instead of settling flush.
+        const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) + pad;
+        const oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) + pad;
         if (ox <= 0 || oy <= 0) continue;
         moved = true;
         const bothMove = movable[i] && movable[j];
@@ -615,18 +642,46 @@ function separateResidualOverlaps(
           a.y += dir * oy * shareA * push;
           b.y -= dir * oy * shareB * push;
         }
-        for (const l of [a, b]) {
-          const minX = bounds.x + 2;
-          const minY = bounds.y + 2;
-          const maxX = Math.max(minX, bounds.x + bounds.width - l.w - 2);
-          const maxY = Math.max(minY, bounds.y + bounds.height - l.h - 2);
-          l.x = Math.max(minX, Math.min(maxX, l.x));
-          l.y = Math.max(minY, Math.min(maxY, l.y));
-        }
+        if (movable[i]) clamp(a);
+        if (movable[j]) clamp(b);
       }
     }
     if (!moved) break;
   }
+
+  // Dot repair: push any pill that ended up covering a foreign annotation dot
+  // out along the axis from the dot centre to the pill centre.
+  const circles = opts?.circles ?? [];
+  if (circles.length > 0) {
+    const circleIdx = new RBush<CircleEntry>();
+    circleIdx.load(circles.map((c) => ({ ...bboxOfCircle(c), c })));
+    for (const l of labels) {
+      if (l.kind !== "circle") continue;
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const box = { x: l.x - pad, y: l.y - pad, w: l.w + pad * 2, h: l.h + pad * 2 };
+        const hits = circleIdx
+          .search(bboxOfRect(box))
+          .filter((ch) => ch.c.id !== l.id && rectIntersectsCircle(box, ch.c));
+        if (hits.length === 0) break;
+        const c = hits[0].c;
+        const lcx = l.x + l.w / 2;
+        const lcy = l.y + l.h / 2;
+        let vx = lcx - c.cx;
+        let vy = lcy - c.cy;
+        const len = Math.hypot(vx, vy) || 1;
+        vx /= len;
+        vy /= len;
+        // Distance needed to clear the circle along this axis.
+        const half = Math.abs(vx) * (l.w / 2 + pad) + Math.abs(vy) * (l.h / 2 + pad);
+        const need = c.r + half - len + 1;
+        if (need <= 0) break;
+        l.x += vx * need;
+        l.y += vy * need;
+        clamp(l);
+      }
+    }
+  }
+
   // Refresh leader lengths from the final positions.
   for (const l of labels) {
     const ex = Math.max(l.x, Math.min(l.ax, l.x + l.w));
@@ -634,6 +689,7 @@ function separateResidualOverlaps(
     l.leader = Math.hypot(ex - l.ax, ey - l.ay);
   }
 }
+
 
 // ---- Public entry point ---------------------------------------------------
 
