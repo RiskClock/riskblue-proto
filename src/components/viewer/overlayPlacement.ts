@@ -1193,16 +1193,24 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
 
   const toRad = (deg: number) => (deg * Math.PI) / 180;
 
+  /**
+   * Half the pill's extent along a direction. Probe distances are measured to
+   * the pill's centre, so this keeps the nearest *edge* the requested distance
+   * away from the anchor instead of parking the pill on top of it.
+   */
+  const halfExtent = (t: ClusterTarget, a: number) =>
+    (Math.abs(Math.cos(a)) * t.w + Math.abs(Math.sin(a)) * t.h) / 2;
+
   /** Nearest free directional slot around the anchor itself. */
   const placeIsolated = (t: ClusterTarget): Box | null =>
     chooseByRings(t, function* () {
       const step = Math.max(6, t.h * RADIAL_STEP_FACTOR);
       const base = t.r + gap + minLeader;
       for (let k = 1; k <= ISOLATED_RING_STEPS; k++) {
-        const dist = base + step * (k - 1);
         const ring: Box[] = [];
         for (const degrees of ISOLATED_DIRECTIONS_DEG) {
           const a = toRad(degrees);
+          const dist = base + step * (k - 1) + halfExtent(t, a);
           ring.push(boxAt(t, t.cx + Math.cos(a) * dist, t.cy + Math.sin(a) * dist));
         }
         yield ring;
