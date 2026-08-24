@@ -98,13 +98,11 @@ const LABEL_ZOOM_MAX = 3.0;
 const CIRCLE_BORDER_PX_SCREEN = 2;
 const LEADER_STROKE_PX_SCREEN = 1.25;
 
-// ---- Level of Detail (LOD) tunables ---------------------------------------
-// Labels are only drawn where the annotation has room on screen. For each
-// labeled anchor we query a screen-space square around it (converted to page
-// units via the current zoom) against an rbush of all anchors; too many
-// neighbours inside it => "low detail" (dot only, no label / leader line).
-const LOD_NEIGHBORHOOD_PX = 80;
-const LOD_MAX_NEIGHBORS = 3;
+// ---- Placement tunables ---------------------------------------------------
+// Anchors within this screen-space distance of each other form a cluster; the
+// cluster-first allocator fans their labels out radially around the cluster
+// centroid. Clusters dissolve as you zoom in.
+const CLUSTER_PROXIMITY_PX = 60;
 /** Zoom is quantized to this step so smooth pinch-zoom doesn't rerun placement. */
 const LOD_SCALE_QUANTIZE = 0.1;
 /**
@@ -719,38 +717,10 @@ export const OverlayLayer = ({
   }, [viewScale]);
 
   /**
-   * Ids of labeled annotations that sit in a crowded neighbourhood at the
-   * current zoom. They render as anchor dots only and are skipped entirely by
-   * the placement optimizer. Disabled for the export path (syncPlacement).
+   * Ids whose label the placement engine could not fit anywhere without a
+   * collision. They render as anchor dots only (drawn fully opaque).
    */
-  const lodHiddenIds = useMemo(() => {
-    const hidden = new Set<string>();
-    if (syncPlacement || exportScale > 1) return hidden;
-    const labeled = circles.filter((c) => !!c.label && !c.isDot);
-    if (labeled.length <= 1) return hidden;
-    const idx = new RBush<{ minX: number; minY: number; maxX: number; maxY: number; id: string }>();
-    idx.load(
-      labeled.map((c) => ({ minX: c.cx, minY: c.cy, maxX: c.cx, maxY: c.cy, id: c.id })),
-    );
-    // Screen-space neighbourhood converted into page units.
-    const half = LOD_NEIGHBORHOOD_PX / 2 / lodScale;
-    for (const c of labeled) {
-      const near = idx.search({
-        minX: c.cx - half,
-        minY: c.cy - half,
-        maxX: c.cx + half,
-        maxY: c.cy + half,
-      });
-      if (near.length - 1 > LOD_MAX_NEIGHBORS) hidden.add(c.id);
-    }
-    return hidden;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [circleLayoutKey, lodScale, syncPlacement, exportScale]);
-
-  const lodHiddenKey = useMemo(
-    () => Array.from(lodHiddenIds).sort().join("|"),
-    [lodHiddenIds],
-  );
+  const [suppressedIds, setSuppressedIds] = useState<Set<string>>(new Set());
 
   // ---- Viewport culling for the placement pass -----------------------------
   // Only annotations/obstacles near the visible region participate in
@@ -809,6 +779,7 @@ export const OverlayLayer = ({
   const buildPlacementInput = (opts?: {
     placementTargetIds?: string[];
     fixedLabels?: PlacedLabel[];
+    previousLabels?: PlacedLabel[];
   }) => ({
     pageSize,
     bounds: visibleBounds ?? undefined,
@@ -825,12 +796,14 @@ export const OverlayLayer = ({
     ),
     fontPx, padX, labelH, gap, charPx,
     scale: exportScale,
-    lodHiddenIds: Array.from(lodHiddenIds),
     placementTargetIds: opts?.placementTargetIds,
     fixedLabels: opts?.fixedLabels?.map(({ x, y, w, h }) => ({ x, y, w, h })),
     leaderSoftCap: syncPlacement
       ? undefined
       : LEADER_SOFT_CAP_SCREEN_PX / Math.max(0.1, lodScale),
+    strategy: (syncPlacement ? "legacy" : "cluster") as "legacy" | "cluster",
+    clusterProximity: CLUSTER_PROXIMITY_PX / Math.max(0.1, lodScale),
+    previousLabels: opts?.previousLabels?.map(({ id, x, y, w, h }) => ({ id, x, y, w, h })),
   });
 
   // Synchronous branch — used by offscreen export capture, which rasterizes
@@ -845,7 +818,7 @@ export const OverlayLayer = ({
   // opening a viewer with many annotations doesn't block paint or input.
   const [asyncPlaced, setAsyncPlaced] = useState<PlacedLabel[]>([]);
   const placementCacheRef = useRef<Map<string, PlacedLabel>>(new Map());
-  const placementStructureKey = `${circleLayoutKey}::${rectLayoutKey}::${lodHiddenKey}::${lodScale}::${pageSize.width}x${pageSize.height}`;
+  const placementStructureKey = `${circleLayoutKey}::${rectLayoutKey}::${lodScale}::${pageSize.width}x${pageSize.height}`;
   const lastPlacementStructureKeyRef = useRef(placementStructureKey);
   useEffect(() => {
     if (syncPlacement) return;
@@ -857,7 +830,6 @@ export const OverlayLayer = ({
       .filter((c) =>
         !!c.label &&
         !c.isDot &&
-        !lodHiddenIds.has(c.id) &&
         intersectsVisible(c.cx, c.cy, c.cx, c.cy),
       )
       .map((c) => c.id);
@@ -877,6 +849,7 @@ export const OverlayLayer = ({
     const hasLabels = showLabels && targetIds.length > 0;
     if (!hasLabels) {
       setAsyncPlaced([]);
+      setSuppressedIds(new Set());
       onPlacingChangeRef.current?.(false);
       return;
     }
@@ -886,11 +859,17 @@ export const OverlayLayer = ({
     }
     onPlacingChangeRef.current?.(true);
     const ticket = requestPlacement(
-      buildPlacementInput({ placementTargetIds: missingIds, fixedLabels: retained }),
-      (placed) => {
+      buildPlacementInput({
+        placementTargetIds: missingIds,
+        fixedLabels: retained,
+        previousLabels: Array.from(placementCacheRef.current.values()),
+      }),
+      ({ placed, suppressedIds: suppressed }) => {
         const cache = placementCacheRef.current;
         for (const p of placed) cache.set(p.id, p);
+        for (const id of suppressed) cache.delete(id);
         setAsyncPlaced([...retained, ...placed]);
+        setSuppressedIds(new Set(suppressed));
         onPlacingChangeRef.current?.(false);
       },
       (err) => {
@@ -918,17 +897,17 @@ export const OverlayLayer = ({
       : asyncPlaced;
 
   /**
-   * A hovered / selected annotation that LOD suppressed still deserves its
+   * A hovered / selected annotation whose label was suppressed still deserves its
    * label. It's rendered as a simple pill docked to the anchor (outside the
    * optimizer, so hovering never retriggers a placement pass).
    */
   const focusFallbackCircle = useMemo(() => {
     if (!showLabels) return null;
     const focusId = hoveredId || selectedId;
-    if (!focusId || !lodHiddenIds.has(focusId)) return null;
+    if (!focusId || !suppressedIds.has(focusId)) return null;
     if (placedLabels.some((p) => p.id === focusId)) return null;
     return circles.find((c) => c.id === focusId && !!c.label) ?? null;
-  }, [showLabels, hoveredId, selectedId, lodHiddenIds, placedLabels, circles]);
+  }, [showLabels, hoveredId, selectedId, suppressedIds, placedLabels, circles]);
 
 
   // After labels render, measure their actual bounding boxes and snap every
@@ -1090,7 +1069,7 @@ export const OverlayLayer = ({
             setDrag={setDrag}
             onOverlayClick={onOverlayClick}
             onOverlayDrag={onOverlayDrag}
-            denseOpaque={showLabels && lodHiddenIds.has(c.id)}
+            denseOpaque={showLabels && suppressedIds.has(c.id)}
           />
         );
       })}
