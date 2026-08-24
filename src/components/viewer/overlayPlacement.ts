@@ -65,6 +65,13 @@ export interface PlacementInput {
   placementTargetIds?: string[];
   /** Existing viewer labels that must remain fixed and act as obstacles. */
   fixedLabels?: Array<{ x: number; y: number; w: number; h: number }>;
+  /**
+   * Viewer-only soft cap on leader length (page px). Beyond it the placement
+   * cost grows quadratically so labels stay near their anchors instead of
+   * being dragged into the crowded middle of the viewport. Exports leave it
+   * undefined to keep the previous linear cost.
+   */
+  leaderSoftCap?: number;
 }
 
 
@@ -332,6 +339,7 @@ function candidateCost(
   leaderIdx: RBush<LeaderEntry>,
   anchors: Anchor[],
   ownerIds: (string | null)[],
+  leaderSoftCap?: number,
 ): number {
   const self = anchors[selfIdx];
   const ownerId = ownerIds[selfIdx];
@@ -343,6 +351,14 @@ function candidateCost(
   const belowPenalty = Math.max(0, dy) * 1.5;
   const rightPenalty = Math.max(0, dx) * 0.75;
   let cost = cand.leader + horizontalOffset * 0.5 + belowPenalty + rightPenalty;
+  // Soft quadratic cap on leader length (viewer only). Past the threshold the
+  // cost grows fast, so a distant anchor prefers a nearer slot over dragging a
+  // long line into the crowded middle of the viewport.
+  if (leaderSoftCap && cand.leader > leaderSoftCap) {
+    const over = (cand.leader - leaderSoftCap) / 40;
+    cost += over * over * 1000;
+  }
+
 
   // Safety buffer: inflate the candidate's footprint by 6px on every side
   // (12px total) when checking label-to-label overlaps. This forces the
@@ -441,6 +457,7 @@ function optimizePlacements(
   anchors: Anchor[],
   ownerIds: (string | null)[],
   rand: () => number,
+  leaderSoftCap?: number,
 ): LabelCandidate[] {
   const circleIdx = new RBush<CircleEntry>();
   circleIdx.load(circles.map((c) => ({ ...bboxOfCircle(c), c })));
@@ -476,9 +493,9 @@ function optimizePlacements(
         if (oldLeader) leaderIdx.remove(oldLeader);
 
         let bestCand = positions[i];
-        let bestCost = candidateCost(bestCand, i, positions, circleIdx, rectIdx, labelIdx, leaderIdx, anchors, ownerIds);
+        let bestCost = candidateCost(bestCand, i, positions, circleIdx, rectIdx, labelIdx, leaderIdx, anchors, ownerIds, leaderSoftCap);
         for (const cand of candidatesPerLabel[i]) {
-          const cost = candidateCost(cand, i, positions, circleIdx, rectIdx, labelIdx, leaderIdx, anchors, ownerIds);
+          const cost = candidateCost(cand, i, positions, circleIdx, rectIdx, labelIdx, leaderIdx, anchors, ownerIds, leaderSoftCap);
           if (cost < bestCost - 0.01) {
             bestCost = cost;
             bestCand = cand;
@@ -521,7 +538,7 @@ function optimizePlacements(
 
     let total = 0;
     for (let i = 0; i < positions.length; i++) {
-      total += candidateCost(positions[i], i, positions, circleIdx, rectIdx, labelIdx, leaderIdx, anchors, ownerIds);
+      total += candidateCost(positions[i], i, positions, circleIdx, rectIdx, labelIdx, leaderIdx, anchors, ownerIds, leaderSoftCap);
     }
     return { positions, totalCost: total };
   };
@@ -571,25 +588,89 @@ function optimizePlacements(
 
 /**
  * Relaxation pass that nudges overlapping label pills apart along their axis
- * of least penetration. Rect (docked bbox) labels are treated as immovable;
- * circle labels move and their leader anchors stay attached to the circle.
+ * of least penetration. Rect (docked bbox) labels and any retained/fixed
+ * labels from the viewer's pan cache are immovable; circle labels move and
+ * their leader anchors stay attached to the circle. A final repair loop pushes
+ * pills off foreign annotation dots.
  */
 function separateResidualOverlaps(
   labels: PlacedLabel[],
   bounds: { x: number; y: number; width: number; height: number },
+  opts?: {
+    fixedLabels?: Array<{ x: number; y: number; w: number; h: number }>;
+    circles?: CircleInfo[];
+    pad?: number;
+  },
 ): void {
-  if (labels.length < 2) return;
-  const movable = labels.map((l) => l.kind === "circle");
-  const MAX_PASSES = 40;
-  for (let pass = 0; pass < MAX_PASSES; pass++) {
+  const pad = opts?.pad ?? 6;
+  interface Box { x: number; y: number; w: number; h: number }
+  const fixed: Box[] = (opts?.fixedLabels ?? []).map((r) => ({ ...r }));
+  // Movable circle pills first, then the immovable set (rect labels + fixed).
+  const boxes: Box[] = [...labels, ...fixed];
+  const movable = [
+    ...labels.map((l) => l.kind === "circle"),
+    ...fixed.map(() => false),
+  ];
+  if (boxes.length < 2 && !(opts?.circles?.length)) return;
+
+  const clamp = (l: Box) => {
+    const minX = bounds.x + 2;
+    const minY = bounds.y + 2;
+    const maxX = Math.max(minX, bounds.x + bounds.width - l.w - 2);
+    const maxY = Math.max(minY, bounds.y + bounds.height - l.h - 2);
+    l.x = Math.max(minX, Math.min(maxX, l.x));
+    l.y = Math.max(minY, Math.min(maxY, l.y));
+  };
+
+  const circles = opts?.circles ?? [];
+  const circleIdx = new RBush<CircleEntry>();
+  if (circles.length > 0) {
+    circleIdx.load(circles.map((c) => ({ ...bboxOfCircle(c), c })));
+  }
+
+  // Push a pill off any foreign annotation dot it covers, along the axis from
+  // the dot centre to the pill centre.
+  const repairDots = (l: PlacedLabel, gap: number): boolean => {
+    if (circles.length === 0) return false;
+    let touched = false;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const box = { x: l.x - gap, y: l.y - gap, w: l.w + gap * 2, h: l.h + gap * 2 };
+      const hits = circleIdx
+        .search(bboxOfRect(box))
+        .filter((ch) => ch.c.id !== l.id && rectIntersectsCircle(box, ch.c));
+      if (hits.length === 0) break;
+      const c = hits[0].c;
+      let vx = l.x + l.w / 2 - c.cx;
+      let vy = l.y + l.h / 2 - c.cy;
+      const len = Math.hypot(vx, vy) || 1;
+      vx /= len;
+      vy /= len;
+      const half = Math.abs(vx) * (l.w / 2 + gap) + Math.abs(vy) * (l.h / 2 + gap);
+      const need = c.r + half - len + 1;
+      if (need <= 0) break;
+      l.x += vx * need;
+      l.y += vy * need;
+      clamp(l);
+      touched = true;
+    }
+    return touched;
+  };
+
+  // Interleaved relaxation. The padded phase aims for the breathing room the
+  // optimizer reserves; the final unpadded phase guarantees a strictly
+  // non-overlapping layout even when the dense case can't reach the padding.
+  const PADDED_PASSES = 30;
+  const TOTAL_PASSES = 60;
+  for (let pass = 0; pass < TOTAL_PASSES; pass++) {
+    const gap = pass < PADDED_PASSES ? pad : 0;
     let moved = false;
-    for (let i = 0; i < labels.length; i++) {
-      for (let j = i + 1; j < labels.length; j++) {
-        const a = labels[i];
-        const b = labels[j];
+    for (let i = 0; i < boxes.length; i++) {
+      for (let j = i + 1; j < boxes.length; j++) {
         if (!movable[i] && !movable[j]) continue;
-        const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
-        const oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+        const a = boxes[i];
+        const b = boxes[j];
+        const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) + gap;
+        const oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) + gap;
         if (ox <= 0 || oy <= 0) continue;
         moved = true;
         const bothMove = movable[i] && movable[j];
@@ -605,18 +686,77 @@ function separateResidualOverlaps(
           a.y += dir * oy * shareA * push;
           b.y -= dir * oy * shareB * push;
         }
-        for (const l of [a, b]) {
-          const minX = bounds.x + 2;
-          const minY = bounds.y + 2;
-          const maxX = Math.max(minX, bounds.x + bounds.width - l.w - 2);
-          const maxY = Math.max(minY, bounds.y + bounds.height - l.h - 2);
-          l.x = Math.max(minX, Math.min(maxX, l.x));
-          l.y = Math.max(minY, Math.min(maxY, l.y));
-        }
+        if (movable[i]) clamp(a);
+        if (movable[j]) clamp(b);
       }
+    }
+    // Dot repair runs inside the loop so a pill pushed onto a dot gets moved
+    // off it, and the next label pass re-resolves any overlap that creates.
+    for (const l of labels) {
+      if (l.kind !== "circle") continue;
+      if (repairDots(l, gap)) moved = true;
     }
     if (!moved) break;
   }
+
+  // Last resort: a pill still overlapping after relaxation is stuck in a local
+  // minimum (a cycle of mutual pushes). Relocate it with an outward spiral
+  // search around its anchor, taking the nearest slot that is free of other
+  // pills and of foreign dots.
+  const overlapsAnything = (self: number, x: number, y: number): boolean => {
+    const a = { x, y, w: boxes[self].w, h: boxes[self].h };
+    for (let k = 0; k < boxes.length; k++) {
+      if (k === self) continue;
+      const b = boxes[k];
+      if (
+        Math.min(a.x + a.w, b.x + b.w) > Math.max(a.x, b.x) &&
+        Math.min(a.y + a.h, b.y + b.h) > Math.max(a.y, b.y)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+  for (let i = 0; i < labels.length; i++) {
+    const l = labels[i];
+    if (l.kind !== "circle") continue;
+    if (!overlapsAnything(i, l.x, l.y)) continue;
+    let best: { x: number; y: number } | null = null;
+    let bestD = Infinity;
+    for (let ring = 1; ring <= 14 && !best; ring++) {
+      const dist = ring * 18;
+      for (let a = 0; a < 24; a++) {
+        const ang = (a / 24) * Math.PI * 2;
+        const cx = l.ax + Math.cos(ang) * dist - l.w / 2;
+        const cy = l.ay + Math.sin(ang) * dist - l.h / 2;
+        const nx = Math.max(bounds.x + 2, Math.min(bounds.x + bounds.width - l.w - 2, cx));
+        const ny = Math.max(bounds.y + 2, Math.min(bounds.y + bounds.height - l.h - 2, cy));
+        if (overlapsAnything(i, nx, ny)) continue;
+        const probe = { ...l, x: nx, y: ny } as PlacedLabel;
+        if (circles.length > 0) {
+          const box = { x: nx, y: ny, w: l.w, h: l.h };
+          const onDot = circleIdx
+            .search(bboxOfRect(box))
+            .some((ch) => ch.c.id !== l.id && rectIntersectsCircle(box, ch.c));
+          if (onDot) continue;
+        }
+        const d = Math.hypot(nx + l.w / 2 - l.ax, ny + l.h / 2 - l.ay);
+        if (d < bestD) {
+          bestD = d;
+          best = { x: probe.x, y: probe.y };
+        }
+      }
+      if (best) break;
+    }
+    if (best) {
+      l.x = best.x;
+      l.y = best.y;
+    }
+  }
+
+
+
+
   // Refresh leader lengths from the final positions.
   for (const l of labels) {
     const ex = Math.max(l.x, Math.min(l.ax, l.x + l.w));
@@ -624,6 +764,7 @@ function separateResidualOverlaps(
     l.leader = Math.hypot(ex - l.ax, ey - l.ay);
   }
 }
+
 
 // ---- Public entry point ---------------------------------------------------
 
@@ -721,7 +862,7 @@ export function runPlacement(input: PlacementInput): PlacedLabel[] {
   ];
   const circlePositions =
     circleItems.length > 0
-      ? optimizePlacements(circleCands, allCircles, rectObstaclesForCircles, circleAnchors, circleOwners, rand)
+      ? optimizePlacements(circleCands, allCircles, rectObstaclesForCircles, circleAnchors, circleOwners, rand, input.leaderSoftCap)
       : [];
 
   const out: PlacedLabel[] = [];
@@ -742,7 +883,10 @@ export function runPlacement(input: PlacementInput): PlacedLabel[] {
   // Final safety pass: the optimizer can settle for an overlapping placement
   // when a dense cluster exhausts its candidates. Push circle labels apart so
   // no pill ever covers another (docked rect labels stay fixed).
-  separateResidualOverlaps(out, bounds);
+  separateResidualOverlaps(out, bounds, {
+    fixedLabels: input.fixedLabels,
+    circles: allCircles,
+  });
 
   return out;
 }
