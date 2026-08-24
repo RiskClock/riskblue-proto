@@ -28,7 +28,7 @@ Panning already retains cached label positions; extend the same behavior to zoom
 
 Hover on either the anchor dot or its label pill highlights the pair:
 
-- Label pill becomes hover-interactive (pointer events enabled for hover; clicks continue to pass through to the canvas beneath).
+- Label pill becomes hover-interactive (pointer events enabled). Because that swallows clicks, the pill gets its own click handler that forwards to the parent annotation and runs the exact same selection logic as clicking the anchor dot (select, highlight, tooltip with delete) — no reliance on CSS click pass-through.
 - On hover: circle border, leader line, and label pill render fully opaque. The circle's fill opacity is unchanged.
 - On hover: circle border, leader line, and label border each gain 1px on top of the new baselines (border 3px to 4px, leader 2.25px to 3.25px).
 - Hover highlight layers on top of an active pulse animation rather than cancelling it.
