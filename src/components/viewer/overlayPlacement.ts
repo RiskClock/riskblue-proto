@@ -72,6 +72,17 @@ export interface PlacementInput {
    * undefined to keep the previous linear cost.
    */
   leaderSoftCap?: number;
+  /**
+   * Placement engine. `"legacy"` (default) is the randomized greedy optimizer
+   * used by the export/capture paths. `"cluster"` is the viewer's
+   * cluster-first radial allocator.
+   */
+  strategy?: "legacy" | "cluster";
+  /** Cluster proximity threshold in page px (cluster strategy). */
+  clusterProximity?: number;
+  /** Previous frame's label rects, used as an anti-jitter seed. */
+  previousLabels?: Array<{ id: string; x: number; y: number; w: number; h: number }>;
+
 }
 
 
