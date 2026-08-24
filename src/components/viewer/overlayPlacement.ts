@@ -1207,7 +1207,7 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
     const step = Math.max(6, t.h * RADIAL_STEP_FACTOR);
     let best: { b: Box; cost: number } | null = null;
     for (let k = 1; k <= LAST_RESORT_RINGS; k++) {
-      const dist = t.r + gap + step * k;
+      const dist = t.r + gap + minLeader + step * (k - 1);
       for (let d = 0; d < LAST_RESORT_DIRECTIONS; d++) {
         const a = (d / LAST_RESORT_DIRECTIONS) * Math.PI * 2;
         const b = boxAt(t, t.cx + Math.cos(a) * dist, t.cy + Math.sin(a) * dist);
