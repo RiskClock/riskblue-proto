@@ -865,6 +865,7 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
     input.clusterProximity && input.clusterProximity > 0
       ? input.clusterProximity
       : CLUSTER_DEFAULT_PROXIMITY;
+  const minLeader = Math.max(0, input.minLeader ?? 0);
 
   const placementTargets = input.placementTargetIds
     ? new Set(input.placementTargetIds)
