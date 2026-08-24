@@ -1845,7 +1845,10 @@ export const FileViewerModal = ({
       }}
 
     >
-      <DialogContent className="max-w-[95vw] w-[95vw] h-[90vh] flex flex-col p-4 [&>button]:top-4 [&>button]:right-4">
+      <DialogContent
+        className="max-w-[95vw] w-[95vw] h-[90vh] flex flex-col p-4 [&>button]:top-4 [&>button]:right-4"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="truncate flex items-center gap-2 min-w-0">
             <span className="truncate">{fileName}</span>
