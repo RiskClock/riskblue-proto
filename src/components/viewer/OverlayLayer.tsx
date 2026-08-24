@@ -124,6 +124,14 @@ const MIN_LEADER_SCREEN_PX = 28;
 /** Extra margin (fraction of the visible span) added around the viewport
  *  before culling placement inputs, so labels don't pop in at the edge. */
 const VIEWPORT_BUFFER_RATIO = 0.2;
+/**
+ * Local-density LOD. An anchor with more than LOD_MAX_NEIGHBORS other labelled
+ * anchors within LOD_NEIGHBOR_RADIUS_PX (screen px) is "low detail": no label,
+ * no leader line, and its dot renders fully opaque. Zooming in thins the
+ * neighbor counts, so labels return progressively.
+ */
+const LOD_NEIGHBOR_RADIUS_PX = 70;
+const LOD_MAX_NEIGHBORS = 3;
 
 
 /** Interpolate label sizing based on the current viewport zoom scale. */
