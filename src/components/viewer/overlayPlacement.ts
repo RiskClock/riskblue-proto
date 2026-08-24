@@ -830,6 +830,8 @@ const DOT_PENALTY = 160;
 /** Last-resort spiral: rings and directions probed against hard obstacles only. */
 const LAST_RESORT_RINGS = 26;
 const LAST_RESORT_DIRECTIONS = 16;
+/** Cost per page px that a leader falls short of the requested minimum. */
+const SHORT_LEADER_PENALTY = 12;
 
 
 export interface PlacementResult {
