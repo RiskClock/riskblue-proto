@@ -460,7 +460,7 @@ function optimizePlacements(
   const runOnce = (seed: LabelCandidate[]): { positions: LabelCandidate[]; totalCost: number } => {
     const positions = seed.slice();
     let labelIdx = buildLabelIdx(positions);
-    let leaderIdx = buildLeaderIdx(positions, anchors, ownerIds, leaderSoftCap);
+    let leaderIdx = buildLeaderIdx(positions, anchors, ownerIds);
     const labelEntries: LabelEntry[] = positions.map((p, i) => ({ ...bboxOfRect(p), idx: i }));
     const leaderEntries: (LeaderEntry | null)[] = positions.map((p, i) => {
       if (!ownerIds[i]) return null;
@@ -514,7 +514,7 @@ function optimizePlacements(
       }
       if (!improved) break;
       labelIdx = buildLabelIdx(positions);
-      leaderIdx = buildLeaderIdx(positions, anchors, ownerIds, leaderSoftCap);
+      leaderIdx = buildLeaderIdx(positions, anchors, ownerIds);
       for (let k = 0; k < positions.length; k++) {
         labelEntries[k] = { ...bboxOfRect(positions[k]), idx: k };
         if (ownerIds[k] && anchors[k]) {
