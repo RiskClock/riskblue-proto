@@ -100,8 +100,10 @@ const LABEL_FONT_MIN_SCREEN = 8;
 const LABEL_FONT_MAX_SCREEN = 13;
 const LABEL_ZOOM_MIN = 1.2;
 const LABEL_ZOOM_MAX = 3.0;
-const CIRCLE_BORDER_PX_SCREEN = 2;
-const LEADER_STROKE_PX_SCREEN = 1.25;
+const CIRCLE_BORDER_PX_SCREEN = 3;
+/** Resting label pill outline (0 = none). Hover adds 1px on top. */
+const LABEL_BORDER_PX_SCREEN = 0;
+const LEADER_STROKE_PX_SCREEN = 2.25;
 
 // ---- Placement tunables ---------------------------------------------------
 // Anchors within this screen-space distance of each other form a cluster; the
@@ -124,6 +126,14 @@ const MIN_LEADER_SCREEN_PX = 28;
 /** Extra margin (fraction of the visible span) added around the viewport
  *  before culling placement inputs, so labels don't pop in at the edge. */
 const VIEWPORT_BUFFER_RATIO = 0.2;
+/**
+ * Local-density LOD. An anchor with more than LOD_MAX_NEIGHBORS other labelled
+ * anchors within LOD_NEIGHBOR_RADIUS_PX (screen px) is "low detail": no label,
+ * no leader line, and its dot renders fully opaque. Zooming in thins the
+ * neighbor counts, so labels return progressively.
+ */
+const LOD_NEIGHBOR_RADIUS_PX = 70;
+const LOD_MAX_NEIGHBORS = 3;
 
 
 /** Interpolate label sizing based on the current viewport zoom scale. */
@@ -406,6 +416,8 @@ interface CircleOverlayProps {
   setDrag: (d: DragState | null) => void;
   onOverlayClick?: (id: string) => void;
   onOverlayDrag?: (id: string, nx: number, ny: number) => void;
+  /** Hover in/out of this anchor (null on leave). */
+  onHoverChange?: (id: string | null) => void;
   /** LOD suppressed this anchor's label — render it as a solid dot. */
   denseOpaque?: boolean;
 }
@@ -413,6 +425,7 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
   const {
     c, hovered, selected = false, pulsing = false, exportScale, clickable, draggable, isDragging, dragDx, dragDy,
     viewScale, pageWidth, pageHeight, dragRef, setDrag, onOverlayClick, onOverlayDrag,
+    onHoverChange,
     denseOpaque = false,
   } = props;
 
@@ -491,8 +504,12 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
     if (clickable) onOverlayClick!(c.id);
   };
 
-  const strokePxScreen = (selected ? 4 : hovered ? 3 : CIRCLE_BORDER_PX_SCREEN) * exportScale;
+  // Hover / selection add 1px on top of the resting baseline.
+  const strokePxScreen =
+    (selected ? CIRCLE_BORDER_PX_SCREEN + 2 : hovered ? CIRCLE_BORDER_PX_SCREEN + 1 : CIRCLE_BORDER_PX_SCREEN) *
+    exportScale;
   const strokePxPage = strokePxScreen / Math.max(0.0001, viewScale);
+  const borderAlpha = hovered || selected ? 1 : 0.5;
 
   return (
     <div
@@ -504,6 +521,8 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
       data-cy={c.cy}
       data-radius={c.r}
       style={style}
+      onPointerEnter={onHoverChange ? () => onHoverChange(c.id) : undefined}
+      onPointerLeave={onHoverChange ? () => onHoverChange(null) : undefined}
       onPointerDown={draggable ? onPointerDown : clickable ? stop : undefined}
       onPointerMove={draggable ? onPointerMove : undefined}
       onPointerUp={draggable ? onPointerUp : clickable ? stop : undefined}
@@ -537,7 +556,7 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
             cy={c.r}
             r={Math.max(0, c.r - strokePxPage / 2)}
             fill="none"
-            stroke={withAlpha(c.color, 0.5)}
+            stroke={withAlpha(c.color, borderAlpha)}
             strokeWidth={strokePxPage}
             vectorEffect="non-scaling-stroke"
             style={{ vectorEffect: "non-scaling-stroke", strokeWidth: strokePxPage }}
@@ -733,6 +752,59 @@ export const OverlayLayer = ({
     return Math.max(LOD_SCALE_QUANTIZE, Math.round(s / LOD_SCALE_QUANTIZE) * LOD_SCALE_QUANTIZE);
   }, [placementScale, viewScale]);
 
+  /**
+   * Local screen-space density pass. Runs over the whole page (not just the
+   * viewport) so the low-detail set doesn't change while panning, and keys off
+   * the settle-debounced `lodScale` so it only changes once a zoom gesture
+   * finishes. Export/sync placement is unaffected.
+   */
+  const lowDetailIds = useMemo(() => {
+    const out = new Set<string>();
+    if (syncPlacement || exportScale > 1) return out;
+    const targets = circles.filter((c) => !!c.label && !c.isDot);
+    if (targets.length <= LOD_MAX_NEIGHBORS) return out;
+    // Neighbor radius expressed in page units at the current zoom.
+    const radius = LOD_NEIGHBOR_RADIUS_PX / Math.max(0.1, lodScale);
+    const r2 = radius * radius;
+    // Uniform grid bucketing so the neighbor scan stays near-linear.
+    const cell = Math.max(1, radius);
+    const buckets = new Map<string, typeof targets>();
+    const keyOf = (x: number, y: number) => `${Math.floor(x / cell)}:${Math.floor(y / cell)}`;
+    for (const c of targets) {
+      const k = keyOf(c.cx, c.cy);
+      const arr = buckets.get(k);
+      if (arr) arr.push(c);
+      else buckets.set(k, [c]);
+    }
+    for (const c of targets) {
+      const gx = Math.floor(c.cx / cell);
+      const gy = Math.floor(c.cy / cell);
+      let count = 0;
+      for (let dx = -1; dx <= 1 && count <= LOD_MAX_NEIGHBORS; dx++) {
+        for (let dy = -1; dy <= 1 && count <= LOD_MAX_NEIGHBORS; dy++) {
+          const arr = buckets.get(`${gx + dx}:${gy + dy}`);
+          if (!arr) continue;
+          for (const o of arr) {
+            if (o.id === c.id) continue;
+            const ddx = o.cx - c.cx;
+            const ddy = o.cy - c.cy;
+            if (ddx * ddx + ddy * ddy <= r2) {
+              count++;
+              if (count > LOD_MAX_NEIGHBORS) break;
+            }
+          }
+        }
+      }
+      if (count > LOD_MAX_NEIGHBORS) out.add(c.id);
+    }
+    return out;
+  }, [circles, lodScale, syncPlacement, exportScale]);
+
+  const lowDetailKey = useMemo(
+    () => `${lowDetailIds.size}:${Array.from(lowDetailIds).sort().join(",")}`,
+    [lowDetailIds],
+  );
+
 
   /**
    * Ids whose label the placement engine could not fit anywhere without a
@@ -867,8 +939,16 @@ export const OverlayLayer = ({
   // Async branch — pushes the heavy optimizer pass into a Web Worker so
   // opening a viewer with many annotations doesn't block paint or input.
   const [asyncPlaced, setAsyncPlaced] = useState<PlacedLabel[]>([]);
-  const placementCacheRef = useRef<Map<string, PlacedLabel>>(new Map());
-  const placementStructureKey = `${circleLayoutKey}::${rectLayoutKey}::${lodScale}::${placementSizingKey}::${pageSize.width}x${pageSize.height}`;
+  /**
+   * Cached label positions. Entries remember the label height they were placed
+   * with so a zoom change can rescale them in place (zoom hysteresis) instead
+   * of invalidating the whole layout.
+   */
+  const placementCacheRef = useRef<Map<string, { p: PlacedLabel; labelH: number }>>(new Map());
+  // NOTE: zoom (lodScale / sizing) is deliberately NOT part of this key —
+  // zooming must not wipe cached positions. Only real structural changes
+  // (annotation set / geometry / page size) reset the cache.
+  const placementStructureKey = `${circleLayoutKey}::${rectLayoutKey}::${pageSize.width}x${pageSize.height}`;
   const lastPlacementStructureKeyRef = useRef(placementStructureKey);
   useEffect(() => {
     if (syncPlacement) return;
@@ -880,6 +960,7 @@ export const OverlayLayer = ({
       .filter((c) =>
         !!c.label &&
         !c.isDot &&
+        !lowDetailIds.has(c.id) &&
         intersectsVisible(c.cx, c.cy, c.cx, c.cy),
       )
       .map((c) => c.id);
@@ -890,9 +971,40 @@ export const OverlayLayer = ({
         p.y >= visibleBounds.y &&
         p.x + p.w <= visibleBounds.x + visibleBounds.width &&
         p.y + p.h <= visibleBounds.y + visibleBounds.height);
-    const retained = Array.from(placementCacheRef.current.values()).filter(
-      (p) => targetIdSet.has(p.id) && fitsVisibleBounds(p),
-    );
+    const overlaps = (
+      a: { x: number; y: number; w: number; h: number },
+      b: { x: number; y: number; w: number; h: number },
+    ) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+    // Zoom hysteresis: rescale each cached label around its own center to the
+    // footprint it would have at the current zoom, then keep it unless it is
+    // now clipped by the viewport or collides with another retained label /
+    // docked rect label. Only invalid labels are re-placed.
+    const cache = placementCacheRef.current;
+    const hardObstacles = rectObstacles.filter((r) => r.id.endsWith("__label"));
+    const retained: PlacedLabel[] = [];
+    for (const entry of Array.from(cache.values())) {
+      if (!targetIdSet.has(entry.p.id)) {
+        cache.delete(entry.p.id);
+        continue;
+      }
+      const k = entry.labelH > 0 ? placementSizing.labelH / entry.labelH : 1;
+      const cx = entry.p.x + entry.p.w / 2;
+      const cy = entry.p.y + entry.p.h / 2;
+      const w = entry.p.w * k;
+      const h = entry.p.h * k;
+      const next: PlacedLabel = { ...entry.p, x: cx - w / 2, y: cy - h / 2, w, h };
+      const valid =
+        fitsVisibleBounds(next) &&
+        !retained.some((r) => overlaps(next, r)) &&
+        !hardObstacles.some((r) => overlaps(next, r));
+      if (valid) {
+        cache.set(next.id, { p: next, labelH: placementSizing.labelH });
+        retained.push(next);
+      } else {
+        cache.delete(entry.p.id);
+      }
+    }
     setAsyncPlaced(retained);
     const retainedIds = new Set(retained.map((p) => p.id));
     const missingIds = targetIds.filter((id) => !retainedIds.has(id));
@@ -912,11 +1024,10 @@ export const OverlayLayer = ({
       buildPlacementInput({
         placementTargetIds: missingIds,
         fixedLabels: retained,
-        previousLabels: Array.from(placementCacheRef.current.values()),
+        previousLabels: retained,
       }),
       ({ placed, suppressedIds: suppressed }) => {
-        const cache = placementCacheRef.current;
-        for (const p of placed) cache.set(p.id, p);
+        for (const p of placed) cache.set(p.id, { p, labelH: placementSizing.labelH });
         for (const id of suppressed) cache.delete(id);
         setAsyncPlaced([...retained, ...placed]);
         setSuppressedIds(new Set(suppressed));
@@ -930,7 +1041,7 @@ export const OverlayLayer = ({
     );
     return () => ticket.cancel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncPlacement, showLabels, placementStructureKey, cullKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx, placementSizingKey]);
+  }, [syncPlacement, showLabels, placementStructureKey, cullKey, lowDetailKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx, placementSizingKey]);
 
 
   // On unmount, ensure the parent's "placing" flag doesn't stay stuck on.
@@ -947,17 +1058,27 @@ export const OverlayLayer = ({
       : asyncPlaced;
 
   /**
-   * A hovered / selected annotation whose label was suppressed still deserves its
-   * label. It's rendered as a simple pill docked to the anchor (outside the
-   * optimizer, so hovering never retriggers a placement pass).
+   * Hover driven from inside the overlay layer (anchor dot or label pill).
+   * Merged with the `hoveredId` prop (driven by the side list) so both sources
+   * highlight the same pair.
+   */
+  const [localHoverId, setLocalHoverId] = useState<string | null>(null);
+  const effectiveHoverId = localHoverId ?? hoveredId ?? null;
+
+  /**
+   * A hovered / selected annotation whose label was suppressed (or dropped by
+   * the density LOD) still deserves its label. It's rendered as a simple pill
+   * docked to the anchor (outside the optimizer, so hovering never retriggers
+   * a placement pass).
    */
   const focusFallbackCircle = useMemo(() => {
     if (!showLabels) return null;
-    const focusId = hoveredId || selectedId;
-    if (!focusId || !suppressedIds.has(focusId)) return null;
+    const focusId = effectiveHoverId || selectedId;
+    if (!focusId) return null;
+    if (!suppressedIds.has(focusId) && !lowDetailIds.has(focusId)) return null;
     if (placedLabels.some((p) => p.id === focusId)) return null;
     return circles.find((c) => c.id === focusId && !!c.label) ?? null;
-  }, [showLabels, hoveredId, selectedId, suppressedIds, placedLabels, circles]);
+  }, [showLabels, effectiveHoverId, selectedId, suppressedIds, lowDetailIds, placedLabels, circles]);
 
 
   // After labels render, measure their actual bounding boxes and snap every
@@ -1073,6 +1194,11 @@ export const OverlayLayer = ({
           const y2 = labelCy - uy * tEdge;
           const leaderLen = Math.hypot(x2 - x1, y2 - y1);
           if (leaderLen < 0.5) return null;
+          const isHovered = effectiveHoverId === p.id;
+          const leaderStroke =
+            ((LEADER_STROKE_PX_SCREEN + (isHovered ? 1 : 0)) * exportScale) /
+            Math.max(0.0001, viewScale);
+          const leaderOpacity = isHovered ? 1 : LABEL_OPACITY;
           return (
             <line
               ref={(el) => { if (el) leaderRefMap.current.set(p.id, el); }}
@@ -1085,13 +1211,13 @@ export const OverlayLayer = ({
               x2={x2}
               y2={y2}
               stroke={p.color}
-              strokeWidth={(LEADER_STROKE_PX_SCREEN * exportScale) / Math.max(0.0001, viewScale)}
+              strokeWidth={leaderStroke}
               vectorEffect="non-scaling-stroke"
               style={{
                 vectorEffect: "non-scaling-stroke",
-                strokeWidth: (LEADER_STROKE_PX_SCREEN * exportScale) / Math.max(0.0001, viewScale),
+                strokeWidth: leaderStroke,
               }}
-              opacity={LABEL_OPACITY}
+              opacity={leaderOpacity}
             />
           );
         })}
@@ -1103,7 +1229,7 @@ export const OverlayLayer = ({
           <CircleOverlay
             key={c.id}
             c={c}
-            hovered={hoveredId === c.id}
+            hovered={effectiveHoverId === c.id}
             selected={selectedId === c.id}
             pulsing={pulsingId === c.id}
             exportScale={exportScale}
@@ -1119,7 +1245,8 @@ export const OverlayLayer = ({
             setDrag={setDrag}
             onOverlayClick={onOverlayClick}
             onOverlayDrag={onOverlayDrag}
-            denseOpaque={showLabels && suppressedIds.has(c.id)}
+            onHoverChange={setLocalHoverId}
+            denseOpaque={showLabels && (suppressedIds.has(c.id) || lowDetailIds.has(c.id))}
           />
         );
       })}
@@ -1157,6 +1284,11 @@ export const OverlayLayer = ({
         const lineHeightPx = Math.round(renderFont * 1.25);
         const centerX = p.x + p.w / 2;
         const centerY = p.y + p.h / 2;
+        // Viewer-only: the pill is hover-interactive and forwards clicks to the
+        // same selection handler the anchor dot uses.
+        const interactive = !fullSizeLabels && !syncPlacement && p.kind === "circle";
+        const isHovered = interactive && effectiveHoverId === p.id;
+        const outlinePx = ((LABEL_BORDER_PX_SCREEN + 1) * exportScale) / s;
         return (
           <div
             ref={(el) => { if (el) labelRefMap.current.set(p.id, el); }}
@@ -1170,7 +1302,16 @@ export const OverlayLayer = ({
             data-h={p.h}
             data-font-px={renderFont}
             data-opacity={LABEL_OPACITY}
-            className="absolute font-bold pointer-events-none text-center"
+            className="absolute font-bold text-center"
+            onPointerEnter={interactive ? () => setLocalHoverId(p.id) : undefined}
+            onPointerLeave={interactive ? () => setLocalHoverId(null) : undefined}
+            onPointerDown={interactive && onOverlayClick ? (e) => e.stopPropagation() : undefined}
+            onPointerUp={interactive && onOverlayClick ? (e) => e.stopPropagation() : undefined}
+            onClick={
+              interactive && onOverlayClick
+                ? (e) => { e.stopPropagation(); onOverlayClick(p.id); }
+                : undefined
+            }
             style={{
               left: centerX,
               top: centerY,
@@ -1194,8 +1335,13 @@ export const OverlayLayer = ({
               borderRadius: 0,
               backgroundColor: p.color,
               color: readableTextOn(p.color),
-              opacity: LABEL_OPACITY,
+              opacity: isHovered ? 1 : LABEL_OPACITY,
               whiteSpace: "pre",
+              pointerEvents: interactive ? "auto" : "none",
+              cursor: interactive && onOverlayClick ? "pointer" : undefined,
+              ...(isHovered
+                ? { outline: `${outlinePx}px solid ${readableTextOn(p.color)}`, outlineOffset: 0 }
+                : null),
             }}
           >
             {p.text}

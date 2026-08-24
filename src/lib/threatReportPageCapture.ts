@@ -134,7 +134,7 @@ export async function rasterizeViewerSurface(
     ctx.save();
     ctx.globalAlpha = opacity;
     ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5 * outScale;
+    ctx.lineWidth = 2.5 * outScale;
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
@@ -174,7 +174,7 @@ export async function rasterizeViewerSurface(
       ctx.stroke();
       ctx.beginPath();
       ctx.arc(center.x, center.y, radius - 1.25 * outScale, 0, Math.PI * 2);
-      ctx.lineWidth = 2.5 * outScale;
+      ctx.lineWidth = 3.5 * outScale;
       ctx.strokeStyle = color;
       ctx.stroke();
     }
