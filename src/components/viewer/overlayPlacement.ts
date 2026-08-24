@@ -1257,7 +1257,7 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
           yield ring;
         }
       });
-      const final = chosen ?? placeIsolated(t);
+      const final = chosen ?? placeIsolated(t) ?? placeLastResort(t);
       if (final) {
         commit(t, final);
         usedAngle = Math.atan2(final.y + final.h / 2 - ccy, final.x + final.w / 2 - ccx);
