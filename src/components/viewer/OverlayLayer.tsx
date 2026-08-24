@@ -692,8 +692,12 @@ export const OverlayLayer = ({
   const rectObstacles: {
     id: string; x: number; y: number; w: number; h: number; color: string; label?: string;
   }[] = [];
+  // Bbox interiors are *soft* obstacles for the cluster strategy — they often
+  // span the whole sheet, so treating them as hard would hide every label.
+  const softRectIds: string[] = [];
   for (const r of rects) {
     rectObstacles.push({ id: r.id, x: r.x, y: r.y, w: r.w, h: r.h, color: r.color });
+    softRectIds.push(r.id);
     if (r.label) {
       const measuredW = measureLabelWidthPx(r.label, fontPx);
       const w = (measuredW ?? r.label.length * charPx) + padX * 2 + 4;
@@ -708,6 +712,7 @@ export const OverlayLayer = ({
       });
     }
   }
+
   // ---- Local density LOD ---------------------------------------------------
   // Quantized zoom so a smooth pinch/scroll doesn't retrigger placement.
   const lodScale = useMemo(() => {
