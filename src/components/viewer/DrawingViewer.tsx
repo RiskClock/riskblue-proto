@@ -649,6 +649,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                     selectedOverlayId={selectedOverlayId}
                     pulsingOverlayId={pulsingOverlayId}
                           viewScale={scale}
+                          placementScale={settledScale}
                           onCanvasClick={
                             onCanvasClick
                               ? (nx, ny) => onCanvasClick(nx, ny, p.pageNum)
