@@ -1181,14 +1181,38 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
       }
     });
 
+  /**
+   * Last resort: expanding spiral around the anchor, checked against hard
+   * obstacles and bounds only. Soft violations (bbox interiors, foreign dots,
+   * leader crossings) are accepted rather than hiding the label.
+   */
+  const placeLastResort = (t: ClusterTarget): Box | null => {
+    const step = Math.max(6, t.h * RADIAL_STEP_FACTOR);
+    let best: { b: Box; cost: number } | null = null;
+    for (let k = 1; k <= LAST_RESORT_RINGS; k++) {
+      const dist = t.r + gap + step * k;
+      for (let d = 0; d < LAST_RESORT_DIRECTIONS; d++) {
+        const a = (d / LAST_RESORT_DIRECTIONS) * Math.PI * 2;
+        const b = boxAt(t, t.cx + Math.cos(a) * dist, t.cy + Math.sin(a) * dist);
+        if (!fitsBounds(b)) continue;
+        if (hitsHardOrLabel(b)) continue;
+        const cost = costOf(t, b);
+        if (!best || cost < best.cost) best = { b, cost };
+      }
+      if (best) return best.b;
+    }
+    return best ? best.b : null;
+  };
+
   for (const members of clusters) {
     if (members.length === 1) {
       const t = members[0];
-      const chosen = placeIsolated(t);
+      const chosen = placeIsolated(t) ?? placeLastResort(t);
       if (chosen) commit(t, chosen);
       else suppressed.push(t.id);
       continue;
     }
+
 
     // Cluster centroid + radius.
     let sx = 0;
