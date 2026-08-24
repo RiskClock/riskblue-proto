@@ -107,6 +107,12 @@ const LOD_NEIGHBORHOOD_PX = 80;
 const LOD_MAX_NEIGHBORS = 3;
 /** Zoom is quantized to this step so smooth pinch-zoom doesn't rerun placement. */
 const LOD_SCALE_QUANTIZE = 0.1;
+/**
+ * Viewer-only soft cap on leader length, in screen px. Past this the placement
+ * cost grows quadratically, so labels stay near their anchors instead of being
+ * dragged into the crowded middle of the viewport. Exports are unaffected.
+ */
+const LEADER_SOFT_CAP_SCREEN_PX = 140;
 /** Extra margin (fraction of the visible span) added around the viewport
  *  before culling placement inputs, so labels don't pop in at the edge. */
 const VIEWPORT_BUFFER_RATIO = 0.2;
@@ -822,6 +828,9 @@ export const OverlayLayer = ({
     lodHiddenIds: Array.from(lodHiddenIds),
     placementTargetIds: opts?.placementTargetIds,
     fixedLabels: opts?.fixedLabels?.map(({ x, y, w, h }) => ({ x, y, w, h })),
+    leaderSoftCap: syncPlacement
+      ? undefined
+      : LEADER_SOFT_CAP_SCREEN_PX / Math.max(0.1, lodScale),
   });
 
   // Synchronous branch — used by offscreen export capture, which rasterizes
