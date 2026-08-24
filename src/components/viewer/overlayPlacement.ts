@@ -622,18 +622,55 @@ function separateResidualOverlaps(
     l.y = Math.max(minY, Math.min(maxY, l.y));
   };
 
-  const MAX_PASSES = 40;
-  for (let pass = 0; pass < MAX_PASSES; pass++) {
+  const circles = opts?.circles ?? [];
+  const circleIdx = new RBush<CircleEntry>();
+  if (circles.length > 0) {
+    circleIdx.load(circles.map((c) => ({ ...bboxOfCircle(c), c })));
+  }
+
+  // Push a pill off any foreign annotation dot it covers, along the axis from
+  // the dot centre to the pill centre.
+  const repairDots = (l: PlacedLabel, gap: number): boolean => {
+    if (circles.length === 0) return false;
+    let touched = false;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const box = { x: l.x - gap, y: l.y - gap, w: l.w + gap * 2, h: l.h + gap * 2 };
+      const hits = circleIdx
+        .search(bboxOfRect(box))
+        .filter((ch) => ch.c.id !== l.id && rectIntersectsCircle(box, ch.c));
+      if (hits.length === 0) break;
+      const c = hits[0].c;
+      let vx = l.x + l.w / 2 - c.cx;
+      let vy = l.y + l.h / 2 - c.cy;
+      const len = Math.hypot(vx, vy) || 1;
+      vx /= len;
+      vy /= len;
+      const half = Math.abs(vx) * (l.w / 2 + gap) + Math.abs(vy) * (l.h / 2 + gap);
+      const need = c.r + half - len + 1;
+      if (need <= 0) break;
+      l.x += vx * need;
+      l.y += vy * need;
+      clamp(l);
+      touched = true;
+    }
+    return touched;
+  };
+
+  // Interleaved relaxation. The padded phase aims for the breathing room the
+  // optimizer reserves; the final unpadded phase guarantees a strictly
+  // non-overlapping layout even when the dense case can't reach the padding.
+  const PADDED_PASSES = 30;
+  const TOTAL_PASSES = 60;
+  for (let pass = 0; pass < TOTAL_PASSES; pass++) {
+    const gap = pass < PADDED_PASSES ? pad : 0;
     let moved = false;
     for (let i = 0; i < boxes.length; i++) {
       for (let j = i + 1; j < boxes.length; j++) {
         if (!movable[i] && !movable[j]) continue;
         const a = boxes[i];
         const b = boxes[j];
-        // Use the same breathing room the optimizer reserves, so the final
-        // layout matches the reserved footprint instead of settling flush.
-        const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) + pad;
-        const oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) + pad;
+        const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) + gap;
+        const oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) + gap;
         if (ox <= 0 || oy <= 0) continue;
         moved = true;
         const bothMove = movable[i] && movable[j];
@@ -653,41 +690,15 @@ function separateResidualOverlaps(
         if (movable[j]) clamp(b);
       }
     }
+    // Dot repair runs inside the loop so a pill pushed onto a dot gets moved
+    // off it, and the next label pass re-resolves any overlap that creates.
+    for (const l of labels) {
+      if (l.kind !== "circle") continue;
+      if (repairDots(l, gap)) moved = true;
+    }
     if (!moved) break;
   }
 
-  // Dot repair: push any pill that ended up covering a foreign annotation dot
-  // out along the axis from the dot centre to the pill centre.
-  const circles = opts?.circles ?? [];
-  if (circles.length > 0) {
-    const circleIdx = new RBush<CircleEntry>();
-    circleIdx.load(circles.map((c) => ({ ...bboxOfCircle(c), c })));
-    for (const l of labels) {
-      if (l.kind !== "circle") continue;
-      for (let attempt = 0; attempt < 8; attempt++) {
-        const box = { x: l.x - pad, y: l.y - pad, w: l.w + pad * 2, h: l.h + pad * 2 };
-        const hits = circleIdx
-          .search(bboxOfRect(box))
-          .filter((ch) => ch.c.id !== l.id && rectIntersectsCircle(box, ch.c));
-        if (hits.length === 0) break;
-        const c = hits[0].c;
-        const lcx = l.x + l.w / 2;
-        const lcy = l.y + l.h / 2;
-        let vx = lcx - c.cx;
-        let vy = lcy - c.cy;
-        const len = Math.hypot(vx, vy) || 1;
-        vx /= len;
-        vy /= len;
-        // Distance needed to clear the circle along this axis.
-        const half = Math.abs(vx) * (l.w / 2 + pad) + Math.abs(vy) * (l.h / 2 + pad);
-        const need = c.r + half - len + 1;
-        if (need <= 0) break;
-        l.x += vx * need;
-        l.y += vy * need;
-        clamp(l);
-      }
-    }
-  }
 
   // Refresh leader lengths from the final positions.
   for (const l of labels) {
