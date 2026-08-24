@@ -73,6 +73,12 @@ export interface PlacementInput {
    */
   leaderSoftCap?: number;
   /**
+   * Viewer-only minimum leader length (page px). Candidates are probed from
+   * this distance outward so a pill never sits on top of its own anchor dot,
+   * and shorter retained positions are penalized. Exports leave it undefined.
+   */
+  minLeader?: number;
+  /**
    * Placement engine. `"legacy"` (default) is the randomized greedy optimizer
    * used by the export/capture paths. `"cluster"` is the viewer's
    * cluster-first radial allocator.
