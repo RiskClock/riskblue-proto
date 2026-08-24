@@ -846,6 +846,9 @@ export const OverlayLayer = ({
     leaderSoftCap: syncPlacement
       ? undefined
       : LEADER_SOFT_CAP_SCREEN_PX / Math.max(0.1, lodScale),
+    minLeader: syncPlacement
+      ? undefined
+      : MIN_LEADER_SCREEN_PX / Math.max(0.1, lodScale),
     strategy: (syncPlacement ? "legacy" : "cluster") as "legacy" | "cluster",
     clusterProximity: CLUSTER_PROXIMITY_PX / Math.max(0.1, lodScale),
     previousLabels: opts?.previousLabels?.map(({ id, x, y, w, h }) => ({ id, x, y, w, h })),
