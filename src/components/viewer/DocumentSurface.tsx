@@ -59,6 +59,8 @@ interface DocumentSurfaceProps {
   showLabels?: boolean;
   /** Forwarded to OverlayLayer.viewportRect (visible page region, 0..1). */
   viewportRect?: { nx: number; ny: number; nw: number; nh: number } | null;
+  /** Forwarded to OverlayLayer.placementScale (settle-debounced zoom). */
+  placementScale?: number;
 }
 
 
