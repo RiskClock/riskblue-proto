@@ -928,8 +928,16 @@ export const OverlayLayer = ({
   // Async branch — pushes the heavy optimizer pass into a Web Worker so
   // opening a viewer with many annotations doesn't block paint or input.
   const [asyncPlaced, setAsyncPlaced] = useState<PlacedLabel[]>([]);
-  const placementCacheRef = useRef<Map<string, PlacedLabel>>(new Map());
-  const placementStructureKey = `${circleLayoutKey}::${rectLayoutKey}::${lodScale}::${placementSizingKey}::${pageSize.width}x${pageSize.height}`;
+  /**
+   * Cached label positions. Entries remember the label height they were placed
+   * with so a zoom change can rescale them in place (zoom hysteresis) instead
+   * of invalidating the whole layout.
+   */
+  const placementCacheRef = useRef<Map<string, { p: PlacedLabel; labelH: number }>>(new Map());
+  // NOTE: zoom (lodScale / sizing) is deliberately NOT part of this key —
+  // zooming must not wipe cached positions. Only real structural changes
+  // (annotation set / geometry / page size) reset the cache.
+  const placementStructureKey = `${circleLayoutKey}::${rectLayoutKey}::${pageSize.width}x${pageSize.height}`;
   const lastPlacementStructureKeyRef = useRef(placementStructureKey);
   useEffect(() => {
     if (syncPlacement) return;
@@ -941,6 +949,7 @@ export const OverlayLayer = ({
       .filter((c) =>
         !!c.label &&
         !c.isDot &&
+        !lowDetailIds.has(c.id) &&
         intersectsVisible(c.cx, c.cy, c.cx, c.cy),
       )
       .map((c) => c.id);
@@ -951,9 +960,40 @@ export const OverlayLayer = ({
         p.y >= visibleBounds.y &&
         p.x + p.w <= visibleBounds.x + visibleBounds.width &&
         p.y + p.h <= visibleBounds.y + visibleBounds.height);
-    const retained = Array.from(placementCacheRef.current.values()).filter(
-      (p) => targetIdSet.has(p.id) && fitsVisibleBounds(p),
-    );
+    const overlaps = (
+      a: { x: number; y: number; w: number; h: number },
+      b: { x: number; y: number; w: number; h: number },
+    ) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+    // Zoom hysteresis: rescale each cached label around its own center to the
+    // footprint it would have at the current zoom, then keep it unless it is
+    // now clipped by the viewport or collides with another retained label /
+    // docked rect label. Only invalid labels are re-placed.
+    const cache = placementCacheRef.current;
+    const hardObstacles = rectObstacles.filter((r) => r.id.endsWith("__label"));
+    const retained: PlacedLabel[] = [];
+    for (const entry of Array.from(cache.values())) {
+      if (!targetIdSet.has(entry.p.id)) {
+        cache.delete(entry.p.id);
+        continue;
+      }
+      const k = entry.labelH > 0 ? placementSizing.labelH / entry.labelH : 1;
+      const cx = entry.p.x + entry.p.w / 2;
+      const cy = entry.p.y + entry.p.h / 2;
+      const w = entry.p.w * k;
+      const h = entry.p.h * k;
+      const next: PlacedLabel = { ...entry.p, x: cx - w / 2, y: cy - h / 2, w, h };
+      const valid =
+        fitsVisibleBounds(next) &&
+        !retained.some((r) => overlaps(next, r)) &&
+        !hardObstacles.some((r) => overlaps(next, r));
+      if (valid) {
+        cache.set(next.id, { p: next, labelH: placementSizing.labelH });
+        retained.push(next);
+      } else {
+        cache.delete(entry.p.id);
+      }
+    }
     setAsyncPlaced(retained);
     const retainedIds = new Set(retained.map((p) => p.id));
     const missingIds = targetIds.filter((id) => !retainedIds.has(id));
@@ -973,11 +1013,10 @@ export const OverlayLayer = ({
       buildPlacementInput({
         placementTargetIds: missingIds,
         fixedLabels: retained,
-        previousLabels: Array.from(placementCacheRef.current.values()),
+        previousLabels: retained,
       }),
       ({ placed, suppressedIds: suppressed }) => {
-        const cache = placementCacheRef.current;
-        for (const p of placed) cache.set(p.id, p);
+        for (const p of placed) cache.set(p.id, { p, labelH: placementSizing.labelH });
         for (const id of suppressed) cache.delete(id);
         setAsyncPlaced([...retained, ...placed]);
         setSuppressedIds(new Set(suppressed));
@@ -991,7 +1030,7 @@ export const OverlayLayer = ({
     );
     return () => ticket.cancel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncPlacement, showLabels, placementStructureKey, cullKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx, placementSizingKey]);
+  }, [syncPlacement, showLabels, placementStructureKey, cullKey, lowDetailKey, pageSize.width, pageSize.height, fontPx, padX, labelH, gap, charPx, placementSizingKey]);
 
 
   // On unmount, ensure the parent's "placing" flag doesn't stay stuck on.
