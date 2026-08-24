@@ -1186,8 +1186,9 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
   const placeIsolated = (t: ClusterTarget): Box | null =>
     chooseByRings(t, function* () {
       const step = Math.max(6, t.h * RADIAL_STEP_FACTOR);
+      const base = t.r + gap + minLeader;
       for (let k = 1; k <= ISOLATED_RING_STEPS; k++) {
-        const dist = t.r + gap + step * k;
+        const dist = base + step * (k - 1);
         const ring: Box[] = [];
         for (const degrees of ISOLATED_DIRECTIONS_DEG) {
           const a = toRad(degrees);
