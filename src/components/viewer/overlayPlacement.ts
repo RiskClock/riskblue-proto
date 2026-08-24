@@ -1107,21 +1107,25 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
 
   const toRad = (deg: number) => (deg * Math.PI) / 180;
 
+  /** Nearest free directional slot around the anchor itself. */
+  const placeIsolated = (t: ClusterTarget): Box | null =>
+    chooseByRings(t, function* () {
+      const step = Math.max(6, t.h * RADIAL_STEP_FACTOR);
+      for (let k = 1; k <= ISOLATED_RING_STEPS; k++) {
+        const dist = t.r + gap + step * k;
+        const ring: Box[] = [];
+        for (const degrees of ISOLATED_DIRECTIONS_DEG) {
+          const a = toRad(degrees);
+          ring.push(boxAt(t, t.cx + Math.cos(a) * dist, t.cy + Math.sin(a) * dist));
+        }
+        yield ring;
+      }
+    });
+
   for (const members of clusters) {
     if (members.length === 1) {
       const t = members[0];
-      const step = Math.max(6, t.h * RADIAL_STEP_FACTOR);
-      const chosen = chooseByRings(t, function* () {
-        for (let k = 1; k <= ISOLATED_RING_STEPS; k++) {
-          const dist = t.r + gap + step * k;
-          const ring: Box[] = [];
-          for (const degrees of ISOLATED_DIRECTIONS_DEG) {
-            const a = toRad(degrees);
-            ring.push(boxAt(t, t.cx + Math.cos(a) * dist, t.cy + Math.sin(a) * dist));
-          }
-          yield ring;
-        }
-      });
+      const chosen = placeIsolated(t);
       if (chosen) commit(t, chosen);
       else suppressed.push(t.id);
       continue;
@@ -1170,9 +1174,10 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
           yield ring;
         }
       });
-      if (chosen) {
-        commit(t, chosen);
-        usedAngle = Math.atan2(chosen.y + chosen.h / 2 - ccy, chosen.x + chosen.w / 2 - ccx);
+      const final = chosen ?? placeIsolated(t);
+      if (final) {
+        commit(t, final);
+        usedAngle = Math.atan2(final.y + final.h / 2 - ccy, final.x + final.w / 2 - ccx);
       } else {
         suppressed.push(t.id);
       }
