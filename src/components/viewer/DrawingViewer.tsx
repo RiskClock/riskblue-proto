@@ -334,6 +334,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       if (visibleRectTimer.current) clearTimeout(visibleRectTimer.current);
       visibleRectTimer.current = setTimeout(() => {
         const s = state.scale || 1;
+        setSettledScale(s);
         const pw = pageCssSize.width;
         const ph = pageCssSize.height;
         if (pw === 0 || ph === 0 || viewportSize.width === 0 || viewportSize.height === 0) {
