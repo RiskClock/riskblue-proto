@@ -72,6 +72,17 @@ export interface PlacementInput {
    * undefined to keep the previous linear cost.
    */
   leaderSoftCap?: number;
+  /**
+   * Placement engine. `"legacy"` (default) is the randomized greedy optimizer
+   * used by the export/capture paths. `"cluster"` is the viewer's
+   * cluster-first radial allocator.
+   */
+  strategy?: "legacy" | "cluster";
+  /** Cluster proximity threshold in page px (cluster strategy). */
+  clusterProximity?: number;
+  /** Previous frame's label rects, used as an anti-jitter seed. */
+  previousLabels?: Array<{ id: string; x: number; y: number; w: number; h: number }>;
+
 }
 
 
@@ -765,11 +776,434 @@ function separateResidualOverlaps(
   }
 }
 
+// ---- Cluster-first radial layout (viewer strategy) ------------------------
+//
+// Proactive spatial allocation instead of randomized greedy relaxation:
+//   1. anchors are grouped into proximity clusters (rbush),
+//   2. clusters are processed largest-first,
+//   3. members of a cluster fan out radially from the cluster centroid in
+//      angular order, so leader lines never cross each other,
+//   4. isolated anchors get the nearest free directional slot,
+//   5. a label with no collision-free slot is suppressed (its dot is drawn
+//      opaque by the viewer instead).
+
+/** Cluster proximity in page px, used when the caller doesn't supply one. */
+const CLUSTER_DEFAULT_PROXIMITY = 60;
+/** Radial ring step as a multiple of the label height. */
+const RADIAL_STEP_FACTOR = 1.15;
+const RADIAL_MAX_STEPS = 16;
+/** Clusters larger than this are split along their longer axis. */
+const MAX_CLUSTER_SIZE = 30;
+
+/** Angular wiggle (degrees) allowed around a member's own centroid ray. */
+const RADIAL_ANGLE_OFFSETS_DEG = [0, 4, -4, 8, -8, 14, -14, 22, -22];
+/** Minimum angular separation (degrees) between consecutive cluster members. */
+const MIN_ANGULAR_GAP_DEG = 2;
+const ISOLATED_RING_STEPS = 10;
+const ISOLATED_DIRECTIONS_DEG = [0, -90, 180, 90, -45, 45, -135, 135];
+/** Weight of the "distance moved from the previous frame" term. */
+const INERTIA_WEIGHT = 0.6;
+/** A previous position is only replaced when the new one is this much cheaper. */
+const HYSTERESIS_RATIO = 0.25;
+/** Breathing room reserved between label pills. */
+const LABEL_SAFETY_PAD = 4;
+
+export interface PlacementResult {
+  placed: PlacedLabel[];
+  /** Ids whose label had no collision-free slot and was dropped. */
+  suppressedIds: string[];
+}
+
+interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+interface ClusterTarget {
+  id: string;
+  cx: number;
+  cy: number;
+  r: number;
+  color: string;
+  text: string;
+  w: number;
+  h: number;
+}
+
+function runClusterPlacement(input: PlacementInput): PlacementResult {
+  const { pageSize, fontPx, padX, labelH, gap, charPx } = input;
+  const bounds = input.bounds ?? { x: 0, y: 0, width: pageSize.width, height: pageSize.height };
+  const proximity =
+    input.clusterProximity && input.clusterProximity > 0
+      ? input.clusterProximity
+      : CLUSTER_DEFAULT_PROXIMITY;
+
+  const placementTargets = input.placementTargetIds
+    ? new Set(input.placementTargetIds)
+    : null;
+  const labeled = input.circles.filter(
+    (c) => !!c.label && !c.isDot && (!placementTargets || placementTargets.has(c.id)),
+  );
+  if (labeled.length === 0) return { placed: [], suppressedIds: [] };
+
+  const lineH = Math.round(fontPx * 1.25);
+  const heightFor = (text: string) => {
+    const lines = text.split("\n").length;
+    return lines <= 1 ? labelH : labelH + (lines - 1) * lineH;
+  };
+  const widthFor = (text: string, measured?: number) => {
+    if (typeof measured === "number" && measured > 0) {
+      return Math.ceil(measured) + padX * 2 + 4;
+    }
+    const longest = text.split("\n").reduce((m, s) => Math.max(m, s.length), 0);
+    return Math.ceil(longest * charPx) + padX * 2 + 4;
+  };
+
+  const targets: ClusterTarget[] = labeled.map((c) => ({
+    id: c.id,
+    cx: c.cx,
+    cy: c.cy,
+    r: c.r,
+    color: c.color,
+    text: c.label!,
+    w: widthFor(c.label!, c.measuredWidthPx),
+    h: heightFor(c.label!),
+  }));
+
+  // ---- Obstacle indexes
+  const hardIdx = new RBush<RectEntry>();
+  hardIdx.load([
+    ...input.rects.map((r) => ({
+      ...bboxOfRect(r),
+      r: { x: r.x, y: r.y, w: r.w, h: r.h, hard: true } as RectInfo,
+    })),
+    ...(input.fixedLabels ?? []).map((r) => ({
+      ...bboxOfRect(r),
+      r: { x: r.x, y: r.y, w: r.w, h: r.h, hard: true } as RectInfo,
+    })),
+  ]);
+  const circleIdx = new RBush<CircleEntry>();
+  circleIdx.load(
+    input.circles.map((c) => ({
+      ...bboxOfCircle(c),
+      c: { id: c.id, cx: c.cx, cy: c.cy, r: c.r, color: c.color, label: c.label },
+    })),
+  );
+
+  const placedIdx = new RBush<BBoxEntry>();
+  const leaderIdx = new RBush<LeaderEntry>();
+  let leaderSeq = 0;
+
+  const prev = new Map<string, Box>();
+  for (const p of input.previousLabels ?? []) {
+    prev.set(p.id, { x: p.x, y: p.y, w: p.w, h: p.h });
+  }
+
+  const fitsBounds = (b: Box) =>
+    b.x >= bounds.x + 1 &&
+    b.y >= bounds.y + 1 &&
+    b.x + b.w <= bounds.x + bounds.width - 1 &&
+    b.y + b.h <= bounds.y + bounds.height - 1;
+
+  const hitsHardOrLabel = (b: Box) => {
+    const pad = LABEL_SAFETY_PAD;
+    const inflated = { x: b.x - pad, y: b.y - pad, w: b.w + pad * 2, h: b.h + pad * 2 };
+    for (const e of placedIdx.search(bboxOfRect(inflated))) {
+      const other = { x: e.minX, y: e.minY, w: e.maxX - e.minX, h: e.maxY - e.minY };
+      if (rectsOverlap(inflated, other, 0)) return true;
+    }
+    for (const e of hardIdx.search(bboxOfRect(b))) {
+      if (rectsOverlap(b, e.r, 0)) return true;
+    }
+    return false;
+  };
+
+  const hitsDot = (b: Box, ownerId: string) => {
+    for (const e of circleIdx.search(bboxOfRect(b))) {
+      if (e.c.id === ownerId) continue;
+      if (rectIntersectsCircle(b, e.c)) return true;
+    }
+    return false;
+  };
+
+  const leaderCrosses = (ax: number, ay: number, bx: number, by: number) => {
+    for (const e of leaderIdx.search(bboxOfSegment(ax, ay, bx, by))) {
+      if (segmentsIntersect({ x: ax, y: ay }, { x: bx, y: by }, { x: e.ax, y: e.ay }, { x: e.bx, y: e.by })) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const out: PlacedLabel[] = [];
+  const suppressed: string[] = [];
+
+  const commit = (t: ClusterTarget, b: Box) => {
+    const dirX = b.x + b.w / 2 - t.cx;
+    const dirY = b.y + b.h / 2 - t.cy;
+    const len = Math.hypot(dirX, dirY) || 1;
+    const ax = t.cx + (dirX / len) * t.r;
+    const ay = t.cy + (dirY / len) * t.r;
+    const ex = Math.max(b.x, Math.min(t.cx, b.x + b.w));
+    const ey = Math.max(b.y, Math.min(t.cy, b.y + b.h));
+    out.push({
+      x: b.x,
+      y: b.y,
+      w: b.w,
+      h: b.h,
+      ax,
+      ay,
+      leader: Math.hypot(ex - ax, ey - ay),
+      id: t.id,
+      color: t.color,
+      text: t.text,
+      kind: "circle",
+    });
+    placedIdx.insert(bboxOfRect(b));
+    const bx = b.x + b.w / 2;
+    const by = b.y + b.h / 2;
+    leaderIdx.insert({
+      ...bboxOfSegment(t.cx, t.cy, bx, by),
+      idx: leaderSeq++,
+      ax: t.cx,
+      ay: t.cy,
+      bx,
+      by,
+    });
+  };
+
+  /**
+   * Cost of a candidate box for a target: leader length plus an inertia term
+   * pulling it toward the position it held in the previous frame.
+   */
+  const costOf = (t: ClusterTarget, b: Box) => {
+    const ex = Math.max(b.x, Math.min(t.cx, b.x + b.w));
+    const ey = Math.max(b.y, Math.min(t.cy, b.y + b.h));
+    let cost = Math.hypot(ex - t.cx, ey - t.cy);
+    const p = prev.get(t.id);
+    if (p) {
+      const moved = Math.hypot(b.x + b.w / 2 - (p.x + p.w / 2), b.y + b.h / 2 - (p.y + p.h / 2));
+      cost += moved * INERTIA_WEIGHT;
+    }
+    return cost;
+  };
+
+  /** Tier 0 = clear of everything, tier 1 = only overlaps foreign dots. */
+  const tierOf = (t: ClusterTarget, b: Box): 0 | 1 | -1 => {
+    if (!fitsBounds(b)) return -1;
+    if (hitsHardOrLabel(b)) return -1;
+    const bx = b.x + b.w / 2;
+    const by = b.y + b.h / 2;
+    const crosses = leaderCrosses(t.cx, t.cy, bx, by);
+    const onDot = hitsDot(b, t.id);
+    if (crosses) return -1;
+    return onDot ? 1 : 0;
+  };
+
+  // ---- Pass 0: retain still-valid previous positions (anti-jitter).
+  const remaining: ClusterTarget[] = [];
+  for (const t of targets) {
+    const p = prev.get(t.id);
+    if (!p || Math.abs(p.w - t.w) > 1 || Math.abs(p.h - t.h) > 1) {
+      remaining.push(t);
+      continue;
+    }
+    if (tierOf(t, p) === 0) {
+      commit(t, p);
+    } else {
+      remaining.push(t);
+    }
+  }
+
+  // ---- Cluster the remaining anchors (connected components within `proximity`).
+  const anchorIdx = new RBush<BBoxEntry & { i: number }>();
+  anchorIdx.load(
+    remaining.map((t, i) => ({ minX: t.cx, minY: t.cy, maxX: t.cx, maxY: t.cy, i })),
+  );
+  const seen = new Array<boolean>(remaining.length).fill(false);
+  const clusters: ClusterTarget[][] = [];
+  for (let i = 0; i < remaining.length; i++) {
+    if (seen[i]) continue;
+    seen[i] = true;
+    const queue = [i];
+    const members: ClusterTarget[] = [];
+    while (queue.length > 0) {
+      const k = queue.pop()!;
+      const t = remaining[k];
+      members.push(t);
+      const near = anchorIdx.search({
+        minX: t.cx - proximity,
+        minY: t.cy - proximity,
+        maxX: t.cx + proximity,
+        maxY: t.cy + proximity,
+      });
+      for (const n of near) {
+        if (seen[n.i]) continue;
+        seen[n.i] = true;
+        queue.push(n.i);
+      }
+    }
+    clusters.push(members);
+  }
+  // A single huge blob would push every label onto one enormous ring, most of
+  // which falls outside the viewport. Split oversized clusters along their
+  // longer axis (median) until each fan stays local.
+  const splitOversized = (members: ClusterTarget[]): ClusterTarget[][] => {
+    if (members.length <= MAX_CLUSTER_SIZE) return [members];
+    const xs = members.map((m) => m.cx);
+    const ys = members.map((m) => m.cy);
+    const spanX = Math.max(...xs) - Math.min(...xs);
+    const spanY = Math.max(...ys) - Math.min(...ys);
+    const sorted = members
+      .slice()
+      .sort((a, b) => (spanX >= spanY ? a.cx - b.cx : a.cy - b.cy));
+    const mid = Math.floor(sorted.length / 2);
+    return [
+      ...splitOversized(sorted.slice(0, mid)),
+      ...splitOversized(sorted.slice(mid)),
+    ];
+  };
+  const splitClusters = clusters.flatMap(splitOversized);
+  clusters.length = 0;
+  clusters.push(...splitClusters);
+  clusters.sort((a, b) => b.length - a.length);
+
+
+  const boxAt = (t: ClusterTarget, cx: number, cy: number): Box => ({
+    x: cx - t.w / 2,
+    y: cy - t.h / 2,
+    w: t.w,
+    h: t.h,
+  });
+
+  /**
+   * Pick the cheapest acceptable candidate, preferring tier 0. Scans ring by
+   * ring and stops at the first ring that yields anything, so labels stay as
+   * close to their anchor as the free space allows.
+   */
+  const chooseByRings = (
+    t: ClusterTarget,
+    ringCandidates: () => Generator<Box[], void, unknown>,
+  ): Box | null => {
+    let fallback: { b: Box; cost: number } | null = null;
+    for (const ring of ringCandidates()) {
+      let best: { b: Box; cost: number } | null = null;
+      for (const b of ring) {
+        const tier = tierOf(t, b);
+        if (tier === -1) continue;
+        const cost = costOf(t, b);
+        if (tier === 0) {
+          if (!best || cost < best.cost) best = { b, cost };
+        } else if (!fallback || cost < fallback.cost) {
+          fallback = { b, cost };
+        }
+      }
+      if (best) return best.b;
+    }
+    return fallback ? fallback.b : null;
+  };
+
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+
+  /** Nearest free directional slot around the anchor itself. */
+  const placeIsolated = (t: ClusterTarget): Box | null =>
+    chooseByRings(t, function* () {
+      const step = Math.max(6, t.h * RADIAL_STEP_FACTOR);
+      for (let k = 1; k <= ISOLATED_RING_STEPS; k++) {
+        const dist = t.r + gap + step * k;
+        const ring: Box[] = [];
+        for (const degrees of ISOLATED_DIRECTIONS_DEG) {
+          const a = toRad(degrees);
+          ring.push(boxAt(t, t.cx + Math.cos(a) * dist, t.cy + Math.sin(a) * dist));
+        }
+        yield ring;
+      }
+    });
+
+  for (const members of clusters) {
+    if (members.length === 1) {
+      const t = members[0];
+      const chosen = placeIsolated(t);
+      if (chosen) commit(t, chosen);
+      else suppressed.push(t.id);
+      continue;
+    }
+
+    // Cluster centroid + radius.
+    let sx = 0;
+    let sy = 0;
+    for (const m of members) {
+      sx += m.cx;
+      sy += m.cy;
+    }
+    const ccx = sx / members.length;
+    const ccy = sy / members.length;
+    let radius = 0;
+    for (const m of members) {
+      radius = Math.max(radius, Math.hypot(m.cx - ccx, m.cy - ccy) + m.r);
+    }
+
+    // Angular order around the centroid keeps leader lines from crossing.
+    const withAngle = members
+      .map((t) => ({ t, angle: Math.atan2(t.cy - ccy, t.cx - ccx) }))
+      .sort((a, b) => a.angle - b.angle);
+
+    const minGap = toRad(MIN_ANGULAR_GAP_DEG);
+    let lastAngle = -Infinity;
+    for (let i = 0; i < withAngle.length; i++) {
+      const { t, angle } = withAngle[i];
+      const nextRaw = i + 1 < withAngle.length ? withAngle[i + 1].angle : Infinity;
+      const lowerBound = lastAngle === -Infinity ? -Infinity : lastAngle + minGap;
+      const angles = RADIAL_ANGLE_OFFSETS_DEG.map((d) => angle + toRad(d)).filter(
+        (a) => a >= lowerBound && (nextRaw === Infinity || a <= nextRaw + minGap),
+      );
+      if (angles.length === 0) angles.push(Math.max(angle, lowerBound === -Infinity ? angle : lowerBound));
+
+      const step = Math.max(6, t.h * RADIAL_STEP_FACTOR);
+      const baseDist = Math.max(radius + gap, Math.hypot(t.cx - ccx, t.cy - ccy) + t.r + gap);
+      let usedAngle: number | null = null;
+      const chosen = chooseByRings(t, function* () {
+        for (let k = 0; k <= RADIAL_MAX_STEPS; k++) {
+          const dist = baseDist + step * (k + 0.6);
+          const ring: Box[] = [];
+          for (const a of angles) {
+            ring.push(boxAt(t, ccx + Math.cos(a) * dist, ccy + Math.sin(a) * dist));
+          }
+          yield ring;
+        }
+      });
+      const final = chosen ?? placeIsolated(t);
+      if (final) {
+        commit(t, final);
+        usedAngle = Math.atan2(final.y + final.h / 2 - ccy, final.x + final.w / 2 - ccx);
+      } else {
+        suppressed.push(t.id);
+      }
+      if (usedAngle !== null) lastAngle = Math.max(usedAngle, angle);
+    }
+  }
+
+  return { placed: out, suppressedIds: suppressed };
+}
+
 
 // ---- Public entry point ---------------------------------------------------
 
 
+/** Detailed entry point: adds the suppressed-id list the viewer needs. */
+export function runPlacementDetailed(input: PlacementInput): PlacementResult {
+  if (input.strategy === "cluster") return runClusterPlacement(input);
+  return { placed: runLegacyPlacement(input), suppressedIds: [] };
+}
+
 export function runPlacement(input: PlacementInput): PlacedLabel[] {
+  return runPlacementDetailed(input).placed;
+}
+
+function runLegacyPlacement(input: PlacementInput): PlacedLabel[] {
+
   const { pageSize, fontPx, padX, labelH, gap, charPx } = input;
   const bounds = input.bounds ?? { x: 0, y: 0, width: pageSize.width, height: pageSize.height };
   const ringScale = Math.max(1, input.scale ?? 1);

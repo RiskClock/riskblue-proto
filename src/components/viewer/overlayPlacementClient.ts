@@ -17,10 +17,16 @@
 // preserved. Callers can also bypass the worker entirely via `runPlacement`
 // (used by the offscreen export capture path).
 
-import { runPlacement, type PlacementInput, type PlacedLabel } from "./overlayPlacement";
+import {
+  runPlacement,
+  runPlacementDetailed,
+  type PlacementInput,
+  type PlacedLabel,
+  type PlacementResult,
+} from "./overlayPlacement";
 
 interface PendingCallback {
-  onDone: (placed: PlacedLabel[]) => void;
+  onDone: (result: PlacementResult) => void;
   onError?: (err: Error) => void;
   cancelled: boolean;
 }
@@ -39,7 +45,7 @@ function getWorker(): Worker | null {
     );
     worker.addEventListener("message", (ev: MessageEvent) => {
       const data = ev.data as
-        | { requestId: number; placed: PlacedLabel[] }
+        | { requestId: number; placed: PlacedLabel[]; suppressedIds: string[] }
         | { requestId: number; error: string };
       const cb = pending.get(data.requestId);
       if (!cb) return;
@@ -48,7 +54,7 @@ function getWorker(): Worker | null {
       if ("error" in data) {
         cb.onError?.(new Error(data.error));
       } else {
-        cb.onDone(data.placed);
+        cb.onDone({ placed: data.placed, suppressedIds: data.suppressedIds ?? [] });
       }
     });
     worker.addEventListener("error", (ev) => {
@@ -77,7 +83,7 @@ export interface PlacementTicket {
 
 export function requestPlacement(
   input: PlacementInput,
-  onDone: (placed: PlacedLabel[]) => void,
+  onDone: (result: PlacementResult) => void,
   onError?: (err: Error) => void,
 ): PlacementTicket {
   const w = getWorker();
@@ -88,7 +94,7 @@ export function requestPlacement(
     queueMicrotask(() => {
       if (cancelled) return;
       try {
-        onDone(runPlacement(input));
+        onDone(runPlacementDetailed(input));
       } catch (e) {
         onError?.(e instanceof Error ? e : new Error(String(e)));
       }
@@ -109,5 +115,5 @@ export function requestPlacement(
 }
 
 // Re-exported for the sync export-capture path.
-export { runPlacement };
-export type { PlacementInput, PlacedLabel };
+export { runPlacement, runPlacementDetailed };
+export type { PlacementInput, PlacedLabel, PlacementResult };
