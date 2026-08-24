@@ -72,6 +72,12 @@ interface OverlayLayerProps {
    * don't dodge off-screen geometry. Omitted / null => no culling.
    */
   viewportRect?: { nx: number; ny: number; nw: number; nh: number } | null;
+  /**
+   * Settle-debounced zoom scale used for the placement pass only (pills still
+   * render at the live `viewScale`). Keeps a zoom gesture from rerunning the
+   * optimizer on every frame. Falls back to `viewScale` when omitted.
+   */
+  placementScale?: number;
 }
 
 
