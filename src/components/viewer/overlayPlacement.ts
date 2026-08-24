@@ -1029,7 +1029,14 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
   const costOf = (t: ClusterTarget, b: Box) => {
     const ex = Math.max(b.x, Math.min(t.cx, b.x + b.w));
     const ey = Math.max(b.y, Math.min(t.cy, b.y + b.h));
-    let cost = Math.hypot(ex - t.cx, ey - t.cy);
+    const leader = Math.hypot(ex - t.cx, ey - t.cy);
+    let cost = leader;
+    // Keep the pill off its own anchor: penalize leaders shorter than the
+    // requested minimum so a too-close retained/fallback slot loses.
+    if (minLeader > 0) {
+      const shortfall = Math.max(0, minLeader + t.r - leader);
+      cost += shortfall * SHORT_LEADER_PENALTY;
+    }
     const p = prev.get(t.id);
     if (p) {
       const moved = Math.hypot(b.x + b.w / 2 - (p.x + p.w / 2), b.y + b.h / 2 - (p.y + p.h / 2));
