@@ -1082,7 +1082,11 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
       remaining.push(t);
       continue;
     }
-    const ev = evaluate(t, p);
+    // A retained slot must also keep a readable leader; otherwise re-place it.
+    const ex = Math.max(p.x, Math.min(t.cx, p.x + p.w));
+    const ey = Math.max(p.y, Math.min(t.cy, p.y + p.h));
+    const tooClose = minLeader > 0 && Math.hypot(ex - t.cx, ey - t.cy) < minLeader + t.r - 1;
+    const ev = tooClose ? null : evaluate(t, p);
     if (ev && ev.clean) {
       commit(t, p);
     } else {
