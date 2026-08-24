@@ -564,6 +564,7 @@ export const OverlayLayer = ({
   onPlacingChange,
   showLabels = true,
   viewportRect = null,
+  placementScale,
 
 
 }: OverlayLayerProps) => {
