@@ -1218,7 +1218,7 @@ export const OverlayLayer = ({
           <CircleOverlay
             key={c.id}
             c={c}
-            hovered={hoveredId === c.id}
+            hovered={effectiveHoverId === c.id}
             selected={selectedId === c.id}
             pulsing={pulsingId === c.id}
             exportScale={exportScale}
@@ -1234,7 +1234,8 @@ export const OverlayLayer = ({
             setDrag={setDrag}
             onOverlayClick={onOverlayClick}
             onOverlayDrag={onOverlayDrag}
-            denseOpaque={showLabels && suppressedIds.has(c.id)}
+            onHoverChange={setLocalHoverId}
+            denseOpaque={showLabels && (suppressedIds.has(c.id) || lowDetailIds.has(c.id))}
           />
         );
       })}
