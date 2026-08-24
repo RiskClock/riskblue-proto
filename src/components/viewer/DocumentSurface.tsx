@@ -111,6 +111,7 @@ export const DocumentSurface = ({
   onPlacingChange,
   showLabels = true,
   viewportRect = null,
+  placementScale,
 }: DocumentSurfaceProps) => {
   const downRef = useRef<{ x: number; y: number } | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
