@@ -726,11 +726,13 @@ export const OverlayLayer = ({
   }
 
   // ---- Local density LOD ---------------------------------------------------
-  // Quantized zoom so a smooth pinch/scroll doesn't retrigger placement.
+  // Quantized, settle-debounced zoom so a smooth pinch/scroll doesn't retrigger
+  // placement mid-gesture. Rendering still uses the live `viewScale`.
   const lodScale = useMemo(() => {
-    const s = Math.max(0.0001, viewScale);
+    const s = Math.max(0.0001, placementScale ?? viewScale);
     return Math.max(LOD_SCALE_QUANTIZE, Math.round(s / LOD_SCALE_QUANTIZE) * LOD_SCALE_QUANTIZE);
-  }, [viewScale]);
+  }, [placementScale, viewScale]);
+
 
   /**
    * Ids whose label the placement engine could not fit anywhere without a
