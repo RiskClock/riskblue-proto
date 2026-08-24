@@ -100,8 +100,8 @@ const LABEL_FONT_MIN_SCREEN = 8;
 const LABEL_FONT_MAX_SCREEN = 13;
 const LABEL_ZOOM_MIN = 1.2;
 const LABEL_ZOOM_MAX = 3.0;
-const CIRCLE_BORDER_PX_SCREEN = 2;
-const LEADER_STROKE_PX_SCREEN = 1.25;
+const CIRCLE_BORDER_PX_SCREEN = 3;
+const LEADER_STROKE_PX_SCREEN = 2.25;
 
 // ---- Placement tunables ---------------------------------------------------
 // Anchors within this screen-space distance of each other form a cluster; the
