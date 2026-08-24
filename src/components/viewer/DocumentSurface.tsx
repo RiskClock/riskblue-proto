@@ -664,6 +664,7 @@ export const DocumentSurface = ({
           onPlacingChange={onPlacingChange}
           showLabels={showLabels}
           viewportRect={viewportRect}
+          placementScale={placementScale}
         />
       )}
       {polyPoints ? renderPolygonEditor() : renderEditor()}
