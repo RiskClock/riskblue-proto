@@ -741,6 +741,59 @@ export const OverlayLayer = ({
     return Math.max(LOD_SCALE_QUANTIZE, Math.round(s / LOD_SCALE_QUANTIZE) * LOD_SCALE_QUANTIZE);
   }, [placementScale, viewScale]);
 
+  /**
+   * Local screen-space density pass. Runs over the whole page (not just the
+   * viewport) so the low-detail set doesn't change while panning, and keys off
+   * the settle-debounced `lodScale` so it only changes once a zoom gesture
+   * finishes. Export/sync placement is unaffected.
+   */
+  const lowDetailIds = useMemo(() => {
+    const out = new Set<string>();
+    if (syncPlacement || exportScale > 1) return out;
+    const targets = circles.filter((c) => !!c.label && !c.isDot);
+    if (targets.length <= LOD_MAX_NEIGHBORS) return out;
+    // Neighbor radius expressed in page units at the current zoom.
+    const radius = LOD_NEIGHBOR_RADIUS_PX / Math.max(0.1, lodScale);
+    const r2 = radius * radius;
+    // Uniform grid bucketing so the neighbor scan stays near-linear.
+    const cell = Math.max(1, radius);
+    const buckets = new Map<string, typeof targets>();
+    const keyOf = (x: number, y: number) => `${Math.floor(x / cell)}:${Math.floor(y / cell)}`;
+    for (const c of targets) {
+      const k = keyOf(c.cx, c.cy);
+      const arr = buckets.get(k);
+      if (arr) arr.push(c);
+      else buckets.set(k, [c]);
+    }
+    for (const c of targets) {
+      const gx = Math.floor(c.cx / cell);
+      const gy = Math.floor(c.cy / cell);
+      let count = 0;
+      for (let dx = -1; dx <= 1 && count <= LOD_MAX_NEIGHBORS; dx++) {
+        for (let dy = -1; dy <= 1 && count <= LOD_MAX_NEIGHBORS; dy++) {
+          const arr = buckets.get(`${gx + dx}:${gy + dy}`);
+          if (!arr) continue;
+          for (const o of arr) {
+            if (o.id === c.id) continue;
+            const ddx = o.cx - c.cx;
+            const ddy = o.cy - c.cy;
+            if (ddx * ddx + ddy * ddy <= r2) {
+              count++;
+              if (count > LOD_MAX_NEIGHBORS) break;
+            }
+          }
+        }
+      }
+      if (count > LOD_MAX_NEIGHBORS) out.add(c.id);
+    }
+    return out;
+  }, [circles, lodScale, syncPlacement, exportScale]);
+
+  const lowDetailKey = useMemo(
+    () => `${lowDetailIds.size}:${Array.from(lowDetailIds).sort().join(",")}`,
+    [lowDetailIds],
+  );
+
 
   /**
    * Ids whose label the placement engine could not fit anywhere without a
