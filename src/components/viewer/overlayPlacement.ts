@@ -1029,16 +1029,33 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
     return cost;
   };
 
-  /** Tier 0 = clear of everything, tier 1 = only overlaps foreign dots. */
-  const tierOf = (t: ClusterTarget, b: Box): 0 | 1 | -1 => {
-    if (!fitsBounds(b)) return -1;
-    if (hitsHardOrLabel(b)) return -1;
-    const bx = b.x + b.w / 2;
-    const by = b.y + b.h / 2;
-    const crosses = leaderCrosses(t.cx, t.cy, bx, by);
-    const onDot = hitsDot(b, t.id);
-    if (crosses) return -1;
-    return onDot ? 1 : 0;
+  /**
+   * Evaluate a candidate. `null` = hard failure (out of bounds, over a hard
+   * obstacle or an already-placed label). Otherwise the base cost plus soft
+   * penalties, with `clean` set when no soft constraint was violated.
+   */
+  const evaluate = (
+    t: ClusterTarget,
+    b: Box,
+  ): { cost: number; clean: boolean } | null => {
+    if (!fitsBounds(b)) return null;
+    if (hitsHardOrLabel(b)) return null;
+    let cost = costOf(t, b);
+    let clean = true;
+    if (hitsSoftRect(b)) {
+      cost += SOFT_RECT_PENALTY;
+      // A bbox interior is a very weak constraint — don't let it dominate.
+      // `clean` stays true so labels are happily placed inside bboxes.
+    }
+    if (hitsDot(b, t.id)) {
+      cost += DOT_PENALTY;
+      clean = false;
+    }
+    if (leaderCrosses(t.cx, t.cy, b.x + b.w / 2, b.y + b.h / 2)) {
+      cost += CLUSTER_LEADER_CROSS_PENALTY;
+      clean = false;
+    }
+    return { cost, clean };
   };
 
   // ---- Pass 0: retain still-valid previous positions (anti-jitter).
@@ -1049,12 +1066,14 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
       remaining.push(t);
       continue;
     }
-    if (tierOf(t, p) === 0) {
+    const ev = evaluate(t, p);
+    if (ev && ev.clean) {
       commit(t, p);
     } else {
       remaining.push(t);
     }
   }
+
 
   // ---- Cluster the remaining anchors (connected components within `proximity`).
   const anchorIdx = new RBush<BBoxEntry & { i: number }>();
