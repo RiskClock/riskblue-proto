@@ -82,6 +82,14 @@ export interface PlacementInput {
   clusterProximity?: number;
   /** Previous frame's label rects, used as an anti-jitter seed. */
   previousLabels?: Array<{ id: string; x: number; y: number; w: number; h: number }>;
+  /**
+   * Rect ids (cluster strategy only) whose area is a *soft* obstacle: labels
+   * may sit inside them at a small cost. Used for bounding-box interiors,
+   * which often span the whole sheet. Their docked label footprints stay hard.
+   */
+  softRectIds?: string[];
+
+
 
 }
 
