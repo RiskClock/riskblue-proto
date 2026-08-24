@@ -65,6 +65,13 @@ export interface PlacementInput {
   placementTargetIds?: string[];
   /** Existing viewer labels that must remain fixed and act as obstacles. */
   fixedLabels?: Array<{ x: number; y: number; w: number; h: number }>;
+  /**
+   * Viewer-only soft cap on leader length (page px). Beyond it the placement
+   * cost grows quadratically so labels stay near their anchors instead of
+   * being dragged into the crowded middle of the viewport. Exports leave it
+   * undefined to keep the previous linear cost.
+   */
+  leaderSoftCap?: number;
 }
 
 
@@ -787,7 +794,7 @@ export function runPlacement(input: PlacementInput): PlacedLabel[] {
   ];
   const circlePositions =
     circleItems.length > 0
-      ? optimizePlacements(circleCands, allCircles, rectObstaclesForCircles, circleAnchors, circleOwners, rand)
+      ? optimizePlacements(circleCands, allCircles, rectObstaclesForCircles, circleAnchors, circleOwners, rand, input.leaderSoftCap)
       : [];
 
   const out: PlacedLabel[] = [];
@@ -808,7 +815,10 @@ export function runPlacement(input: PlacementInput): PlacedLabel[] {
   // Final safety pass: the optimizer can settle for an overlapping placement
   // when a dense cluster exhausts its candidates. Push circle labels apart so
   // no pill ever covers another (docked rect labels stay fixed).
-  separateResidualOverlaps(out, bounds);
+  separateResidualOverlaps(out, bounds, {
+    fixedLabels: input.fixedLabels,
+    circles: allCircles,
+  });
 
   return out;
 }
