@@ -1047,17 +1047,27 @@ export const OverlayLayer = ({
       : asyncPlaced;
 
   /**
-   * A hovered / selected annotation whose label was suppressed still deserves its
-   * label. It's rendered as a simple pill docked to the anchor (outside the
-   * optimizer, so hovering never retriggers a placement pass).
+   * Hover driven from inside the overlay layer (anchor dot or label pill).
+   * Merged with the `hoveredId` prop (driven by the side list) so both sources
+   * highlight the same pair.
+   */
+  const [localHoverId, setLocalHoverId] = useState<string | null>(null);
+  const effectiveHoverId = localHoverId ?? hoveredId ?? null;
+
+  /**
+   * A hovered / selected annotation whose label was suppressed (or dropped by
+   * the density LOD) still deserves its label. It's rendered as a simple pill
+   * docked to the anchor (outside the optimizer, so hovering never retriggers
+   * a placement pass).
    */
   const focusFallbackCircle = useMemo(() => {
     if (!showLabels) return null;
-    const focusId = hoveredId || selectedId;
-    if (!focusId || !suppressedIds.has(focusId)) return null;
+    const focusId = effectiveHoverId || selectedId;
+    if (!focusId) return null;
+    if (!suppressedIds.has(focusId) && !lowDetailIds.has(focusId)) return null;
     if (placedLabels.some((p) => p.id === focusId)) return null;
     return circles.find((c) => c.id === focusId && !!c.label) ?? null;
-  }, [showLabels, hoveredId, selectedId, suppressedIds, placedLabels, circles]);
+  }, [showLabels, effectiveHoverId, selectedId, suppressedIds, lowDetailIds, placedLabels, circles]);
 
 
   // After labels render, measure their actual bounding boxes and snap every
