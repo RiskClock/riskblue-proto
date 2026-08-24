@@ -101,6 +101,8 @@ const LABEL_FONT_MAX_SCREEN = 13;
 const LABEL_ZOOM_MIN = 1.2;
 const LABEL_ZOOM_MAX = 3.0;
 const CIRCLE_BORDER_PX_SCREEN = 3;
+/** Resting label pill outline (0 = none). Hover adds 1px on top. */
+const LABEL_BORDER_PX_SCREEN = 0;
 const LEADER_STROKE_PX_SCREEN = 2.25;
 
 // ---- Placement tunables ---------------------------------------------------
