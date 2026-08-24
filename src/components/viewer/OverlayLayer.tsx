@@ -116,6 +116,11 @@ const LOD_SCALE_QUANTIZE = 0.1;
  * dragged into the crowded middle of the viewport. Exports are unaffected.
  */
 const LEADER_SOFT_CAP_SCREEN_PX = 140;
+/**
+ * Viewer-only minimum leader length, in screen px. Labels are probed from this
+ * distance outward so a pill never covers its own anchor dot.
+ */
+const MIN_LEADER_SCREEN_PX = 28;
 /** Extra margin (fraction of the visible span) added around the viewport
  *  before culling placement inputs, so labels don't pop in at the edge. */
 const VIEWPORT_BUFFER_RATIO = 0.2;
