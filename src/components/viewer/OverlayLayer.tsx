@@ -72,6 +72,12 @@ interface OverlayLayerProps {
    * don't dodge off-screen geometry. Omitted / null => no culling.
    */
   viewportRect?: { nx: number; ny: number; nw: number; nh: number } | null;
+  /**
+   * Settle-debounced zoom scale used for the placement pass only (pills still
+   * render at the live `viewScale`). Keeps a zoom gesture from rerunning the
+   * optimizer on every frame. Falls back to `viewScale` when omitted.
+   */
+  placementScale?: number;
 }
 
 
@@ -110,6 +116,11 @@ const LOD_SCALE_QUANTIZE = 0.1;
  * dragged into the crowded middle of the viewport. Exports are unaffected.
  */
 const LEADER_SOFT_CAP_SCREEN_PX = 140;
+/**
+ * Viewer-only minimum leader length, in screen px. Labels are probed from this
+ * distance outward so a pill never covers its own anchor dot.
+ */
+const MIN_LEADER_SCREEN_PX = 28;
 /** Extra margin (fraction of the visible span) added around the viewport
  *  before culling placement inputs, so labels don't pop in at the edge. */
 const VIEWPORT_BUFFER_RATIO = 0.2;
@@ -558,6 +569,7 @@ export const OverlayLayer = ({
   onPlacingChange,
   showLabels = true,
   viewportRect = null,
+  placementScale,
 
 
 }: OverlayLayerProps) => {
@@ -714,11 +726,13 @@ export const OverlayLayer = ({
   }
 
   // ---- Local density LOD ---------------------------------------------------
-  // Quantized zoom so a smooth pinch/scroll doesn't retrigger placement.
+  // Quantized, settle-debounced zoom so a smooth pinch/scroll doesn't retrigger
+  // placement mid-gesture. Rendering still uses the live `viewScale`.
   const lodScale = useMemo(() => {
-    const s = Math.max(0.0001, viewScale);
+    const s = Math.max(0.0001, placementScale ?? viewScale);
     return Math.max(LOD_SCALE_QUANTIZE, Math.round(s / LOD_SCALE_QUANTIZE) * LOD_SCALE_QUANTIZE);
-  }, [viewScale]);
+  }, [placementScale, viewScale]);
+
 
   /**
    * Ids whose label the placement engine could not fit anywhere without a
@@ -832,6 +846,9 @@ export const OverlayLayer = ({
     leaderSoftCap: syncPlacement
       ? undefined
       : LEADER_SOFT_CAP_SCREEN_PX / Math.max(0.1, lodScale),
+    minLeader: syncPlacement
+      ? undefined
+      : MIN_LEADER_SCREEN_PX / Math.max(0.1, lodScale),
     strategy: (syncPlacement ? "legacy" : "cluster") as "legacy" | "cluster",
     clusterProximity: CLUSTER_PROXIMITY_PX / Math.max(0.1, lodScale),
     previousLabels: opts?.previousLabels?.map(({ id, x, y, w, h }) => ({ id, x, y, w, h })),

@@ -73,6 +73,12 @@ export interface PlacementInput {
    */
   leaderSoftCap?: number;
   /**
+   * Viewer-only minimum leader length (page px). Candidates are probed from
+   * this distance outward so a pill never sits on top of its own anchor dot,
+   * and shorter retained positions are penalized. Exports leave it undefined.
+   */
+  minLeader?: number;
+  /**
    * Placement engine. `"legacy"` (default) is the randomized greedy optimizer
    * used by the export/capture paths. `"cluster"` is the viewer's
    * cluster-first radial allocator.
@@ -824,6 +830,8 @@ const DOT_PENALTY = 160;
 /** Last-resort spiral: rings and directions probed against hard obstacles only. */
 const LAST_RESORT_RINGS = 26;
 const LAST_RESORT_DIRECTIONS = 16;
+/** Cost per page px that a leader falls short of the requested minimum. */
+const SHORT_LEADER_PENALTY = 12;
 
 
 export interface PlacementResult {
@@ -857,6 +865,7 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
     input.clusterProximity && input.clusterProximity > 0
       ? input.clusterProximity
       : CLUSTER_DEFAULT_PROXIMITY;
+  const minLeader = Math.max(0, input.minLeader ?? 0);
 
   const placementTargets = input.placementTargetIds
     ? new Set(input.placementTargetIds)
@@ -1020,7 +1029,14 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
   const costOf = (t: ClusterTarget, b: Box) => {
     const ex = Math.max(b.x, Math.min(t.cx, b.x + b.w));
     const ey = Math.max(b.y, Math.min(t.cy, b.y + b.h));
-    let cost = Math.hypot(ex - t.cx, ey - t.cy);
+    const leader = Math.hypot(ex - t.cx, ey - t.cy);
+    let cost = leader;
+    // Keep the pill off its own anchor: penalize leaders shorter than the
+    // requested minimum so a too-close retained/fallback slot loses.
+    if (minLeader > 0) {
+      const shortfall = Math.max(0, minLeader + t.r - leader);
+      cost += shortfall * SHORT_LEADER_PENALTY;
+    }
     const p = prev.get(t.id);
     if (p) {
       const moved = Math.hypot(b.x + b.w / 2 - (p.x + p.w / 2), b.y + b.h / 2 - (p.y + p.h / 2));
@@ -1042,6 +1058,13 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
     if (hitsHardOrLabel(b)) return null;
     let cost = costOf(t, b);
     let clean = true;
+    if (minLeader > 0) {
+      // Measure from the pill's nearest edge: a box whose edge sits on the
+      // anchor hides the detection point even if its centre is far away.
+      const ex = Math.max(b.x, Math.min(t.cx, b.x + b.w));
+      const ey = Math.max(b.y, Math.min(t.cy, b.y + b.h));
+      if (Math.hypot(ex - t.cx, ey - t.cy) < minLeader + t.r - 1) clean = false;
+    }
     if (hitsSoftRect(b)) {
       cost += SOFT_RECT_PENALTY;
       // A bbox interior is a very weak constraint — don't let it dominate.
@@ -1066,7 +1089,11 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
       remaining.push(t);
       continue;
     }
-    const ev = evaluate(t, p);
+    // A retained slot must also keep a readable leader; otherwise re-place it.
+    const ex = Math.max(p.x, Math.min(t.cx, p.x + p.w));
+    const ey = Math.max(p.y, Math.min(t.cy, p.y + p.h));
+    const tooClose = minLeader > 0 && Math.hypot(ex - t.cx, ey - t.cy) < minLeader + t.r - 1;
+    const ev = tooClose ? null : evaluate(t, p);
     if (ev && ev.clean) {
       commit(t, p);
     } else {
@@ -1166,15 +1193,24 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
 
   const toRad = (deg: number) => (deg * Math.PI) / 180;
 
+  /**
+   * Half the pill's extent along a direction. Probe distances are measured to
+   * the pill's centre, so this keeps the nearest *edge* the requested distance
+   * away from the anchor instead of parking the pill on top of it.
+   */
+  const halfExtent = (t: ClusterTarget, a: number) =>
+    (Math.abs(Math.cos(a)) * t.w + Math.abs(Math.sin(a)) * t.h) / 2;
+
   /** Nearest free directional slot around the anchor itself. */
   const placeIsolated = (t: ClusterTarget): Box | null =>
     chooseByRings(t, function* () {
       const step = Math.max(6, t.h * RADIAL_STEP_FACTOR);
+      const base = t.r + gap + minLeader;
       for (let k = 1; k <= ISOLATED_RING_STEPS; k++) {
-        const dist = t.r + gap + step * k;
         const ring: Box[] = [];
         for (const degrees of ISOLATED_DIRECTIONS_DEG) {
           const a = toRad(degrees);
+          const dist = base + step * (k - 1) + halfExtent(t, a);
           ring.push(boxAt(t, t.cx + Math.cos(a) * dist, t.cy + Math.sin(a) * dist));
         }
         yield ring;
@@ -1190,9 +1226,10 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
     const step = Math.max(6, t.h * RADIAL_STEP_FACTOR);
     let best: { b: Box; cost: number } | null = null;
     for (let k = 1; k <= LAST_RESORT_RINGS; k++) {
-      const dist = t.r + gap + step * k;
+      const base = t.r + gap + minLeader + step * (k - 1);
       for (let d = 0; d < LAST_RESORT_DIRECTIONS; d++) {
         const a = (d / LAST_RESORT_DIRECTIONS) * Math.PI * 2;
+        const dist = base + halfExtent(t, a);
         const b = boxAt(t, t.cx + Math.cos(a) * dist, t.cy + Math.sin(a) * dist);
         if (!fitsBounds(b)) continue;
         if (hitsHardOrLabel(b)) continue;
@@ -1245,13 +1282,14 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
       if (angles.length === 0) angles.push(Math.max(angle, lowerBound === -Infinity ? angle : lowerBound));
 
       const step = Math.max(6, t.h * RADIAL_STEP_FACTOR);
-      const baseDist = Math.max(radius + gap, Math.hypot(t.cx - ccx, t.cy - ccy) + t.r + gap);
+      const baseDist =
+        Math.max(radius + gap, Math.hypot(t.cx - ccx, t.cy - ccy) + t.r + gap) + minLeader;
       let usedAngle: number | null = null;
       const chosen = chooseByRings(t, function* () {
         for (let k = 0; k <= RADIAL_MAX_STEPS; k++) {
-          const dist = baseDist + step * (k + 0.6);
           const ring: Box[] = [];
           for (const a of angles) {
+            const dist = baseDist + step * (k + 0.6) + halfExtent(t, a);
             ring.push(boxAt(t, ccx + Math.cos(a) * dist, ccy + Math.sin(a) * dist));
           }
           yield ring;

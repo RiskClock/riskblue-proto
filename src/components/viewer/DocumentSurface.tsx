@@ -59,6 +59,8 @@ interface DocumentSurfaceProps {
   showLabels?: boolean;
   /** Forwarded to OverlayLayer.viewportRect (visible page region, 0..1). */
   viewportRect?: { nx: number; ny: number; nw: number; nh: number } | null;
+  /** Forwarded to OverlayLayer.placementScale (settle-debounced zoom). */
+  placementScale?: number;
 }
 
 
@@ -109,6 +111,7 @@ export const DocumentSurface = ({
   onPlacingChange,
   showLabels = true,
   viewportRect = null,
+  placementScale,
 }: DocumentSurfaceProps) => {
   const downRef = useRef<{ x: number; y: number } | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -661,6 +664,7 @@ export const DocumentSurface = ({
           onPlacingChange={onPlacingChange}
           showLabels={showLabels}
           viewportRect={viewportRect}
+          placementScale={placementScale}
         />
       )}
       {polyPoints ? renderPolygonEditor() : renderEditor()}

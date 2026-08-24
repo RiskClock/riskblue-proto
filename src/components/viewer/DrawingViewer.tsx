@@ -183,6 +183,9 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       { nx: number; ny: number; nw: number; nh: number } | null
     >(null);
     const visibleRectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Zoom scale published only once a gesture settles. Label placement uses
+    // this so the optimizer doesn't rerun on every wheel/pinch frame.
+    const [settledScale, setSettledScale] = useState(1);
     const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
     const fitOnceRef = useRef(false);
 
@@ -331,6 +334,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       if (visibleRectTimer.current) clearTimeout(visibleRectTimer.current);
       visibleRectTimer.current = setTimeout(() => {
         const s = state.scale || 1;
+        setSettledScale(s);
         const pw = pageCssSize.width;
         const ph = pageCssSize.height;
         if (pw === 0 || ph === 0 || viewportSize.width === 0 || viewportSize.height === 0) {
@@ -568,6 +572,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                     pulsingOverlayId={pulsingOverlayId}
                     viewScale={scale}
                     viewportRect={visibleRect}
+                    placementScale={settledScale}
                     rotation={rotation}
                     onCanvasClick={
                       onCanvasClick
@@ -644,6 +649,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                     selectedOverlayId={selectedOverlayId}
                     pulsingOverlayId={pulsingOverlayId}
                           viewScale={scale}
+                          placementScale={settledScale}
                           onCanvasClick={
                             onCanvasClick
                               ? (nx, ny) => onCanvasClick(nx, ny, p.pageNum)
