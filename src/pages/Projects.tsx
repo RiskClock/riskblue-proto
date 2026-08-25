@@ -159,7 +159,7 @@ const Projects = () => {
         description: "The project has been successfully deleted.",
       });
 
-      fetchProjects();
+      fetchProjects({ reset: true });
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -338,7 +338,16 @@ const Projects = () => {
         )}
 
         {!loading && user && projects.length > 0 && (
-          <div className="flex justify-center mt-6">
+          <div className="flex justify-center gap-3 mt-6">
+            {hasMore && (
+              <Button
+                variant="outline"
+                onClick={() => fetchProjects()}
+                disabled={loadingMore}
+              >
+                {loadingMore ? "Loading…" : "Load More"}
+              </Button>
+            )}
             <Button onClick={handleNewProject}>Add New Project</Button>
           </div>
         )}
@@ -349,7 +358,7 @@ const Projects = () => {
       <CreateProjectModal
         open={showCreateModal}
         onOpenChange={setShowCreateModal}
-        onCreated={fetchProjects}
+        onCreated={() => fetchProjects({ reset: true })}
       />
     </div>
   );
