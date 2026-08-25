@@ -181,6 +181,8 @@ const WB_STATUS_OPTIONS = [
   { value: "processed", label: "Processed" },
 ];
 
+const WORKBENCH_PAGE_SIZE = 50;
+
 export default function InternalWorkbench() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -219,6 +221,7 @@ export default function InternalWorkbench() {
   const [filterCompanies, setFilterCompanies] = useState<string[]>(saved?.companies ?? []);
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [visibleLimit, setVisibleLimit] = useState(WORKBENCH_PAGE_SIZE);
   const [columnPrefs, setColumnPrefs] = useState<Record<WBColumnId, boolean>>(() => loadWBColumnPrefs());
   useEffect(() => {
     try { localStorage.setItem(WB_COLUMN_PREFS_KEY, JSON.stringify(columnPrefs)); } catch {}
@@ -245,78 +248,44 @@ export default function InternalWorkbench() {
     );
   }, [filterCreators, filterStatuses, filterCreatorTypes, filterWBStatuses, filterCompanies]);
 
-  const { data: projects, isLoading, refetch } = useQuery({
-    queryKey: ["workbench-projects"],
+  const { data: projects, isLoading, isFetching, refetch } = useQuery({
+    queryKey: ["workbench-projects", visibleLimit],
     refetchInterval: 10_000,
     refetchIntervalInBackground: false,
     enabled: !!user && isInternal,
     queryFn: async (): Promise<WorkbenchProject[]> => {
-      const { data: projectsData, error } = await supabase
-        .from("projects")
-        .select("id, name, user_id, created_at, workbench_status")
-        .order("created_at", { ascending: false });
+      const { data, error } = await supabase.rpc("get_workbench_project_summaries", {
+        p_limit: visibleLimit,
+        p_offset: 0,
+      });
       if (error) throw error;
 
-      const ids = (projectsData || []).map((p) => p.id);
-      const userIds = [...new Set((projectsData || []).map((p) => p.user_id))];
-
-      const [profilesRes, analysisRes, emailsRes] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("user_id, display_name, account_type, company")
-          .in("user_id", userIds),
-        ids.length > 0
-          ? supabase
-              .from("analysis_requests")
-              .select("id, project_id, status, file_count, total_size_bytes, created_at, pipeline_phase, error_message, pipeline_progress_done, pipeline_progress_total, updated_at")
-              .in("project_id", ids)
-              .order("created_at", { ascending: false })
-          : Promise.resolve({ data: [] as any[] }),
-        supabase.functions
-          .invoke(`get-user-emails?userIds=${userIds.join(",")}`, { method: "GET" })
-          .catch(() => ({ data: null as any })),
-      ]);
-
-      const profilesMap = new Map(
-        (profilesRes.data || []).map((p: any) => [p.user_id, p])
-      );
-      const emailsMap = new Map<string, string>(
-        emailsRes.data?.emails ? Object.entries(emailsRes.data.emails) : []
-      );
-      const latestAnalysis = new Map<string, any>();
-      for (const row of (analysisRes.data || []) as any[]) {
-        if (!latestAnalysis.has(row.project_id)) latestAnalysis.set(row.project_id, row);
-      }
-
-      return (projectsData || []).map((p: any) => {
-        const prof: any = profilesMap.get(p.user_id);
-        const email = emailsMap.get(p.user_id) || "";
-        const analysis = latestAnalysis.get(p.id);
-        return {
-          id: p.id,
-          name: p.name,
-          user_id: p.user_id,
-          created_at: p.created_at,
-          account_type: (prof?.account_type as any) || "standard",
-          creator_name: prof?.display_name || (email ? email.split("@")[0] : "Unknown"),
-          creator_email: email,
-          company: (prof?.company as string) || null,
-          is_internal: email.toLowerCase().endsWith("@riskclock.com"),
-          file_count: analysis?.file_count ?? 0,
-          total_size_bytes: analysis?.total_size_bytes ?? null,
-          status: analysis?.status ?? null,
-          workbench_status: (p.workbench_status as string) ?? "processing",
-          pipeline_phase: analysis?.pipeline_phase ?? null,
-          error_message: analysis?.error_message ?? null,
-          pipeline_progress_done: analysis?.pipeline_progress_done ?? null,
-          pipeline_progress_total: analysis?.pipeline_progress_total ?? null,
-          request_updated_at: analysis?.updated_at ?? null,
-          analysis_request_id: analysis?.id ?? null,
-        };
-      });
+      return (data || []).map((p) => ({
+        id: p.id,
+        name: p.name,
+        user_id: p.user_id,
+        created_at: p.created_at,
+        account_type: p.account_type === "wmsv" ? "wmsv" : "standard",
+        creator_name: p.creator_name || "Unknown",
+        creator_email: p.creator_email || "",
+        company: p.company || null,
+        is_internal: !!p.is_internal,
+        file_count: p.file_count ?? 0,
+        total_size_bytes: p.total_size_bytes ?? null,
+        status: p.status ?? null,
+        workbench_status: p.workbench_status ?? "processing",
+        pipeline_phase: p.pipeline_phase ?? null,
+        error_message: p.error_message ?? null,
+        pipeline_progress_done: p.pipeline_progress_done ?? null,
+        pipeline_progress_total: p.pipeline_progress_total ?? null,
+        request_updated_at: p.request_updated_at ?? null,
+        analysis_request_id: p.analysis_request_id ?? null,
+      }));
 
     },
   });
+
+  const hasMoreProjects = (projects?.length ?? 0) >= visibleLimit;
 
   const creatorOptions = useMemo(() => {
     const seen = new Map<string, string>();
@@ -810,6 +779,17 @@ export default function InternalWorkbench() {
                 })}
               </TableBody>
             </Table>
+            {hasMoreProjects && (
+              <div className="sticky bottom-0 flex justify-center border-t bg-card/95 p-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setVisibleLimit((limit) => limit + WORKBENCH_PAGE_SIZE)}
+                  disabled={isFetching}
+                >
+                  {isFetching ? "Loading…" : "Load More"}
+                </Button>
+              </div>
+            )}
           </div>
         )}
         </div>
