@@ -3275,6 +3275,47 @@ export type Database = {
           sub_options: Json
         }[]
       }
+      get_project_list_summaries: {
+        Args: { p_limit?: number; p_offset?: number }
+        Returns: {
+          created_at: string
+          creator_email: string
+          creator_name: string
+          credits_consumed: number
+          id: string
+          name: string
+          report_file_name: string
+          report_file_path: string
+          status: string
+          user_id: string
+          user_role: Database["public"]["Enums"]["project_role"]
+          workbench_status: string
+        }[]
+      }
+      get_workbench_project_summaries: {
+        Args: { p_limit?: number; p_offset?: number }
+        Returns: {
+          account_type: string
+          analysis_request_id: string
+          company: string
+          created_at: string
+          creator_email: string
+          creator_name: string
+          error_message: string
+          file_count: number
+          id: string
+          is_internal: boolean
+          name: string
+          pipeline_phase: string
+          pipeline_progress_done: number
+          pipeline_progress_total: number
+          request_updated_at: string
+          status: string
+          total_size_bytes: number
+          user_id: string
+          workbench_status: string
+        }[]
+      }
       grant_credits: {
         Args: {
           p_amount: number

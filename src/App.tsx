@@ -1,36 +1,10 @@
+import { Suspense, lazy } from "react";
 import { Toaster } from "@/components/ui/toaster"; 
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import Auth from "./pages/Auth";
-import Projects from "./pages/Projects";
-import ProjectWizard from "./pages/ProjectWizard";
-import SolutionProviderPortal from "./pages/SolutionProviderPortal";
-import Configuration from "./pages/Configuration";
-import Logs from "./pages/Logs";
-import AcceptInvite from "./pages/AcceptInvite";
-import OAuthCallback from "./pages/OAuthCallback";
-import GoogleDriveConnect from "./pages/GoogleDriveConnect";
-import ProcoreConnect from "./pages/ProcoreConnect";
-import SharePointConnect from "./pages/SharePointConnect";
-import ResetPassword from "./pages/ResetPassword";
-import SetupAccount from "./pages/SetupAccount";
-import InternalWorkbench from "./pages/InternalWorkbench";
-import WorkbenchProjectDetail from "./pages/WorkbenchProjectDetail";
-import PromptRefinery from "./pages/PromptRefinery";
-import PromptRefineryDetail from "./pages/PromptRefineryDetail";
-
-import UserManagement from "./pages/UserManagement";
-import Controls from "./pages/Controls";
-
-import InternalViewerTest from "./pages/InternalViewerTest";
-import InternalActivity from "./pages/InternalActivity";
-import CheckoutReturn from "./pages/CheckoutReturn";
-import ThreatReportDownload from "./pages/ThreatReportDownload";
-import NotFound from "./pages/NotFound";
-import OAuthConsent from "./pages/OAuthConsent";
 import { Loader2 } from "lucide-react";
 import { ExportProvider } from "./contexts/ExportContext";
 import { ExportProgressPanel } from "./components/export/ExportProgressPanel";
@@ -38,6 +12,32 @@ import { PaymentTestModeBanner } from "./components/PaymentTestModeBanner";
 import { useVersionCheck } from "./hooks/useVersionCheck";
 
 const queryClient = new QueryClient();
+
+const Auth = lazy(() => import("./pages/Auth"));
+const Projects = lazy(() => import("./pages/Projects"));
+const ProjectWizard = lazy(() => import("./pages/ProjectWizard"));
+const SolutionProviderPortal = lazy(() => import("./pages/SolutionProviderPortal"));
+const Configuration = lazy(() => import("./pages/Configuration"));
+const Logs = lazy(() => import("./pages/Logs"));
+const AcceptInvite = lazy(() => import("./pages/AcceptInvite"));
+const OAuthCallback = lazy(() => import("./pages/OAuthCallback"));
+const GoogleDriveConnect = lazy(() => import("./pages/GoogleDriveConnect"));
+const ProcoreConnect = lazy(() => import("./pages/ProcoreConnect"));
+const SharePointConnect = lazy(() => import("./pages/SharePointConnect"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const SetupAccount = lazy(() => import("./pages/SetupAccount"));
+const InternalWorkbench = lazy(() => import("./pages/InternalWorkbench"));
+const WorkbenchProjectDetail = lazy(() => import("./pages/WorkbenchProjectDetail"));
+const PromptRefinery = lazy(() => import("./pages/PromptRefinery"));
+const PromptRefineryDetail = lazy(() => import("./pages/PromptRefineryDetail"));
+const UserManagement = lazy(() => import("./pages/UserManagement"));
+const Controls = lazy(() => import("./pages/Controls"));
+const InternalViewerTest = lazy(() => import("./pages/InternalViewerTest"));
+const InternalActivity = lazy(() => import("./pages/InternalActivity"));
+const CheckoutReturn = lazy(() => import("./pages/CheckoutReturn"));
+const ThreatReportDownload = lazy(() => import("./pages/ThreatReportDownload"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
 
 const VersionWatcher = () => {
   useVersionCheck();
@@ -77,6 +77,7 @@ const App = () => (
 
             <ExportProgressPanel />
             <PaymentTestModeBanner />
+            <Suspense fallback={<FullScreenLoader />}>
             <Routes>
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
             <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
@@ -107,6 +108,7 @@ const App = () => (
             <Route path="/" element={<Navigate to="/projects" />} />
             <Route path="*" element={<NotFound />} />
             </Routes>
+            </Suspense>
           </ExportProvider>
         </AuthProvider>
       </BrowserRouter>
