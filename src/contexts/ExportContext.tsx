@@ -11,12 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  generateAnalysisDocx,
-  buildExportFilename,
-  ExportAbortError,
-  type ExportProgress,
-} from "@/lib/analysisDocxExporter";
+import type { ExportProgress } from "@/lib/analysisDocxExporter";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -113,6 +108,18 @@ function downloadBlob(blob: Blob, filename: string): void {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, 1000);
+}
+
+/** RiskBlue {Project_Name_With_Underscores} Assets and Systems Export {YYYYMMDD}.docx */
+function buildExportFilename(projectName: string, date: Date = new Date()): string {
+  const safeName = (projectName || "Project")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  const yyyymmdd =
+    `${date.getFullYear()}` +
+    `${String(date.getMonth() + 1).padStart(2, "0")}` +
+    `${String(date.getDate()).padStart(2, "0")}`;
+  return `RiskBlue ${safeName} Assets and Systems Export ${yyyymmdd}.docx`;
 }
 
 // ---------------------------------------------------------------------------
@@ -311,6 +318,8 @@ export function ExportProvider({ children }: { children: ReactNode }) {
       };
 
       try {
+        updateExport(localId, { percent: 3, detail: "Loading export engine…" });
+        const { generateAnalysisDocx } = await import("@/lib/analysisDocxExporter");
         const blob = await generateAnalysisDocx(
           args.analysisRequestId,
           args.summaryData,
@@ -342,7 +351,9 @@ export function ExportProvider({ children }: { children: ReactNode }) {
         });
         scheduleAutoDismiss(localId, COMPLETE_AUTO_DISMISS_MS);
       } catch (e) {
-        const aborted = e instanceof ExportAbortError || controller.signal.aborted;
+        const aborted =
+          controller.signal.aborted ||
+          (e instanceof Error && e.name === "ExportAbortError");
         const message = aborted
           ? "Export cancelled by user."
           : (e as Error)?.message || "Export failed.";
