@@ -1331,7 +1331,7 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
       let usedAngle: number | null = null;
       // Local-first: a free slot next to the anchor always beats the hull fan.
       const chosen =
-        chooseByRings(t, localRings(t, LOCAL_FIRST_RING_STEPS)) ??
+        chooseByRings(t, localRings(t, LOCAL_FIRST_RING_STEPS), true) ??
         chooseByRings(t, function* () {
           for (let k = 0; k <= RADIAL_MAX_STEPS; k++) {
             const ring: Box[] = [];
