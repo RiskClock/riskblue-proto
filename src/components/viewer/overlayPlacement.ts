@@ -1051,6 +1051,14 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
       const shortfall = Math.max(0, minLeader + t.r - leader);
       cost += shortfall * SHORT_LEADER_PENALTY;
     }
+    // Long leaders drag labels across the sheet: past the soft cap the cost
+    // grows quadratically so a nearer, slightly penalized slot wins.
+    const cap = input.leaderSoftCap;
+    if (cap && cap > 0 && leader > cap) {
+      const over = (leader - cap) / 40;
+      cost += over * over * 1000;
+    }
+
     const p = prev.get(t.id);
     if (p) {
       const moved = Math.hypot(b.x + b.w / 2 - (p.x + p.w / 2), b.y + b.h / 2 - (p.y + p.h / 2));
