@@ -1217,7 +1217,7 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
       }
       if (best) return best.b;
     }
-    return fallback ? fallback.b : null;
+    return !cleanOnly && fallback ? fallback.b : null;
   };
 
 
