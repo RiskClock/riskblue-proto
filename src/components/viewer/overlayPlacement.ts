@@ -1201,8 +1201,8 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
     ringCandidates: () => Generator<Box[], void, unknown>,
     cleanOnly = false,
   ): Box | null => {
-    let fallback: { b: Box; cost: number } | null = cleanOnly ? { b: null as never, cost: 0 } : null;
-    if (cleanOnly) fallback = null;
+    let fallback: { b: Box; cost: number } | null = null;
+
 
     for (const ring of ringCandidates()) {
       let best: { b: Box; cost: number } | null = null;
