@@ -807,7 +807,20 @@ const CLUSTER_DEFAULT_PROXIMITY = 60;
 const RADIAL_STEP_FACTOR = 1.15;
 const RADIAL_MAX_STEPS = 20;
 /** Clusters larger than this are split along their longer axis. */
-const MAX_CLUSTER_SIZE = 30;
+const MAX_CLUSTER_SIZE = 12;
+/**
+ * A connected component whose bounding-box span exceeds this multiple of the
+ * proximity threshold is a chain, not a knot: split it so labels fan locally.
+ */
+const MAX_CLUSTER_SPAN_FACTOR = 4;
+/** Anchor-local rings tried before falling back to the centroid-radial fan. */
+const LOCAL_FIRST_RING_STEPS = 4;
+/**
+ * A cluster member's label may never sit further from its anchor than this
+ * multiple of the requested leader cap (or of the label height when no cap).
+ */
+const MAX_RADIAL_EXTRA_FACTOR = 1;
+
 
 /** Angular wiggle (degrees) allowed around a member's own centroid ray. */
 const RADIAL_ANGLE_OFFSETS_DEG = [0, 4, -4, 8, -8, 14, -14, 22, -22];
@@ -825,8 +838,9 @@ const HYSTERESIS_RATIO = 0.25;
 const LABEL_SAFETY_PAD = 4;
 /** Soft-constraint costs (page px equivalents), never hard rejections. */
 const SOFT_RECT_PENALTY = 40;
-const CLUSTER_LEADER_CROSS_PENALTY = 220;
+const CLUSTER_LEADER_CROSS_PENALTY = 600;
 const DOT_PENALTY = 160;
+
 /** Last-resort spiral: rings and directions probed against hard obstacles only. */
 const LAST_RESORT_RINGS = 26;
 const LAST_RESORT_DIRECTIONS = 16;
@@ -1037,6 +1051,14 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
       const shortfall = Math.max(0, minLeader + t.r - leader);
       cost += shortfall * SHORT_LEADER_PENALTY;
     }
+    // Long leaders drag labels across the sheet: past the soft cap the cost
+    // grows quadratically so a nearer, slightly penalized slot wins.
+    const cap = input.leaderSoftCap;
+    if (cap && cap > 0 && leader > cap) {
+      const over = (leader - cap) / 40;
+      cost += over * over * 1000;
+    }
+
     const p = prev.get(t.id);
     if (p) {
       const moved = Math.hypot(b.x + b.w / 2 - (p.x + p.w / 2), b.y + b.h / 2 - (p.y + p.h / 2));
@@ -1135,16 +1157,21 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
   // A single huge blob would push every label onto one enormous ring, most of
   // which falls outside the viewport. Split oversized clusters along their
   // longer axis (median) until each fan stays local.
+  const maxSpan = proximity * MAX_CLUSTER_SPAN_FACTOR;
   const splitOversized = (members: ClusterTarget[]): ClusterTarget[][] => {
-    if (members.length <= MAX_CLUSTER_SIZE) return [members];
+    if (members.length <= 1) return [members];
     const xs = members.map((m) => m.cx);
     const ys = members.map((m) => m.cy);
     const spanX = Math.max(...xs) - Math.min(...xs);
     const spanY = Math.max(...ys) - Math.min(...ys);
+    const tooBig = members.length > MAX_CLUSTER_SIZE;
+    const tooWide = Math.max(spanX, spanY) > maxSpan;
+    if (!tooBig && !tooWide) return [members];
     const sorted = members
       .slice()
       .sort((a, b) => (spanX >= spanY ? a.cx - b.cx : a.cy - b.cy));
     const mid = Math.floor(sorted.length / 2);
+
     return [
       ...splitOversized(sorted.slice(0, mid)),
       ...splitOversized(sorted.slice(mid)),
@@ -1172,8 +1199,11 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
   const chooseByRings = (
     t: ClusterTarget,
     ringCandidates: () => Generator<Box[], void, unknown>,
+    cleanOnly = false,
   ): Box | null => {
     let fallback: { b: Box; cost: number } | null = null;
+
+
     for (const ring of ringCandidates()) {
       let best: { b: Box; cost: number } | null = null;
       for (const b of ring) {
@@ -1187,7 +1217,7 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
       }
       if (best) return best.b;
     }
-    return fallback ? fallback.b : null;
+    return !cleanOnly && fallback ? fallback.b : null;
   };
 
 
@@ -1201,12 +1231,12 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
   const halfExtent = (t: ClusterTarget, a: number) =>
     (Math.abs(Math.cos(a)) * t.w + Math.abs(Math.sin(a)) * t.h) / 2;
 
-  /** Nearest free directional slot around the anchor itself. */
-  const placeIsolated = (t: ClusterTarget): Box | null =>
-    chooseByRings(t, function* () {
+  /** Rings of directional slots around the anchor itself, nearest first. */
+  const localRings = (t: ClusterTarget, steps: number) =>
+    function* () {
       const step = Math.max(6, t.h * RADIAL_STEP_FACTOR);
       const base = t.r + gap + minLeader;
-      for (let k = 1; k <= ISOLATED_RING_STEPS; k++) {
+      for (let k = 1; k <= steps; k++) {
         const ring: Box[] = [];
         for (const degrees of ISOLATED_DIRECTIONS_DEG) {
           const a = toRad(degrees);
@@ -1215,7 +1245,12 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
         }
         yield ring;
       }
-    });
+    };
+
+  /** Nearest free directional slot around the anchor itself. */
+  const placeIsolated = (t: ClusterTarget): Box | null =>
+    chooseByRings(t, localRings(t, ISOLATED_RING_STEPS));
+
 
   /**
    * Last resort: expanding spiral around the anchor, checked against hard
@@ -1282,20 +1317,33 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
       if (angles.length === 0) angles.push(Math.max(angle, lowerBound === -Infinity ? angle : lowerBound));
 
       const step = Math.max(6, t.h * RADIAL_STEP_FACTOR);
-      const baseDist =
-        Math.max(radius + gap, Math.hypot(t.cx - ccx, t.cy - ccy) + t.r + gap) + minLeader;
+      const dFromCentroid = Math.hypot(t.cx - ccx, t.cy - ccy);
+      // Never fan a member further out than its own leader budget allows —
+      // otherwise a member near the centroid gets flung onto the cluster hull.
+      const leaderBudget =
+        (input.leaderSoftCap && input.leaderSoftCap > 0
+          ? input.leaderSoftCap
+          : t.h * 6) * MAX_RADIAL_EXTRA_FACTOR;
+      const baseDist = Math.min(
+        Math.max(radius + gap, dFromCentroid + t.r + gap) + minLeader,
+        dFromCentroid + t.r + gap + minLeader + leaderBudget,
+      );
       let usedAngle: number | null = null;
-      const chosen = chooseByRings(t, function* () {
-        for (let k = 0; k <= RADIAL_MAX_STEPS; k++) {
-          const ring: Box[] = [];
-          for (const a of angles) {
-            const dist = baseDist + step * (k + 0.6) + halfExtent(t, a);
-            ring.push(boxAt(t, ccx + Math.cos(a) * dist, ccy + Math.sin(a) * dist));
+      // Local-first: a free slot next to the anchor always beats the hull fan.
+      const chosen =
+        chooseByRings(t, localRings(t, LOCAL_FIRST_RING_STEPS), true) ??
+        chooseByRings(t, function* () {
+          for (let k = 0; k <= RADIAL_MAX_STEPS; k++) {
+            const ring: Box[] = [];
+            for (const a of angles) {
+              const dist = baseDist + step * (k + 0.6) + halfExtent(t, a);
+              ring.push(boxAt(t, ccx + Math.cos(a) * dist, ccy + Math.sin(a) * dist));
+            }
+            yield ring;
           }
-          yield ring;
-        }
-      });
+        });
       const final = chosen ?? placeIsolated(t) ?? placeLastResort(t);
+
       if (final) {
         commit(t, final);
         usedAngle = Math.atan2(final.y + final.h / 2 - ccy, final.x + final.w / 2 - ccx);
