@@ -807,7 +807,20 @@ const CLUSTER_DEFAULT_PROXIMITY = 60;
 const RADIAL_STEP_FACTOR = 1.15;
 const RADIAL_MAX_STEPS = 20;
 /** Clusters larger than this are split along their longer axis. */
-const MAX_CLUSTER_SIZE = 30;
+const MAX_CLUSTER_SIZE = 12;
+/**
+ * A connected component whose bounding-box span exceeds this multiple of the
+ * proximity threshold is a chain, not a knot: split it so labels fan locally.
+ */
+const MAX_CLUSTER_SPAN_FACTOR = 4;
+/** Anchor-local rings tried before falling back to the centroid-radial fan. */
+const LOCAL_FIRST_RING_STEPS = 4;
+/**
+ * A cluster member's label may never sit further from its anchor than this
+ * multiple of the requested leader cap (or of the label height when no cap).
+ */
+const MAX_RADIAL_EXTRA_FACTOR = 1;
+
 
 /** Angular wiggle (degrees) allowed around a member's own centroid ray. */
 const RADIAL_ANGLE_OFFSETS_DEG = [0, 4, -4, 8, -8, 14, -14, 22, -22];
