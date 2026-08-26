@@ -1228,12 +1228,12 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
   const halfExtent = (t: ClusterTarget, a: number) =>
     (Math.abs(Math.cos(a)) * t.w + Math.abs(Math.sin(a)) * t.h) / 2;
 
-  /** Nearest free directional slot around the anchor itself. */
-  const placeIsolated = (t: ClusterTarget): Box | null =>
-    chooseByRings(t, function* () {
+  /** Rings of directional slots around the anchor itself, nearest first. */
+  const localRings = (t: ClusterTarget, steps: number) =>
+    function* () {
       const step = Math.max(6, t.h * RADIAL_STEP_FACTOR);
       const base = t.r + gap + minLeader;
-      for (let k = 1; k <= ISOLATED_RING_STEPS; k++) {
+      for (let k = 1; k <= steps; k++) {
         const ring: Box[] = [];
         for (const degrees of ISOLATED_DIRECTIONS_DEG) {
           const a = toRad(degrees);
@@ -1242,7 +1242,12 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
         }
         yield ring;
       }
-    });
+    };
+
+  /** Nearest free directional slot around the anchor itself. */
+  const placeIsolated = (t: ClusterTarget): Box | null =>
+    chooseByRings(t, localRings(t, ISOLATED_RING_STEPS));
+
 
   /**
    * Last resort: expanding spiral around the anchor, checked against hard
