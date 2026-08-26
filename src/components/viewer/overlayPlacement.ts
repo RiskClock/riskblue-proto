@@ -1314,20 +1314,33 @@ function runClusterPlacement(input: PlacementInput): PlacementResult {
       if (angles.length === 0) angles.push(Math.max(angle, lowerBound === -Infinity ? angle : lowerBound));
 
       const step = Math.max(6, t.h * RADIAL_STEP_FACTOR);
-      const baseDist =
-        Math.max(radius + gap, Math.hypot(t.cx - ccx, t.cy - ccy) + t.r + gap) + minLeader;
+      const dFromCentroid = Math.hypot(t.cx - ccx, t.cy - ccy);
+      // Never fan a member further out than its own leader budget allows —
+      // otherwise a member near the centroid gets flung onto the cluster hull.
+      const leaderBudget =
+        (input.leaderSoftCap && input.leaderSoftCap > 0
+          ? input.leaderSoftCap
+          : t.h * 6) * MAX_RADIAL_EXTRA_FACTOR;
+      const baseDist = Math.min(
+        Math.max(radius + gap, dFromCentroid + t.r + gap) + minLeader,
+        dFromCentroid + t.r + gap + minLeader + leaderBudget,
+      );
       let usedAngle: number | null = null;
-      const chosen = chooseByRings(t, function* () {
-        for (let k = 0; k <= RADIAL_MAX_STEPS; k++) {
-          const ring: Box[] = [];
-          for (const a of angles) {
-            const dist = baseDist + step * (k + 0.6) + halfExtent(t, a);
-            ring.push(boxAt(t, ccx + Math.cos(a) * dist, ccy + Math.sin(a) * dist));
+      // Local-first: a free slot next to the anchor always beats the hull fan.
+      const chosen =
+        chooseByRings(t, localRings(t, LOCAL_FIRST_RING_STEPS)) ??
+        chooseByRings(t, function* () {
+          for (let k = 0; k <= RADIAL_MAX_STEPS; k++) {
+            const ring: Box[] = [];
+            for (const a of angles) {
+              const dist = baseDist + step * (k + 0.6) + halfExtent(t, a);
+              ring.push(boxAt(t, ccx + Math.cos(a) * dist, ccy + Math.sin(a) * dist));
+            }
+            yield ring;
           }
-          yield ring;
-        }
-      });
+        });
       const final = chosen ?? placeIsolated(t) ?? placeLastResort(t);
+
       if (final) {
         commit(t, final);
         usedAngle = Math.atan2(final.y + final.h / 2 - ccy, final.x + final.w / 2 - ccx);
