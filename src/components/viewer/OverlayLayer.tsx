@@ -104,6 +104,8 @@ const CIRCLE_BORDER_PX_SCREEN = 3;
 /** Resting label pill outline (0 = none). Hover adds 1px on top. */
 const LABEL_BORDER_PX_SCREEN = 0;
 const LEADER_STROKE_PX_SCREEN = 2.25;
+/** Colour used to emphasize a hovered annotation (dot border + leader + pill outline). */
+const HOVER_EMPHASIS_COLOR = "#000000";
 
 // ---- Placement tunables ---------------------------------------------------
 // Anchors within this screen-space distance of each other form a cluster; the
