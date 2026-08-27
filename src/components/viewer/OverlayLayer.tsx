@@ -106,6 +106,10 @@ const CIRCLE_BORDER_PX_SCREEN = 3;
 /** Resting label pill outline (0 = none). Hover adds 1px on top. */
 const LABEL_BORDER_PX_SCREEN = 0;
 const LEADER_STROKE_PX_SCREEN = 2.25;
+/** Max labels re-evaluated per zoom-in / pan pass (worst leaders first). */
+const MAX_REEVAL_PER_PASS = 8;
+/** A re-evaluated label only moves if its new leader is this much shorter. */
+const REEVAL_IMPROVE_RATIO = 0.75;
 /** Colour used to emphasize a hovered annotation (dot border + leader + pill outline). */
 const HOVER_EMPHASIS_COLOR = "#000000";
 
@@ -950,6 +954,9 @@ export const OverlayLayer = ({
    * of invalidating the whole layout.
    */
   const placementCacheRef = useRef<Map<string, { p: PlacedLabel; labelH: number }>>(new Map());
+  /** Previous settled zoom + viewport key, used to detect zoom-in / pan. */
+  const prevPlacementScaleRef = useRef(0);
+  const prevCullKeyRef = useRef("");
   // NOTE: zoom (lodScale / sizing) is deliberately NOT part of this key —
   // zooming must not wipe cached positions. Only real structural changes
   // (annotation set / geometry / page size) reset the cache.
