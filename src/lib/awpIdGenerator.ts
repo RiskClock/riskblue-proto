@@ -57,6 +57,8 @@ const LEGACY_CLASS_TO_PREFIX_MAP: Record<string, string> = {
   "Kitchens & Washroom": "KW",
   "Facade, Envelope, Exterior, and Roofing": "FEER",
   "Mass Timber and Millwork": "MTM",
+  "Fire Hose Cabinet": "FHC",
+  "Fire Hose Cabinets": "FHC",
   Suite: "STE",
   Suites: "STE",
   // Water Systems
