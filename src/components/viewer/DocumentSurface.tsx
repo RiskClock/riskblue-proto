@@ -22,6 +22,8 @@ interface DocumentSurfaceProps {
   pageSize: { width: number; height: number };
   overlays?: NormalizedOverlay[];
   hoveredOverlayId?: string | null;
+  /** Fired when the pointer enters/leaves an annotation or its label. */
+  onOverlayHoverChange?: (id: string | null) => void;
   selectedOverlayId?: string | null;
   pulsingOverlayId?: string | null;
   viewScale?: number;
@@ -94,6 +96,7 @@ export const DocumentSurface = ({
   pageSize,
   overlays,
   hoveredOverlayId,
+  onOverlayHoverChange,
   selectedOverlayId,
   pulsingOverlayId,
   viewScale,
@@ -655,6 +658,7 @@ export const DocumentSurface = ({
           overlays={overlays}
           pageSize={pageSize}
           hoveredId={hoveredOverlayId}
+          onHoverChange={onOverlayHoverChange}
           selectedId={selectedOverlayId}
           pulsingId={pulsingOverlayId}
           viewScale={viewScale}

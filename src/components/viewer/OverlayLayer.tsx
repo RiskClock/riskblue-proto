@@ -1,4 +1,4 @@
-import { CSSProperties, PointerEvent as ReactPointerEvent, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, PointerEvent as ReactPointerEvent, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { NormalizedOverlay } from "./viewerGeometry";
 import { readableTextOn } from "@/lib/awpColor";
 import {
@@ -78,6 +78,8 @@ interface OverlayLayerProps {
    * optimizer on every frame. Falls back to `viewScale` when omitted.
    */
   placementScale?: number;
+  /** Fired when hover starts/ends on an anchor dot or its label pill. */
+  onHoverChange?: (id: string | null) => void;
 }
 
 
@@ -104,6 +106,12 @@ const CIRCLE_BORDER_PX_SCREEN = 3;
 /** Resting label pill outline (0 = none). Hover adds 1px on top. */
 const LABEL_BORDER_PX_SCREEN = 0;
 const LEADER_STROKE_PX_SCREEN = 2.25;
+/** Max labels re-evaluated per zoom-in / pan pass (worst leaders first). */
+const MAX_REEVAL_PER_PASS = 8;
+/** A re-evaluated label only moves if its new leader is this much shorter. */
+const REEVAL_IMPROVE_RATIO = 0.75;
+/** Colour used to emphasize a hovered annotation (dot border + leader + pill outline). */
+const HOVER_EMPHASIS_COLOR = "#000000";
 
 // ---- Placement tunables ---------------------------------------------------
 // Anchors within this screen-space distance of each other form a cluster; the
@@ -556,7 +564,7 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
             cy={c.r}
             r={Math.max(0, c.r - strokePxPage / 2)}
             fill="none"
-            stroke={withAlpha(c.color, borderAlpha)}
+            stroke={hovered ? HOVER_EMPHASIS_COLOR : withAlpha(c.color, borderAlpha)}
             strokeWidth={strokePxPage}
             vectorEffect="non-scaling-stroke"
             style={{ vectorEffect: "non-scaling-stroke", strokeWidth: strokePxPage }}
@@ -589,6 +597,7 @@ export const OverlayLayer = ({
   showLabels = true,
   viewportRect = null,
   placementScale,
+  onHoverChange,
 
 
 }: OverlayLayerProps) => {
@@ -945,6 +954,9 @@ export const OverlayLayer = ({
    * of invalidating the whole layout.
    */
   const placementCacheRef = useRef<Map<string, { p: PlacedLabel; labelH: number }>>(new Map());
+  /** Previous settled zoom + viewport key, used to detect zoom-in / pan. */
+  const prevPlacementScaleRef = useRef(0);
+  const prevCullKeyRef = useRef("");
   // NOTE: zoom (lodScale / sizing) is deliberately NOT part of this key —
   // zooming must not wipe cached positions. Only real structural changes
   // (annotation set / geometry / page size) reset the cache.
@@ -1005,8 +1017,41 @@ export const OverlayLayer = ({
         cache.delete(entry.p.id);
       }
     }
-    setAsyncPlaced(retained);
-    const retainedIds = new Set(retained.map((p) => p.id));
+    // Zoom-in / pan re-evaluation: crowding at the old zoom can leave a label
+    // flung far from its anchor. When new space opens up (zoom in, or a pan
+    // that reveals a different region) evict the worst long-leader labels so
+    // the optimizer gets another shot at them. Zooming out never re-evaluates.
+    const zoomedIn = lodScale > prevPlacementScaleRef.current + 1e-6;
+    const panned = prevCullKeyRef.current !== cullKey;
+    prevPlacementScaleRef.current = lodScale;
+    prevCullKeyRef.current = cullKey;
+    const anchorById = new Map(circles.map((c) => [c.id, c]));
+    const leaderLenOf = (p: PlacedLabel) => {
+      const a = anchorById.get(p.id);
+      if (!a) return 0;
+      return Math.max(
+        0,
+        Math.hypot(p.x + p.w / 2 - a.cx, p.y + p.h / 2 - a.cy) - a.r,
+      );
+    };
+    const reevalPrev = new Map<string, { p: PlacedLabel; len: number }>();
+    if (zoomedIn || panned) {
+      const cap = LEADER_SOFT_CAP_SCREEN_PX / Math.max(0.1, lodScale);
+      const offenders = retained
+        .map((p) => ({ p, len: leaderLenOf(p) }))
+        .filter((o) => o.len > cap)
+        .sort((a, b) => b.len - a.len)
+        .slice(0, MAX_REEVAL_PER_PASS);
+      for (const o of offenders) {
+        reevalPrev.set(o.p.id, o);
+        cache.delete(o.p.id);
+      }
+    }
+    const stable = reevalPrev.size
+      ? retained.filter((p) => !reevalPrev.has(p.id))
+      : retained;
+    setAsyncPlaced(stable);
+    const retainedIds = new Set(stable.map((p) => p.id));
     const missingIds = targetIds.filter((id) => !retainedIds.has(id));
     const hasLabels = showLabels && targetIds.length > 0;
     if (!hasLabels) {
@@ -1023,19 +1068,49 @@ export const OverlayLayer = ({
     const ticket = requestPlacement(
       buildPlacementInput({
         placementTargetIds: missingIds,
-        fixedLabels: retained,
-        previousLabels: retained,
+        fixedLabels: stable,
+        previousLabels: stable,
       }),
       ({ placed, suppressedIds: suppressed }) => {
-        for (const p of placed) cache.set(p.id, { p, labelH: placementSizing.labelH });
-        for (const id of suppressed) cache.delete(id);
-        setAsyncPlaced([...retained, ...placed]);
-        setSuppressedIds(new Set(suppressed));
+        // Hysteresis: a re-evaluated label only moves if the new slot is
+        // meaningfully closer to its anchor, otherwise it keeps its old spot.
+        const accepted: PlacedLabel[] = [];
+        const suppressedSet = new Set(suppressed);
+        for (const p of placed) {
+          const prevInfo = reevalPrev.get(p.id);
+          if (prevInfo && leaderLenOf(p) > prevInfo.len * REEVAL_IMPROVE_RATIO) {
+            accepted.push(prevInfo.p);
+            cache.set(prevInfo.p.id, { p: prevInfo.p, labelH: placementSizing.labelH });
+            continue;
+          }
+          accepted.push(p);
+          cache.set(p.id, { p, labelH: placementSizing.labelH });
+        }
+        for (const id of suppressed) {
+          // A re-evaluated label that now fails placement keeps its old spot
+          // rather than disappearing.
+          const prevInfo = reevalPrev.get(id);
+          if (prevInfo) {
+            accepted.push(prevInfo.p);
+            cache.set(id, { p: prevInfo.p, labelH: placementSizing.labelH });
+            suppressedSet.delete(id);
+            continue;
+          }
+          cache.delete(id);
+        }
+        setAsyncPlaced([...stable, ...accepted]);
+        setSuppressedIds(suppressedSet);
         onPlacingChangeRef.current?.(false);
       },
       (err) => {
         // eslint-disable-next-line no-console
         console.warn("[OverlayLayer] placement failed", err);
+        // Restore any label we evicted for re-evaluation so it doesn't vanish.
+        if (reevalPrev.size) {
+          const restored = Array.from(reevalPrev.values()).map((o) => o.p);
+          for (const p of restored) cache.set(p.id, { p, labelH: placementSizing.labelH });
+          setAsyncPlaced([...stable, ...restored]);
+        }
         onPlacingChangeRef.current?.(false);
       },
     );
@@ -1064,6 +1139,13 @@ export const OverlayLayer = ({
    */
   const [localHoverId, setLocalHoverId] = useState<string | null>(null);
   const effectiveHoverId = localHoverId ?? hoveredId ?? null;
+  const onHoverChangeRef = useRef(onHoverChange);
+  onHoverChangeRef.current = onHoverChange;
+  /** Stable hover setter that also notifies the parent (side lists). */
+  const emitHover = useCallback((id: string | null) => {
+    setLocalHoverId(id);
+    onHoverChangeRef.current?.(id);
+  }, []);
 
   /**
    * A hovered / selected annotation whose label was suppressed (or dropped by
@@ -1210,7 +1292,7 @@ export const OverlayLayer = ({
               y1={y1}
               x2={x2}
               y2={y2}
-              stroke={p.color}
+              stroke={isHovered ? HOVER_EMPHASIS_COLOR : p.color}
               strokeWidth={leaderStroke}
               vectorEffect="non-scaling-stroke"
               style={{
@@ -1245,7 +1327,7 @@ export const OverlayLayer = ({
             setDrag={setDrag}
             onOverlayClick={onOverlayClick}
             onOverlayDrag={onOverlayDrag}
-            onHoverChange={setLocalHoverId}
+            onHoverChange={emitHover}
             denseOpaque={showLabels && (suppressedIds.has(c.id) || lowDetailIds.has(c.id))}
           />
         );
@@ -1303,8 +1385,8 @@ export const OverlayLayer = ({
             data-font-px={renderFont}
             data-opacity={LABEL_OPACITY}
             className="absolute font-bold text-center"
-            onPointerEnter={interactive ? () => setLocalHoverId(p.id) : undefined}
-            onPointerLeave={interactive ? () => setLocalHoverId(null) : undefined}
+            onPointerEnter={interactive ? () => emitHover(p.id) : undefined}
+            onPointerLeave={interactive ? () => emitHover(null) : undefined}
             onPointerDown={interactive && onOverlayClick ? (e) => e.stopPropagation() : undefined}
             onPointerUp={interactive && onOverlayClick ? (e) => e.stopPropagation() : undefined}
             onClick={

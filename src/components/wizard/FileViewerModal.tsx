@@ -345,6 +345,8 @@ export const FileViewerModal = ({
 
   const { toast } = useToast();
   const [hoveredCode, setHoveredCode] = useState<string | null>(null);
+  /** Instance hovered on the canvas or in either side list (kept in sync). */
+  const [hoveredInstanceId, setHoveredInstanceId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(pageIndex);
   const [renderedPageSize, setRenderedPageSize] = useState<{
     width: number;
@@ -1896,7 +1898,16 @@ export const FileViewerModal = ({
                   ? detectionOverlays.find((o) =>
                       o.id.endsWith(`-${hoveredCode}`),
                     )?.id ?? null
-                  : null
+                  : hoveredInstanceId
+                    ? instances.find((i) => i.id === hoveredInstanceId)?.awp_class_name === UNIT_MARKER_CLASS
+                      ? `um-${hoveredInstanceId}`
+                      : `inst-${hoveredInstanceId}`
+                    : null
+              }
+              onOverlayHoverChange={(id) =>
+                setHoveredInstanceId(
+                  id ? id.replace(/^(inst-|um-)/, "") : null,
+                )
               }
               selectedOverlayId={
                 selectedInstanceId
@@ -2063,6 +2074,8 @@ export const FileViewerModal = ({
                     instancesOnPage={Array.from(instancesByClassThisFile.values()).flat()}
                     numberByInstanceId={numberByInstanceId}
                     instanceLabel={instanceLabel}
+                    hoveredInstanceId={hoveredInstanceId}
+                    onHoverInstance={setHoveredInstanceId}
                     editingPlan={editingPlan}
                     onEnterEdit={viewingMode ? undefined : enterPlanEdit}
                     onCancelEdit={cancelPlanEdit}
@@ -2098,6 +2111,8 @@ export const FileViewerModal = ({
                     numberByInstanceId={numberByInstanceId}
                     effectivePage={effectivePage}
                     instanceLabel={instanceLabel}
+                    hoveredInstanceId={hoveredInstanceId}
+                    onHoverInstance={setHoveredInstanceId}
                     handleDeleteFromList={handleDeleteFromList}
                     viewingMode={viewingMode}
                     loadingInstances={loadingInstances}
@@ -2540,6 +2555,9 @@ interface DetectionsPanelProps {
   numberByInstanceId: Map<string, number>;
   effectivePage: number;
   instanceLabel: (i: DrawingInstanceRow) => string;
+  /** Instance hovered on the canvas or in the other list. */
+  hoveredInstanceId?: string | null;
+  onHoverInstance?: (id: string | null) => void;
   handleDeleteFromList: (id: string) => void;
   /** Read-only viewing mode: hide destructive/edit affordances. */
   viewingMode?: boolean;
@@ -2591,6 +2609,8 @@ const DetectionsPanel = ({
   numberByInstanceId,
   effectivePage,
   instanceLabel,
+  hoveredInstanceId,
+  onHoverInstance,
   handleDeleteFromList,
   viewingMode = false,
   loadingInstances,
@@ -2735,8 +2755,12 @@ const DetectionsPanel = ({
                         return (
                           <div
                             key={i.id}
-                            className={`flex items-center gap-2 text-[11px] rounded px-1 -mx-1 ${isHidden ? "opacity-40" : "cursor-pointer hover:bg-muted/60"}`}
+                            className={`flex items-center gap-2 text-[11px] rounded px-1 -mx-1 ${isHidden ? "opacity-40" : "cursor-pointer hover:bg-muted/60"} ${
+                              hoveredInstanceId === i.id && !isHidden ? "bg-muted font-semibold" : ""
+                            }`}
                             onClick={() => { if (!isHidden) onFocusInstance?.(i); }}
+                            onMouseEnter={() => { if (!isHidden) onHoverInstance?.(i.id); }}
+                            onMouseLeave={() => onHoverInstance?.(null)}
                           >
                             <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
                             <span className="flex-1 min-w-0 font-mono truncate">
@@ -2834,6 +2858,9 @@ interface FloorPlansPanelProps {
   instancesOnPage?: DrawingInstanceRow[];
   numberByInstanceId?: Map<string, number>;
   instanceLabel?: (i: DrawingInstanceRow) => string;
+  /** Instance hovered on the canvas or in the other list. */
+  hoveredInstanceId?: string | null;
+  onHoverInstance?: (id: string | null) => void;
   /** Bbox-edit integration. */
   editingPlan?: EditingPlanShape | null;
   onEnterEdit?: (fp: ParsedFloorPlan) => void;
@@ -2876,6 +2903,8 @@ const FloorPlansPanel = ({
   instancesOnPage = [],
   numberByInstanceId,
   instanceLabel,
+  hoveredInstanceId,
+  onHoverInstance,
   editingPlan,
   onEnterEdit,
   onCancelEdit,
@@ -2977,13 +3006,17 @@ const FloorPlansPanel = ({
           return (
             <div
               key={inst.id}
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border"
+              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] border ${
+                hoveredInstanceId === inst.id ? "font-bold brightness-95" : "font-medium"
+              }`}
               style={{
                 backgroundColor: softBgFrom(c),
                 color: c,
-                borderColor: c,
+                borderColor: hoveredInstanceId === inst.id ? "hsl(var(--foreground))" : c,
               }}
               title={label}
+              onMouseEnter={() => onHoverInstance?.(inst.id)}
+              onMouseLeave={() => onHoverInstance?.(null)}
             >
               {label}
             </div>
