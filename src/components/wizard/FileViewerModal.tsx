@@ -2609,6 +2609,8 @@ const DetectionsPanel = ({
   numberByInstanceId,
   effectivePage,
   instanceLabel,
+  hoveredInstanceId,
+  onHoverInstance,
   handleDeleteFromList,
   viewingMode = false,
   loadingInstances,
@@ -2753,8 +2755,12 @@ const DetectionsPanel = ({
                         return (
                           <div
                             key={i.id}
-                            className={`flex items-center gap-2 text-[11px] rounded px-1 -mx-1 ${isHidden ? "opacity-40" : "cursor-pointer hover:bg-muted/60"}`}
+                            className={`flex items-center gap-2 text-[11px] rounded px-1 -mx-1 ${isHidden ? "opacity-40" : "cursor-pointer hover:bg-muted/60"} ${
+                              hoveredInstanceId === i.id && !isHidden ? "bg-muted font-semibold" : ""
+                            }`}
                             onClick={() => { if (!isHidden) onFocusInstance?.(i); }}
+                            onMouseEnter={() => { if (!isHidden) onHoverInstance?.(i.id); }}
+                            onMouseLeave={() => onHoverInstance?.(null)}
                           >
                             <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
                             <span className="flex-1 min-w-0 font-mono truncate">
