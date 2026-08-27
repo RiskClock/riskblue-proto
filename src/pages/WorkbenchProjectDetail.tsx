@@ -7952,8 +7952,8 @@ function InstancesReportModal({
       rows: rowsForSpace.map((r) => ({
         instanceId: r.instanceId,
         awpClassName: isSubtypeSplitClass(r.awpClassName)
-          ? displayNameByEntryKey.get(entryKeyForRow(r)) || r.awpClassName
-          : r.awpClassName,
+          ? displayNameByEntryKey.get(entryKeyForRow(r)) || displayClassName(r.awpClassName)
+          : displayClassName(r.awpClassName),
         unitName: r.unitName ?? null,
         annotationBaseId: r.annotationBaseId,
         fileName: fileNameById.get(r.fileId) || "",
