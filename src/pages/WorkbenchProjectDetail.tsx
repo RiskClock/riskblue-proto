@@ -7651,7 +7651,7 @@ function InstancesReportModal({
                 {rows.map((r, i) => (
                   <TableRow key={`${r.instanceId}-${i}`} className={compactRow}>
                     <TableCell className={`${compactCell} font-mono`}>{r.instanceId}</TableCell>
-                    <TableCell className={compactCell}>{r.awpClassName}</TableCell>
+                    <TableCell className={compactCell}>{displayClassName(r.awpClassName)}</TableCell>
                     {showUnitCol && (
                       <TableCell className={compactCell}>{r.unitName ?? "-"}</TableCell>
                     )}
