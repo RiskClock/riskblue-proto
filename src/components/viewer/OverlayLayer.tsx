@@ -1066,6 +1066,13 @@ export const OverlayLayer = ({
    */
   const [localHoverId, setLocalHoverId] = useState<string | null>(null);
   const effectiveHoverId = localHoverId ?? hoveredId ?? null;
+  const onHoverChangeRef = useRef(onHoverChange);
+  onHoverChangeRef.current = onHoverChange;
+  /** Stable hover setter that also notifies the parent (side lists). */
+  const emitHover = useCallback((id: string | null) => {
+    setLocalHoverId(id);
+    onHoverChangeRef.current?.(id);
+  }, []);
 
   /**
    * A hovered / selected annotation whose label was suppressed (or dropped by
