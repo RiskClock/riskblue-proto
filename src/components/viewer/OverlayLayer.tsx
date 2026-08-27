@@ -1,4 +1,4 @@
-import { CSSProperties, PointerEvent as ReactPointerEvent, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, PointerEvent as ReactPointerEvent, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { NormalizedOverlay } from "./viewerGeometry";
 import { readableTextOn } from "@/lib/awpColor";
 import {
@@ -78,6 +78,8 @@ interface OverlayLayerProps {
    * optimizer on every frame. Falls back to `viewScale` when omitted.
    */
   placementScale?: number;
+  /** Fired when hover starts/ends on an anchor dot or its label pill. */
+  onHoverChange?: (id: string | null) => void;
 }
 
 
@@ -591,6 +593,7 @@ export const OverlayLayer = ({
   showLabels = true,
   viewportRect = null,
   placementScale,
+  onHoverChange,
 
 
 }: OverlayLayerProps) => {
@@ -1254,7 +1257,7 @@ export const OverlayLayer = ({
             setDrag={setDrag}
             onOverlayClick={onOverlayClick}
             onOverlayDrag={onOverlayDrag}
-            onHoverChange={setLocalHoverId}
+            onHoverChange={emitHover}
             denseOpaque={showLabels && (suppressedIds.has(c.id) || lowDetailIds.has(c.id))}
           />
         );
@@ -1312,8 +1315,8 @@ export const OverlayLayer = ({
             data-font-px={renderFont}
             data-opacity={LABEL_OPACITY}
             className="absolute font-bold text-center"
-            onPointerEnter={interactive ? () => setLocalHoverId(p.id) : undefined}
-            onPointerLeave={interactive ? () => setLocalHoverId(null) : undefined}
+            onPointerEnter={interactive ? () => emitHover(p.id) : undefined}
+            onPointerLeave={interactive ? () => emitHover(null) : undefined}
             onPointerDown={interactive && onOverlayClick ? (e) => e.stopPropagation() : undefined}
             onPointerUp={interactive && onOverlayClick ? (e) => e.stopPropagation() : undefined}
             onClick={
