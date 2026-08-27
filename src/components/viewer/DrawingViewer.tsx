@@ -58,6 +58,8 @@ export interface DrawingViewerProps {
   initialFit?: "page" | "selection" | "actual";
   initialFitOverlayId?: string;
   hoveredOverlayId?: string | null;
+  /** Fired when the pointer enters/leaves an annotation or its label. */
+  onOverlayHoverChange?: (id: string | null) => void;
   /** Overlay rendered with a persistent selection ring. */
   selectedOverlayId?: string | null;
   /** Overlay rendered with a temporary attention pulse. */
@@ -139,6 +141,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       initialFit = "page",
       initialFitOverlayId,
       hoveredOverlayId,
+      onOverlayHoverChange,
       selectedOverlayId,
       pulsingOverlayId,
       minScale = DEFAULT_MIN,
@@ -568,6 +571,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                     pageSize={pageCssSize}
                     overlays={normalizedByPage.get(activePage.pageNum) ?? []}
                     hoveredOverlayId={hoveredOverlayId}
+                    onOverlayHoverChange={onOverlayHoverChange}
                     selectedOverlayId={selectedOverlayId}
                     pulsingOverlayId={pulsingOverlayId}
                     viewScale={scale}
@@ -646,6 +650,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                           overlays={normalizedByPage.get(p.pageNum) ?? []}
 
                           hoveredOverlayId={hoveredOverlayId}
+                          onOverlayHoverChange={onOverlayHoverChange}
                     selectedOverlayId={selectedOverlayId}
                     pulsingOverlayId={pulsingOverlayId}
                           viewScale={scale}
