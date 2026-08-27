@@ -1010,8 +1010,41 @@ export const OverlayLayer = ({
         cache.delete(entry.p.id);
       }
     }
-    setAsyncPlaced(retained);
-    const retainedIds = new Set(retained.map((p) => p.id));
+    // Zoom-in / pan re-evaluation: crowding at the old zoom can leave a label
+    // flung far from its anchor. When new space opens up (zoom in, or a pan
+    // that reveals a different region) evict the worst long-leader labels so
+    // the optimizer gets another shot at them. Zooming out never re-evaluates.
+    const zoomedIn = lodScale > prevPlacementScaleRef.current + 1e-6;
+    const panned = prevCullKeyRef.current !== cullKey;
+    prevPlacementScaleRef.current = lodScale;
+    prevCullKeyRef.current = cullKey;
+    const anchorById = new Map(circles.map((c) => [c.id, c]));
+    const leaderLenOf = (p: PlacedLabel) => {
+      const a = anchorById.get(p.id);
+      if (!a) return 0;
+      return Math.max(
+        0,
+        Math.hypot(p.x + p.w / 2 - a.cx, p.y + p.h / 2 - a.cy) - a.r,
+      );
+    };
+    const reevalPrev = new Map<string, { p: PlacedLabel; len: number }>();
+    if (zoomedIn || panned) {
+      const cap = LEADER_SOFT_CAP_SCREEN_PX / Math.max(0.1, lodScale);
+      const offenders = retained
+        .map((p) => ({ p, len: leaderLenOf(p) }))
+        .filter((o) => o.len > cap)
+        .sort((a, b) => b.len - a.len)
+        .slice(0, MAX_REEVAL_PER_PASS);
+      for (const o of offenders) {
+        reevalPrev.set(o.p.id, o);
+        cache.delete(o.p.id);
+      }
+    }
+    const stable = reevalPrev.size
+      ? retained.filter((p) => !reevalPrev.has(p.id))
+      : retained;
+    setAsyncPlaced(stable);
+    const retainedIds = new Set(stable.map((p) => p.id));
     const missingIds = targetIds.filter((id) => !retainedIds.has(id));
     const hasLabels = showLabels && targetIds.length > 0;
     if (!hasLabels) {
@@ -1028,19 +1061,49 @@ export const OverlayLayer = ({
     const ticket = requestPlacement(
       buildPlacementInput({
         placementTargetIds: missingIds,
-        fixedLabels: retained,
-        previousLabels: retained,
+        fixedLabels: stable,
+        previousLabels: stable,
       }),
       ({ placed, suppressedIds: suppressed }) => {
-        for (const p of placed) cache.set(p.id, { p, labelH: placementSizing.labelH });
-        for (const id of suppressed) cache.delete(id);
-        setAsyncPlaced([...retained, ...placed]);
-        setSuppressedIds(new Set(suppressed));
+        // Hysteresis: a re-evaluated label only moves if the new slot is
+        // meaningfully closer to its anchor, otherwise it keeps its old spot.
+        const accepted: PlacedLabel[] = [];
+        const suppressedSet = new Set(suppressed);
+        for (const p of placed) {
+          const prevInfo = reevalPrev.get(p.id);
+          if (prevInfo && leaderLenOf(p) > prevInfo.len * REEVAL_IMPROVE_RATIO) {
+            accepted.push(prevInfo.p);
+            cache.set(prevInfo.p.id, { p: prevInfo.p, labelH: placementSizing.labelH });
+            continue;
+          }
+          accepted.push(p);
+          cache.set(p.id, { p, labelH: placementSizing.labelH });
+        }
+        for (const id of suppressed) {
+          // A re-evaluated label that now fails placement keeps its old spot
+          // rather than disappearing.
+          const prevInfo = reevalPrev.get(id);
+          if (prevInfo) {
+            accepted.push(prevInfo.p);
+            cache.set(id, { p: prevInfo.p, labelH: placementSizing.labelH });
+            suppressedSet.delete(id);
+            continue;
+          }
+          cache.delete(id);
+        }
+        setAsyncPlaced([...stable, ...accepted]);
+        setSuppressedIds(suppressedSet);
         onPlacingChangeRef.current?.(false);
       },
       (err) => {
         // eslint-disable-next-line no-console
         console.warn("[OverlayLayer] placement failed", err);
+        // Restore any label we evicted for re-evaluation so it doesn't vanish.
+        if (reevalPrev.size) {
+          const restored = Array.from(reevalPrev.values()).map((o) => o.p);
+          for (const p of restored) cache.set(p.id, { p, labelH: placementSizing.labelH });
+          setAsyncPlaced([...stable, ...restored]);
+        }
         onPlacingChangeRef.current?.(false);
       },
     );
