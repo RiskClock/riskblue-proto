@@ -92,6 +92,8 @@ import {
   ADDED_UNIT_PLANS_KEY,
   DELETED_PLAN_IDS_KEY,
   getDeletedPlanIds,
+  PLAN_ORDER_KEY,
+  sortPlansByOrder,
   getEffectiveBbox,
   getEffectivePoints,
   asPointsPct,
@@ -829,7 +831,10 @@ export default function WorkbenchProjectDetail() {
       knownIds,
       deleted,
     );
-    return [...base, ...added, ...overrideOnly];
+    return sortPlansByOrder(
+      [...base, ...added, ...overrideOnly],
+      activeFloorPlanOverrides,
+    );
   }, [activeFileFloorPlansByPage, activePageView, activeFloorPlanOverrides]);
 
   // NOTE: `activeFileAllUnitPlans` is declared later (after `rows`) so it can
@@ -891,6 +896,31 @@ export default function WorkbenchProjectDetail() {
       toast({
         variant: "destructive",
         title: "Could not save floor plan",
+        description: getUserFriendlyError(error),
+      });
+    }
+  };
+
+  // Persist the manual ordering of floor plan bounding boxes on this page.
+  const savePlanOrder = async (planIds: string[]) => {
+    if (!activeSheetIdForPage) {
+      toast({
+        variant: "destructive",
+        title: "Cannot save",
+        description: "No sheet row exists yet for this page.",
+      });
+      return;
+    }
+    const merged = { ...activeFloorPlanOverrides, [PLAN_ORDER_KEY]: planIds };
+    setActiveFloorPlanOverrides(merged);
+    const { error } = await supabase
+      .from("analysis_request_sheets")
+      .update({ floor_plan_overrides: merged } as any)
+      .eq("id", activeSheetIdForPage);
+    if (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not save order",
         description: getUserFriendlyError(error),
       });
     }
@@ -5457,6 +5487,7 @@ const isChildPlanType = (t: string) =>
             riskElementClasses={activeFileRiskClasses}
             onDeletePlan={deleteFloorPlan}
             onAddPlan={addFloorPlan}
+            onSavePlanOrder={savePlanOrder}
             onInstancesChanged={() => {
               queryClient.refetchQueries({ queryKey: ["workbench-instances", requestId] });
             }}
