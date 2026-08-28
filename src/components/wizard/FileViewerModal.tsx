@@ -57,6 +57,7 @@ import {
   getEffectiveLabel,
   getEffectiveType,
 } from "@/lib/surveyFloorPlans";
+import { ManagePlanOrderModal } from "@/components/wizard/ManagePlanOrderModal";
 import { AnnotationMetadataPopover } from "@/components/wizard/AnnotationMetadataPopover";
 import { SUBTYPED_CLASSES } from "@/components/CreateProjectModal";
 import {
@@ -619,6 +620,7 @@ export const FileViewerModal = ({
     next: () => void;
   }>(null);
   const [confirmDelete, setConfirmDelete] = useState<null | { planId: string; label: string }>(null);
+  const [manageOrderOpen, setManageOrderOpen] = useState(false);
   const viewerApiRef = useRef<any>(null);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
   // Type most recently applied to a plan in this session; new plans default
@@ -2401,6 +2403,18 @@ export const FileViewerModal = ({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {onSavePlanOrder && (
+          <ManagePlanOrderModal
+            open={manageOrderOpen}
+            onOpenChange={setManageOrderOpen}
+            plans={floorPlans ?? []}
+            overrides={floorPlanOverrides ?? {}}
+            onSaveOrder={onSavePlanOrder}
+            onDeletePlan={onDeletePlan}
+            onAddPlan={onAddPlan ? handleAddPlan : undefined}
+          />
+        )}
 
         {/* Delete plan confirmation */}
 
