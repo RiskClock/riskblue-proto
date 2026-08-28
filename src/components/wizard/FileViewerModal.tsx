@@ -2023,7 +2023,23 @@ export const FileViewerModal = ({
                 }}
                 className="flex-1 flex flex-col min-h-0"
               >
-                <TabsList className="m-2 grid grid-cols-2">
+                <div className="px-2 pt-2 flex">
+                  <Button
+                    size="sm"
+                    variant={viewingMode ? "default" : "outline"}
+                    className="h-7 w-full text-[11px]"
+                    aria-pressed={viewingMode}
+                    onClick={() => {
+                      setViewingMode((v) => {
+                        if (!v) setEditingPlan(null);
+                        return !v;
+                      });
+                    }}
+                  >
+                    {viewingMode ? "View Mode" : "Enable View Mode"}
+                  </Button>
+                </div>
+                <TabsList className="mx-2 mt-2 mb-2 grid grid-cols-2">
                   <TabsTrigger value="floor-plans">Floor Plans</TabsTrigger>
                   <TabsTrigger value="detections">Detections</TabsTrigger>
                 </TabsList>
@@ -2131,12 +2147,6 @@ export const FileViewerModal = ({
                     futureLen={future.length}
                     floorPlans={floorPlans}
                     floorPlanOverrides={floorPlanOverrides ?? {}}
-                    onToggleViewingMode={() => {
-                      setViewingMode((v) => {
-                        if (!v) setEditingPlan(null);
-                        return !v;
-                      });
-                    }}
                     hiddenClasses={hiddenClasses}
                     toggleClassHidden={(name) => {
                       updateHiddenClasses((prev) => {
@@ -2663,17 +2673,6 @@ const DetectionsPanel = ({
           </Button>
         </div>
         <div className="flex items-center gap-1">
-          {onToggleViewingMode && (
-            <Button
-              size="sm"
-              variant={viewingMode ? "default" : "ghost"}
-              className="h-7 px-2 text-[11px]"
-              onClick={onToggleViewingMode}
-              aria-pressed={viewingMode}
-            >
-              {viewingMode ? "View Mode" : "Enable View Mode"}
-            </Button>
-          )}
           <Button
             size="sm"
             variant="ghost"
