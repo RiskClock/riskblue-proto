@@ -26,6 +26,9 @@ export function isNewerVersion(candidate: string, current: string): boolean {
 
 // Tiny module-level store so any component (e.g. AppHeader) can read the flag.
 let updateAvailable = false;
+// Module-level so remounts / duplicate hook usage can never stack toasts.
+let promptedFor: string | null = null;
+const UPDATE_TOAST_ID = "riskblue-update-available";
 const listeners = new Set<() => void>();
 
 function setUpdateAvailable(next: boolean) {
@@ -84,13 +87,13 @@ export function useVersionCheck() {
 
     let cancelled = false;
     let isColdStart = true;
-    let promptedFor: string | null = null;
 
     const promptReload = (version: string) => {
       setUpdateAvailable(true);
       if (promptedFor === version) return;
       promptedFor = version;
       sonnerToast("A new version of RiskBlue is available", {
+        id: UPDATE_TOAST_ID,
         description: "Reload to get the latest updates.",
         duration: Infinity,
         action: {
