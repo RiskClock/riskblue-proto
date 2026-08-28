@@ -1859,11 +1859,11 @@ export const FileViewerModal = ({
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="truncate flex items-center gap-2 min-w-0">
             <span className="truncate">{fileName}</span>
-            <Button
+<Button
               type="button"
               size="sm"
               variant={viewingMode ? "default" : "outline"}
-              className="h-7 px-2 flex-shrink-0 text-[11px]"
+              className="h-8 px-2 flex-shrink-0 text-xs"
               aria-pressed={viewingMode}
               onClick={() => {
                 setViewingMode((v) => {
