@@ -115,6 +115,8 @@ export const ManagePlanOrderModal = ({
 
   const move = (from: number, to: number) => {
     if (from === to || to < 0 || to >= rows.length) return;
+    // Manual reordering invalidates any active sort selection.
+    setSort(null);
     setRows((prev) => {
       const next = prev.slice();
       const [item] = next.splice(from, 1);
@@ -138,7 +140,7 @@ export const ManagePlanOrderModal = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle>Manage order</DialogTitle>
           <DialogDescription>
@@ -147,15 +149,14 @@ export const ManagePlanOrderModal = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-center gap-1 flex-wrap">
-          <span className="text-[11px] text-muted-foreground mr-1">Sort by</span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-muted-foreground mr-1">Sort by</span>
           {(["name", "type", "coordinate"] as SortKey[]).map((k) => (
             <Button
               key={k}
               type="button"
-              size="sm"
               variant={sort?.key === k ? "default" : "outline"}
-              className="h-7 px-2 text-[11px] capitalize"
+              className="capitalize"
               onClick={() => applySort(k)}
             >
               {k}
@@ -165,15 +166,14 @@ export const ManagePlanOrderModal = ({
           {onAddPlan && (
             <Button
               type="button"
-              size="sm"
               variant="outline"
-              className="h-7 px-2 text-[11px] ml-auto gap-1"
+              className="ml-auto gap-1"
               onClick={async () => {
                 onOpenChange(false);
                 await onAddPlan();
               }}
             >
-              <Plus className="h-3 w-3" />
+              <Plus className="h-4 w-4" />
               Add
             </Button>
           )}
@@ -181,7 +181,7 @@ export const ManagePlanOrderModal = ({
 
         <div className="max-h-[50vh] overflow-y-auto rounded-md border divide-y">
           {rows.length === 0 && (
-            <div className="p-3 text-xs italic text-muted-foreground">
+            <div className="p-3 text-sm italic text-muted-foreground">
               No bounding boxes on this page.
             </div>
           )}
@@ -202,25 +202,25 @@ export const ManagePlanOrderModal = ({
                   }
                 }}
                 onDragEnd={() => setDragIndex(null)}
-                className={`flex items-center gap-2 px-2 py-1.5 text-xs bg-background ${
+                className={`flex items-center gap-2 px-3 py-2 text-sm bg-background ${
                   dragIndex === idx ? "opacity-60" : ""
                 }`}
               >
-                <GripVertical className="h-3.5 w-3.5 text-muted-foreground cursor-grab shrink-0" />
-                <span className="w-5 text-[10px] tabular-nums text-muted-foreground shrink-0">
+                <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab shrink-0" />
+                <span className="w-6 text-sm tabular-nums text-muted-foreground shrink-0">
                   {idx + 1}
                 </span>
                 <span
-                  className="h-2 w-2 rounded-full shrink-0"
+                  className="h-2.5 w-2.5 rounded-full shrink-0"
                   style={{ backgroundColor: color }}
                 />
                 <span className="flex-1 min-w-0 truncate" title={r.label}>
                   {r.label}
                 </span>
-                <span className="text-[10px] text-muted-foreground shrink-0">
+                <span className="text-sm text-muted-foreground shrink-0">
                   {TYPE_LABELS[r.type] ?? r.type}
                 </span>
-                <span className="text-[10px] tabular-nums text-muted-foreground shrink-0 w-20 text-right">
+                <span className="text-sm tabular-nums text-muted-foreground shrink-0 w-24 text-right">
                   {Number.isFinite(r.x)
                     ? `${Math.round(r.x)}, ${Math.round(r.y)}`
                     : "-"}
@@ -235,7 +235,7 @@ export const ManagePlanOrderModal = ({
                       setRemoved((prev) => [...prev, r]);
                     }}
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 className="h-4 w-4" />
                   </button>
                 )}
               </div>
@@ -245,7 +245,7 @@ export const ManagePlanOrderModal = ({
 
         {removed.length > 0 && (
           <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 space-y-1">
-            <div className="text-[11px] font-medium text-destructive">
+            <div className="text-sm font-medium text-destructive">
               {removed.length} bounding box{removed.length === 1 ? "" : "es"} will
               be deleted on save
             </div>
@@ -253,7 +253,7 @@ export const ManagePlanOrderModal = ({
               {removed.map((r) => (
                 <span
                   key={r.planId}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px]"
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded border text-sm"
                 >
                   {r.label}
                   <button
@@ -267,7 +267,7 @@ export const ManagePlanOrderModal = ({
                     }}
                     className="hover:opacity-70"
                   >
-                    <XIcon className="h-2.5 w-2.5" />
+                    <XIcon className="h-3.5 w-3.5" />
                   </button>
                 </span>
               ))}
