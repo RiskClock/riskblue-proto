@@ -57,6 +57,7 @@ import {
   getEffectiveLabel,
   getEffectiveType,
 } from "@/lib/surveyFloorPlans";
+import { ManagePlanOrderModal } from "@/components/wizard/ManagePlanOrderModal";
 import { AnnotationMetadataPopover } from "@/components/wizard/AnnotationMetadataPopover";
 import { SUBTYPED_CLASSES } from "@/components/CreateProjectModal";
 import {
@@ -250,6 +251,8 @@ interface FileViewerModalProps {
   /** Delete a floor plan entirely (parsed plans go to `__deleted_plan_ids`,
    *  added unit plans are removed from `__added_unit_plans`). */
   onDeletePlan?: (planId: string) => Promise<void> | void;
+  /** Persist the manual ordering of floor plan bounding boxes on this page. */
+  onSavePlanOrder?: (planIds: string[]) => Promise<void> | void;
   /** Add a manually-created floor plan with a default bounding box. */
   onAddPlan?: (args: {
     type: "level_floor_plan" | "unit_floor_plan";
@@ -333,6 +336,7 @@ export const FileViewerModal = ({
   onSaveLevelUnits,
   onDeletePlan,
   onAddPlan,
+  onSavePlanOrder,
   riskElementClasses,
   annotationAssignments,
   onAssignAnnotation,
@@ -616,6 +620,7 @@ export const FileViewerModal = ({
     next: () => void;
   }>(null);
   const [confirmDelete, setConfirmDelete] = useState<null | { planId: string; label: string }>(null);
+  const [manageOrderOpen, setManageOrderOpen] = useState(false);
   const viewerApiRef = useRef<any>(null);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
   // Type most recently applied to a plan in this session; new plans default
@@ -1930,12 +1935,6 @@ export const FileViewerModal = ({
               onOverlayClick={editingEnabled ? handleOverlayClick : undefined}
               onOverlayDrag={editingEnabled ? handleOverlayDrag : undefined}
               viewingMode={viewingMode}
-              onToggleViewingMode={() => {
-                setViewingMode((v) => {
-                  if (!v) setEditingPlan(null);
-                  return !v;
-                });
-              }}
               onActivePageRenderedSizeChange={setRenderedPageSize}
               onApiReady={(api) => (viewerApiRef.current = api)}
               editorBbox={
@@ -2068,8 +2067,18 @@ export const FileViewerModal = ({
                     onSaveOverride={viewingMode ? undefined : onSaveFloorPlanOverride}
                     onEditFloors={viewingMode ? undefined : onEditFloors}
                     onEditLevelUnits={onEditLevelUnits}
-                    onSaveLevelUnits={onSaveLevelUnits}
-                    onPlaceUnitBbox={sidebarEnabled ? handleStartUnitMarkerPlacement : undefined}
+                    onSaveLevelUnits={viewingMode ? undefined : onSaveLevelUnits}
+                    onPlaceUnitBbox={
+                      sidebarEnabled && !viewingMode
+                        ? handleStartUnitMarkerPlacement
+                        : undefined
+                    }
+                    membershipOverrides={floorPlanOverrides ?? {}}
+                    onManageOrder={
+                      onSavePlanOrder && !viewingMode
+                        ? () => setManageOrderOpen(true)
+                        : undefined
+                    }
                     viewingMode={viewingMode}
                     instancesOnPage={Array.from(instancesByClassThisFile.values()).flat()}
                     numberByInstanceId={numberByInstanceId}
@@ -2121,7 +2130,13 @@ export const FileViewerModal = ({
                     pastLen={past.length}
                     futureLen={future.length}
                     floorPlans={floorPlans}
-                    floorPlanOverrides={effectiveFloorPlanOverrides}
+                    floorPlanOverrides={floorPlanOverrides ?? {}}
+                    onToggleViewingMode={() => {
+                      setViewingMode((v) => {
+                        if (!v) setEditingPlan(null);
+                        return !v;
+                      });
+                    }}
                     hiddenClasses={hiddenClasses}
                     toggleClassHidden={(name) => {
                       updateHiddenClasses((prev) => {
@@ -2138,12 +2153,6 @@ export const FileViewerModal = ({
                         }
                         return next;
                       });
-                    }}
-                    setAllHidden={(hidden) => {
-                      updateHiddenClasses(() =>
-                        hidden ? new Set((awpClasses || []).map((c) => c.name)) : new Set(),
-                      );
-                      if (hidden) setSelectedClass(null);
                     }}
                     onFocusInstance={focusInstance}
                   />
@@ -2395,6 +2404,18 @@ export const FileViewerModal = ({
           </AlertDialogContent>
         </AlertDialog>
 
+        {onSavePlanOrder && (
+          <ManagePlanOrderModal
+            open={manageOrderOpen}
+            onOpenChange={setManageOrderOpen}
+            plans={floorPlans ?? []}
+            overrides={floorPlanOverrides ?? {}}
+            onSaveOrder={onSavePlanOrder}
+            onDeletePlan={onDeletePlan}
+            onAddPlan={onAddPlan ? handleAddPlan : undefined}
+          />
+        )}
+
         {/* Delete plan confirmation */}
 
         <AlertDialog
@@ -2572,7 +2593,8 @@ interface DetectionsPanelProps {
   /** Classes whose annotations are hidden on the canvas. */
   hiddenClasses: Set<string>;
   toggleClassHidden: (name: string) => void;
-  setAllHidden: (hidden: boolean) => void;
+  /** Toggles the read-only viewing mode from the list header. */
+  onToggleViewingMode?: () => void;
   onFocusInstance?: (i: DrawingInstanceRow) => void;
 }
 
@@ -2623,11 +2645,10 @@ const DetectionsPanel = ({
   floorPlanOverrides = {},
   hiddenClasses,
   toggleClassHidden,
-  setAllHidden,
+  onToggleViewingMode,
   onFocusInstance,
 }: DetectionsPanelProps) => {
   const showPlanBadges = (floorPlans?.length ?? 0) > 0;
-  const anyHidden = awpClasses.some((c) => hiddenClasses.has(c.name));
   const allExpanded =
     awpClasses.length > 0 && awpClasses.every((c) => expanded.has(c.name));
   return (
@@ -2642,14 +2663,17 @@ const DetectionsPanel = ({
           </Button>
         </div>
         <div className="flex items-center gap-1">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 px-2 text-[11px]"
-            onClick={() => setAllHidden(!anyHidden)}
-          >
-            {anyHidden ? "Show All" : "Hide All"}
-          </Button>
+          {onToggleViewingMode && (
+            <Button
+              size="sm"
+              variant={viewingMode ? "default" : "ghost"}
+              className="h-7 px-2 text-[11px]"
+              onClick={onToggleViewingMode}
+              aria-pressed={viewingMode}
+            >
+              {viewingMode ? "View Mode" : "Enable View Mode"}
+            </Button>
+          )}
           <Button
             size="sm"
             variant="ghost"
@@ -2872,6 +2896,11 @@ interface FloorPlansPanelProps {
   
   onRequestDelete?: (planId: string, label: string) => void;
   onAddPlan?: () => void | Promise<void>;
+  /** Opens the manage-order modal for bounding boxes on this page. */
+  onManageOrder?: () => void;
+  /** Committed overrides used for annotation ownership. Kept separate from
+   *  `overrides` so a bbox being dragged does not re-shuffle the lists. */
+  membershipOverrides?: Record<string, any>;
   /** Read-only viewing mode: only unit/detail attachment stays enabled. */
   viewingMode?: boolean;
   /** When set, that row's name <Input> should autoFocus + select() on mount
@@ -2914,6 +2943,8 @@ const FloorPlansPanel = ({
   onEditingTypeChange,
   onRequestDelete,
   onAddPlan,
+  onManageOrder,
+  membershipOverrides,
   viewingMode = false,
   focusNamePlanId,
   onFocusHandled,
@@ -2975,7 +3006,12 @@ const FloorPlansPanel = ({
   const annotationsByPlan = new Map<string, DrawingInstanceRow[]>();
   const orphaned: DrawingInstanceRow[] = [];
   for (const inst of instancesOnPage) {
-    const containing = findContainingPlan(floorPlans, inst.nx, inst.ny, overrides);
+    const containing = findContainingPlan(
+      floorPlans,
+      inst.nx,
+      inst.ny,
+      membershipOverrides ?? overrides,
+    );
     if (containing) {
       const arr = annotationsByPlan.get(containing.plan_id) ?? [];
       arr.push(inst);
@@ -3297,18 +3333,31 @@ const FloorPlansPanel = ({
         )}
       </div>
 
-      {onAddPlan && (
-        <div className="border-t p-2 shrink-0 bg-background">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="w-full h-8 text-xs gap-1"
-            onClick={() => void onAddPlan()}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add Floor Plan Bounding Box
-          </Button>
+      {(onAddPlan || onManageOrder) && (
+        <div className="border-t p-2 shrink-0 bg-background flex items-center gap-1">
+          {onAddPlan && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="flex-1 h-8 text-xs gap-1"
+              onClick={() => void onAddPlan()}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add Floor Plan Bounding Box
+            </Button>
+          )}
+          {onManageOrder && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs shrink-0"
+              onClick={onManageOrder}
+            >
+              Manage Order
+            </Button>
+          )}
         </div>
       )}
     </div>
@@ -3405,7 +3454,7 @@ const LevelUnitsSection = ({
     <div className="space-y-1">
       <div className="flex items-center justify-between gap-2">
         <div className="text-[10px] font-medium text-muted-foreground">
-          {effUnits.length > 0 ? `Units / Details (${effUnits.length})` : "Units / Details"}
+          {`Units / Details (${effUnits.length})`}
         </div>
         {onSaveLevelUnits && (
           <Button

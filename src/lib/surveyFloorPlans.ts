@@ -430,3 +430,35 @@ export function getEffectiveType(
 }
 
 
+
+// ---- Manual plan ordering -------------------------------------------------
+// Stored in analysis_request_sheets.floor_plan_overrides under the reserved
+// key "__plan_order": an array of plan_ids in the user's preferred order.
+export const PLAN_ORDER_KEY = "__plan_order";
+
+export function getPlanOrder(
+  overrides: Record<string, any> | null | undefined,
+): string[] {
+  const raw = overrides?.[PLAN_ORDER_KEY];
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((x) => typeof x === "string");
+}
+
+/** Stable sort of plans by the stored manual order. Unknown ids keep their
+ *  relative position at the end of the list. */
+export function sortPlansByOrder<T extends { plan_id: string }>(
+  plans: T[],
+  overrides: Record<string, any> | null | undefined,
+): T[] {
+  const order = getPlanOrder(overrides);
+  if (order.length === 0) return plans;
+  const idx = new Map(order.map((id, i) => [id, i]));
+  return plans
+    .map((p, i) => ({ p, i }))
+    .sort((a, b) => {
+      const ai = idx.get(a.p.plan_id) ?? Number.MAX_SAFE_INTEGER;
+      const bi = idx.get(b.p.plan_id) ?? Number.MAX_SAFE_INTEGER;
+      return ai - bi || a.i - b.i;
+    })
+    .map((x) => x.p);
+}
