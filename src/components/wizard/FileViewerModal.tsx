@@ -3340,12 +3340,12 @@ const FloorPlansPanel = ({
               type="button"
               size="sm"
               variant="outline"
-              className="flex-1 h-8 text-xs gap-1"
+              className="flex-1 h-8 text-xs"
               onClick={() => void onAddPlan()}
             >
-              <Plus className="h-3.5 w-3.5" />
-              Add Floor Plan Bounding Box
+              Add Floor Plan
             </Button>
+
           )}
           {onManageOrder && (
             <Button
