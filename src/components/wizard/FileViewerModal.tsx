@@ -1859,7 +1859,23 @@ export const FileViewerModal = ({
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="truncate flex items-center gap-2 min-w-0">
             <span className="truncate">{fileName}</span>
+            <Button
+              type="button"
+              size="sm"
+              variant={viewingMode ? "default" : "outline"}
+              className="h-7 px-2 flex-shrink-0 text-[11px]"
+              aria-pressed={viewingMode}
+              onClick={() => {
+                setViewingMode((v) => {
+                  if (!v) setEditingPlan(null);
+                  return !v;
+                });
+              }}
+            >
+              {viewingMode ? "View Mode" : "Enable View Mode"}
+            </Button>
             {isInternal && (
+
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
