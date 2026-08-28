@@ -2152,12 +2152,6 @@ export const FileViewerModal = ({
                         return next;
                       });
                     }}
-                    setAllHidden={(hidden) => {
-                      updateHiddenClasses(() =>
-                        hidden ? new Set((awpClasses || []).map((c) => c.name)) : new Set(),
-                      );
-                      if (hidden) setSelectedClass(null);
-                    }}
                     onFocusInstance={focusInstance}
                   />
                 </TabsContent>
@@ -2585,7 +2579,8 @@ interface DetectionsPanelProps {
   /** Classes whose annotations are hidden on the canvas. */
   hiddenClasses: Set<string>;
   toggleClassHidden: (name: string) => void;
-  setAllHidden: (hidden: boolean) => void;
+  /** Toggles the read-only viewing mode from the list header. */
+  onToggleViewingMode?: () => void;
   onFocusInstance?: (i: DrawingInstanceRow) => void;
 }
 
@@ -2636,11 +2631,10 @@ const DetectionsPanel = ({
   floorPlanOverrides = {},
   hiddenClasses,
   toggleClassHidden,
-  setAllHidden,
+  onToggleViewingMode,
   onFocusInstance,
 }: DetectionsPanelProps) => {
   const showPlanBadges = (floorPlans?.length ?? 0) > 0;
-  const anyHidden = awpClasses.some((c) => hiddenClasses.has(c.name));
   const allExpanded =
     awpClasses.length > 0 && awpClasses.every((c) => expanded.has(c.name));
   return (
@@ -2888,6 +2882,11 @@ interface FloorPlansPanelProps {
   
   onRequestDelete?: (planId: string, label: string) => void;
   onAddPlan?: () => void | Promise<void>;
+  /** Opens the manage-order modal for bounding boxes on this page. */
+  onManageOrder?: () => void;
+  /** Committed overrides used for annotation ownership. Kept separate from
+   *  `overrides` so a bbox being dragged does not re-shuffle the lists. */
+  membershipOverrides?: Record<string, any>;
   /** Read-only viewing mode: only unit/detail attachment stays enabled. */
   viewingMode?: boolean;
   /** When set, that row's name <Input> should autoFocus + select() on mount
@@ -2930,6 +2929,8 @@ const FloorPlansPanel = ({
   onEditingTypeChange,
   onRequestDelete,
   onAddPlan,
+  onManageOrder,
+  membershipOverrides,
   viewingMode = false,
   focusNamePlanId,
   onFocusHandled,
@@ -2991,7 +2992,12 @@ const FloorPlansPanel = ({
   const annotationsByPlan = new Map<string, DrawingInstanceRow[]>();
   const orphaned: DrawingInstanceRow[] = [];
   for (const inst of instancesOnPage) {
-    const containing = findContainingPlan(floorPlans, inst.nx, inst.ny, overrides);
+    const containing = findContainingPlan(
+      floorPlans,
+      inst.nx,
+      inst.ny,
+      membershipOverrides ?? overrides,
+    );
     if (containing) {
       const arr = annotationsByPlan.get(containing.plan_id) ?? [];
       arr.push(inst);
@@ -3313,18 +3319,31 @@ const FloorPlansPanel = ({
         )}
       </div>
 
-      {onAddPlan && (
-        <div className="border-t p-2 shrink-0 bg-background">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="w-full h-8 text-xs gap-1"
-            onClick={() => void onAddPlan()}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add Floor Plan Bounding Box
-          </Button>
+      {(onAddPlan || onManageOrder) && (
+        <div className="border-t p-2 shrink-0 bg-background flex items-center gap-1">
+          {onAddPlan && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="flex-1 h-8 text-xs gap-1"
+              onClick={() => void onAddPlan()}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add Floor Plan Bounding Box
+            </Button>
+          )}
+          {onManageOrder && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs shrink-0"
+              onClick={onManageOrder}
+            >
+              Manage Order
+            </Button>
+          )}
         </div>
       )}
     </div>
