@@ -250,6 +250,8 @@ interface FileViewerModalProps {
   /** Delete a floor plan entirely (parsed plans go to `__deleted_plan_ids`,
    *  added unit plans are removed from `__added_unit_plans`). */
   onDeletePlan?: (planId: string) => Promise<void> | void;
+  /** Persist the manual ordering of floor plan bounding boxes on this page. */
+  onSavePlanOrder?: (planIds: string[]) => Promise<void> | void;
   /** Add a manually-created floor plan with a default bounding box. */
   onAddPlan?: (args: {
     type: "level_floor_plan" | "unit_floor_plan";
@@ -333,6 +335,7 @@ export const FileViewerModal = ({
   onSaveLevelUnits,
   onDeletePlan,
   onAddPlan,
+  onSavePlanOrder,
   riskElementClasses,
   annotationAssignments,
   onAssignAnnotation,
@@ -1930,12 +1933,6 @@ export const FileViewerModal = ({
               onOverlayClick={editingEnabled ? handleOverlayClick : undefined}
               onOverlayDrag={editingEnabled ? handleOverlayDrag : undefined}
               viewingMode={viewingMode}
-              onToggleViewingMode={() => {
-                setViewingMode((v) => {
-                  if (!v) setEditingPlan(null);
-                  return !v;
-                });
-              }}
               onActivePageRenderedSizeChange={setRenderedPageSize}
               onApiReady={(api) => (viewerApiRef.current = api)}
               editorBbox={
@@ -2068,8 +2065,18 @@ export const FileViewerModal = ({
                     onSaveOverride={viewingMode ? undefined : onSaveFloorPlanOverride}
                     onEditFloors={viewingMode ? undefined : onEditFloors}
                     onEditLevelUnits={onEditLevelUnits}
-                    onSaveLevelUnits={onSaveLevelUnits}
-                    onPlaceUnitBbox={sidebarEnabled ? handleStartUnitMarkerPlacement : undefined}
+                    onSaveLevelUnits={viewingMode ? undefined : onSaveLevelUnits}
+                    onPlaceUnitBbox={
+                      sidebarEnabled && !viewingMode
+                        ? handleStartUnitMarkerPlacement
+                        : undefined
+                    }
+                    membershipOverrides={floorPlanOverrides ?? {}}
+                    onManageOrder={
+                      onSavePlanOrder && !viewingMode
+                        ? () => setManageOrderOpen(true)
+                        : undefined
+                    }
                     viewingMode={viewingMode}
                     instancesOnPage={Array.from(instancesByClassThisFile.values()).flat()}
                     numberByInstanceId={numberByInstanceId}
@@ -2121,7 +2128,13 @@ export const FileViewerModal = ({
                     pastLen={past.length}
                     futureLen={future.length}
                     floorPlans={floorPlans}
-                    floorPlanOverrides={effectiveFloorPlanOverrides}
+                    floorPlanOverrides={floorPlanOverrides ?? {}}
+                    onToggleViewingMode={() => {
+                      setViewingMode((v) => {
+                        if (!v) setEditingPlan(null);
+                        return !v;
+                      });
+                    }}
                     hiddenClasses={hiddenClasses}
                     toggleClassHidden={(name) => {
                       updateHiddenClasses((prev) => {
@@ -2642,14 +2655,17 @@ const DetectionsPanel = ({
           </Button>
         </div>
         <div className="flex items-center gap-1">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 px-2 text-[11px]"
-            onClick={() => setAllHidden(!anyHidden)}
-          >
-            {anyHidden ? "Show All" : "Hide All"}
-          </Button>
+          {onToggleViewingMode && (
+            <Button
+              size="sm"
+              variant={viewingMode ? "default" : "ghost"}
+              className="h-7 px-2 text-[11px]"
+              onClick={onToggleViewingMode}
+              aria-pressed={viewingMode}
+            >
+              {viewingMode ? "View Mode" : "Enable View Mode"}
+            </Button>
+          )}
           <Button
             size="sm"
             variant="ghost"
@@ -3405,7 +3421,7 @@ const LevelUnitsSection = ({
     <div className="space-y-1">
       <div className="flex items-center justify-between gap-2">
         <div className="text-[10px] font-medium text-muted-foreground">
-          {effUnits.length > 0 ? `Units / Details (${effUnits.length})` : "Units / Details"}
+          {`Units / Details (${effUnits.length})`}
         </div>
         {onSaveLevelUnits && (
           <Button
