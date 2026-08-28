@@ -1859,11 +1859,11 @@ export const FileViewerModal = ({
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="truncate flex items-center gap-2 min-w-0">
             <span className="truncate">{fileName}</span>
-            <Button
+<Button
               type="button"
               size="sm"
               variant={viewingMode ? "default" : "outline"}
-              className="h-7 px-2 flex-shrink-0 text-[11px]"
+              className="h-8 px-2 flex-shrink-0 text-xs"
               aria-pressed={viewingMode}
               onClick={() => {
                 setViewingMode((v) => {
@@ -3066,10 +3066,10 @@ const FloorPlansPanel = ({
     <div className="h-full flex flex-col min-h-0">
       {onScoutPage && (
         <div className="px-2 pb-2 shrink-0 flex items-center gap-1">
-          <Button
+<Button
             size="sm"
             variant="outline"
-            className="flex-1 h-7 text-xs"
+            className="flex-1 h-8 text-xs"
             onClick={onScoutPage}
             disabled={scoutBusy}
           >
@@ -3084,9 +3084,9 @@ const FloorPlansPanel = ({
           </Button>
           {onScoutDebug && (
             <Button
-              size="sm"
+size="sm"
               variant="outline"
-              className="h-7 w-7 p-0 shrink-0"
+              className="h-8 w-8 p-0 shrink-0"
               onClick={onScoutDebug}
               aria-label="Scout debug"
               title="Scout debug"
