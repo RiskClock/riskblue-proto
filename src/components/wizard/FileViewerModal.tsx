@@ -3084,9 +3084,9 @@ const FloorPlansPanel = ({
           </Button>
           {onScoutDebug && (
             <Button
-              size="sm"
+size="sm"
               variant="outline"
-              className="h-7 w-7 p-0 shrink-0"
+              className="h-8 w-8 p-0 shrink-0"
               onClick={onScoutDebug}
               aria-label="Scout debug"
               title="Scout debug"
