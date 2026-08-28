@@ -2039,23 +2039,8 @@ export const FileViewerModal = ({
                 }}
                 className="flex-1 flex flex-col min-h-0"
               >
-                <div className="px-2 pt-2 flex">
-                  <Button
-                    size="sm"
-                    variant={viewingMode ? "default" : "outline"}
-                    className="h-7 w-full text-[11px]"
-                    aria-pressed={viewingMode}
-                    onClick={() => {
-                      setViewingMode((v) => {
-                        if (!v) setEditingPlan(null);
-                        return !v;
-                      });
-                    }}
-                  >
-                    {viewingMode ? "View Mode" : "Enable View Mode"}
-                  </Button>
-                </div>
                 <TabsList className="mx-2 mt-2 mb-2 grid grid-cols-2">
+
                   <TabsTrigger value="floor-plans">Floor Plans</TabsTrigger>
                   <TabsTrigger value="detections">Detections</TabsTrigger>
                 </TabsList>
