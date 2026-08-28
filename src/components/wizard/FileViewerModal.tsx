@@ -3066,10 +3066,10 @@ const FloorPlansPanel = ({
     <div className="h-full flex flex-col min-h-0">
       {onScoutPage && (
         <div className="px-2 pb-2 shrink-0 flex items-center gap-1">
-          <Button
+<Button
             size="sm"
             variant="outline"
-            className="flex-1 h-7 text-xs"
+            className="flex-1 h-8 text-xs"
             onClick={onScoutPage}
             disabled={scoutBusy}
           >
