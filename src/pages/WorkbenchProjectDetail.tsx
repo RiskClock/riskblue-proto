@@ -1084,7 +1084,7 @@ export default function WorkbenchProjectDetail() {
 
 
   useEffect(() => {
-    if (user && !canAccess) navigate("/projects", { replace: true });
+    if (user && !canAccess) navigate(tenantPath("/projects"), { replace: true });
   }, [user, canAccess, navigate]);
 
 
@@ -4228,7 +4228,7 @@ const isChildPlanType = (t: string) =>
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 shrink-0"
-                onClick={() => navigate(canManage ? "/workbench" : "/projects")}
+                onClick={() => navigate(canManage && !tenantId ? "/workbench" : tenantPath("/projects"))}
                 aria-label="Back"
               >
                 <ArrowLeft className="h-4 w-4" />
