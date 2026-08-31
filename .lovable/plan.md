@@ -29,7 +29,7 @@ Role templates:
 |---|---|---|---|
 | view_projects | yes | yes | yes |
 | create_project | yes | yes | no |
-| edit_project | yes | yes | no |
+| edit_project | yes | yes | yes |
 | delete_project | yes | no | no |
 | export_report | yes | yes | yes |
 | view_credits | yes | yes | no |
