@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CreateProjectModal } from "@/components/CreateProjectModal";
 import { useAccountType } from "@/hooks/useAccountType";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface Project {
   id: string;
@@ -39,6 +40,9 @@ const Projects = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { isWMSV } = useAccountType();
+  const { tenantId, tenantPath, hasPermission } = useTenant();
+  const canCreateProject = tenantId ? hasPermission("create_project") : true;
+  const canDeleteProject = tenantId ? hasPermission("delete_project") : true;
   useHeapIdentify();
   const { logActivity } = useActivityLogger();
   const [projects, setProjects] = useState<ProjectWithCreator[]>([]);
@@ -60,7 +64,8 @@ const Projects = () => {
     if (user) {
       fetchProjects({ reset: true });
     }
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, tenantId]);
 
 
   const fetchProjects = async ({ reset = false }: { reset?: boolean } = {}) => {
@@ -73,7 +78,8 @@ const Projects = () => {
       const { data, error } = await supabase.rpc("get_project_list_summaries", {
         p_limit: PROJECT_PAGE_SIZE,
         p_offset: offset,
-      });
+        p_tenant_id: tenantId,
+      } as any);
 
       if (error) throw error;
 
@@ -211,7 +217,9 @@ const Projects = () => {
         ) : projects.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-muted-foreground mb-4">No projects yet</p>
-            <Button onClick={handleNewProject}>Create your first project</Button>
+            {canCreateProject && (
+              <Button onClick={handleNewProject}>Create your first project</Button>
+            )}
           </div>
         ) : (
           <div className="bg-card rounded-lg border overflow-hidden">
@@ -233,9 +241,11 @@ const Projects = () => {
                     className="border-t hover:bg-muted/30 cursor-pointer"
                     onClick={() =>
                       navigate(
-                        isWMSV
-                          ? `/workbench/project/${project.id}`
-                          : `/project/${project.id}`,
+                        tenantPath(
+                          isWMSV
+                            ? `/workbench/project/${project.id}`
+                            : `/project/${project.id}`,
+                        ),
                       )
                     }
                   >
@@ -319,7 +329,7 @@ const Projects = () => {
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
-                        {userProjectRoles.get(project.id) === "admin" && (
+                        {userProjectRoles.get(project.id) === "admin" && canDeleteProject && (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -348,7 +358,9 @@ const Projects = () => {
                 {loadingMore ? "Loading…" : "Load More"}
               </Button>
             )}
-            <Button onClick={handleNewProject}>Add New Project</Button>
+            {canCreateProject && (
+              <Button onClick={handleNewProject}>Add New Project</Button>
+            )}
           </div>
         )}
       </main>
