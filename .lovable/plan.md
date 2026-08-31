@@ -29,13 +29,15 @@ Role templates:
 |---|---|---|---|
 | view_projects | yes | yes | yes |
 | create_project | yes | yes | no |
-| edit_project | yes | yes | no |
+| edit_project | yes | yes | yes |
 | delete_project | yes | no | no |
 | export_report | yes | yes | yes |
 | view_credits | yes | yes | no |
 | buy_credits | yes | no | no |
 | manage_members | yes | no | no |
 | manage_tenant_settings | yes | no | no |
+
+Guests can edit projects they have access to (contractors editing assigned work) but cannot create or delete them.
 
 Templates are resolved server-side; per-member overrides are supported via the jsonb column so flags can diverge from the template later without a schema change.
 
@@ -46,6 +48,7 @@ Templates are resolved server-side; per-member overrides are supported via the j
 - Non-member hitting a tenant URL gets a "no access" screen, not a redirect loop.
 - Login/`/` routing: `last_accessed_tenant_id` → first available tenant → tenant-less `/projects` if the user belongs to none.
 - Legacy `/projects` and `/project/:id` remain for tenant-less projects and internal users.
+- Any project created while inside `/t/:tenantId/` automatically inherits `tenant_id` from the active tenant route context — the creation modal never asks, and the value is re-validated server-side against the caller's membership.
 
 ## 4. Company Management page (internal only)
 
@@ -72,9 +75,10 @@ A database trigger on `tenant_members` rejects any delete or role downgrade that
 
 ## 8. Boundary enforcement
 
-- RLS on every tenant-scoped table uses a `is_tenant_member(user, tenant)` / `tenant_has_permission(user, tenant, flag)` security-definer pair (no recursive policy reads).
+- RLS on every tenant-scoped table uses a `is_tenant_member(user, tenant)` / `tenant_has_permission(user, tenant, flag)` security-definer pair (no recursive policy reads). `is_tenant_member` returns false when the tenant is not active, so deactivating a company immediately cuts off all member access.
 - Projects policies extend to: creator, project collaborator, tenant member of `projects.tenant_id`, or internal user.
-- Edge functions that accept a `tenantId` validate membership from the bearer token before doing any work; public link paths (invite acceptance, threat-report download links) are the documented exceptions.
+- Public share links: `projects` gains a nullable `public_share_token`, and the SELECT policy allows a row through when the request carries a matching valid (non-null, non-revoked, unexpired) token — the one explicit bypass of tenant membership. Token matching is done through a security-definer helper so the token itself is never readable from the client.
+- Edge functions that accept a `tenantId` validate membership from the bearer token before doing any work; public link paths (invite acceptance, threat-report download links, share-token reads) are the documented exceptions.
 - Invitations: internal users can add members to any tenant; tenant admins with `manage_members` can invite only into their own tenant, reusing the existing invite-email infrastructure.
 
 ## Technical notes
