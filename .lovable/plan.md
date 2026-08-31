@@ -37,6 +37,8 @@ Role templates:
 | manage_members | yes | no | no |
 | manage_tenant_settings | yes | no | no |
 
+Guests can edit projects they have access to (contractors editing assigned work) but cannot create or delete them.
+
 Templates are resolved server-side; per-member overrides are supported via the jsonb column so flags can diverge from the template later without a schema change.
 
 ## 3. Routing
