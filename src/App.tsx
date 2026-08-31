@@ -10,6 +10,7 @@ import { ExportProvider } from "./contexts/ExportContext";
 import { ExportProgressPanel } from "./components/export/ExportProgressPanel";
 import { PaymentTestModeBanner } from "./components/PaymentTestModeBanner";
 import { useVersionCheck } from "./hooks/useVersionCheck";
+import { TenantLayout, RootRedirect } from "./components/TenantLayout";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +39,7 @@ const CheckoutReturn = lazy(() => import("./pages/CheckoutReturn"));
 const ThreatReportDownload = lazy(() => import("./pages/ThreatReportDownload"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
+const CompanyManagement = lazy(() => import("./pages/CompanyManagement"));
 
 const VersionWatcher = () => {
   useVersionCheck();
@@ -93,8 +95,18 @@ const App = () => (
             <Route path="/prompt-refinery" element={<ProtectedRoute><PromptRefinery /></ProtectedRoute>} />
             <Route path="/prompt-refinery/:promptId" element={<ProtectedRoute><PromptRefineryDetail /></ProtectedRoute>} />
             <Route path="/internal/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
+            <Route path="/internal/companies" element={<ProtectedRoute><CompanyManagement /></ProtectedRoute>} />
             <Route path="/internal/viewer-test" element={<ProtectedRoute><InternalViewerTest /></ProtectedRoute>} />
             <Route path="/internal/activity" element={<ProtectedRoute><InternalActivity /></ProtectedRoute>} />
+
+            {/* Tenant-scoped routes */}
+            <Route path="/t/:tenantId" element={<ProtectedRoute><TenantLayout /></ProtectedRoute>}>
+              <Route index element={<Navigate to="projects" replace />} />
+              <Route path="projects" element={<Projects />} />
+              <Route path="project/:id" element={<ProjectWizard />} />
+              <Route path="workbench/project/:projectId" element={<WorkbenchProjectDetail />} />
+            </Route>
+
             <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="/oauth/callback" element={<OAuthCallback />} />
             <Route path="/connect/google-drive" element={<GoogleDriveConnect />} />
@@ -105,7 +117,7 @@ const App = () => (
             <Route path="/credits/return" element={<CheckoutReturn />} />
             <Route path="/projects/:projectId/export/:exportId" element={<ThreatReportDownload />} />
             <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
-            <Route path="/" element={<Navigate to="/projects" />} />
+            <Route path="/" element={<ProtectedRoute><RootRedirect /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
             </Routes>
             </Suspense>

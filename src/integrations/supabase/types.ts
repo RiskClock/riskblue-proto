@@ -1710,6 +1710,7 @@ export type Database = {
           display_name: string | null
           id: string
           is_active: boolean
+          last_accessed_tenant_id: string | null
           updated_at: string
           user_id: string
         }
@@ -1723,6 +1724,7 @@ export type Database = {
           display_name?: string | null
           id?: string
           is_active?: boolean
+          last_accessed_tenant_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1736,6 +1738,7 @@ export type Database = {
           display_name?: string | null
           id?: string
           is_active?: boolean
+          last_accessed_tenant_id?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -2096,6 +2099,9 @@ export type Database = {
           name: string
           project_data: Json | null
           project_type: string | null
+          public_share_expires_at: string | null
+          public_share_revoked: boolean
+          public_share_token: string | null
           report_file_name: string | null
           report_file_path: string | null
           selected_awp_class_names: string[]
@@ -2103,6 +2109,7 @@ export type Database = {
           selected_other_classes: string[]
           state: string | null
           status: string | null
+          tenant_id: string | null
           total_floors: number | null
           tower_type: string | null
           typical_floors: number | null
@@ -2136,6 +2143,9 @@ export type Database = {
           name: string
           project_data?: Json | null
           project_type?: string | null
+          public_share_expires_at?: string | null
+          public_share_revoked?: boolean
+          public_share_token?: string | null
           report_file_name?: string | null
           report_file_path?: string | null
           selected_awp_class_names?: string[]
@@ -2143,6 +2153,7 @@ export type Database = {
           selected_other_classes?: string[]
           state?: string | null
           status?: string | null
+          tenant_id?: string | null
           total_floors?: number | null
           tower_type?: string | null
           typical_floors?: number | null
@@ -2176,6 +2187,9 @@ export type Database = {
           name?: string
           project_data?: Json | null
           project_type?: string | null
+          public_share_expires_at?: string | null
+          public_share_revoked?: boolean
+          public_share_token?: string | null
           report_file_name?: string | null
           report_file_path?: string | null
           selected_awp_class_names?: string[]
@@ -2183,6 +2197,7 @@ export type Database = {
           selected_other_classes?: string[]
           state?: string | null
           status?: string | null
+          tenant_id?: string | null
           total_floors?: number | null
           tower_type?: string | null
           typical_floors?: number | null
@@ -2196,7 +2211,15 @@ export type Database = {
           workbench_status?: string
           zip_code?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "projects_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       proposals: {
         Row: {
@@ -2721,6 +2744,180 @@ export type Database = {
         }
         Relationships: []
       }
+      tenant_credit_transactions: {
+        Row: {
+          actor_user_id: string | null
+          amount_cents: number | null
+          analysis_request_id: string | null
+          created_at: string
+          delta: number
+          id: string
+          package_label: string | null
+          project_id: string | null
+          reason: string
+          stripe_session_id: string | null
+          tenant_id: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          amount_cents?: number | null
+          analysis_request_id?: string | null
+          created_at?: string
+          delta: number
+          id?: string
+          package_label?: string | null
+          project_id?: string | null
+          reason: string
+          stripe_session_id?: string | null
+          tenant_id: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          amount_cents?: number | null
+          analysis_request_id?: string | null
+          created_at?: string
+          delta?: number
+          id?: string
+          package_label?: string | null
+          project_id?: string | null
+          reason?: string
+          stripe_session_id?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_credit_transactions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_invitations: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string | null
+          role: Database["public"]["Enums"]["tenant_role"]
+          tenant_id: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          email: string
+          expires_at?: string
+          id?: string
+          invited_by?: string | null
+          role?: Database["public"]["Enums"]["tenant_role"]
+          tenant_id: string
+          token?: string
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          invited_by?: string | null
+          role?: Database["public"]["Enums"]["tenant_role"]
+          tenant_id?: string
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_invitations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_members: {
+        Row: {
+          created_at: string
+          id: string
+          invited_by: string | null
+          permission_overrides: Json
+          role: Database["public"]["Enums"]["tenant_role"]
+          status: string
+          tenant_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invited_by?: string | null
+          permission_overrides?: Json
+          role?: Database["public"]["Enums"]["tenant_role"]
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invited_by?: string | null
+          permission_overrides?: Json
+          role?: Database["public"]["Enums"]["tenant_role"]
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_members_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenants: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          credits_balance: number
+          id: string
+          is_active: boolean
+          name: string
+          slug: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          credits_balance?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          slug?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          credits_balance?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          slug?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_activity_logs: {
         Row: {
           action: string
@@ -3172,6 +3369,10 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_adjust_tenant_credits: {
+        Args: { p_new_balance: number; p_reason?: string; p_tenant_id: string }
+        Returns: Json
+      }
       claim_next_analysis_jobs: {
         Args: { p_batch_size?: number; p_worker_id: string }
         Returns: {
@@ -3255,6 +3456,16 @@ export type Database = {
         }
         Returns: Json
       }
+      consume_tenant_credits: {
+        Args: {
+          p_amount: number
+          p_analysis_request_id?: string
+          p_project_id?: string
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
+      current_share_token: { Args: never; Returns: string }
       find_orphaned_uploaded_drawings: {
         Args: never
         Returns: {
@@ -3275,8 +3486,19 @@ export type Database = {
           sub_options: Json
         }[]
       }
+      get_my_tenants: {
+        Args: never
+        Returns: {
+          credits_balance: number
+          id: string
+          name: string
+          permissions: Json
+          role: Database["public"]["Enums"]["tenant_role"]
+          slug: string
+        }[]
+      }
       get_project_list_summaries: {
-        Args: { p_limit?: number; p_offset?: number }
+        Args: { p_limit?: number; p_offset?: number; p_tenant_id?: string }
         Returns: {
           created_at: string
           creator_email: string
@@ -3287,9 +3509,23 @@ export type Database = {
           report_file_name: string
           report_file_path: string
           status: string
+          tenant_id: string
           user_id: string
           user_role: Database["public"]["Enums"]["project_role"]
           workbench_status: string
+        }[]
+      }
+      get_tenant_summaries: {
+        Args: never
+        Returns: {
+          created_at: string
+          credits_balance: number
+          id: string
+          is_active: boolean
+          member_count: number
+          name: string
+          project_count: number
+          slug: string
         }[]
       }
       get_workbench_project_summaries: {
@@ -3349,9 +3585,25 @@ export type Database = {
         Args: { _project_id: string; _user_id: string }
         Returns: boolean
       }
+      is_tenant_member: {
+        Args: { _tenant_id: string; _user_id: string }
+        Returns: boolean
+      }
       seed_analysis_worker_secret: {
         Args: { p_secret: string }
         Returns: boolean
+      }
+      tenant_has_permission: {
+        Args: { _flag: string; _tenant_id: string; _user_id: string }
+        Returns: boolean
+      }
+      tenant_member_role: {
+        Args: { _tenant_id: string; _user_id: string }
+        Returns: Database["public"]["Enums"]["tenant_role"]
+      }
+      tenant_role_permissions: {
+        Args: { _role: Database["public"]["Enums"]["tenant_role"] }
+        Returns: Json
       }
       try_lock_analysis_finalize: {
         Args: { p_request_id: string }
@@ -3363,6 +3615,7 @@ export type Database = {
     Enums: {
       app_role: "admin" | "moderator" | "user"
       project_role: "admin" | "contributor"
+      tenant_role: "admin" | "member" | "guest"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3492,6 +3745,7 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "moderator", "user"],
       project_role: ["admin", "contributor"],
+      tenant_role: ["admin", "member", "guest"],
     },
   },
 } as const

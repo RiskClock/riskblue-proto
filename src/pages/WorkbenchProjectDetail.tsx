@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import { normalizeFunctionError } from "@/lib/functionsError";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -356,6 +357,7 @@ export default function WorkbenchProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>();
   const { user, session } = useAuth();
   const navigate = useNavigate();
+  const { tenantId, tenantPath } = useTenant();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { logActivity } = useActivityLogger();
@@ -1084,7 +1086,7 @@ export default function WorkbenchProjectDetail() {
 
 
   useEffect(() => {
-    if (user && !canAccess) navigate("/projects", { replace: true });
+    if (user && !canAccess) navigate(tenantPath("/projects"), { replace: true });
   }, [user, canAccess, navigate]);
 
 
@@ -4228,7 +4230,7 @@ const isChildPlanType = (t: string) =>
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 shrink-0"
-                onClick={() => navigate(canManage ? "/workbench" : "/projects")}
+                onClick={() => navigate(canManage && !tenantId ? "/workbench" : tenantPath("/projects"))}
                 aria-label="Back"
               >
                 <ArrowLeft className="h-4 w-4" />

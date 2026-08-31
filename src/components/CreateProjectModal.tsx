@@ -22,6 +22,7 @@ import { useAWPOptions, groupAWPOptionsByCategory } from "@/hooks/useAWPOptions"
 import { useCredits } from "@/hooks/useCredits";
 import { BuyCreditsModal } from "@/components/BuyCreditsModal";
 import { getUserFriendlyError } from "@/lib/errorHandling";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface CreateProjectModalProps {
   open: boolean;
@@ -113,6 +114,9 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
   const { toast } = useToast();
   const { data: awpOptions } = useAWPOptions();
   const { balance, refetch: refetchCredits } = useCredits();
+  const { tenantId, tenant, refetch: refetchTenants } = useTenant();
+  // Company workspaces draw from the shared company pool instead of the personal one.
+  const effectiveBalance = tenantId ? (tenant?.credits_balance ?? 0) : balance;
   const nameRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -233,7 +237,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
   const handleSave = async () => {
     if (!canSave || !user || cost == null) return;
 
-    if (balance < cost) {
+    if (effectiveBalance < cost) {
       setShowBuyCredits(true);
       return;
     }
@@ -242,12 +246,18 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
     const projectName = name.trim();
 
     try {
-      // 1) Consume credits up-front (skip if free, e.g. Enterprise)
+      // 1) Consume credits up-front (skip if free, e.g. Enterprise).
+      //    Inside a company workspace credits come from the shared tenant pool.
       if (cost > 0) {
-        const { data: consumeRes, error: consumeErr } = await supabase.rpc("consume_credits", {
-          p_user_id: user.id,
-          p_amount: cost,
-        });
+        const { data: consumeRes, error: consumeErr } = tenantId
+          ? await supabase.rpc("consume_tenant_credits", {
+              p_tenant_id: tenantId,
+              p_amount: cost,
+            } as any)
+          : await supabase.rpc("consume_credits", {
+              p_user_id: user.id,
+              p_amount: cost,
+            });
         if (consumeErr) throw consumeErr;
         const ok = (consumeRes as any)?.success;
         if (!ok) {
@@ -258,7 +268,8 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
           }
           throw new Error(`Couldn't consume credits (${reason || "unknown"})`);
         }
-        await refetchCredits();
+        if (tenantId) refetchTenants();
+        else await refetchCredits();
       }
 
       // 2) Create the project
@@ -270,6 +281,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
           status: "draft",
           estimated_units: units,
           credits_consumed: cost,
+          tenant_id: tenantId,
           selected_awp_class_names: finalSelectedClassNames,
           selected_other_classes: otherList,
           selected_awp_subtypes: selectedSubtypesMap,
@@ -448,8 +460,8 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
                     <span className="text-muted-foreground">credits</span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Your balance: {balance} credit{balance === 1 ? "" : "s"}.
-                    {balance < (cost ?? 0) && " You don't have enough - you'll be prompted to purchase more."}
+                    Your balance: {effectiveBalance} credit{effectiveBalance === 1 ? "" : "s"}.
+                    {effectiveBalance < (cost ?? 0) && " You don't have enough - you'll be prompted to purchase more."}
                   </p>
                 </div>
               )}
@@ -653,7 +665,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
         onOpenChange={setShowBuyCredits}
         reason={
           cost != null
-            ? `This project costs ${cost} credits. You currently have ${balance}.`
+            ? `This project costs ${cost} credits. You currently have ${effectiveBalance}.`
             : undefined
         }
       />

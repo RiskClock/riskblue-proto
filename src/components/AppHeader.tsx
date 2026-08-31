@@ -10,7 +10,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, BarChart3, Shield, Coins, Users, KeyRound, UserCog, LayoutGrid, Info, FlaskConical } from "lucide-react";
+import { LogOut, Settings, BarChart3, Shield, Coins, Users, KeyRound, UserCog, LayoutGrid, Info, FlaskConical, Building2, ArrowLeftRight } from "lucide-react";
+import { useTenant, useMyTenants } from "@/contexts/TenantContext";
+import { SwitchCompanyModal } from "@/components/SwitchCompanyModal";
 import { useBrandLogo } from "@/hooks/useBrandLogo";
 import { APP_VERSION } from "@/lib/appVersion";
 import { useUpdateAvailable } from "@/hooks/useVersionCheck";
@@ -38,7 +40,10 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
   const { logoUrl, isCompanyLogo, companyName } = useBrandLogo();
 
   const { balance: credits } = useCredits();
+  const { tenant, tenantId, tenantPath, hasPermission } = useTenant();
+  const { data: myTenants = [] } = useMyTenants();
   const [buyOpen, setBuyOpen] = useState(false);
+  const [switchCompanyOpen, setSwitchCompanyOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -47,6 +52,12 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
 
   const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
   const isRefineryAdmin = (user?.email?.toLowerCase() ?? "") === "admin@riskclock.com";
+
+  // Inside a company workspace credits come from the shared tenant pool and are
+  // gated by the view_credits / buy_credits permission flags.
+  const showCredits = tenantId ? hasPermission("view_credits") : true;
+  const canBuyCredits = tenantId ? hasPermission("buy_credits") : true;
+  const displayedCredits = tenantId ? (tenant?.credits_balance ?? 0) : credits;
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -81,18 +92,21 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
         <div className="flex items-center gap-6 shrink-0">
           {actions}
           <button
-            onClick={() => navigate("/projects")}
-            className={`hover:text-primary ${isActive("/projects") ? "text-primary font-medium" : "text-foreground"}`}
+            onClick={() => navigate(tenantPath("/projects"))}
+            className={`hover:text-primary ${isActive(tenantPath("/projects")) ? "text-primary font-medium" : "text-foreground"}`}
           >
             Projects
           </button>
-          <button
-            onClick={() => setBuyOpen(true)}
-            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <Coins className="h-4 w-4" />
-            <span>Credits: <span className="tabular-nums font-medium text-foreground">{credits}</span></span>
-          </button>
+          {showCredits && (
+            <button
+              onClick={() => canBuyCredits && setBuyOpen(true)}
+              disabled={!canBuyCredits}
+              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground disabled:hover:text-muted-foreground disabled:cursor-default"
+            >
+              <Coins className="h-4 w-4" />
+              <span>Credits: <span className="tabular-nums font-medium text-foreground">{displayedCredits}</span></span>
+            </button>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Avatar className="cursor-pointer">
@@ -127,6 +141,10 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
               {isInternalUser && (
                 <>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => navigate("/internal/companies")} className="cursor-pointer">
+                    <Building2 className="h-4 w-4 mr-2" />
+                    Company Management
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate("/internal/users")} className="cursor-pointer">
                     <Users className="h-4 w-4 mr-2" />
                     User Management
@@ -152,6 +170,12 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
                 </>
               )}
               <DropdownMenuSeparator />
+              {(myTenants.length > 0 || isInternalUser) && (
+                <DropdownMenuItem onClick={() => setSwitchCompanyOpen(true)} className="cursor-pointer">
+                  <ArrowLeftRight className="h-4 w-4 mr-2" />
+                  Switch Company
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={signOut} className="cursor-pointer">
                 <LogOut className="h-4 w-4 mr-2" />
                 Logout
@@ -173,6 +197,7 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
         </div>
       </div>
       <BuyCreditsModal open={buyOpen} onOpenChange={setBuyOpen} />
+      <SwitchCompanyModal open={switchCompanyOpen} onOpenChange={setSwitchCompanyOpen} />
       <ChangePasswordModal open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
       <EditProfileModal open={editProfileOpen} onOpenChange={setEditProfileOpen} />
       {infoContent && (
