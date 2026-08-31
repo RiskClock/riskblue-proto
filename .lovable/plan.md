@@ -48,6 +48,7 @@ Templates are resolved server-side; per-member overrides are supported via the j
 - Non-member hitting a tenant URL gets a "no access" screen, not a redirect loop.
 - Login/`/` routing: `last_accessed_tenant_id` → first available tenant → tenant-less `/projects` if the user belongs to none.
 - Legacy `/projects` and `/project/:id` remain for tenant-less projects and internal users.
+- Any project created while inside `/t/:tenantId/` automatically inherits `tenant_id` from the active tenant route context — the creation modal never asks, and the value is re-validated server-side against the caller's membership.
 
 ## 4. Company Management page (internal only)
 
