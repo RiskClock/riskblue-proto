@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import { normalizeFunctionError } from "@/lib/functionsError";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -356,6 +357,7 @@ export default function WorkbenchProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>();
   const { user, session } = useAuth();
   const navigate = useNavigate();
+  const { tenantId, tenantPath } = useTenant();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { logActivity } = useActivityLogger();
