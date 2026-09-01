@@ -1,0 +1,2 @@
+REVOKE EXECUTE ON FUNCTION public.grant_tenant_credits(uuid, integer, text, text, integer, text, uuid) FROM anon, authenticated, public;
+GRANT EXECUTE ON FUNCTION public.grant_tenant_credits(uuid, integer, text, text, integer, text, uuid) TO service_role;
