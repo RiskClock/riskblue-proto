@@ -24,7 +24,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import {
-  Loader2, Plus, Trash2, ExternalLink, Search, Filter, RotateCcw,
+  Loader2, Plus, Trash2, ExternalLink, Search, RotateCcw,
   Settings2, GripVertical, ArrowUp, ArrowDown, ArrowUpDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -508,11 +508,10 @@ const CompanyDialog = ({
   const isNew = !tenant;
 
   const [name, setName] = useState(tenant?.name ?? "");
-  const [isActive, setIsActive] = useState(tenant?.is_active ?? true);
   const [credits, setCredits] = useState(String(tenant?.credits_balance ?? 0));
   const [saving, setSaving] = useState(false);
-  const [addUserId, setAddUserId] = useState<string>("");
-  const [addRole, setAddRole] = useState<TenantRole>("member");
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoRemoved, setLogoRemoved] = useState(false);
 
   // Staged member list — nothing is written until Save.
   const [rows, setRows] = useState<MemberRow[]>([]);
@@ -587,21 +586,32 @@ const CompanyDialog = ({
     enabled: open && !!tenant?.id,
   });
 
-  const stagedIds = useMemo(() => new Set(rows.map((m) => m.user_id)), [rows]);
-  const candidates = useMemo(
-    () => allUsers.filter((u) => !stagedIds.has(u.user_id)),
-    [allUsers, stagedIds],
+  const memberOptions = useMemo(
+    () =>
+      allUsers.map((u) => ({
+        value: u.user_id,
+        label: `${u.display_name}${u.email ? ` (${u.email})` : ""}`,
+      })),
+    [allUsers],
   );
 
-  const stageMember = () => {
-    if (!addUserId) return;
-    const u = allUsers.find((x) => x.user_id === addUserId);
-    if (!u) return;
-    setRows((prev) => [
-      ...prev,
-      { id: null, user_id: u.user_id, role: addRole, display_name: u.display_name, email: u.email },
-    ]);
-    setAddUserId("");
+  /** Syncs the staged member list with the multi-select, preserving existing roles. */
+  const setSelectedMembers = (userIds: string[]) => {
+    setRows((prev) => {
+      const byUser = new Map(prev.map((r) => [r.user_id, r]));
+      return userIds.map((id) => {
+        const existing = byUser.get(id);
+        if (existing) return existing;
+        const u = allUsers.find((x) => x.user_id === id);
+        return {
+          id: null,
+          user_id: id,
+          role: "member" as TenantRole,
+          display_name: u?.display_name || "Unknown",
+          email: u?.email || "",
+        };
+      });
+    });
   };
 
   const setRowRole = (userId: string, role: TenantRole) =>
@@ -624,7 +634,7 @@ const CompanyDialog = ({
           .insert({
             name: trimmedName,
             credits_balance: targetCredits,
-            is_active: isActive,
+            is_active: true,
             created_by: user?.id ?? null,
           })
           .select("id")
@@ -634,7 +644,7 @@ const CompanyDialog = ({
       } else {
         const { error } = await supabase
           .from("tenants")
-          .update({ name: trimmedName, is_active: isActive })
+          .update({ name: trimmedName, is_active: true })
           .eq("id", tenant!.id);
         if (error) throw error;
         if (targetCredits !== tenant!.credits_balance) {
@@ -672,6 +682,13 @@ const CompanyDialog = ({
         if (error) throw error;
       }
 
+      // Commit the staged logo against the final company name.
+      if (logoFile) {
+        await uploadCompanyLogo(trimmedName, logoFile);
+      } else if (logoRemoved) {
+        await purgeCompanyLogos(trimmedName);
+      }
+
       toast({ title: isNew ? "Company created" : "Company updated" });
       queryClient.invalidateQueries({ queryKey: ["tenant-members", tenantId] });
       onChanged();
@@ -706,7 +723,7 @@ const CompanyDialog = ({
             <h3 className="text-sm font-semibold">Settings</h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-2 sm:col-span-2">
-                <Label>Name</Label>
+                <Label>Company Name</Label>
                 <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Water Co." />
               </div>
               <div className="space-y-2">
@@ -714,48 +731,30 @@ const CompanyDialog = ({
                 <Input type="number" min={0} value={credits} onChange={(e) => setCredits(e.target.value)} />
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Switch checked={isActive} onCheckedChange={setIsActive} id="tenant-active" />
-              <Label htmlFor="tenant-active">Active</Label>
-            </div>
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">Company logo</Label>
-              {name.trim() ? (
-                <CompanyLogoField company={name.trim()} />
-              ) : (
-                <p className="text-xs text-muted-foreground">Enter a company name to upload a logo.</p>
-              )}
+              <CompanyLogoField
+                company={tenant?.name ?? name}
+                file={logoFile}
+                removed={logoRemoved}
+                onFileChange={setLogoFile}
+                onRemovedChange={setLogoRemoved}
+              />
             </div>
           </section>
 
           <section className="space-y-3">
             <h3 className="text-sm font-semibold">Members</h3>
-            <div className="flex items-end gap-2">
-              <div className="flex-1 space-y-1">
-                <Label className="text-xs">Add user</Label>
-                <Select value={addUserId} onValueChange={setAddUserId}>
-                  <SelectTrigger><SelectValue placeholder="Select a user" /></SelectTrigger>
-                  <SelectContent className="max-h-64">
-                    {candidates.map((u) => (
-                      <SelectItem key={u.user_id} value={u.user_id}>
-                        {u.display_name}{u.email ? ` (${u.email})` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="w-32 space-y-1">
-                <Label className="text-xs">Role</Label>
-                <Select value={addRole} onValueChange={(v) => setAddRole(v as TenantRole)}>
-                  <SelectTrigger className="capitalize"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {ROLES.map((r) => (
-                      <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button onClick={stageMember} disabled={!addUserId}>Add</Button>
+            <div className="space-y-1">
+              <Label className="text-xs">Users</Label>
+              <MultiSelectChecklist
+                options={memberOptions}
+                selected={rows.map((r) => r.user_id)}
+                onChange={setSelectedMembers}
+                allLabel="Select users"
+                emptyLabel="No users"
+                searchable
+              />
             </div>
 
             <div className="rounded-md border">
@@ -808,14 +807,12 @@ const CompanyDialog = ({
             </div>
           </section>
 
-          {!isNew && <TenantInviteSection tenantId={tenant!.id} />}
-
           {!isNew && (
             <section className="space-y-3">
               <h3 className="text-sm font-semibold">Projects ({projects.length})</h3>
               <div className="rounded-md border divide-y">
                 {projects.length === 0 && (
-                  <p className="p-4 text-sm text-muted-foreground">No projects assigned to this company.</p>
+                  <p className="p-4 text-sm text-muted-foreground">None of the users in this project created any project.</p>
                 )}
                 {projects.map((p: any) => (
                   <div key={p.id} className="flex items-center justify-between px-4 py-2 text-sm">
