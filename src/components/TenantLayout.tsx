@@ -77,7 +77,9 @@ export const RootRedirect = ({ fallback }: { fallback?: React.ReactNode } = {}) 
     );
   }
 
-  const list = tenants ?? [];
+  // Never auto-drop a user into a company they aren't a member of (internal
+  // staff can see all companies but must choose one explicitly).
+  const list = (tenants ?? []).filter((t) => t.isMember);
   const target =
     (lastTenantId && list.some((t) => t.id === lastTenantId) && lastTenantId) ||
     list[0]?.id ||
