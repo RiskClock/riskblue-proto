@@ -233,7 +233,7 @@ export const TenantMembersModal = ({
                         value={m.role}
                         onValueChange={(v) =>
                           mutate(
-                            () => supabase.from("tenant_members").update({ role: v }).eq("id", m.id) as any,
+                            () => supabase.from("tenant_members").update({ role: v as TenantRole }).eq("id", m.id) as any,
                             "Cannot change role",
                           )
                         }
