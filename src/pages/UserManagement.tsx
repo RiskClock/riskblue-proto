@@ -1267,11 +1267,9 @@ function CreateUserDialog({
             {companyRequired && !companyValid && (
               <p className="text-xs text-destructive mt-1">Company is required for WMSV accounts</p>
             )}
-            <div className="mt-3">
-              <Label className="text-xs text-muted-foreground">Company logo (optional)</Label>
-              <CompanyLogoField company={company} />
-            </div>
           </div>
+
+          <TenantAssigner tenants={allTenants} value={tenantAssignments} onChange={setTenantAssignments} />
 
           <div>
             <Label>Tags (optional)</Label>
