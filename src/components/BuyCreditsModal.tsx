@@ -64,9 +64,11 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason, canBuyCredits = tr
   const persistedRef = useRef<string | null>(null);
 
 
-  // Reset everything when modal closes
+  // Reset everything when modal closes; capture starting balance when it opens.
   useEffect(() => {
-    if (!open) {
+    if (open) {
+      startingBalanceRef.current = displayedBalance;
+    } else {
       setStep("select");
       setSelectedPackage(null);
       setPoliciesLoading(false);
@@ -80,7 +82,7 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason, canBuyCredits = tr
       setPackageLoading(null);
       persistedRef.current = null;
     }
-  }, [open]);
+  }, [open, displayedBalance]);
 
 
   const handleCheckoutComplete = async () => {
