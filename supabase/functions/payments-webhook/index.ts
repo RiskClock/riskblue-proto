@@ -41,23 +41,35 @@ async function handleCheckoutCompleted(session: any) {
   const credits = parseInt(session.metadata?.credits || "0", 10);
   const amountCents = parseInt(session.metadata?.amountCents || "0", 10);
   const packageLabel = session.metadata?.packageLabel || null;
+  const tenantId = session.metadata?.tenantId || null;
 
   if (!userId || !credits) {
     console.error("[payments-webhook] missing metadata", session.id, session.metadata);
     return;
   }
 
-  const { data, error } = await supabase.rpc("grant_credits", {
-    p_user_id: userId,
-    p_amount: credits,
-    p_reason: "purchase",
-    p_package_label: packageLabel,
-    p_amount_cents: amountCents || null,
-    p_stripe_session_id: session.id,
-  });
+  // Purchases made inside a company workspace fund the shared company pool.
+  const { data, error } = tenantId
+    ? await supabase.rpc("grant_tenant_credits", {
+        p_tenant_id: tenantId,
+        p_amount: credits,
+        p_reason: "purchase",
+        p_package_label: packageLabel,
+        p_amount_cents: amountCents || null,
+        p_stripe_session_id: session.id,
+        p_actor_user_id: userId,
+      })
+    : await supabase.rpc("grant_credits", {
+        p_user_id: userId,
+        p_amount: credits,
+        p_reason: "purchase",
+        p_package_label: packageLabel,
+        p_amount_cents: amountCents || null,
+        p_stripe_session_id: session.id,
+      });
 
   if (error) {
-    console.error("[payments-webhook] grant_credits failed:", error);
+    console.error("[payments-webhook] grant credits failed:", error);
     throw error;
   }
   console.log("[payments-webhook] credits granted:", data);
