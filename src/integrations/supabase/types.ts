@@ -3563,6 +3563,18 @@ export type Database = {
         }
         Returns: Json
       }
+      grant_tenant_credits: {
+        Args: {
+          p_actor_user_id?: string
+          p_amount: number
+          p_amount_cents?: number
+          p_package_label?: string
+          p_reason: string
+          p_stripe_session_id?: string
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
       has_project_access: { Args: { project_uuid: string }; Returns: boolean }
       has_project_role: {
         Args: {
