@@ -18,6 +18,7 @@ interface BuyCreditsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   reason?: string;
+  canBuyCredits?: boolean;
 }
 
 interface CreditPackage {
