@@ -249,7 +249,7 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason, canBuyCredits = tr
               ? "Review the Terms of Service and Privacy Policy, then complete your purchase."
               : reason
                 ? reason
-                : `You currently have ${balance} credit${balance === 1 ? "" : "s"}.`}
+                : `You currently have ${displayedBalance} credit${displayedBalance === 1 ? "" : "s"}.`}
           </DialogDescription>
         </DialogHeader>
 
