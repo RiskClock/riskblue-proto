@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Loader2, Upload, Check, Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Loader2, Upload, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -11,14 +10,14 @@ import {
 } from "@/lib/brandLogo";
 
 /**
- * Company logo picker/uploader shown under the Company dropdown in user
- * create/edit dialogs. Logos are stored per company and previously uploaded
- * logos are suggested whenever the same company is selected again.
+ * Company logo uploader. A company has exactly one logo: uploading a new file
+ * overrides (and deletes) whatever was there before. Logos are never shared
+ * between companies, so no suggestions are shown.
  */
 export function CompanyLogoField({ company }: { company: string | null }) {
   const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [rows, setRows] = useState<CompanyLogoRow[]>([]);
+  const [current, setCurrent] = useState<CompanyLogoRow | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   // Guards against out-of-order responses when the company changes quickly.
@@ -29,7 +28,7 @@ export function CompanyLogoField({ company }: { company: string | null }) {
   const load = async () => {
     const token = ++requestRef.current;
     if (!trimmed) {
-      setRows([]);
+      setCurrent(null);
       setLoading(false);
       return;
     }
@@ -37,47 +36,34 @@ export function CompanyLogoField({ company }: { company: string | null }) {
     try {
       const next = await fetchCompanyLogos(trimmed);
       if (requestRef.current !== token) return;
-      setRows(next);
+      setCurrent(next[0] ?? null);
     } catch (e: any) {
       if (requestRef.current !== token) return;
-      setRows([]);
-      toast({ title: "Couldn't load logos", description: (e as any)?.message, variant: "destructive" });
+      setCurrent(null);
+      toast({ title: "Couldn't load logo", description: (e as any)?.message, variant: "destructive" });
     } finally {
       if (requestRef.current === token) setLoading(false);
     }
   };
 
   useEffect(() => {
-    // Drop previous company's logos immediately so nothing stale is suggested.
-    setRows([]);
+    setCurrent(null);
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trimmed]);
 
-
-  const makeCurrent = async (row: CompanyLogoRow) => {
-    setBusy(true);
-    try {
-      await supabase.from("company_logos").update({ is_current: false }).ilike("company", trimmed);
-      const { error } = await supabase
-        .from("company_logos")
-        .update({ is_current: true, updated_at: new Date().toISOString() })
-        .eq("id", row.id);
-      if (error) throw error;
-      await load();
-    } catch (e: any) {
-      toast({ title: "Couldn't set logo", description: (e as any)?.message, variant: "destructive" });
-    } finally {
-      setBusy(false);
-    }
+  /** Deletes every stored logo for this company (rows + files). */
+  const purgeExisting = async () => {
+    const existing = await fetchCompanyLogos(trimmed);
+    if (existing.length === 0) return;
+    await supabase.from("company_logos").delete().in("id", existing.map((r) => r.id));
+    await supabase.storage.from(COMPANY_LOGO_BUCKET).remove(existing.map((r) => r.storage_path));
   };
 
-  const remove = async (row: CompanyLogoRow) => {
+  const remove = async () => {
     setBusy(true);
     try {
-      const { error } = await supabase.from("company_logos").delete().eq("id", row.id);
-      if (error) throw error;
-      await supabase.storage.from(COMPANY_LOGO_BUCKET).remove([row.storage_path]);
+      await purgeExisting();
       await load();
     } catch (e: any) {
       toast({ title: "Couldn't remove logo", description: (e as any)?.message, variant: "destructive" });
@@ -106,18 +92,19 @@ export function CompanyLogoField({ company }: { company: string | null }) {
         .upload(path, file, { contentType: file.type, upsert: false });
       if (upErr) throw upErr;
 
+      // A new upload always overrides the previous logo.
+      await purgeExisting();
+
       const { data: userRes } = await supabase.auth.getUser();
-      // Newly uploaded logos are only *suggested* — the user must click one to
-      // make it the company's current logo.
       const { error: insErr } = await supabase.from("company_logos").insert({
         company: trimmed,
         storage_path: path,
-        is_current: false,
+        is_current: true,
         updated_by: userRes?.user?.id ?? null,
       } as any);
       if (insErr) throw insErr;
       await load();
-      toast({ title: "Logo uploaded", description: "Click the logo to use it for this company." });
+      toast({ title: "Logo updated" });
     } catch (e: any) {
       toast({ title: "Upload failed", description: (e as any)?.message, variant: "destructive" });
     } finally {
@@ -129,71 +116,22 @@ export function CompanyLogoField({ company }: { company: string | null }) {
   if (!trimmed) {
     return (
       <p className="text-xs text-muted-foreground mt-1">
-        Select a company to manage its logo.
+        Enter a company name to upload a logo.
       </p>
     );
   }
 
   return (
-    <div className="mt-1 space-y-2">
-      {loading ? (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading logos…
-        </div>
-      ) : rows.length > 0 ? (
-        <div className="space-y-1.5">
-          <div className="flex flex-wrap gap-2">
-            {rows.map((r) => (
-              <div key={r.id} className="space-y-1">
-                <div
-                  className={cn(
-                    "group relative h-14 w-24 rounded border bg-muted/30 p-1 flex items-center justify-center",
-                    r.is_current ? "border-primary ring-1 ring-primary" : "border-dashed border-border",
-                  )}
-                >
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => makeCurrent(r)}
-                    title={r.is_current ? "Current logo" : "Click to use this logo"}
-                    className={cn(
-                      "h-full w-full flex items-center justify-center",
-                      r.is_current ? "" : "opacity-70 hover:opacity-100 transition-opacity",
-                    )}
-                  >
-                    <img src={r.url} alt="Company logo" className="max-h-full max-w-full object-contain" />
-                  </button>
-                  {r.is_current && (
-                    <span className="absolute -top-1.5 -left-1.5 rounded-full bg-primary text-primary-foreground p-0.5">
-                      <Check className="h-3 w-3" />
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => remove(r)}
-                    title="Remove logo"
-                    className="absolute -top-1.5 -right-1.5 rounded-full bg-destructive text-destructive-foreground p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </div>
-                <p className="text-[10px] text-center text-muted-foreground">
-                  {r.is_current ? "Selected" : "Suggested"}
-                </p>
-              </div>
-            ))}
-          </div>
-          {!rows.some((r) => r.is_current) && (
-            <p className="text-[11px] text-muted-foreground">
-              No logo selected yet - click a suggestion to use it for {trimmed}.
-            </p>
-          )}
-        </div>
-      ) : (
-        <p className="text-xs text-muted-foreground">No logo uploaded for {trimmed} yet.</p>
-      )}
-
+    <div className="mt-1 flex items-center gap-3">
+      <div className="h-14 w-24 shrink-0 rounded border border-dashed bg-muted/30 p-1 flex items-center justify-center">
+        {loading ? (
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        ) : current ? (
+          <img src={current.url} alt={`${trimmed} logo`} className="max-h-full max-w-full object-contain" />
+        ) : (
+          <span className="text-[10px] text-muted-foreground">No logo</span>
+        )}
+      </div>
 
       <input
         ref={inputRef}
@@ -205,19 +143,30 @@ export function CompanyLogoField({ company }: { company: string | null }) {
           if (f) upload(f);
         }}
       />
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={busy}
-        onClick={() => inputRef.current?.click()}
-      >
-        {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
-        Upload logo
-      </Button>
-      <p className="text-[11px] text-muted-foreground">
-        The selected logo replaces RiskBlue branding for everyone at this company.
-      </p>
+
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            onClick={() => inputRef.current?.click()}
+          >
+            {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+            {current ? "Replace logo" : "Upload logo"}
+          </Button>
+          {current && (
+            <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={remove}>
+              <Trash2 className="h-4 w-4 mr-2 text-destructive" />
+              Remove
+            </Button>
+          )}
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          Uploading a new file replaces the existing logo for {trimmed}.
+        </p>
+      </div>
     </div>
   );
 }
