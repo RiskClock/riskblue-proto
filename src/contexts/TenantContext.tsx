@@ -57,6 +57,7 @@ export const useMyTenants = () => {
         credits_balance: t.credits_balance ?? null,
         role: t.role as TenantRole,
         permissions: (t.permissions ?? {}) as Record<string, boolean>,
+        isMember: t.is_member !== false,
       }));
     },
     enabled: !!user?.id,
