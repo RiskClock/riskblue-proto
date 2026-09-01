@@ -84,6 +84,7 @@ async function handleCheckoutCompleted(session: any) {
         credits,
         amount_cents: amountCents || null,
         package_label: packageLabel,
+        tenant_id: tenantId,
         stripe_session_id: session.id,
         environment: session.livemode ? "live" : "sandbox",
         already_processed: alreadyProcessed,
