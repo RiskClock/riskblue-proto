@@ -12,6 +12,7 @@ import { getStripe, stripeEnvironment } from "@/lib/stripe";
 import { useAuth } from "@/contexts/AuthContext";
 import { PolicyReviewPanel, type PolicyDoc } from "@/components/checkout/PolicyReviewPanel";
 import { useActivityLogger } from "@/hooks/useActivityLogger";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface BuyCreditsModalProps {
   open: boolean;
@@ -39,6 +40,7 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
   const { toast } = useToast();
   const { user } = useAuth();
   const { balance, refetch } = useCredits();
+  const { tenantId, refetch: refetchTenants } = useTenant();
   const { logActivity } = useActivityLogger();
 
   const [step, setStep] = useState<Step>("select");
@@ -86,6 +88,10 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
     });
     for (let i = 0; i < 6; i++) {
       await new Promise((r) => setTimeout(r, 1000));
+      if (tenantId) {
+        refetchTenants();
+        continue;
+      }
       const { data } = await refetch();
       if ((data ?? 0) > balance) break;
     }
@@ -135,6 +141,7 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
           packageId: pkg.id,
           environment: stripeEnvironment,
           returnUrl: `${window.location.origin}/credits/return?session_id={CHECKOUT_SESSION_ID}`,
+          ...(tenantId ? { tenantId } : {}),
           tosVersion: tos?.version,
           privacyVersion: privacy?.version,
         },
