@@ -32,7 +32,7 @@ import { cn } from "@/lib/utils";
 import { TenantInviteSection } from "@/components/TenantMembersModal";
 import { CompanyLogoField } from "@/components/users/CompanyLogoField";
 import { MultiSelectChecklist } from "@/components/common/MultiSelectChecklist";
-import { fetchCompanyLogos } from "@/lib/brandLogo";
+
 
 type TenantRole = "admin" | "member" | "guest";
 
