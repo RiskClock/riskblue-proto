@@ -21,6 +21,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import { Loader2, Plus, Trash2, ExternalLink } from "lucide-react";
+import { TenantInviteSection } from "@/components/TenantMembersModal";
 
 type TenantRole = "admin" | "member" | "guest";
 
