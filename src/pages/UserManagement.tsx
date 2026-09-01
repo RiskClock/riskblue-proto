@@ -1445,6 +1445,7 @@ function EditUserDialog({
                 credits: credits.trim() === "" ? null : Math.max(0, Math.floor(Number(credits))),
                 password: password.length > 0 ? password : null,
                 projects,
+                tenants: tenantAssignments,
               })
             }
             disabled={loading || !name.trim() || !creditsValid || !pwdValid}
