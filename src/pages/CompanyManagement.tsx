@@ -9,20 +9,30 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Popover, PopoverContent, PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
-import { Loader2, Plus, Trash2, ExternalLink } from "lucide-react";
+import {
+  Loader2, Plus, Trash2, ExternalLink, Search, Filter, RotateCcw,
+  Settings2, GripVertical, ArrowUp, ArrowDown, ArrowUpDown,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 import { TenantInviteSection } from "@/components/TenantMembersModal";
 import { CompanyLogoField } from "@/components/users/CompanyLogoField";
+import { MultiSelectChecklist } from "@/components/common/MultiSelectChecklist";
+import { fetchCompanyLogos } from "@/lib/brandLogo";
 
 type TenantRole = "admin" | "member" | "guest";
 
@@ -39,6 +49,61 @@ interface TenantSummary {
 
 const ROLES: TenantRole[] = ["admin", "member", "guest"];
 
+// ---------- columns ----------
+type ColumnId = "name" | "logo" | "members" | "projects" | "credits" | "status" | "created";
+
+const ALL_COLUMNS: { id: ColumnId; label: string }[] = [
+  { id: "name", label: "Name" },
+  { id: "logo", label: "Logo" },
+  { id: "members", label: "Members" },
+  { id: "projects", label: "Projects" },
+  { id: "credits", label: "Credits" },
+  { id: "status", label: "Status" },
+  { id: "created", label: "Created" },
+];
+
+const COLUMN_PREFS_KEY = "company-management-columns:v1";
+
+interface ColumnPrefs {
+  order: ColumnId[];
+  visible: Record<ColumnId, boolean>;
+}
+
+function loadColumnPrefs(): ColumnPrefs {
+  const defaults: ColumnPrefs = {
+    order: ALL_COLUMNS.map((c) => c.id),
+    visible: ALL_COLUMNS.reduce((acc, c) => ({ ...acc, [c.id]: true }), {} as Record<ColumnId, boolean>),
+  };
+  if (typeof window === "undefined") return defaults;
+  try {
+    const raw = window.localStorage.getItem(COLUMN_PREFS_KEY);
+    if (!raw) return defaults;
+    const parsed = JSON.parse(raw);
+    const valid = new Set(ALL_COLUMNS.map((c) => c.id));
+    const order: ColumnId[] = Array.isArray(parsed.order)
+      ? parsed.order.filter((id: any) => valid.has(id))
+      : [...defaults.order];
+    for (const c of ALL_COLUMNS) if (!order.includes(c.id)) order.push(c.id);
+    return {
+      order: ["name", ...order.filter((id) => id !== "name")],
+      visible: { ...defaults.visible, ...(parsed.visible || {}), name: true },
+    };
+  } catch {
+    return defaults;
+  }
+}
+
+// ---------- filters / sorting ----------
+type SortKey = "name" | "members" | "projects" | "credits" | "status" | "created";
+type SortDir = "asc" | "desc";
+const DEFAULT_SORT_KEY: SortKey = "name";
+const DEFAULT_SORT_DIR: SortDir = "asc";
+
+const STATUS_OPTIONS = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+];
+
 const CompanyManagement = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -47,6 +112,25 @@ const CompanyManagement = () => {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
+
+  const [search, setSearch] = useState("");
+  const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
+  const [sortKey, setSortKey] = useState<SortKey>(DEFAULT_SORT_KEY);
+  const [sortDir, setSortDir] = useState<SortDir>(DEFAULT_SORT_DIR);
+
+  const [columnPrefs, setColumnPrefs] = useState<ColumnPrefs>(() => loadColumnPrefs());
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(COLUMN_PREFS_KEY, JSON.stringify(columnPrefs));
+    } catch {
+      /* ignore */
+    }
+  }, [columnPrefs]);
+
+  const visibleColumns = useMemo(
+    () => columnPrefs.order.filter((id) => columnPrefs.visible[id]),
+    [columnPrefs],
+  );
 
   const { data: tenants = [], isLoading } = useQuery({
     queryKey: ["tenant-summaries"],
@@ -58,9 +142,85 @@ const CompanyManagement = () => {
     enabled: isInternal,
   });
 
+  // Current logo per company name (lowercased key).
+  const { data: logoByCompany } = useQuery({
+    queryKey: ["company-logos-map"],
+    queryFn: async (): Promise<Record<string, string>> => {
+      const { data, error } = await supabase
+        .from("company_logos")
+        .select("company, storage_path, is_current, created_at")
+        .order("is_current", { ascending: false })
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      for (const r of (data ?? []) as any[]) {
+        const key = (r.company || "").trim().toLowerCase();
+        if (!key || map[key]) continue;
+        map[key] = supabase.storage.from("company-logos").getPublicUrl(r.storage_path).data.publicUrl;
+      }
+      return map;
+    },
+    enabled: isInternal,
+  });
+
   const detail = useMemo(() => tenants.find((t) => t.id === detailId) ?? null, [tenants, detailId]);
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["tenant-summaries"] });
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["tenant-summaries"] });
+    queryClient.invalidateQueries({ queryKey: ["company-logos-map"] });
+  };
+
+  const filteredSorted = useMemo(() => {
+    let list = [...tenants];
+    const q = search.trim().toLowerCase();
+    if (q) list = list.filter((t) => t.name.toLowerCase().includes(q));
+    if (filterStatuses.length > 0) {
+      list = list.filter((t) => filterStatuses.includes(t.is_active ? "active" : "inactive"));
+    }
+    list.sort((a, b) => {
+      let va: string | number;
+      let vb: string | number;
+      switch (sortKey) {
+        case "members": va = a.member_count; vb = b.member_count; break;
+        case "projects": va = a.project_count; vb = b.project_count; break;
+        case "credits": va = a.credits_balance; vb = b.credits_balance; break;
+        case "status": va = a.is_active ? 0 : 1; vb = b.is_active ? 0 : 1; break;
+        case "created": va = a.created_at; vb = b.created_at; break;
+        default: va = a.name.toLowerCase(); vb = b.name.toLowerCase();
+      }
+      if (va < vb) return sortDir === "asc" ? -1 : 1;
+      if (va > vb) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [tenants, search, filterStatuses, sortKey, sortDir]);
+
+  const toggleSort = (k: SortKey) => {
+    if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(k);
+      setSortDir(k === "name" ? "asc" : "desc");
+    }
+  };
+
+  const SortIcon = ({ k }: { k: SortKey }) =>
+    sortKey !== k ? (
+      <ArrowUpDown className="h-3 w-3 ml-1 inline text-muted-foreground/50" />
+    ) : sortDir === "asc" ? (
+      <ArrowUp className="h-3 w-3 ml-1 inline" />
+    ) : (
+      <ArrowDown className="h-3 w-3 ml-1 inline" />
+    );
+
+  const isDirty =
+    !!search || filterStatuses.length > 0 || sortKey !== DEFAULT_SORT_KEY || sortDir !== DEFAULT_SORT_DIR;
+
+  const resetAll = () => {
+    setSearch("");
+    setFilterStatuses([]);
+    setSortKey(DEFAULT_SORT_KEY);
+    setSortDir(DEFAULT_SORT_DIR);
+  };
 
   if (!isInternal) {
     return (
@@ -73,16 +233,139 @@ const CompanyManagement = () => {
     );
   }
 
+  const headerFor = (colId: ColumnId) => {
+    switch (colId) {
+      case "name":
+        return (
+          <TableHead key={colId} className="cursor-pointer select-none" onClick={() => toggleSort("name")}>
+            Name{" "}
+            <span className="text-muted-foreground font-normal">
+              ({filteredSorted.length !== tenants.length ? `${filteredSorted.length} of ${tenants.length}` : tenants.length})
+            </span>{" "}
+            <SortIcon k="name" />
+          </TableHead>
+        );
+      case "logo":
+        return <TableHead key={colId} className="w-20" />;
+      case "members":
+        return (
+          <TableHead key={colId} className="cursor-pointer select-none text-right" onClick={() => toggleSort("members")}>
+            Members <SortIcon k="members" />
+          </TableHead>
+        );
+      case "projects":
+        return (
+          <TableHead key={colId} className="cursor-pointer select-none text-right" onClick={() => toggleSort("projects")}>
+            Projects <SortIcon k="projects" />
+          </TableHead>
+        );
+      case "credits":
+        return (
+          <TableHead key={colId} className="cursor-pointer select-none text-right" onClick={() => toggleSort("credits")}>
+            Credits <SortIcon k="credits" />
+          </TableHead>
+        );
+      case "status":
+        return (
+          <TableHead key={colId} className="cursor-pointer select-none" onClick={() => toggleSort("status")}>
+            Status <SortIcon k="status" />
+          </TableHead>
+        );
+      case "created":
+        return (
+          <TableHead key={colId} className="cursor-pointer select-none" onClick={() => toggleSort("created")}>
+            Created <SortIcon k="created" />
+          </TableHead>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const cellFor = (colId: ColumnId, t: TenantSummary) => {
+    switch (colId) {
+      case "name":
+        return <TableCell key={colId} className="font-medium">{t.name}</TableCell>;
+      case "logo": {
+        const url = logoByCompany?.[t.name.trim().toLowerCase()];
+        return (
+          <TableCell key={colId} className="w-20">
+            {url ? (
+              <img src={url} alt={`${t.name} logo`} className="h-6 max-w-[72px] object-contain" />
+            ) : (
+              <span className="text-muted-foreground text-xs">-</span>
+            )}
+          </TableCell>
+        );
+      }
+      case "members":
+        return <TableCell key={colId} className="text-right tabular-nums">{t.member_count}</TableCell>;
+      case "projects":
+        return <TableCell key={colId} className="text-right tabular-nums">{t.project_count}</TableCell>;
+      case "credits":
+        return <TableCell key={colId} className="text-right tabular-nums">{t.credits_balance}</TableCell>;
+      case "status":
+        return (
+          <TableCell key={colId}>
+            <Badge variant={t.is_active ? "secondary" : "outline"}>{t.is_active ? "Active" : "Inactive"}</Badge>
+          </TableCell>
+        );
+      case "created":
+        return (
+          <TableCell key={colId} className="text-muted-foreground whitespace-nowrap">
+            {new Date(t.created_at).toLocaleDateString()}
+          </TableCell>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <AppHeader title="Company Management" />
       <div className="container mx-auto px-6 py-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            {tenants.length} {tenants.length === 1 ? "company" : "companies"}
-          </p>
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4 mr-1.5" /> New Company
+        <div className="flex items-center justify-end gap-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search company name"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 w-72"
+            />
+          </div>
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline">
+                <Filter className="h-4 w-4 mr-2" />
+                Filter
+                {filterStatuses.length > 0 && (
+                  <Badge variant="secondary" className="ml-2 px-1.5">1</Badge>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 space-y-4">
+              <div>
+                <Label className="text-xs uppercase text-muted-foreground">Status</Label>
+                <MultiSelectChecklist
+                  options={STATUS_OPTIONS}
+                  selected={filterStatuses}
+                  onChange={setFilterStatuses}
+                  allLabel="All statuses"
+                />
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          <Button variant="outline" onClick={resetAll} disabled={!isDirty} title="Reset filters and sorting">
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Reset
+          </Button>
+
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" /> New Company
           </Button>
         </div>
 
@@ -90,59 +373,31 @@ const CompanyManagement = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead className="text-right">Members</TableHead>
-                <TableHead className="text-right">Projects</TableHead>
-                <TableHead className="text-right">Credits</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead className="w-10" />
+                {visibleColumns.map((c) => headerFor(c))}
+                <TableHead className="w-[60px] text-center">
+                  <ColumnEditDropdown columnPrefs={columnPrefs} setColumnPrefs={setColumnPrefs} />
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10">
+                  <TableCell colSpan={visibleColumns.length + 1} className="text-center py-10">
                     <Loader2 className="h-5 w-5 animate-spin inline text-muted-foreground" />
                   </TableCell>
                 </TableRow>
               )}
-              {!isLoading && tenants.length === 0 && (
+              {!isLoading && filteredSorted.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
-                    No companies yet. Create one to get started.
+                  <TableCell colSpan={visibleColumns.length + 1} className="text-center py-10 text-muted-foreground">
+                    {tenants.length === 0 ? "No companies yet. Create one to get started." : "No companies match your filters."}
                   </TableCell>
                 </TableRow>
               )}
-              {tenants.map((t) => (
-                <TableRow
-                  key={t.id}
-                  className="cursor-pointer"
-                  onClick={() => setDetailId(t.id)}
-                >
-                  <TableCell className="font-medium">{t.name}</TableCell>
-                  <TableCell className="text-right tabular-nums">{t.member_count}</TableCell>
-                  <TableCell className="text-right tabular-nums">{t.project_count}</TableCell>
-                  <TableCell className="text-right tabular-nums">{t.credits_balance}</TableCell>
-                  <TableCell>
-                    <Badge variant={t.is_active ? "secondary" : "outline"}>
-                      {t.is_active ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {new Date(t.created_at).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      title="Open company workspace"
-                      onClick={() => navigate(`/t/${t.id}/projects`)}
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
+              {!isLoading && filteredSorted.map((t) => (
+                <TableRow key={t.id} className="cursor-pointer" onClick={() => setDetailId(t.id)}>
+                  {visibleColumns.map((c) => cellFor(c, t))}
+                  <TableCell className="w-[60px]" />
                 </TableRow>
               ))}
             </TableBody>
@@ -156,6 +411,7 @@ const CompanyManagement = () => {
           open={createOpen}
           onOpenChange={setCreateOpen}
           onChanged={refresh}
+          onOpenWorkspace={(id) => navigate(`/t/${id}/projects`)}
         />
       )}
 
@@ -165,11 +421,115 @@ const CompanyManagement = () => {
           open={!!detailId}
           onOpenChange={(o) => !o && setDetailId(null)}
           onChanged={refresh}
+          onOpenWorkspace={(id) => navigate(`/t/${id}/projects`)}
         />
       )}
     </div>
   );
 };
+
+function ColumnEditDropdown({
+  columnPrefs,
+  setColumnPrefs,
+}: {
+  columnPrefs: ColumnPrefs;
+  setColumnPrefs: React.Dispatch<React.SetStateAction<ColumnPrefs>>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [dragId, setDragId] = useState<ColumnId | null>(null);
+  const [overId, setOverId] = useState<ColumnId | null>(null);
+
+  const labelFor = (id: ColumnId) => ALL_COLUMNS.find((c) => c.id === id)?.label || id;
+
+  const toggleVisible = (id: ColumnId) => {
+    if (id === "name") return;
+    setColumnPrefs((prev) => ({ ...prev, visible: { ...prev.visible, [id]: !prev.visible[id] } }));
+  };
+
+  const handleDrop = (targetId: ColumnId) => {
+    if (!dragId || dragId === targetId || dragId === "name" || targetId === "name") {
+      setDragId(null);
+      setOverId(null);
+      return;
+    }
+    setColumnPrefs((prev) => {
+      const order = [...prev.order];
+      const from = order.indexOf(dragId);
+      const to = order.indexOf(targetId);
+      if (from === -1 || to === -1) return prev;
+      order.splice(from, 1);
+      order.splice(to, 0, dragId);
+      return { ...prev, order: ["name", ...order.filter((id) => id !== "name")] };
+    });
+    setDragId(null);
+    setOverId(null);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="icon" variant="ghost" className="h-8 w-8" title="Edit columns">
+          <Settings2 className="h-4 w-4" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-64 p-2">
+        <div className="text-xs font-medium text-muted-foreground px-2 py-1.5">Show & reorder columns</div>
+        <div className="space-y-0.5">
+          {columnPrefs.order.map((id) => {
+            const locked = id === "name";
+            const isDraggingOver = overId === id && dragId && dragId !== id;
+            return (
+              <div
+                key={id}
+                draggable={!locked}
+                onDragStart={(e) => {
+                  if (locked) {
+                    e.preventDefault();
+                    return;
+                  }
+                  setDragId(id);
+                  e.dataTransfer.effectAllowed = "move";
+                }}
+                onDragOver={(e) => {
+                  if (locked || !dragId) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  if (overId !== id) setOverId(id);
+                }}
+                onDragLeave={() => {
+                  if (overId === id) setOverId(null);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  handleDrop(id);
+                }}
+                onDragEnd={() => {
+                  setDragId(null);
+                  setOverId(null);
+                }}
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm select-none",
+                  !locked && "cursor-grab active:cursor-grabbing hover:bg-accent",
+                  isDraggingOver && "border border-primary/40 bg-primary/5",
+                  dragId === id && "opacity-50",
+                )}
+              >
+                <GripVertical className={cn("h-4 w-4 shrink-0", locked ? "opacity-25" : "text-muted-foreground")} />
+                <Checkbox
+                  checked={columnPrefs.visible[id]}
+                  disabled={locked}
+                  onCheckedChange={() => toggleVisible(id)}
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <span className={cn("flex-1", locked && "text-muted-foreground")}>{labelFor(id)}</span>
+              </div>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 interface MemberRow {
   /** tenant_members row id; null for rows staged but not yet saved. */
@@ -181,12 +541,13 @@ interface MemberRow {
 }
 
 const CompanyDialog = ({
-  tenant, open, onOpenChange, onChanged,
+  tenant, open, onOpenChange, onChanged, onOpenWorkspace,
 }: {
   tenant: TenantSummary | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onChanged: () => void;
+  onOpenWorkspace: (tenantId: string) => void;
 }) => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -385,11 +746,6 @@ const CompanyDialog = ({
       <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
           <DialogTitle>{isNew ? "New Company" : tenant!.name}</DialogTitle>
-          <DialogDescription>
-            {isNew
-              ? "Set up the company, its credits and starting members. Nothing is saved until you click Save."
-              : "Manage settings, members and projects for this company."}
-          </DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
@@ -521,12 +877,21 @@ const CompanyDialog = ({
           )}
         </div>
 
-        <DialogFooter className="px-6 py-4 border-t shrink-0">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving || !name.trim()}>
-            {saving && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
-            {isNew ? "Create" : "Save"}
-          </Button>
+        <DialogFooter className="px-6 py-4 border-t shrink-0 sm:justify-between">
+          <div>
+            {!isNew && (
+              <Button variant="outline" onClick={() => onOpenWorkspace(tenant!.id)} disabled={saving}>
+                <ExternalLink className="h-4 w-4 mr-2" /> Open workspace
+              </Button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
+            <Button onClick={handleSave} disabled={saving || !name.trim()}>
+              {saving && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+              {isNew ? "Create" : "Save"}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
