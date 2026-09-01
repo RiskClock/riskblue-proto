@@ -37,11 +37,13 @@ const PACKAGES: CreditPackage[] = [
 
 type Step = "select" | "review_and_checkout";
 
-export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalProps) => {
+export const BuyCreditsModal = ({ open, onOpenChange, reason, canBuyCredits = true }: BuyCreditsModalProps) => {
   const { toast } = useToast();
   const { user } = useAuth();
   const { balance, refetch } = useCredits();
-  const { tenantId, refetch: refetchTenants } = useTenant();
+  const { tenantId, tenant, refetch: refetchTenants } = useTenant();
+  const displayedBalance = tenantId ? (tenant?.credits_balance ?? 0) : balance;
+  const startingBalanceRef = useRef(displayedBalance);
   const { logActivity } = useActivityLogger();
 
   const [step, setStep] = useState<Step>("select");
