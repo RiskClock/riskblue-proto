@@ -81,7 +81,10 @@ export function MultiSelectChecklist({
             />
           </div>
         )}
-        <div className="max-h-56 overflow-auto p-1">
+        <div
+          className="max-h-56 overflow-auto p-1 overscroll-contain"
+          onWheel={(e) => e.stopPropagation()}
+        >
           {filtered.length === 0 && (
             <div className="px-2 py-3 text-sm text-muted-foreground">{emptyLabel}</div>
           )}
