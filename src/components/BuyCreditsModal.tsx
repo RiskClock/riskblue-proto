@@ -258,39 +258,46 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason, canBuyCredits = tr
           const visiblePackages = PACKAGES.filter((p) => !p.internalOnly || isInternal);
           const cols = visiblePackages.length >= 3 ? "md:grid-cols-3" : "md:grid-cols-2";
           return (
-          <div className={`grid gap-4 ${cols} mt-2`}>
-            {visiblePackages.map((pkg) => (
-              <Card
-                key={pkg.id}
-                className="relative overflow-hidden p-5 flex flex-col gap-3 transition-all border-primary/20 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 bg-gradient-to-br from-card to-primary/5"
-              >
-                <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-bold text-primary">{pkg.credits}</span>
-                  <span className="text-sm text-muted-foreground">credits</span>
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-semibold text-primary">
-                    ${pkg.priceUsd.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex-1" />
-                <Button
-                  size="sm"
-                  onClick={() => handleSelect(pkg)}
-                  disabled={packageLoading !== null}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground"
+          <div className="mt-2 space-y-3">
+            {!canBuyCredits && (
+              <p className="text-sm text-muted-foreground">
+                Credit purchases are restricted in this workspace. Contact an admin to buy credits.
+              </p>
+            )}
+            <div className={`grid gap-4 ${cols}`}>
+              {visiblePackages.map((pkg) => (
+                <Card
+                  key={pkg.id}
+                  className="relative overflow-hidden p-5 flex flex-col gap-3 transition-all border-primary/20 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 bg-gradient-to-br from-card to-primary/5"
                 >
-                  {packageLoading === pkg.id ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Loading...
-                    </>
-                  ) : (
-                    "Buy"
-                  )}
-                </Button>
-              </Card>
-            ))}
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl font-bold text-primary">{pkg.credits}</span>
+                    <span className="text-sm text-muted-foreground">credits</span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-semibold text-primary">
+                      ${pkg.priceUsd.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex-1" />
+                  <Button
+                    size="sm"
+                    onClick={() => handleSelect(pkg)}
+                    disabled={!canBuyCredits || packageLoading !== null}
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50"
+                  >
+                    {packageLoading === pkg.id ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      "Buy"
+                    )}
+                  </Button>
+                </Card>
+              ))}
+            </div>
           </div>
           );
         })()}
