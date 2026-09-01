@@ -1194,6 +1194,7 @@ function CreateUserDialog({
       credits: creditsNum,
       send_welcome_email: sendWelcomeEmail,
       projects,
+      tenants: tenantAssignments,
     });
   };
 
