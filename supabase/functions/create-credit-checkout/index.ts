@@ -199,6 +199,7 @@ serve(async (req) => {
         amountCents: String(amountCents),
         packageLabel: pkg.label,
         managed_payments: "false",
+        ...(tenantId ? { tenantId: String(tenantId) } : {}),
         ...(tosVersion ? { tosVersion: String(tosVersion) } : {}),
         ...(privacyVersion ? { privacyVersion: String(privacyVersion) } : {}),
       },
