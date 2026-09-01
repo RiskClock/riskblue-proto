@@ -1126,6 +1126,7 @@ function CreateUserDialog({
   companies,
   availableTags,
   allProjects,
+  allTenants,
   onSubmit,
   loading,
 }: {
@@ -1134,6 +1135,7 @@ function CreateUserDialog({
   companies: string[];
   availableTags: TagOption[];
   allProjects: ProjectOption[];
+  allTenants: TenantOption[];
   onSubmit: (p: {
     email: string;
     name: string;
@@ -1144,6 +1146,7 @@ function CreateUserDialog({
     credits: number;
     send_welcome_email: boolean;
     projects: { project_id: string; role: "admin" | "contributor" }[];
+    tenants: TenantAssignment[];
   }) => void;
   loading: boolean;
 }) {
@@ -1156,6 +1159,7 @@ function CreateUserDialog({
   const [credits, setCredits] = useState<string>("20");
   const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true);
   const [projects, setProjects] = useState<{ project_id: string; role: "admin" | "contributor" }[]>([]);
+  const [tenantAssignments, setTenantAssignments] = useState<TenantAssignment[]>([]);
 
   useEffect(() => {
     if (open) {
@@ -1168,6 +1172,7 @@ function CreateUserDialog({
       setCredits("20");
       setSendWelcomeEmail(true);
       setProjects([]);
+      setTenantAssignments([]);
     }
   }, [open]);
 
