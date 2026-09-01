@@ -204,7 +204,7 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
           </DropdownMenu>
         </div>
       </div>
-      <BuyCreditsModal open={buyOpen} onOpenChange={setBuyOpen} />
+      <BuyCreditsModal open={buyOpen} onOpenChange={setBuyOpen} canBuyCredits={canBuyCredits} />
       <SwitchCompanyModal open={switchCompanyOpen} onOpenChange={setSwitchCompanyOpen} />
       {tenantId && tenant && (
         <TenantMembersModal
