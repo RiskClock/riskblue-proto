@@ -93,10 +93,11 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason, canBuyCredits = tr
       await new Promise((r) => setTimeout(r, 1000));
       if (tenantId) {
         refetchTenants();
+        if ((tenant?.credits_balance ?? 0) > startingBalanceRef.current) break;
         continue;
       }
       const { data } = await refetch();
-      if ((data ?? 0) > balance) break;
+      if ((data ?? 0) > startingBalanceRef.current) break;
     }
   };
 
