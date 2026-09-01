@@ -88,6 +88,10 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
     });
     for (let i = 0; i < 6; i++) {
       await new Promise((r) => setTimeout(r, 1000));
+      if (tenantId) {
+        refetchTenants();
+        continue;
+      }
       const { data } = await refetch();
       if ((data ?? 0) > balance) break;
     }
