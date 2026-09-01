@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CompanyLogoField } from "@/components/users/CompanyLogoField";
+import { TenantAssigner, type TenantOption, type TenantAssignment } from "@/components/users/TenantAssigner";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -121,6 +121,7 @@ type SortKey =
   | "created_at"
   | "email"
   | "company"
+  | "tenant"
   | "last_sign_in_at"
   | "status"
   | "tags"
@@ -132,6 +133,7 @@ type SortDir = "asc" | "desc";
 type ColumnId =
   | "user"
   | "company"
+  | "tenant"
   | "projects"
   | "tags"
   | "type"
@@ -148,6 +150,7 @@ interface ColumnDef {
 const ALL_COLUMNS: ColumnDef[] = [
   { id: "user", label: "User" },
   { id: "company", label: "Company" },
+  { id: "tenant", label: "Tenant" },
   { id: "projects", label: "Projects" },
   { id: "tags", label: "Tags" },
   { id: "type", label: "Type" },
@@ -157,7 +160,7 @@ const ALL_COLUMNS: ColumnDef[] = [
   { id: "last_sign_in", label: "Last Sign-In" },
 ];
 
-const COLUMN_PREFS_KEY = "user-management-columns:v1";
+const COLUMN_PREFS_KEY = "user-management-columns:v2";
 
 interface ColumnPrefs {
   order: ColumnId[];
@@ -330,6 +333,62 @@ const UserManagement = () => {
   const allTags = data?.tags || [];
   const allProjects = data?.all_projects || [];
 
+  // ---- tenants (companies) + memberships ----
+  const { data: tenantData } = useQuery({
+    queryKey: ["admin-tenants-with-members"],
+    queryFn: async () => {
+      const [{ data: tenants, error: tErr }, { data: members, error: mErr }] = await Promise.all([
+        supabase.from("tenants").select("id, name").order("name"),
+        supabase.from("tenant_members").select("tenant_id, user_id, role"),
+      ]);
+      if (tErr) throw tErr;
+      if (mErr) throw mErr;
+      return {
+        tenants: (tenants || []) as TenantOption[],
+        members: (members || []) as { tenant_id: string; user_id: string; role: TenantAssignment["role"] }[],
+      };
+    },
+    enabled: isInternal,
+  });
+
+  const allTenants = tenantData?.tenants || [];
+  const tenantNameById = useMemo(
+    () => new Map(allTenants.map((t) => [t.id, t.name])),
+    [allTenants],
+  );
+  const membershipsByUser = useMemo(() => {
+    const m = new Map<string, TenantAssignment[]>();
+    for (const row of tenantData?.members || []) {
+      const arr = m.get(row.user_id) || [];
+      arr.push({ tenant_id: row.tenant_id, role: row.role });
+      m.set(row.user_id, arr);
+    }
+    return m;
+  }, [tenantData]);
+  const tenantNamesFor = (userId: string) =>
+    (membershipsByUser.get(userId) || [])
+      .map((a) => tenantNameById.get(a.tenant_id) || "")
+      .filter(Boolean)
+      .sort();
+
+  /** Reconciles tenant_members rows for a user with the desired assignments. */
+  const syncTenantMemberships = async (userId: string, desired: TenantAssignment[]) => {
+    const existing = membershipsByUser.get(userId) || [];
+    const desiredIds = new Set(desired.map((d) => d.tenant_id));
+    const toRemove = existing.filter((e) => !desiredIds.has(e.tenant_id)).map((e) => e.tenant_id);
+    if (toRemove.length > 0) {
+      await supabase.from("tenant_members").delete().eq("user_id", userId).in("tenant_id", toRemove);
+    }
+    if (desired.length > 0) {
+      const { error } = await supabase.from("tenant_members").upsert(
+        desired.map((d) => ({ tenant_id: d.tenant_id, user_id: userId, role: d.role })) as any,
+        { onConflict: "tenant_id,user_id" },
+      );
+      if (error) throw error;
+    }
+    await queryClient.invalidateQueries({ queryKey: ["admin-tenants-with-members"] });
+  };
+
   // ---- persisted filters / sort ----
   const [prefs, setPrefs] = useState<PersistedPrefs>(() => loadPrefs());
   const { search, filterCompanies, filterStatuses, filterTags, sortKey, sortDir } = prefs;
@@ -386,6 +445,10 @@ const UserManagement = () => {
         case "company":
           va = (a.company || "").toLowerCase();
           vb = (b.company || "").toLowerCase();
+          break;
+        case "tenant":
+          va = tenantNamesFor(a.user_id)[0]?.toLowerCase() || "\uffff";
+          vb = tenantNamesFor(b.user_id)[0]?.toLowerCase() || "\uffff";
           break;
         case "last_sign_in_at":
           va = a.last_sign_in_at ? new Date(a.last_sign_in_at).getTime() : 0;
@@ -490,7 +553,11 @@ const UserManagement = () => {
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin-users"] });
 
   const createMutation = useMutation({
-    mutationFn: invokeAction,
+    mutationFn: async ({ tenants, ...body }: any) => {
+      const res: any = await invokeAction(body);
+      if (res?.user_id) await syncTenantMemberships(res.user_id, tenants || []);
+      return res;
+    },
     onSuccess: () => {
       toast({ title: "User created" });
       setCreateOpen(false);
@@ -504,7 +571,11 @@ const UserManagement = () => {
       }),
   });
   const updateMutation = useMutation({
-    mutationFn: invokeAction,
+    mutationFn: async ({ tenants, ...body }: any) => {
+      const res: any = await invokeAction(body);
+      if (body.user_id) await syncTenantMemberships(body.user_id, tenants || []);
+      return res;
+    },
     onSuccess: () => {
       toast({ title: "User updated" });
       setEditing(null);
@@ -659,6 +730,12 @@ const UserManagement = () => {
                             Company <SortIcon k="company" />
                           </TableHead>
                         );
+                      case "tenant":
+                        return (
+                          <TableHead key={colId} className="cursor-pointer select-none" onClick={() => toggleSort("tenant")}>
+                            Tenant <SortIcon k="tenant" />
+                          </TableHead>
+                        );
                       case "projects":
                         return (
                           <TableHead key={colId} className="cursor-pointer select-none text-center" onClick={() => toggleSort("projects")}>
@@ -737,6 +814,22 @@ const UserManagement = () => {
                                 {u.company || <span className="text-muted-foreground">-</span>}
                               </TableCell>
                             );
+                          case "tenant": {
+                            const names = tenantNamesFor(u.user_id);
+                            return (
+                              <TableCell key={colId} className={dim}>
+                                {names.length === 0 ? (
+                                  <span className="text-muted-foreground">-</span>
+                                ) : (
+                                  <div className="flex flex-wrap gap-1">
+                                    {names.map((n) => (
+                                      <Badge key={n} variant="outline" className="font-normal">{n}</Badge>
+                                    ))}
+                                  </div>
+                                )}
+                              </TableCell>
+                            );
+                          }
                           case "projects":
                             return (
                               <TableCell key={colId} className={cn("text-center tabular-nums", dim)}>
@@ -866,6 +959,7 @@ const UserManagement = () => {
         companies={companies}
         availableTags={allTags}
         allProjects={allProjects}
+        allTenants={allTenants}
         onSubmit={(payload) => createMutation.mutate({ action: "create", ...payload })}
         loading={createMutation.isPending}
       />
@@ -876,6 +970,8 @@ const UserManagement = () => {
         companies={companies}
         availableTags={allTags}
         allProjects={allProjects}
+        allTenants={allTenants}
+        initialTenants={editing ? membershipsByUser.get(editing.user_id) || [] : []}
         onSubmit={(payload) =>
           updateMutation.mutate({ action: "update", user_id: editing!.user_id, ...payload })
         }
@@ -1126,6 +1222,7 @@ function CreateUserDialog({
   companies,
   availableTags,
   allProjects,
+  allTenants,
   onSubmit,
   loading,
 }: {
@@ -1134,6 +1231,7 @@ function CreateUserDialog({
   companies: string[];
   availableTags: TagOption[];
   allProjects: ProjectOption[];
+  allTenants: TenantOption[];
   onSubmit: (p: {
     email: string;
     name: string;
@@ -1144,6 +1242,7 @@ function CreateUserDialog({
     credits: number;
     send_welcome_email: boolean;
     projects: { project_id: string; role: "admin" | "contributor" }[];
+    tenants: TenantAssignment[];
   }) => void;
   loading: boolean;
 }) {
@@ -1156,6 +1255,7 @@ function CreateUserDialog({
   const [credits, setCredits] = useState<string>("20");
   const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true);
   const [projects, setProjects] = useState<{ project_id: string; role: "admin" | "contributor" }[]>([]);
+  const [tenantAssignments, setTenantAssignments] = useState<TenantAssignment[]>([]);
 
   useEffect(() => {
     if (open) {
@@ -1168,6 +1268,7 @@ function CreateUserDialog({
       setCredits("20");
       setSendWelcomeEmail(true);
       setProjects([]);
+      setTenantAssignments([]);
     }
   }, [open]);
 
@@ -1189,6 +1290,7 @@ function CreateUserDialog({
       credits: creditsNum,
       send_welcome_email: sendWelcomeEmail,
       projects,
+      tenants: tenantAssignments,
     });
   };
 
@@ -1267,11 +1369,9 @@ function CreateUserDialog({
             {companyRequired && !companyValid && (
               <p className="text-xs text-destructive mt-1">Company is required for WMSV accounts</p>
             )}
-            <div className="mt-3">
-              <Label className="text-xs text-muted-foreground">Company logo (optional)</Label>
-              <CompanyLogoField company={company} />
-            </div>
           </div>
+
+          <TenantAssigner tenants={allTenants} value={tenantAssignments} onChange={setTenantAssignments} />
 
           <div>
             <Label>Tags (optional)</Label>
@@ -1309,6 +1409,8 @@ function EditUserDialog({
   companies,
   availableTags,
   allProjects,
+  allTenants,
+  initialTenants,
   onSubmit,
   loading,
 }: {
@@ -1317,6 +1419,8 @@ function EditUserDialog({
   companies: string[];
   availableTags: TagOption[];
   allProjects: ProjectOption[];
+  allTenants: TenantOption[];
+  initialTenants: TenantAssignment[];
   onSubmit: (p: {
     name: string;
     is_wmsv: boolean;
@@ -1325,6 +1429,7 @@ function EditUserDialog({
     credits: number | null;
     password: string | null;
     projects: { project_id: string; role: "admin" | "contributor" }[];
+    tenants: TenantAssignment[];
   }) => void;
   loading: boolean;
 }) {
@@ -1335,6 +1440,9 @@ function EditUserDialog({
   const [credits, setCredits] = useState<string>("");
   const [password, setPassword] = useState("");
   const [projects, setProjects] = useState<{ project_id: string; role: "admin" | "contributor" }[]>([]);
+  const [tenantAssignments, setTenantAssignments] = useState<TenantAssignment[]>([]);
+
+  const initialTenantKey = initialTenants.map((t) => `${t.tenant_id}:${t.role}`).join("|");
 
   useEffect(() => {
     if (user) {
@@ -1350,8 +1458,10 @@ function EditUserDialog({
           role: p.role === "admin" ? "admin" : "contributor",
         })),
       );
+      setTenantAssignments(initialTenants);
     }
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, initialTenantKey]);
 
   const creditsValid = credits.trim() === "" || (Number.isFinite(Number(credits)) && Number(credits) >= 0);
   const pwdValid = password.length === 0 || password.length >= 6;
@@ -1402,11 +1512,8 @@ function EditUserDialog({
           <div>
             <Label>Company</Label>
             <CompanyCombobox value={company} onChange={setCompany} companies={companies} />
-            <div className="mt-3">
-              <Label className="text-xs text-muted-foreground">Company logo (optional)</Label>
-              <CompanyLogoField company={company} />
-            </div>
           </div>
+          <TenantAssigner tenants={allTenants} value={tenantAssignments} onChange={setTenantAssignments} />
           <div>
             <Label>Tags</Label>
             <div className="mt-1">
@@ -1434,6 +1541,7 @@ function EditUserDialog({
                 credits: credits.trim() === "" ? null : Math.max(0, Math.floor(Number(credits))),
                 password: password.length > 0 ? password : null,
                 projects,
+                tenants: tenantAssignments,
               })
             }
             disabled={loading || !name.trim() || !creditsValid || !pwdValid}
