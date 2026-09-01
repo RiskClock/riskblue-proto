@@ -84,7 +84,23 @@ serve(async (req) => {
       });
     }
 
-    const { packageId, environment, returnUrl, tosVersion, privacyVersion } = await req.json();
+    const { packageId, environment, returnUrl, tosVersion, privacyVersion, tenantId } = await req.json();
+
+    // When purchasing inside a company workspace, credits go to the shared
+    // company pool. Validate membership + buy_credits permission server-side.
+    if (tenantId) {
+      const { data: allowed, error: permError } = await supabase.rpc("tenant_has_permission", {
+        _user_id: user.id,
+        _tenant_id: tenantId,
+        _flag: "buy_credits",
+      });
+      if (permError || allowed !== true) {
+        return new Response(JSON.stringify({ error: "Not allowed to buy credits for this company" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
     // Note: any "tier" sent by the client is ignored - the server determines
     // pricing tier authoritatively from the user's profile.account_type.
     const pkg = PACKAGES[packageId];
