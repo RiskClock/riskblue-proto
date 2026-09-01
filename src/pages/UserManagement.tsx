@@ -1313,6 +1313,8 @@ function EditUserDialog({
   companies,
   availableTags,
   allProjects,
+  allTenants,
+  initialTenants,
   onSubmit,
   loading,
 }: {
@@ -1321,6 +1323,8 @@ function EditUserDialog({
   companies: string[];
   availableTags: TagOption[];
   allProjects: ProjectOption[];
+  allTenants: TenantOption[];
+  initialTenants: TenantAssignment[];
   onSubmit: (p: {
     name: string;
     is_wmsv: boolean;
@@ -1329,6 +1333,7 @@ function EditUserDialog({
     credits: number | null;
     password: string | null;
     projects: { project_id: string; role: "admin" | "contributor" }[];
+    tenants: TenantAssignment[];
   }) => void;
   loading: boolean;
 }) {
@@ -1339,6 +1344,9 @@ function EditUserDialog({
   const [credits, setCredits] = useState<string>("");
   const [password, setPassword] = useState("");
   const [projects, setProjects] = useState<{ project_id: string; role: "admin" | "contributor" }[]>([]);
+  const [tenantAssignments, setTenantAssignments] = useState<TenantAssignment[]>([]);
+
+  const initialTenantKey = initialTenants.map((t) => `${t.tenant_id}:${t.role}`).join("|");
 
   useEffect(() => {
     if (user) {
@@ -1354,8 +1362,10 @@ function EditUserDialog({
           role: p.role === "admin" ? "admin" : "contributor",
         })),
       );
+      setTenantAssignments(initialTenants);
     }
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, initialTenantKey]);
 
   const creditsValid = credits.trim() === "" || (Number.isFinite(Number(credits)) && Number(credits) >= 0);
   const pwdValid = password.length === 0 || password.length >= 6;
