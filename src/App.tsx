@@ -108,6 +108,7 @@ const App = () => (
             </Route>
 
             <Route path="/accept-invite" element={<AcceptInvite />} />
+            <Route path="/accept-company-invite" element={<AcceptCompanyInvite />} />
             <Route path="/oauth/callback" element={<OAuthCallback />} />
             <Route path="/connect/google-drive" element={<GoogleDriveConnect />} />
             <Route path="/connect/procore" element={<ProcoreConnect />} />
