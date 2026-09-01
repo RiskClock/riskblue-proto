@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -29,8 +28,7 @@ import {
   Settings2, GripVertical, ArrowUp, ArrowDown, ArrowUpDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { TenantInviteSection } from "@/components/TenantMembersModal";
-import { CompanyLogoField } from "@/components/users/CompanyLogoField";
+import { CompanyLogoField, uploadCompanyLogo, purgeCompanyLogos } from "@/components/users/CompanyLogoField";
 import { MultiSelectChecklist } from "@/components/common/MultiSelectChecklist";
 
 
@@ -50,19 +48,21 @@ interface TenantSummary {
 const ROLES: TenantRole[] = ["admin", "member", "guest"];
 
 // ---------- columns ----------
-type ColumnId = "name" | "logo" | "members" | "projects" | "credits" | "status" | "created";
+type ColumnId = "logo" | "name" | "members" | "projects" | "credits" | "created";
 
 const ALL_COLUMNS: { id: ColumnId; label: string }[] = [
-  { id: "name", label: "Name" },
   { id: "logo", label: "Logo" },
+  { id: "name", label: "Company Name" },
   { id: "members", label: "Members" },
   { id: "projects", label: "Projects" },
   { id: "credits", label: "Credits" },
-  { id: "status", label: "Status" },
   { id: "created", label: "Created" },
 ];
 
-const COLUMN_PREFS_KEY = "company-management-columns:v1";
+/** Columns that are always shown, in this order, at the start of the table. */
+const LOCKED_COLUMNS: ColumnId[] = ["logo", "name"];
+
+const COLUMN_PREFS_KEY = "company-management-columns:v2";
 
 interface ColumnPrefs {
   order: ColumnId[];
@@ -85,8 +85,8 @@ function loadColumnPrefs(): ColumnPrefs {
       : [...defaults.order];
     for (const c of ALL_COLUMNS) if (!order.includes(c.id)) order.push(c.id);
     return {
-      order: ["name", ...order.filter((id) => id !== "name")],
-      visible: { ...defaults.visible, ...(parsed.visible || {}), name: true },
+      order: [...LOCKED_COLUMNS, ...order.filter((id) => !LOCKED_COLUMNS.includes(id))],
+      visible: { ...defaults.visible, ...(parsed.visible || {}), logo: true, name: true },
     };
   } catch {
     return defaults;
@@ -94,15 +94,10 @@ function loadColumnPrefs(): ColumnPrefs {
 }
 
 // ---------- filters / sorting ----------
-type SortKey = "name" | "members" | "projects" | "credits" | "status" | "created";
+type SortKey = "name" | "members" | "projects" | "credits" | "created";
 type SortDir = "asc" | "desc";
 const DEFAULT_SORT_KEY: SortKey = "name";
 const DEFAULT_SORT_DIR: SortDir = "asc";
-
-const STATUS_OPTIONS = [
-  { value: "active", label: "Active" },
-  { value: "inactive", label: "Inactive" },
-];
 
 const CompanyManagement = () => {
   const { user } = useAuth();
@@ -114,7 +109,6 @@ const CompanyManagement = () => {
   const [detailId, setDetailId] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
-  const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<SortKey>(DEFAULT_SORT_KEY);
   const [sortDir, setSortDir] = useState<SortDir>(DEFAULT_SORT_DIR);
 
@@ -174,9 +168,6 @@ const CompanyManagement = () => {
     let list = [...tenants];
     const q = search.trim().toLowerCase();
     if (q) list = list.filter((t) => t.name.toLowerCase().includes(q));
-    if (filterStatuses.length > 0) {
-      list = list.filter((t) => filterStatuses.includes(t.is_active ? "active" : "inactive"));
-    }
     list.sort((a, b) => {
       let va: string | number;
       let vb: string | number;
@@ -184,7 +175,6 @@ const CompanyManagement = () => {
         case "members": va = a.member_count; vb = b.member_count; break;
         case "projects": va = a.project_count; vb = b.project_count; break;
         case "credits": va = a.credits_balance; vb = b.credits_balance; break;
-        case "status": va = a.is_active ? 0 : 1; vb = b.is_active ? 0 : 1; break;
         case "created": va = a.created_at; vb = b.created_at; break;
         default: va = a.name.toLowerCase(); vb = b.name.toLowerCase();
       }
@@ -193,7 +183,7 @@ const CompanyManagement = () => {
       return 0;
     });
     return list;
-  }, [tenants, search, filterStatuses, sortKey, sortDir]);
+  }, [tenants, search, sortKey, sortDir]);
 
   const toggleSort = (k: SortKey) => {
     if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -212,12 +202,10 @@ const CompanyManagement = () => {
       <ArrowDown className="h-3 w-3 ml-1 inline" />
     );
 
-  const isDirty =
-    !!search || filterStatuses.length > 0 || sortKey !== DEFAULT_SORT_KEY || sortDir !== DEFAULT_SORT_DIR;
+  const isDirty = !!search || sortKey !== DEFAULT_SORT_KEY || sortDir !== DEFAULT_SORT_DIR;
 
   const resetAll = () => {
     setSearch("");
-    setFilterStatuses([]);
     setSortKey(DEFAULT_SORT_KEY);
     setSortDir(DEFAULT_SORT_DIR);
   };
@@ -238,7 +226,7 @@ const CompanyManagement = () => {
       case "name":
         return (
           <TableHead key={colId} className="cursor-pointer select-none" onClick={() => toggleSort("name")}>
-            Name{" "}
+            Company Name{" "}
             <span className="text-muted-foreground font-normal">
               ({filteredSorted.length !== tenants.length ? `${filteredSorted.length} of ${tenants.length}` : tenants.length})
             </span>{" "}
@@ -263,12 +251,6 @@ const CompanyManagement = () => {
         return (
           <TableHead key={colId} className="cursor-pointer select-none text-right" onClick={() => toggleSort("credits")}>
             Credits <SortIcon k="credits" />
-          </TableHead>
-        );
-      case "status":
-        return (
-          <TableHead key={colId} className="cursor-pointer select-none" onClick={() => toggleSort("status")}>
-            Status <SortIcon k="status" />
           </TableHead>
         );
       case "created":
@@ -304,12 +286,6 @@ const CompanyManagement = () => {
         return <TableCell key={colId} className="text-right tabular-nums">{t.project_count}</TableCell>;
       case "credits":
         return <TableCell key={colId} className="text-right tabular-nums">{t.credits_balance}</TableCell>;
-      case "status":
-        return (
-          <TableCell key={colId}>
-            <Badge variant={t.is_active ? "secondary" : "outline"}>{t.is_active ? "Active" : "Inactive"}</Badge>
-          </TableCell>
-        );
       case "created":
         return (
           <TableCell key={colId} className="text-muted-foreground whitespace-nowrap">
@@ -335,29 +311,6 @@ const CompanyManagement = () => {
               className="pl-9 w-72"
             />
           </div>
-
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline">
-                <Filter className="h-4 w-4 mr-2" />
-                Filter
-                {filterStatuses.length > 0 && (
-                  <Badge variant="secondary" className="ml-2 px-1.5">1</Badge>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-72 space-y-4">
-              <div>
-                <Label className="text-xs uppercase text-muted-foreground">Status</Label>
-                <MultiSelectChecklist
-                  options={STATUS_OPTIONS}
-                  selected={filterStatuses}
-                  onChange={setFilterStatuses}
-                  allLabel="All statuses"
-                />
-              </div>
-            </PopoverContent>
-          </Popover>
 
           <Button variant="outline" onClick={resetAll} disabled={!isDirty} title="Reset filters and sorting">
             <RotateCcw className="h-4 w-4 mr-2" />
@@ -442,12 +395,12 @@ function ColumnEditDropdown({
   const labelFor = (id: ColumnId) => ALL_COLUMNS.find((c) => c.id === id)?.label || id;
 
   const toggleVisible = (id: ColumnId) => {
-    if (id === "name") return;
+    if (LOCKED_COLUMNS.includes(id)) return;
     setColumnPrefs((prev) => ({ ...prev, visible: { ...prev.visible, [id]: !prev.visible[id] } }));
   };
 
   const handleDrop = (targetId: ColumnId) => {
-    if (!dragId || dragId === targetId || dragId === "name" || targetId === "name") {
+    if (!dragId || dragId === targetId || LOCKED_COLUMNS.includes(dragId) || LOCKED_COLUMNS.includes(targetId)) {
       setDragId(null);
       setOverId(null);
       return;
@@ -459,7 +412,7 @@ function ColumnEditDropdown({
       if (from === -1 || to === -1) return prev;
       order.splice(from, 1);
       order.splice(to, 0, dragId);
-      return { ...prev, order: ["name", ...order.filter((id) => id !== "name")] };
+      return { ...prev, order: [...LOCKED_COLUMNS, ...order.filter((id) => !LOCKED_COLUMNS.includes(id))] };
     });
     setDragId(null);
     setOverId(null);
@@ -476,7 +429,7 @@ function ColumnEditDropdown({
         <div className="text-xs font-medium text-muted-foreground px-2 py-1.5">Show & reorder columns</div>
         <div className="space-y-0.5">
           {columnPrefs.order.map((id) => {
-            const locked = id === "name";
+            const locked = LOCKED_COLUMNS.includes(id);
             const isDraggingOver = overId === id && dragId && dragId !== id;
             return (
               <div
