@@ -930,6 +930,7 @@ const UserManagement = () => {
         companies={companies}
         availableTags={allTags}
         allProjects={allProjects}
+        allTenants={allTenants}
         onSubmit={(payload) => createMutation.mutate({ action: "create", ...payload })}
         loading={createMutation.isPending}
       />
@@ -940,6 +941,8 @@ const UserManagement = () => {
         companies={companies}
         availableTags={allTags}
         allProjects={allProjects}
+        allTenants={allTenants}
+        initialTenants={editing ? membershipsByUser.get(editing.user_id) || [] : []}
         onSubmit={(payload) =>
           updateMutation.mutate({ action: "update", user_id: editing!.user_id, ...payload })
         }
