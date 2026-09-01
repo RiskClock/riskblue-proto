@@ -21,6 +21,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import { Loader2, Plus, Trash2, ExternalLink } from "lucide-react";
+import { TenantInviteSection } from "@/components/TenantMembersModal";
 
 type TenantRole = "admin" | "member" | "guest";
 
@@ -496,6 +497,8 @@ const CompanyDetailDialog = ({
             </Table>
           </div>
         </section>
+
+        <TenantInviteSection tenantId={tenant.id} />
 
         <section className="space-y-3">
           <h3 className="text-sm font-semibold">Projects ({projects.length})</h3>
