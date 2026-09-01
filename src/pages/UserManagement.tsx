@@ -330,6 +330,62 @@ const UserManagement = () => {
   const allTags = data?.tags || [];
   const allProjects = data?.all_projects || [];
 
+  // ---- tenants (companies) + memberships ----
+  const { data: tenantData } = useQuery({
+    queryKey: ["admin-tenants-with-members"],
+    queryFn: async () => {
+      const [{ data: tenants, error: tErr }, { data: members, error: mErr }] = await Promise.all([
+        supabase.from("tenants").select("id, name").order("name"),
+        supabase.from("tenant_members").select("tenant_id, user_id, role"),
+      ]);
+      if (tErr) throw tErr;
+      if (mErr) throw mErr;
+      return {
+        tenants: (tenants || []) as TenantOption[],
+        members: (members || []) as { tenant_id: string; user_id: string; role: TenantAssignment["role"] }[],
+      };
+    },
+    enabled: isInternal,
+  });
+
+  const allTenants = tenantData?.tenants || [];
+  const tenantNameById = useMemo(
+    () => new Map(allTenants.map((t) => [t.id, t.name])),
+    [allTenants],
+  );
+  const membershipsByUser = useMemo(() => {
+    const m = new Map<string, TenantAssignment[]>();
+    for (const row of tenantData?.members || []) {
+      const arr = m.get(row.user_id) || [];
+      arr.push({ tenant_id: row.tenant_id, role: row.role });
+      m.set(row.user_id, arr);
+    }
+    return m;
+  }, [tenantData]);
+  const tenantNamesFor = (userId: string) =>
+    (membershipsByUser.get(userId) || [])
+      .map((a) => tenantNameById.get(a.tenant_id) || "")
+      .filter(Boolean)
+      .sort();
+
+  /** Reconciles tenant_members rows for a user with the desired assignments. */
+  const syncTenantMemberships = async (userId: string, desired: TenantAssignment[]) => {
+    const existing = membershipsByUser.get(userId) || [];
+    const desiredIds = new Set(desired.map((d) => d.tenant_id));
+    const toRemove = existing.filter((e) => !desiredIds.has(e.tenant_id)).map((e) => e.tenant_id);
+    if (toRemove.length > 0) {
+      await supabase.from("tenant_members").delete().eq("user_id", userId).in("tenant_id", toRemove);
+    }
+    if (desired.length > 0) {
+      const { error } = await supabase.from("tenant_members").upsert(
+        desired.map((d) => ({ tenant_id: d.tenant_id, user_id: userId, role: d.role })) as any,
+        { onConflict: "tenant_id,user_id" },
+      );
+      if (error) throw error;
+    }
+    await queryClient.invalidateQueries({ queryKey: ["admin-tenants-with-members"] });
+  };
+
   // ---- persisted filters / sort ----
   const [prefs, setPrefs] = useState<PersistedPrefs>(() => loadPrefs());
   const { search, filterCompanies, filterStatuses, filterTags, sortKey, sortDir } = prefs;
