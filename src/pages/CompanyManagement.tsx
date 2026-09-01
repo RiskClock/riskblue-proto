@@ -734,7 +734,7 @@ const CompanyDialog = ({
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">Company logo</Label>
               <CompanyLogoField
-                company={tenant?.name ?? name}
+                company={tenant?.name ?? null}
                 file={logoFile}
                 removed={logoRemoved}
                 onFileChange={setLogoFile}
