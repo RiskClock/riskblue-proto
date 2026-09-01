@@ -1095,7 +1095,10 @@ function MultiSelectChecklist({
             />
           </div>
         )}
-        <div className="max-h-64 overflow-y-auto py-1">
+        <div
+          className="max-h-64 overflow-y-auto py-1 overscroll-contain"
+          onWheel={(e) => e.stopPropagation()}
+        >
           {filtered.length === 0 ? (
             <div className="px-3 py-2 text-sm text-muted-foreground">{emptyLabel}</div>
           ) : (
