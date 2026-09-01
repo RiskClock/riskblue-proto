@@ -3589,6 +3589,7 @@ export type Database = {
         Args: { _tenant_id: string; _user_id: string }
         Returns: boolean
       }
+      is_tenant_scoped_user: { Args: { _user_id: string }; Returns: boolean }
       seed_analysis_worker_secret: {
         Args: { p_secret: string }
         Returns: boolean
