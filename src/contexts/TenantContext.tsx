@@ -24,6 +24,8 @@ export interface TenantMembership {
   credits_balance: number | null;
   role: TenantRole;
   permissions: Record<string, boolean>;
+  /** True only when the user is an actual member (internal staff see all companies). */
+  isMember: boolean;
 }
 
 interface TenantContextValue {
