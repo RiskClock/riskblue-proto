@@ -101,9 +101,9 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
           </button>
           {showCredits && (
             <button
-              onClick={() => canBuyCredits && setBuyOpen(true)}
-              disabled={!canBuyCredits}
-              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground disabled:hover:text-muted-foreground disabled:cursor-default"
+              onClick={() => setBuyOpen(true)}
+              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground cursor-pointer"
+              title="Buy credits"
             >
               <Coins className="h-4 w-4" />
               <span>Credits: <span className="tabular-nums font-medium text-foreground">{displayedCredits}</span></span>
