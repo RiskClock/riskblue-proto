@@ -83,7 +83,7 @@ const App = () => (
             <Suspense fallback={<FullScreenLoader />}>
             <Routes>
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
-            <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
+            <Route path="/projects" element={<ProtectedRoute><RootRedirect fallback={<Projects />} /></ProtectedRoute>} />
             <Route path="/project/:id" element={<ProtectedRoute><ProjectWizard /></ProtectedRoute>} />
             
             <Route path="/solution-provider-portal" element={<ProtectedRoute><SolutionProviderPortal /></ProtectedRoute>} />
