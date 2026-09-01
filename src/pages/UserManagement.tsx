@@ -1406,11 +1406,8 @@ function EditUserDialog({
           <div>
             <Label>Company</Label>
             <CompanyCombobox value={company} onChange={setCompany} companies={companies} />
-            <div className="mt-3">
-              <Label className="text-xs text-muted-foreground">Company logo (optional)</Label>
-              <CompanyLogoField company={company} />
-            </div>
           </div>
+          <TenantAssigner tenants={allTenants} value={tenantAssignments} onChange={setTenantAssignments} />
           <div>
             <Label>Tags</Label>
             <div className="mt-1">
