@@ -83,5 +83,6 @@ export const RootRedirect = ({ fallback }: { fallback?: React.ReactNode } = {}) 
     list[0]?.id ||
     null;
 
-  return <Navigate to={target ? `/t/${target}/projects` : "/projects"} replace />;
+  if (!target) return <>{fallback ?? <Navigate to="/projects" replace />}</>;
+  return <Navigate to={`/t/${target}/projects`} replace />;
 };
