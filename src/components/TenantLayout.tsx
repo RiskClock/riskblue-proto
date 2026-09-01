@@ -45,7 +45,7 @@ export const TenantLayout = () => (
  * Landing redirect: sends the user to their last accessed company, then to
  * their first company, and finally to the personal project list.
  */
-export const RootRedirect = () => {
+export const RootRedirect = ({ fallback }: { fallback?: React.ReactNode } = {}) => {
   const { user } = useAuth();
   const { data: tenants, isLoading } = useMyTenants();
   const [lastTenantId, setLastTenantId] = useState<string | null | undefined>(undefined);
