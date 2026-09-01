@@ -564,7 +564,11 @@ const UserManagement = () => {
       }),
   });
   const updateMutation = useMutation({
-    mutationFn: invokeAction,
+    mutationFn: async ({ tenants, ...body }: any) => {
+      const res: any = await invokeAction(body);
+      if (body.user_id) await syncTenantMemberships(body.user_id, tenants || []);
+      return res;
+    },
     onSuccess: () => {
       toast({ title: "User updated" });
       setEditing(null);
