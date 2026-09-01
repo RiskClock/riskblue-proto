@@ -170,6 +170,12 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
                 </>
               )}
               <DropdownMenuSeparator />
+              {tenantId && !isInternalUser && hasPermission("manage_members") && (
+                <DropdownMenuItem onClick={() => setMembersOpen(true)} className="cursor-pointer">
+                  <Users className="h-4 w-4 mr-2" />
+                  Company Members
+                </DropdownMenuItem>
+              )}
               {(myTenants.length > 0 || isInternalUser) && (
                 <DropdownMenuItem onClick={() => setSwitchCompanyOpen(true)} className="cursor-pointer">
                   <ArrowLeftRight className="h-4 w-4 mr-2" />
