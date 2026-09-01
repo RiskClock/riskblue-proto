@@ -21,6 +21,7 @@ const SolutionProviderPortal = lazy(() => import("./pages/SolutionProviderPortal
 const Configuration = lazy(() => import("./pages/Configuration"));
 const Logs = lazy(() => import("./pages/Logs"));
 const AcceptInvite = lazy(() => import("./pages/AcceptInvite"));
+const AcceptCompanyInvite = lazy(() => import("./pages/AcceptCompanyInvite"));
 const OAuthCallback = lazy(() => import("./pages/OAuthCallback"));
 const GoogleDriveConnect = lazy(() => import("./pages/GoogleDriveConnect"));
 const ProcoreConnect = lazy(() => import("./pages/ProcoreConnect"));
