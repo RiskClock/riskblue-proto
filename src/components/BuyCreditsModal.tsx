@@ -141,6 +141,7 @@ export const BuyCreditsModal = ({ open, onOpenChange, reason }: BuyCreditsModalP
           packageId: pkg.id,
           environment: stripeEnvironment,
           returnUrl: `${window.location.origin}/credits/return?session_id={CHECKOUT_SESSION_ID}`,
+          ...(tenantId ? { tenantId } : {}),
           tosVersion: tos?.version,
           privacyVersion: privacy?.version,
         },
