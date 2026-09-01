@@ -12,6 +12,7 @@ import { getStripe, stripeEnvironment } from "@/lib/stripe";
 import { useAuth } from "@/contexts/AuthContext";
 import { PolicyReviewPanel, type PolicyDoc } from "@/components/checkout/PolicyReviewPanel";
 import { useActivityLogger } from "@/hooks/useActivityLogger";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface BuyCreditsModalProps {
   open: boolean;
