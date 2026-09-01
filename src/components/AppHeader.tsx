@@ -13,6 +13,7 @@ import {
 import { LogOut, Settings, BarChart3, Shield, Coins, Users, KeyRound, UserCog, LayoutGrid, Info, FlaskConical, Building2, ArrowLeftRight } from "lucide-react";
 import { useTenant, useMyTenants } from "@/contexts/TenantContext";
 import { SwitchCompanyModal } from "@/components/SwitchCompanyModal";
+import { TenantMembersModal } from "@/components/TenantMembersModal";
 import { useBrandLogo } from "@/hooks/useBrandLogo";
 import { APP_VERSION } from "@/lib/appVersion";
 import { useUpdateAvailable } from "@/hooks/useVersionCheck";
@@ -44,6 +45,7 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
   const { data: myTenants = [] } = useMyTenants();
   const [buyOpen, setBuyOpen] = useState(false);
   const [switchCompanyOpen, setSwitchCompanyOpen] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -204,6 +206,14 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
       </div>
       <BuyCreditsModal open={buyOpen} onOpenChange={setBuyOpen} />
       <SwitchCompanyModal open={switchCompanyOpen} onOpenChange={setSwitchCompanyOpen} />
+      {tenantId && tenant && (
+        <TenantMembersModal
+          tenantId={tenantId}
+          tenantName={tenant.name}
+          open={membersOpen}
+          onOpenChange={setMembersOpen}
+        />
+      )}
       <ChangePasswordModal open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
       <EditProfileModal open={editProfileOpen} onOpenChange={setEditProfileOpen} />
       {infoContent && (
