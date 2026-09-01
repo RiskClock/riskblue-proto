@@ -32,10 +32,14 @@ export function useAccountType() {
 
   // Company (tenant) membership takes precedence over the legacy profile
   // company field, which will be deprecated once everyone is migrated.
+  // Only the company the user is actually inside (route) or genuinely belongs
+  // to may brand the app. Internal staff can see every company through the
+  // switcher, but that must never leak another company's branding.
+  const memberTenants = tenants.filter((t) => t.isMember);
   const activeTenant =
     tenants.find((t) => t.id === tenantId) ??
-    tenants.find((t) => t.id === data?.lastTenantId) ??
-    tenants[0] ??
+    memberTenants.find((t) => t.id === data?.lastTenantId) ??
+    memberTenants[0] ??
     null;
 
   return {

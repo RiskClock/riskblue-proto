@@ -24,6 +24,8 @@ export interface TenantMembership {
   credits_balance: number | null;
   role: TenantRole;
   permissions: Record<string, boolean>;
+  /** True only when the user is an actual member (internal staff see all companies). */
+  isMember: boolean;
 }
 
 interface TenantContextValue {
@@ -55,6 +57,7 @@ export const useMyTenants = () => {
         credits_balance: t.credits_balance ?? null,
         role: t.role as TenantRole,
         permissions: (t.permissions ?? {}) as Record<string, boolean>,
+        isMember: t.is_member !== false,
       }));
     },
     enabled: !!user?.id,

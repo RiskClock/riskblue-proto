@@ -3491,6 +3491,7 @@ export type Database = {
         Returns: {
           credits_balance: number
           id: string
+          is_member: boolean
           name: string
           permissions: Json
           role: Database["public"]["Enums"]["tenant_role"]
