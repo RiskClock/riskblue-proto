@@ -546,7 +546,11 @@ const UserManagement = () => {
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin-users"] });
 
   const createMutation = useMutation({
-    mutationFn: invokeAction,
+    mutationFn: async ({ tenants, ...body }: any) => {
+      const res: any = await invokeAction(body);
+      if (res?.user_id) await syncTenantMemberships(res.user_id, tenants || []);
+      return res;
+    },
     onSuccess: () => {
       toast({ title: "User created" });
       setCreateOpen(false);
