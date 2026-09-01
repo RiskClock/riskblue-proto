@@ -497,6 +497,8 @@ const CompanyDetailDialog = ({
           </div>
         </section>
 
+        <TenantInviteSection tenantId={tenant.id} />
+
         <section className="space-y-3">
           <h3 className="text-sm font-semibold">Projects ({projects.length})</h3>
           <div className="rounded-md border divide-y">
