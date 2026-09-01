@@ -121,6 +121,7 @@ type SortKey =
   | "created_at"
   | "email"
   | "company"
+  | "tenant"
   | "last_sign_in_at"
   | "status"
   | "tags"
@@ -132,6 +133,7 @@ type SortDir = "asc" | "desc";
 type ColumnId =
   | "user"
   | "company"
+  | "tenant"
   | "projects"
   | "tags"
   | "type"
@@ -148,6 +150,7 @@ interface ColumnDef {
 const ALL_COLUMNS: ColumnDef[] = [
   { id: "user", label: "User" },
   { id: "company", label: "Company" },
+  { id: "tenant", label: "Tenant" },
   { id: "projects", label: "Projects" },
   { id: "tags", label: "Tags" },
   { id: "type", label: "Type" },
@@ -157,7 +160,7 @@ const ALL_COLUMNS: ColumnDef[] = [
   { id: "last_sign_in", label: "Last Sign-In" },
 ];
 
-const COLUMN_PREFS_KEY = "user-management-columns:v1";
+const COLUMN_PREFS_KEY = "user-management-columns:v2";
 
 interface ColumnPrefs {
   order: ColumnId[];
@@ -443,6 +446,10 @@ const UserManagement = () => {
           va = (a.company || "").toLowerCase();
           vb = (b.company || "").toLowerCase();
           break;
+        case "tenant":
+          va = tenantNamesFor(a.user_id)[0]?.toLowerCase() || "\uffff";
+          vb = tenantNamesFor(b.user_id)[0]?.toLowerCase() || "\uffff";
+          break;
         case "last_sign_in_at":
           va = a.last_sign_in_at ? new Date(a.last_sign_in_at).getTime() : 0;
           vb = b.last_sign_in_at ? new Date(b.last_sign_in_at).getTime() : 0;
@@ -723,6 +730,12 @@ const UserManagement = () => {
                             Company <SortIcon k="company" />
                           </TableHead>
                         );
+                      case "tenant":
+                        return (
+                          <TableHead key={colId} className="cursor-pointer select-none" onClick={() => toggleSort("tenant")}>
+                            Tenant <SortIcon k="tenant" />
+                          </TableHead>
+                        );
                       case "projects":
                         return (
                           <TableHead key={colId} className="cursor-pointer select-none text-center" onClick={() => toggleSort("projects")}>
@@ -801,6 +814,22 @@ const UserManagement = () => {
                                 {u.company || <span className="text-muted-foreground">-</span>}
                               </TableCell>
                             );
+                          case "tenant": {
+                            const names = tenantNamesFor(u.user_id);
+                            return (
+                              <TableCell key={colId} className={dim}>
+                                {names.length === 0 ? (
+                                  <span className="text-muted-foreground">-</span>
+                                ) : (
+                                  <div className="flex flex-wrap gap-1">
+                                    {names.map((n) => (
+                                      <Badge key={n} variant="outline" className="font-normal">{n}</Badge>
+                                    ))}
+                                  </div>
+                                )}
+                              </TableCell>
+                            );
+                          }
                           case "projects":
                             return (
                               <TableCell key={colId} className={cn("text-center tabular-nums", dim)}>
