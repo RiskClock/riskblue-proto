@@ -104,6 +104,7 @@ const App = () => (
             <Route path="/t/:tenantId" element={<ProtectedRoute><TenantLayout /></ProtectedRoute>}>
               <Route index element={<Navigate to="projects" replace />} />
               <Route path="projects" element={<Projects />} />
+              <Route path="users" element={<UserManagement />} />
               <Route path="project/:id" element={<ProjectWizard />} />
               <Route path="workbench/project/:projectId" element={<WorkbenchProjectDetail />} />
             </Route>
