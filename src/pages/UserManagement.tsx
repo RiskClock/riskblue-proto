@@ -142,6 +142,7 @@ type ColumnId =
   | "user"
   | "company"
   | "tenant"
+  | "role"
   | "projects"
   | "tags"
   | "type"
@@ -158,6 +159,7 @@ interface ColumnDef {
 const ALL_COLUMNS: ColumnDef[] = [
   { id: "user", label: "User" },
   { id: "tenant", label: "Company" },
+  { id: "role", label: "Role" },
   { id: "projects", label: "Projects" },
   { id: "tags", label: "Tags" },
   { id: "type", label: "Type" },
@@ -381,6 +383,10 @@ const UserManagement = () => {
     }
     return m;
   }, [tenantData]);
+  const tenantBadgesFor = (userId: string) =>
+    (membershipsByUser.get(userId) || [])
+      .map((a) => ({ name: tenantNameById.get(a.tenant_id) || "", role: a.role as string }))
+      .filter((b) => b.name);
   const tenantNamesFor = (userId: string) =>
     (membershipsByUser.get(userId) || [])
       .map((a) => tenantNameById.get(a.tenant_id) || "")
@@ -556,9 +562,12 @@ const UserManagement = () => {
   }, [columnPrefs]);
 
   // Company admins only ever see identity/status columns.
-  const SCOPED_COLUMNS: ColumnId[] = ["user", "status", "created", "last_sign_in"];
+  const SCOPED_COLUMNS: ColumnId[] = ["user", "role", "status", "created"];
   const availableColumns = useMemo(
-    () => (scopedTenantId ? ALL_COLUMNS.filter((c) => SCOPED_COLUMNS.includes(c.id)) : ALL_COLUMNS),
+    () =>
+      scopedTenantId
+        ? ALL_COLUMNS.filter((c) => SCOPED_COLUMNS.includes(c.id))
+        : ALL_COLUMNS.filter((c) => c.id !== "role"),
     [scopedTenantId]
   );
   const visibleColumns = useMemo(
@@ -775,6 +784,8 @@ const UserManagement = () => {
                             Company <SortIcon k="tenant" />
                           </TableHead>
                         );
+                      case "role":
+                        return <TableHead key={colId}>Role</TableHead>;
                       case "projects":
                         return (
                           <TableHead key={colId} className="cursor-pointer select-none text-center" onClick={() => toggleSort("projects")}>
@@ -854,17 +865,33 @@ const UserManagement = () => {
                               </TableCell>
                             );
                           case "tenant": {
-                            const names = tenantNamesFor(u.user_id);
+                            const badges = tenantBadgesFor(u.user_id);
                             return (
                               <TableCell key={colId} className={dim}>
-                                {names.length === 0 ? (
+                                {badges.length === 0 ? (
                                   <span className="text-muted-foreground">-</span>
                                 ) : (
                                   <div className="flex flex-wrap gap-1">
-                                    {names.map((n) => (
-                                      <Badge key={n} variant="outline" className="font-normal">{n}</Badge>
+                                    {badges.map((b) => (
+                                      <Badge key={b.name} variant="outline" className="font-normal">
+                                        {b.name} ({b.role})
+                                      </Badge>
                                     ))}
                                   </div>
+                                )}
+                              </TableCell>
+                            );
+                          }
+                          case "role": {
+                            const r = scopedTenantId
+                              ? (membershipsByUser.get(u.user_id) || []).find((m) => m.tenant_id === scopedTenantId)?.role
+                              : undefined;
+                            return (
+                              <TableCell key={colId} className={dim}>
+                                {r ? (
+                                  <Badge variant="outline" className="font-normal capitalize">{r}</Badge>
+                                ) : (
+                                  <span className="text-muted-foreground">-</span>
                                 )}
                               </TableCell>
                             );
