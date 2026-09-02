@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeFunction } from "@/lib/functionsError";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -9,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { TenantAssigner, type TenantOption, type TenantAssignment } from "@/components/users/TenantAssigner";
+import { TenantAssigner, type TenantOption, type TenantAssignment, type TenantRoleValue } from "@/components/users/TenantAssigner";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -82,6 +83,13 @@ import {
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { TagPicker, TagChip } from "@/components/users/TagPicker";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface TagOption {
   id: string;
@@ -310,22 +318,31 @@ const UserManagement = () => {
   const { toast } = useToast();
 
   const isInternal = !!user?.email?.toLowerCase().endsWith("@riskclock.com");
+  const { tenantId, tenant, tenants: myTenants, loading: tenantsLoading } = useTenant();
+
+  // Company admins get a company-scoped version of this page.
+  const scopedTenantId = !isInternal && tenantId ? tenantId : null;
+  const isTenantAdmin = !!scopedTenantId && tenant?.role === "admin";
+  const allowed = isInternal || isTenantAdmin;
+  const scopedTenant = scopedTenantId
+    ? { id: scopedTenantId, name: tenant?.name || myTenants.find((t) => t.id === scopedTenantId)?.name || "Company" }
+    : null;
 
   useEffect(() => {
-    if (user && !isInternal) navigate("/projects");
-  }, [user, isInternal, navigate]);
+    if (user && !tenantsLoading && !allowed) navigate("/projects");
+  }, [user, allowed, tenantsLoading, navigate]);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["admin-users"],
+    queryKey: ["admin-users", scopedTenantId],
     queryFn: async () => {
       return await invokeFunction<{
         users: UserRow[];
         companies: string[];
         tags: TagOption[];
         all_projects: ProjectOption[];
-      }>("admin-users", { body: { action: "list" } });
+      }>("admin-users", { body: { action: "list", tenant_id: scopedTenantId } });
     },
-    enabled: isInternal,
+    enabled: allowed,
   });
 
   const users = data?.users || [];
@@ -348,7 +365,7 @@ const UserManagement = () => {
         members: (members || []) as { tenant_id: string; user_id: string; role: TenantAssignment["role"] }[],
       };
     },
-    enabled: isInternal,
+    enabled: allowed,
   });
 
   const allTenants = tenantData?.tenants || [];
@@ -534,9 +551,18 @@ const UserManagement = () => {
     }
   }, [columnPrefs]);
 
+  // Company admins only ever see identity/status columns.
+  const SCOPED_COLUMNS: ColumnId[] = ["user", "status", "created", "last_sign_in"];
+  const availableColumns = useMemo(
+    () => (scopedTenantId ? ALL_COLUMNS.filter((c) => SCOPED_COLUMNS.includes(c.id)) : ALL_COLUMNS),
+    [scopedTenantId]
+  );
   const visibleColumns = useMemo(
-    () => columnPrefs.order.filter((id) => columnPrefs.visible[id]),
-    [columnPrefs]
+    () =>
+      columnPrefs.order.filter(
+        (id) => columnPrefs.visible[id] && availableColumns.some((c) => c.id === id)
+      ),
+    [columnPrefs, availableColumns]
   );
 
   // ---- modals ----
@@ -548,9 +574,10 @@ const UserManagement = () => {
   } | null>(null);
 
   // ---- mutations ----
-  const invokeAction = async (body: any) => invokeFunction("admin-users", { body });
+  const invokeAction = async (body: any) =>
+    invokeFunction("admin-users", { body: { ...body, tenant_id: scopedTenantId } });
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin-users", scopedTenantId] });
 
   const createMutation = useMutation({
     mutationFn: async ({ tenants, ...body }: any) => {
@@ -602,7 +629,7 @@ const UserManagement = () => {
   });
 
   if (!user) return null;
-  if (!isInternal) return null;
+  if (!allowed) return null;
 
   const filterCount =
     (filterCompanies.length > 0 ? 1 : 0) + (filterStatuses.length > 0 ? 1 : 0) + (filterTags.length > 0 ? 1 : 0);
@@ -612,7 +639,7 @@ const UserManagement = () => {
       <AppHeader
         title="User Management"
         infoTitle="About User Management"
-        infoContent={<p>Manage internal and external user accounts, companies, tags, credit balances, and access status across the platform.</p>}
+        infoContent={<p>{scopedTenant ? `Manage the users in ${scopedTenant.name}: invite new users, edit their name and role, and deactivate access.` : "Manage internal and external user accounts, companies, tags, credit balances, and access status across the platform."}</p>}
       />
       <main className="container mx-auto px-6 py-8 flex-1 overflow-auto flex flex-col min-h-0">
         <div className="flex items-center justify-end mb-6 shrink-0">
@@ -643,6 +670,7 @@ const UserManagement = () => {
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-80 space-y-4">
+                {!scopedTenantId && (
                 <div>
                   <Label className="text-xs uppercase text-muted-foreground">Company</Label>
                   <MultiSelectChecklist
@@ -654,6 +682,7 @@ const UserManagement = () => {
                     searchable
                   />
                 </div>
+                )}
                 <div>
                   <Label className="text-xs uppercase text-muted-foreground">Status</Label>
                   <MultiSelectChecklist
@@ -663,17 +692,19 @@ const UserManagement = () => {
                     allLabel="All statuses"
                   />
                 </div>
-                <div>
-                  <Label className="text-xs uppercase text-muted-foreground">Tags</Label>
-                  <div className="mt-1">
-                    <TagPicker
-                      selected={filterTags}
-                      onChange={setFilterTags}
-                      available={allTags}
-                      placeholder={filterTags.length > 0 ? "Edit tags" : "Any tags"}
-                    />
+                {!scopedTenantId && (
+                  <div>
+                    <Label className="text-xs uppercase text-muted-foreground">Tags</Label>
+                    <div className="mt-1">
+                      <TagPicker
+                        selected={filterTags}
+                        onChange={setFilterTags}
+                        available={allTags}
+                        placeholder={filterTags.length > 0 ? "Edit tags" : "Any tags"}
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
               </PopoverContent>
             </Popover>
 
@@ -779,7 +810,7 @@ const UserManagement = () => {
                     }
                   })}
                   <TableHead className="w-[60px] text-center">
-                    <ColumnEditDropdown columnPrefs={columnPrefs} setColumnPrefs={setColumnPrefs} />
+                    <ColumnEditDropdown columnPrefs={columnPrefs} setColumnPrefs={setColumnPrefs} columns={availableColumns} />
                   </TableHead>
                 </TableRow>
               </TableHeader>
@@ -916,10 +947,12 @@ const UserManagement = () => {
                               <Pencil className="h-4 w-4 mr-2" />
                               Edit
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setConfirmAction({ type: "reset", user: u })}>
-                              <KeyRound className="h-4 w-4 mr-2" />
-                              Reset Password
-                            </DropdownMenuItem>
+                            {isInternal && (
+                              <DropdownMenuItem onClick={() => setConfirmAction({ type: "reset", user: u })}>
+                                <KeyRound className="h-4 w-4 mr-2" />
+                                Reset Password
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuSeparator />
                             {u.is_active ? (
                               <DropdownMenuItem
@@ -960,6 +993,7 @@ const UserManagement = () => {
         availableTags={allTags}
         allProjects={allProjects}
         allTenants={allTenants}
+        scopedTenant={scopedTenant}
         onSubmit={(payload) => createMutation.mutate({ action: "create", ...payload })}
         loading={createMutation.isPending}
       />
@@ -971,6 +1005,7 @@ const UserManagement = () => {
         availableTags={allTags}
         allProjects={allProjects}
         allTenants={allTenants}
+        scopedTenant={scopedTenant}
         initialTenants={editing ? membershipsByUser.get(editing.user_id) || [] : []}
         onSubmit={(payload) =>
           updateMutation.mutate({ action: "update", user_id: editing!.user_id, ...payload })
@@ -1222,78 +1257,65 @@ function CompanyCombobox({
 function CreateUserDialog({
   open,
   onOpenChange,
-  companies,
   availableTags,
   allProjects,
   allTenants,
+  scopedTenant,
   onSubmit,
   loading,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  companies: string[];
+  companies?: string[];
   availableTags: TagOption[];
   allProjects: ProjectOption[];
   allTenants: TenantOption[];
+  scopedTenant: { id: string; name: string } | null;
   onSubmit: (p: {
     email: string;
     name: string;
     password: string | null;
-    is_wmsv: boolean;
-    company: string | null;
     tags: string[];
-    credits: number;
     send_welcome_email: boolean;
     projects: { project_id: string; role: "admin" | "contributor" }[];
     tenants: TenantAssignment[];
+    tenant_role?: TenantRoleValue;
   }) => void;
   loading: boolean;
 }) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
-  const [isWmsv, setIsWmsv] = useState(false);
-  const [company, setCompany] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
-  const [credits, setCredits] = useState<string>("20");
   const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true);
   const [projects, setProjects] = useState<{ project_id: string; role: "admin" | "contributor" }[]>([]);
   const [tenantAssignments, setTenantAssignments] = useState<TenantAssignment[]>([]);
+  const [scopedRole, setScopedRole] = useState<TenantRoleValue>("member");
 
   useEffect(() => {
     if (open) {
       setEmail("");
       setName("");
       setPassword("");
-      setIsWmsv(false);
-      setCompany(null);
       setTags([]);
-      setCredits("20");
       setSendWelcomeEmail(true);
       setProjects([]);
       setTenantAssignments([]);
+      setScopedRole("member");
     }
   }, [open]);
 
-  const creditsNum = Math.max(0, Math.floor(Number(credits) || 0));
-  const creditsValid = credits.trim() !== "" && Number.isFinite(Number(credits)) && Number(credits) >= 0;
-
-  const companyRequired = isWmsv;
-  const companyValid = !companyRequired || !!(company && company.trim());
-
   const submit = () => {
-    if (!email.trim() || !name.trim() || !creditsValid || !companyValid) return;
+    if (!email.trim() || !name.trim()) return;
     onSubmit({
       email: email.trim(),
       name: name.trim(),
       password: password.trim() || null,
-      is_wmsv: isWmsv,
-      company,
-      tags,
-      credits: creditsNum,
+      tags: scopedTenant ? [] : tags,
       send_welcome_email: sendWelcomeEmail,
-      projects,
-      tenants: tenantAssignments,
+      projects: scopedTenant ? [] : projects,
+      tenants: scopedTenant ? [{ tenant_id: scopedTenant.id, role: scopedRole }] : tenantAssignments,
+      ...(scopedTenant ? { tenant_role: scopedRole } : {}),
     });
   };
 
@@ -1301,10 +1323,9 @@ function CreateUserDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] flex flex-col gap-0 p-0 overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
-          <DialogTitle>Create new user</DialogTitle>
+          <DialogTitle>{scopedTenant ? `Invite user to ${scopedTenant.name}` : "Create new user"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 flex-1 overflow-y-auto px-6 py-4">
-
           <div>
             <Label>Email</Label>
             <Input
@@ -1349,44 +1370,33 @@ function CreateUserDialog({
               </Label>
             </div>
           </div>
-          <div>
-            <Label>Credits</Label>
-            <Input
-              type="number"
-              min={0}
-              step={1}
-              value={credits}
-              onChange={(e) => setCredits(e.target.value)}
-              className="mt-1"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Checkbox id="wmsv" checked={isWmsv} onCheckedChange={(v) => setIsWmsv(!!v)} />
-            <Label htmlFor="wmsv" className="cursor-pointer font-normal">
-              WMSV (Water Mitigation Solution Vendor) account
-            </Label>
-          </div>
-          <div>
-            <Label>Company{companyRequired ? "" : " (optional)"}</Label>
-            <CompanyCombobox value={company} onChange={setCompany} companies={companies} />
-            {companyRequired && !companyValid && (
-              <p className="text-xs text-destructive mt-1">Company is required for WMSV accounts</p>
-            )}
-          </div>
 
-          <TenantAssigner tenants={allTenants} value={tenantAssignments} onChange={setTenantAssignments} />
-
-          <div>
-            <Label>Tags (optional)</Label>
-            <div className="mt-1">
-              <TagPicker selected={tags} onChange={setTags} available={availableTags} />
+          {scopedTenant ? (
+            <div>
+              <Label>Role</Label>
+              <Select value={scopedRole} onValueChange={(v) => setScopedRole(v as TenantRoleValue)}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="member">Member</SelectItem>
+                  <SelectItem value="guest">Guest</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          </div>
-          <ProjectsAssigner
-            allProjects={allProjects}
-            value={projects}
-            onChange={setProjects}
-          />
+          ) : (
+            <>
+              <TenantAssigner tenants={allTenants} value={tenantAssignments} onChange={setTenantAssignments} />
+              <div>
+                <Label>Tags (optional)</Label>
+                <div className="mt-1">
+                  <TagPicker selected={tags} onChange={setTags} available={availableTags} />
+                </div>
+              </div>
+              <ProjectsAssigner allProjects={allProjects} value={projects} onChange={setProjects} />
+            </>
+          )}
         </div>
         <DialogFooter className="px-6 py-4 border-t shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
@@ -1394,9 +1404,9 @@ function CreateUserDialog({
           </Button>
           <Button
             onClick={submit}
-            disabled={loading || !email.trim() || !name.trim() || !creditsValid || !companyValid || (password.length > 0 && password.length < 6)}
+            disabled={loading || !email.trim() || !name.trim() || (password.length > 0 && password.length < 6)}
           >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create user"}
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : scopedTenant ? "Invite user" : "Create user"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1409,27 +1419,25 @@ function CreateUserDialog({
 function EditUserDialog({
   user,
   onOpenChange,
-  companies,
   availableTags,
   allProjects,
   allTenants,
+  scopedTenant,
   initialTenants,
   onSubmit,
   loading,
 }: {
   user: UserRow | null;
   onOpenChange: (o: boolean) => void;
-  companies: string[];
+  companies?: string[];
   availableTags: TagOption[];
   allProjects: ProjectOption[];
   allTenants: TenantOption[];
+  scopedTenant: { id: string; name: string } | null;
   initialTenants: TenantAssignment[];
   onSubmit: (p: {
     name: string;
-    is_wmsv: boolean;
-    company: string | null;
     tags: string[];
-    credits: number | null;
     password: string | null;
     projects: { project_id: string; role: "admin" | "contributor" }[];
     tenants: TenantAssignment[];
@@ -1437,23 +1445,18 @@ function EditUserDialog({
   loading: boolean;
 }) {
   const [name, setName] = useState("");
-  const [isWmsv, setIsWmsv] = useState(false);
-  const [company, setCompany] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
-  const [credits, setCredits] = useState<string>("");
   const [password, setPassword] = useState("");
   const [projects, setProjects] = useState<{ project_id: string; role: "admin" | "contributor" }[]>([]);
   const [tenantAssignments, setTenantAssignments] = useState<TenantAssignment[]>([]);
+  const [scopedRole, setScopedRole] = useState<TenantRoleValue>("member");
 
   const initialTenantKey = initialTenants.map((t) => `${t.tenant_id}:${t.role}`).join("|");
 
   useEffect(() => {
     if (user) {
       setName(user.display_name || "");
-      setIsWmsv(user.account_type === "wmsv");
-      setCompany(user.company || null);
       setTags(user.tags.map((t) => t.name));
-      setCredits(String(user.credits_balance ?? 0));
       setPassword("");
       setProjects(
         user.projects.map((p) => ({
@@ -1462,11 +1465,13 @@ function EditUserDialog({
         })),
       );
       setTenantAssignments(initialTenants);
+      setScopedRole(
+        (initialTenants.find((t) => t.tenant_id === scopedTenant?.id)?.role as TenantRoleValue) || "member",
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, initialTenantKey]);
+  }, [user, initialTenantKey, scopedTenant?.id]);
 
-  const creditsValid = credits.trim() === "" || (Number.isFinite(Number(credits)) && Number(credits) >= 0);
   const pwdValid = password.length === 0 || password.length >= 6;
 
   return (
@@ -1477,60 +1482,52 @@ function EditUserDialog({
           <DialogDescription>{user?.email}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 flex-1 overflow-y-auto px-6 py-4">
-
           <div>
             <Label>Name</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1" />
           </div>
-          <div>
-            <Label>Credits</Label>
-            <Input
-              type="number"
-              min={0}
-              step={1}
-              value={credits}
-              onChange={(e) => setCredits(e.target.value)}
-              className="mt-1"
-            />
-          </div>
-          <div>
-            <Label>Set new password (optional)</Label>
-            <Input
-              type="text"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Leave empty to keep current password"
-              className="mt-1"
-            />
-            {password.length > 0 && password.length < 6 && (
-              <p className="text-xs text-destructive mt-1">Must be at least 6 characters</p>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Checkbox id="edit-wmsv" checked={isWmsv} onCheckedChange={(v) => setIsWmsv(!!v)} />
-            <Label htmlFor="edit-wmsv" className="cursor-pointer font-normal">
-              WMSV (Water Mitigation Solution Vendor) account
-            </Label>
-          </div>
-          <div>
-            <Label>Company</Label>
-            <CompanyCombobox value={company} onChange={setCompany} companies={companies} />
-          </div>
-          <TenantAssigner tenants={allTenants} value={tenantAssignments} onChange={setTenantAssignments} />
-          <div>
-            <Label>Tags</Label>
-            <div className="mt-1">
-              <TagPicker selected={tags} onChange={setTags} available={availableTags} />
+
+          {scopedTenant ? (
+            <div>
+              <Label>Role</Label>
+              <Select value={scopedRole} onValueChange={(v) => setScopedRole(v as TenantRoleValue)}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="member">Member</SelectItem>
+                  <SelectItem value="guest">Guest</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          </div>
-          <ProjectsAssigner
-            allProjects={allProjects}
-            value={projects}
-            onChange={setProjects}
-          />
+          ) : (
+            <>
+              <div>
+                <Label>Set new password (optional)</Label>
+                <Input
+                  type="text"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Leave empty to keep current password"
+                  className="mt-1"
+                />
+                {password.length > 0 && password.length < 6 && (
+                  <p className="text-xs text-destructive mt-1">Must be at least 6 characters</p>
+                )}
+              </div>
+              <TenantAssigner tenants={allTenants} value={tenantAssignments} onChange={setTenantAssignments} />
+              <div>
+                <Label>Tags</Label>
+                <div className="mt-1">
+                  <TagPicker selected={tags} onChange={setTags} available={availableTags} />
+                </div>
+              </div>
+              <ProjectsAssigner allProjects={allProjects} value={projects} onChange={setProjects} />
+            </>
+          )}
         </div>
         <DialogFooter className="px-6 py-4 border-t shrink-0">
-
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Cancel
           </Button>
@@ -1538,16 +1535,18 @@ function EditUserDialog({
             onClick={() =>
               onSubmit({
                 name: name.trim(),
-                is_wmsv: isWmsv,
-                company,
-                tags,
-                credits: credits.trim() === "" ? null : Math.max(0, Math.floor(Number(credits))),
-                password: password.length > 0 ? password : null,
+                tags: scopedTenant ? tags : tags,
+                password: scopedTenant ? null : password.length > 0 ? password : null,
                 projects,
-                tenants: tenantAssignments,
+                tenants: scopedTenant
+                  ? [
+                      ...tenantAssignments.filter((t) => t.tenant_id !== scopedTenant.id),
+                      { tenant_id: scopedTenant.id, role: scopedRole },
+                    ]
+                  : tenantAssignments,
               })
             }
-            disabled={loading || !name.trim() || !creditsValid || !pwdValid}
+            disabled={loading || !name.trim() || !pwdValid}
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
           </Button>
@@ -1677,9 +1676,11 @@ function ProjectsAssigner({
 function ColumnEditDropdown({
   columnPrefs,
   setColumnPrefs,
+  columns = ALL_COLUMNS,
 }: {
   columnPrefs: ColumnPrefs;
   setColumnPrefs: React.Dispatch<React.SetStateAction<ColumnPrefs>>;
+  columns?: typeof ALL_COLUMNS;
 }) {
   const [open, setOpen] = useState(false);
   const [dragId, setDragId] = useState<ColumnId | null>(null);
@@ -1728,7 +1729,9 @@ function ColumnEditDropdown({
           Show & reorder columns
         </div>
         <div className="space-y-0.5">
-          {columnPrefs.order.map((id) => {
+          {columnPrefs.order
+            .filter((id) => columns.some((c) => c.id === id))
+            .map((id) => {
             const isUser = id === "user";
             const isDraggingOver = overId === id && dragId && dragId !== id;
             return (

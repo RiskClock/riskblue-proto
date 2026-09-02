@@ -126,14 +126,30 @@ async function logAdminEvent(
 
 // ---------- Actions ----------
 
-async function actionList() {
-  const authUsers = await listAllAuthUsers();
+/** Active member user_ids of a tenant. */
+async function tenantMemberIds(tenantId: string): Promise<Set<string>> {
+  const { data } = await adminClient
+    .from("tenant_members")
+    .select("user_id, status")
+    .eq("tenant_id", tenantId);
+  return new Set(
+    (data || [])
+      .filter((m: any) => (m.status || "active") === "active")
+      .map((m: any) => m.user_id as string),
+  );
+}
+
+async function actionList(scopeTenantId: string | null) {
+  const memberIds = scopeTenantId ? await tenantMemberIds(scopeTenantId) : null;
+  const allAuthUsers = await listAllAuthUsers();
+  const authUsers = memberIds ? allAuthUsers.filter((u) => memberIds.has(u.id)) : allAuthUsers;
   const { data: profiles, error: pErr } = await adminClient
     .from("profiles")
     .select("user_id, display_name, account_type, company, credits_balance, is_active, deactivated_at, created_at");
   if (pErr) throw pErr;
 
   const profileMap = new Map((profiles || []).map((p) => [p.user_id, p]));
+
 
   // Projects index (all projects + per-user role assignments)
   const { data: allProjectsData } = await adminClient
@@ -306,15 +322,20 @@ async function setUserTags(userId: string, tagNames: string[], assignedBy: strin
   if (error) throw error;
 }
 
-async function actionCreate(body: any, actor: { id: string | null; email: string | null }) {
+async function actionCreate(
+  body: any,
+  actor: { id: string | null; email: string | null },
+  scopeTenantId: string | null = null,
+) {
   const actorId = actor.id;
   const email = String(body.email || "").trim().toLowerCase();
   const name = String(body.name || "").trim();
   const password = body.password ? String(body.password) : null;
-  const isWmsv = !!body.is_wmsv;
+  // Every account is a WMSV account now; the toggle was removed from the UI.
+  const isWmsv = body.is_wmsv === undefined ? true : !!body.is_wmsv;
   const company = body.company ? String(body.company).trim() : null;
   const tagNames: string[] = Array.isArray(body.tags) ? body.tags : [];
-  const credits = Number.isFinite(Number(body.credits)) ? Math.max(0, Math.floor(Number(body.credits))) : 20;
+  const credits = Number.isFinite(Number(body.credits)) ? Math.max(0, Math.floor(Number(body.credits))) : 0;
   // Default true to preserve prior behaviour for any caller not passing the flag.
   const sendWelcomeEmail = body.send_welcome_email === undefined ? true : !!body.send_welcome_email;
 
@@ -383,6 +404,20 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
     await setUserProjects(created.user.id, projectAssignments);
   } catch (e) {
     console.error("setUserProjects create err:", e);
+  }
+
+  // Company admins can only ever create users inside their own company.
+  if (scopeTenantId) {
+    const role = ["admin", "member", "guest"].includes(String(body.tenant_role))
+      ? String(body.tenant_role)
+      : "member";
+    const { error: tmErr } = await adminClient
+      .from("tenant_members")
+      .upsert(
+        { tenant_id: scopeTenantId, user_id: created.user.id, role, status: "active", invited_by: actorId },
+        { onConflict: "tenant_id,user_id" },
+      );
+    if (tmErr) console.error("tenant member upsert err:", tmErr);
   }
 
   // Send email
@@ -654,17 +689,53 @@ Deno.serve(async (req) => {
   try {
     const user = await getAuthedUser(req);
     if (!user) return json({ success: false, error: "Unauthorized" }, 401);
-    if (!isInternal(user.email)) return json({ success: false, error: "Forbidden" }, 403);
 
     const body = await req.json().catch(() => ({}));
     const action = String(body.action || "");
 
+    // Internal staff have unrestricted access. Everyone else must be an active
+    // admin of the company they claim, and is limited to that company's users.
+    let scopeTenantId: string | null = null;
+    if (!isInternal(user.email)) {
+      const tenantId = String(body.tenant_id || "");
+      if (!tenantId) return json({ success: false, error: "Forbidden" }, 403);
+      const { data: membership } = await adminClient
+        .from("tenant_members")
+        .select("role, status")
+        .eq("tenant_id", tenantId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (!membership || membership.role !== "admin" || (membership.status || "active") !== "active") {
+        return json({ success: false, error: "Forbidden" }, 403);
+      }
+      scopeTenantId = tenantId;
+
+      // Company admins may not touch users outside their company, and may only
+      // perform the member-management actions.
+      const allowed = ["list", "create", "update", "deactivate", "reactivate"];
+      if (!allowed.includes(action)) return json({ success: false, error: "Forbidden" }, 403);
+      if (action !== "list" && action !== "create") {
+        const targetId = String(body.user_id || "");
+        const members = await tenantMemberIds(scopeTenantId);
+        if (!targetId || !members.has(targetId)) {
+          return json({ success: false, error: "Forbidden" }, 403);
+        }
+      }
+      // Strip privileged fields regardless of what the client sent.
+      delete body.credits;
+      delete body.company;
+      delete body.is_wmsv;
+      delete body.tags;
+      delete body.projects;
+      delete body.password;
+    }
+
     const actor = { id: user.id, email: user.email ?? null };
     switch (action) {
       case "list":
-        return json({ success: true, ...(await actionList()) });
+        return json({ success: true, ...(await actionList(scopeTenantId)) });
       case "create":
-        return await actionCreate(body, actor);
+        return await actionCreate(body, actor, scopeTenantId);
       case "update":
         return await actionUpdate(body, actor);
       case "deactivate":
@@ -681,3 +752,4 @@ Deno.serve(async (req) => {
     return json({ success: false, error: e?.message || "Internal error" }, 500);
   }
 });
+
