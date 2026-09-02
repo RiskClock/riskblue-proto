@@ -126,14 +126,30 @@ async function logAdminEvent(
 
 // ---------- Actions ----------
 
-async function actionList() {
-  const authUsers = await listAllAuthUsers();
+/** Active member user_ids of a tenant. */
+async function tenantMemberIds(tenantId: string): Promise<Set<string>> {
+  const { data } = await adminClient
+    .from("tenant_members")
+    .select("user_id, status")
+    .eq("tenant_id", tenantId);
+  return new Set(
+    (data || [])
+      .filter((m: any) => (m.status || "active") === "active")
+      .map((m: any) => m.user_id as string),
+  );
+}
+
+async function actionList(scopeTenantId: string | null) {
+  const memberIds = scopeTenantId ? await tenantMemberIds(scopeTenantId) : null;
+  const allAuthUsers = await listAllAuthUsers();
+  const authUsers = memberIds ? allAuthUsers.filter((u) => memberIds.has(u.id)) : allAuthUsers;
   const { data: profiles, error: pErr } = await adminClient
     .from("profiles")
     .select("user_id, display_name, account_type, company, credits_balance, is_active, deactivated_at, created_at");
   if (pErr) throw pErr;
 
   const profileMap = new Map((profiles || []).map((p) => [p.user_id, p]));
+
 
   // Projects index (all projects + per-user role assignments)
   const { data: allProjectsData } = await adminClient
