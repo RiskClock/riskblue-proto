@@ -625,11 +625,35 @@ const CompanyDialog = ({
   const removeRow = (userId: string) =>
     setRows((prev) => prev.filter((r) => r.user_id !== userId));
 
+  const duplicateName = useMemo(() => {
+    const key = name.trim().toLowerCase();
+    if (!key) return false;
+    return allTenants.some((t) => t.id !== tenant?.id && t.name.trim().toLowerCase() === key);
+  }, [name, allTenants, tenant?.id]);
+
+  const handleDelete = async () => {
+    if (!tenant) return;
+    setDeleting(true);
+    try {
+      const { error } = await supabase.rpc("delete_tenant" as any, { p_tenant_id: tenant.id });
+      if (error) throw error;
+      toast({ title: "Company deleted", description: "Its projects were kept and are no longer linked to a company." });
+      setConfirmDelete(false);
+      onChanged();
+      onOpenChange(false);
+    } catch (e) {
+      toast({ title: "Error", description: getUserFriendlyError(e), variant: "destructive" });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleSave = async () => {
     const trimmedName = name.trim();
-    if (!trimmedName) return;
+    if (!trimmedName || duplicateName) return;
     setSaving(true);
     try {
+
       const targetCredits = Math.max(0, parseInt(credits || "0", 10) || 0);
       let tenantId = tenant?.id ?? null;
 
