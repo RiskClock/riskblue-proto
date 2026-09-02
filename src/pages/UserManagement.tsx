@@ -1712,9 +1712,11 @@ function ProjectsAssigner({
 function ColumnEditDropdown({
   columnPrefs,
   setColumnPrefs,
+  columns = ALL_COLUMNS,
 }: {
   columnPrefs: ColumnPrefs;
   setColumnPrefs: React.Dispatch<React.SetStateAction<ColumnPrefs>>;
+  columns?: typeof ALL_COLUMNS;
 }) {
   const [open, setOpen] = useState(false);
   const [dragId, setDragId] = useState<ColumnId | null>(null);
@@ -1763,7 +1765,9 @@ function ColumnEditDropdown({
           Show & reorder columns
         </div>
         <div className="space-y-0.5">
-          {columnPrefs.order.map((id) => {
+          {columnPrefs.order
+            .filter((id) => columns.some((c) => c.id === id))
+            .map((id) => {
             const isUser = id === "user";
             const isDraggingOver = overId === id && dragId && dragId !== id;
             return (
