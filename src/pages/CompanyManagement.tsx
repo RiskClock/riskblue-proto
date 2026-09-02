@@ -361,6 +361,7 @@ const CompanyManagement = () => {
       {createOpen && (
         <CompanyDialog
           tenant={null}
+          allTenants={tenants}
           open={createOpen}
           onOpenChange={setCreateOpen}
           onChanged={refresh}
@@ -371,12 +372,14 @@ const CompanyManagement = () => {
       {detail && (
         <CompanyDialog
           tenant={detail}
+          allTenants={tenants}
           open={!!detailId}
           onOpenChange={(o) => !o && setDetailId(null)}
           onChanged={refresh}
           onOpenWorkspace={(id) => navigate(`/t/${id}/projects`)}
         />
       )}
+
     </div>
   );
 };
