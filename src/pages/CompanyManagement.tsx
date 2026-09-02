@@ -860,22 +860,47 @@ const CompanyDialog = ({
         </div>
 
         <DialogFooter className="px-6 py-4 border-t shrink-0 sm:justify-between">
-          <div>
+          <div className="flex items-center gap-2">
             {!isNew && (
-              <Button variant="outline" onClick={() => onOpenWorkspace(tenant!.id)} disabled={saving}>
-                <ExternalLink className="h-4 w-4 mr-2" /> Open workspace
-              </Button>
+              <>
+                <Button variant="outline" onClick={() => onOpenWorkspace(tenant!.id)} disabled={saving || deleting}>
+                  <ExternalLink className="h-4 w-4 mr-2" /> Open workspace
+                </Button>
+                <Button variant="destructive" onClick={() => setConfirmDelete(true)} disabled={saving || deleting}>
+                  <Trash2 className="h-4 w-4 mr-2" /> Delete
+                </Button>
+              </>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saving || !name.trim()}>
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving || deleting}>Cancel</Button>
+            <Button onClick={handleSave} disabled={saving || deleting || !name.trim() || duplicateName}>
               {saving && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
               {isNew ? "Create" : "Save"}
             </Button>
           </div>
         </DialogFooter>
+
+        <Dialog open={confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(false)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Delete {tenant?.name}?</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              This permanently removes the company, its members and its invitations. Its projects are
+              kept but will no longer belong to any company. This cannot be undone.
+            </p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConfirmDelete(false)} disabled={deleting}>Cancel</Button>
+              <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+                {deleting && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+                Delete company
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
+
     </Dialog>
   );
 };
