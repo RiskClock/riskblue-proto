@@ -501,7 +501,7 @@ const UserManagement = () => {
       return 0;
     });
     return rows;
-  }, [users, search, filterCompanies, filterStatuses, filterTags, sortKey, sortDir]);
+  }, [users, search, filterCompanies, filterStatuses, filterTags, sortKey, sortDir, membershipsByUser, tenantNameById]);
 
   const toggleSort = (key: SortKey) => {
     setPrefs((p) => {
