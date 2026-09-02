@@ -298,10 +298,10 @@ const CompanyManagement = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
       <AppHeader title="Company Management" />
-      <div className="container mx-auto px-6 py-6 space-y-4">
-        <div className="flex items-center justify-end gap-2">
+      <main className="container mx-auto px-6 py-8 flex-1 overflow-auto flex flex-col min-h-0">
+        <div className="flex items-center justify-end gap-2 mb-6 shrink-0">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -322,8 +322,8 @@ const CompanyManagement = () => {
           </Button>
         </div>
 
-        <div className="rounded-md border bg-card">
-          <Table>
+        <div className="rounded-md border bg-card flex-1 min-h-0 overflow-auto [&>div]:h-full">
+          <Table className="[&_td]:py-2 [&_th]:py-2 [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-card [&_thead_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
             <TableHeader>
               <TableRow>
                 {visibleColumns.map((c) => headerFor(c))}
@@ -356,7 +356,8 @@ const CompanyManagement = () => {
             </TableBody>
           </Table>
         </div>
-      </div>
+      </main>
+
 
       {createOpen && (
         <CompanyDialog
