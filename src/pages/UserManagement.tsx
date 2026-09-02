@@ -123,6 +123,7 @@ interface UserRow {
   has_profile: boolean;
   tags: TagOption[];
   projects: ProjectAssignment[];
+  projects_created_count: number;
 }
 
 type SortKey =
