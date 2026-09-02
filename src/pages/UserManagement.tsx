@@ -900,8 +900,8 @@ const UserManagement = () => {
                           case "projects":
                             return (
                               <TableCell key={colId} className={cn("text-center tabular-nums", dim)}>
-                                {u.projects.length > 0 ? (
-                                  u.projects.length
+                                {u.projects_created_count > 0 ? (
+                                  u.projects_created_count
                                 ) : (
                                   <span className="text-muted-foreground">-</span>
                                 )}
