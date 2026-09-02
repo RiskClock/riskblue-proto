@@ -495,8 +495,8 @@ const UserManagement = () => {
           vb = b.credits_balance ?? 0;
           break;
         case "projects":
-          va = a.projects.length;
-          vb = b.projects.length;
+          va = a.projects_created_count ?? 0;
+          vb = b.projects_created_count ?? 0;
           break;
         case "created_at":
         default:
