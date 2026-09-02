@@ -363,7 +363,8 @@ const UserManagement = () => {
     enabled: allowed,
   });
 
-  const users = data?.users || [];
+  const baseUsers = data?.users || [];
+  const invitations = (data?.invitations || []) as InvitationRow[];
   const companies = data?.companies || [];
   const allTags = data?.tags || [];
   const allProjects = data?.all_projects || [];
@@ -409,6 +410,41 @@ const UserManagement = () => {
       .map((a) => tenantNameById.get(a.tenant_id) || "")
       .filter(Boolean)
       .sort();
+
+  /** Outstanding invitations render as Pending rows alongside real members. */
+  const users: UserRow[] = useMemo(
+    () => [
+      ...baseUsers,
+      ...invitations.map((i) => ({
+        user_id: `invite:${i.id}`,
+        email: i.email,
+        display_name: null,
+        account_type: "wmsv",
+        company: null,
+        credits_balance: 0,
+        is_active: true,
+        deactivated_at: null,
+        created_at: i.created_at,
+        last_sign_in_at: null,
+        email_confirmed_at: null,
+        banned_until: null,
+        has_profile: false,
+        tags: [],
+        projects: [],
+        projects_created_count: 0,
+        invitation_id: i.id,
+        invited_role: i.role,
+      })),
+    ],
+    [baseUsers, invitations],
+  );
+
+  const roleFor = (u: UserRow): string | null => {
+    if (u.invited_role) return u.invited_role;
+    const ms = membershipsByUser.get(u.user_id) || [];
+    if (scopedTenantId) return ms.find((m) => m.tenant_id === scopedTenantId)?.role ?? null;
+    return ms[0]?.role ?? null;
+  };
 
   /** Reconciles tenant_members rows for a user with the desired assignments. */
   const syncTenantMemberships = async (userId: string, desired: TenantAssignment[]) => {
@@ -462,6 +498,13 @@ const UserManagement = () => {
       const set = new Set(filterStatuses);
       rows = rows.filter((u) => set.has(getStatus(u)));
     }
+    if (filterRoles.length > 0) {
+      const set = new Set(filterRoles);
+      rows = rows.filter((u) => {
+        const r = roleFor(u);
+        return !!r && set.has(r);
+      });
+    }
     if (filterTags.length > 0) {
       const wanted = new Set(filterTags.map((t) => t.toLowerCase()));
       rows = rows.filter((u) =>
@@ -475,6 +518,8 @@ const UserManagement = () => {
           (u.display_name || "").toLowerCase().includes(q) ||
           (u.email || "").toLowerCase().includes(q) ||
           tenantNamesFor(u.user_id).some((n) => n.toLowerCase().includes(q)) ||
+          getStatus(u).includes(q) ||
+          (roleFor(u) || "").includes(q) ||
           u.tags.some((t) => t.name.toLowerCase().includes(q))
       );
     }
@@ -525,7 +570,7 @@ const UserManagement = () => {
       return 0;
     });
     return rows;
-  }, [users, search, filterCompanies, filterStatuses, filterTags, sortKey, sortDir, membershipsByUser, tenantNameById]);
+  }, [users, search, filterCompanies, filterStatuses, filterTags, filterRoles, sortKey, sortDir, membershipsByUser, tenantNameById]);
 
   const toggleSort = (key: SortKey) => {
     setPrefs((p) => {
@@ -730,6 +775,19 @@ const UserManagement = () => {
                     selected={filterStatuses}
                     onChange={setFilterStatuses}
                     allLabel="All statuses"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs uppercase text-muted-foreground">Role</Label>
+                  <MultiSelectChecklist
+                    options={[
+                      { value: "admin", label: "Admin" },
+                      { value: "member", label: "Member" },
+                      { value: "guest", label: "Guest" },
+                    ]}
+                    selected={filterRoles}
+                    onChange={setFilterRoles}
+                    allLabel="All roles"
                   />
                 </div>
                 {!scopedTenantId && (
