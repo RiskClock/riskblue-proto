@@ -124,7 +124,97 @@ async function logAdminEvent(
   }
 }
 
+// ---------- Company invitations ----------
+
+/** Creates (or replaces) a pending company invitation and emails the invitee. */
+async function createTenantInvitation(
+  tenantId: string,
+  email: string,
+  role: string,
+  actor: { id: string | null; email: string | null },
+) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const { data: tenant } = await adminClient
+    .from("tenants")
+    .select("id, name")
+    .eq("id", tenantId)
+    .maybeSingle();
+  if (!tenant) throw new Error("Company not found");
+
+  await adminClient
+    .from("tenant_invitations")
+    .delete()
+    .eq("tenant_id", tenantId)
+    .eq("email", normalizedEmail)
+    .is("accepted_at", null);
+
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: invitation, error } = await adminClient
+    .from("tenant_invitations")
+    .insert({
+      tenant_id: tenantId,
+      email: normalizedEmail,
+      role,
+      invited_by: actor.id,
+      expires_at: expiresAt,
+    })
+    .select("id, token")
+    .single();
+  if (error) throw error;
+
+  const link = `${APP_URL}/accept-company-invite?token=${invitation.token}`;
+  const roleDisplay = role.charAt(0).toUpperCase() + role.slice(1);
+  const html = emailLayout(
+    "Company Invitation",
+    [
+      renderGreeting("Hi,"),
+      renderParagraph(
+        `${sharedEscapeHtml(actor.email || "A teammate")} has invited you to join ${sharedEscapeHtml(
+          tenant.name,
+        )} on RiskBlue as a ${sharedEscapeHtml(roleDisplay)}.`,
+      ),
+      renderNote("This invitation will expire in 7 days."),
+    ].join(""),
+    { label: "Accept Invitation", href: link },
+  );
+  await sendEmail({
+    to: normalizedEmail,
+    subject: `You've been invited to join ${tenant.name}`,
+    html,
+  });
+  return invitation.id as string;
+}
+
+async function actionResendInvite(body: any, actor: { id: string | null; email: string | null }, scopeTenantId: string | null) {
+  const id = String(body.invitation_id || "");
+  if (!id) return json({ success: false, error: "invitation_id required" }, 400);
+  const { data: inv } = await adminClient
+    .from("tenant_invitations")
+    .select("id, tenant_id, email, role")
+    .eq("id", id)
+    .maybeSingle();
+  if (!inv) return json({ success: false, error: "Invitation not found" }, 404);
+  if (scopeTenantId && inv.tenant_id !== scopeTenantId) return json({ success: false, error: "Forbidden" }, 403);
+  await createTenantInvitation(inv.tenant_id, inv.email, String(inv.role), actor);
+  return json({ success: true });
+}
+
+async function actionCancelInvite(body: any, _actor: unknown, scopeTenantId: string | null) {
+  const id = String(body.invitation_id || "");
+  if (!id) return json({ success: false, error: "invitation_id required" }, 400);
+  const { data: inv } = await adminClient
+    .from("tenant_invitations")
+    .select("id, tenant_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!inv) return json({ success: true });
+  if (scopeTenantId && inv.tenant_id !== scopeTenantId) return json({ success: false, error: "Forbidden" }, 403);
+  await adminClient.from("tenant_invitations").delete().eq("id", id);
+  return json({ success: true });
+}
+
 // ---------- Actions ----------
+
 
 /** Active member user_ids of a tenant. */
 async function tenantMemberIds(tenantId: string): Promise<Set<string>> {
@@ -237,7 +327,23 @@ async function actionList(scopeTenantId: string | null) {
     )
   ).sort((a, b) => a.localeCompare(b));
 
-  return { users, companies, tags: allTags, all_projects: allProjects };
+  // Outstanding company invitations that have no membership yet (company view only).
+  let invitations: any[] = [];
+  if (scopeTenantId) {
+    const { data: invs } = await adminClient
+      .from("tenant_invitations")
+      .select("id, email, role, created_at, expires_at")
+      .eq("tenant_id", scopeTenantId)
+      .is("accepted_at", null)
+      .order("created_at", { ascending: false });
+    const memberEmails = new Set(
+      authUsers.map((u) => (u.email || "").toLowerCase()),
+    );
+    invitations = (invs || []).filter((i: any) => !memberEmails.has(String(i.email).toLowerCase()));
+  }
+
+  return { users, companies, tags: allTags, all_projects: allProjects, invitations };
+
 }
 
 async function setUserProjects(
@@ -352,7 +458,38 @@ async function actionCreate(
 
   // Check existing
   const existing = await findAuthUserByEmail(email);
-  if (existing) return json({ success: false, error: "A user with this email already exists" }, 409);
+  if (existing) {
+    // Someone who already has a RiskBlue account can still be invited into a
+    // company: we create a pending company invitation instead of an account.
+    const inviteTenantId = scopeTenantId || (body.tenant_id ? String(body.tenant_id) : null);
+    if (!inviteTenantId) {
+      return json({ success: false, error: "A user with this email already exists" }, 409);
+    }
+    const { data: member } = await adminClient
+      .from("tenant_members")
+      .select("id, status")
+      .eq("tenant_id", inviteTenantId)
+      .eq("user_id", existing.id)
+      .maybeSingle();
+    if (member && (member.status || "active") === "active") {
+      return json({ success: false, error: "That person is already a member of this company" }, 409);
+    }
+    const role = ["admin", "member", "guest"].includes(String(body.tenant_role))
+      ? String(body.tenant_role)
+      : "member";
+    try {
+      await createTenantInvitation(inviteTenantId, email, role, actor);
+    } catch (e: any) {
+      return json({ success: false, error: e?.message || "Failed to send invitation" }, 500);
+    }
+    await logAdminEvent(existing.id, "admin_user_invited_to_tenant", actor, {
+      target_email: email,
+      tenant_id: inviteTenantId,
+      role,
+    });
+    return json({ success: true, invited: true });
+  }
+
 
   // Create auth user
   const createPayload: any = {
@@ -584,6 +721,10 @@ async function actionUpdate(body: any, actor: { id: string | null; email: string
 async function actionDeactivate(body: any, actor: { id: string | null; email: string | null }) {
   const userId = String(body.user_id || "");
   if (!userId) return json({ success: false, error: "user_id required" }, 400);
+  if (actor.id && userId === actor.id) {
+    return json({ success: false, error: "You cannot deactivate your own account" }, 400);
+  }
+
 
   const { error: banErr } = await adminClient.auth.admin.updateUserById(userId, {
     ban_duration: "876000h", // ~100 years
@@ -720,9 +861,9 @@ Deno.serve(async (req) => {
 
       // Company admins may not touch users outside their company, and may only
       // perform the member-management actions.
-      const allowed = ["list", "create", "update", "deactivate", "reactivate"];
+      const allowed = ["list", "create", "update", "deactivate", "reactivate", "resend_invite", "cancel_invite"];
       if (!allowed.includes(action)) return json({ success: false, error: "Forbidden" }, 403);
-      if (action !== "list" && action !== "create") {
+      if (!["list", "create", "resend_invite", "cancel_invite"].includes(action)) {
         const targetId = String(body.user_id || "");
         const members = await tenantMemberIds(scopeTenantId);
         if (!targetId || !members.has(targetId)) {
@@ -736,6 +877,8 @@ Deno.serve(async (req) => {
       delete body.tags;
       delete body.projects;
       delete body.password;
+      // Company admins always send the invitation email.
+      body.send_welcome_email = true;
     }
 
     const actor = { id: user.id, email: user.email ?? null };
@@ -750,8 +893,13 @@ Deno.serve(async (req) => {
         return await actionDeactivate(body, actor);
       case "reactivate":
         return await actionReactivate(body, actor);
+      case "resend_invite":
+        return await actionResendInvite(body, actor, scopeTenantId);
+      case "cancel_invite":
+        return await actionCancelInvite(body, actor, scopeTenantId);
       case "reset_password":
         return await actionResetPassword(body, actor);
+
       default:
         return json({ success: false, error: "Unknown action" }, 400);
     }

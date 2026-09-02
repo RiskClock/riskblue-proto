@@ -124,7 +124,19 @@ interface UserRow {
   tags: TagOption[];
   projects: ProjectAssignment[];
   projects_created_count: number;
+  /** Set when the row represents an outstanding company invitation. */
+  invitation_id?: string;
+  invited_role?: string;
 }
+
+interface InvitationRow {
+  id: string;
+  email: string;
+  role: string;
+  created_at: string;
+  expires_at: string;
+}
+
 
 type SortKey =
   | "created_at"
@@ -258,6 +270,7 @@ interface PersistedPrefs {
   filterCompanies: string[];
   filterStatuses: string[];
   filterTags: string[]; // tag names
+  filterRoles: string[];
   sortKey: SortKey;
   sortDir: SortDir;
 }
@@ -269,6 +282,7 @@ function loadPrefs(): PersistedPrefs {
       filterCompanies: [],
       filterStatuses: [],
       filterTags: [],
+      filterRoles: [],
       sortKey: DEFAULT_SORT_KEY,
       sortDir: DEFAULT_SORT_DIR,
     };
@@ -285,6 +299,7 @@ function loadPrefs(): PersistedPrefs {
       filterCompanies: Array.isArray(parsed.filterCompanies) ? parsed.filterCompanies : legacyCompany,
       filterStatuses: Array.isArray(parsed.filterStatuses) ? parsed.filterStatuses : legacyStatus,
       filterTags: Array.isArray(parsed.filterTags) ? parsed.filterTags : [],
+      filterRoles: Array.isArray(parsed.filterRoles) ? parsed.filterRoles : [],
       sortKey: parsed.sortKey || DEFAULT_SORT_KEY,
       sortDir: parsed.sortDir === "asc" ? "asc" : parsed.sortDir === "desc" ? "desc" : DEFAULT_SORT_DIR,
     };
@@ -294,6 +309,7 @@ function loadPrefs(): PersistedPrefs {
       filterCompanies: [],
       filterStatuses: [],
       filterTags: [],
+      filterRoles: [],
       sortKey: DEFAULT_SORT_KEY,
       sortDir: DEFAULT_SORT_DIR,
     };
@@ -414,7 +430,7 @@ const UserManagement = () => {
 
   // ---- persisted filters / sort ----
   const [prefs, setPrefs] = useState<PersistedPrefs>(() => loadPrefs());
-  const { search, filterCompanies, filterStatuses, filterTags, sortKey, sortDir } = prefs;
+  const { search, filterCompanies, filterStatuses, filterTags, filterRoles, sortKey, sortDir } = prefs;
 
   useEffect(() => {
     try {
@@ -430,6 +446,7 @@ const UserManagement = () => {
   const setFilterStatuses = (v: string[]) =>
     setPrefs((p) => ({ ...p, filterStatuses: v }));
   const setFilterTags = (v: string[]) => setPrefs((p) => ({ ...p, filterTags: v }));
+  const setFilterRoles = (v: string[]) => setPrefs((p) => ({ ...p, filterRoles: v }));
 
   const filteredSorted = useMemo(() => {
     let rows = [...users];
@@ -538,6 +555,7 @@ const UserManagement = () => {
     filterCompanies.length > 0 ||
     filterStatuses.length > 0 ||
     filterTags.length > 0 ||
+    filterRoles.length > 0 ||
     sortKey !== DEFAULT_SORT_KEY ||
     sortDir !== DEFAULT_SORT_DIR;
 
@@ -547,6 +565,7 @@ const UserManagement = () => {
       filterCompanies: [],
       filterStatuses: [],
       filterTags: [],
+      filterRoles: [],
       sortKey: DEFAULT_SORT_KEY,
       sortDir: DEFAULT_SORT_DIR,
     });
@@ -563,7 +582,7 @@ const UserManagement = () => {
   }, [columnPrefs]);
 
   // Company admins only ever see identity/status columns.
-  const SCOPED_COLUMNS: ColumnId[] = ["user", "role", "status", "created"];
+  const SCOPED_COLUMNS: ColumnId[] = ["user", "status", "role", "created"];
   const availableColumns = useMemo(
     () =>
       scopedTenantId
@@ -571,13 +590,13 @@ const UserManagement = () => {
         : ALL_COLUMNS.filter((c) => c.id !== "role"),
     [scopedTenantId]
   );
-  const visibleColumns = useMemo(
-    () =>
-      columnPrefs.order.filter(
-        (id) => columnPrefs.visible[id] && availableColumns.some((c) => c.id === id)
-      ),
-    [columnPrefs, availableColumns]
-  );
+  const visibleColumns = useMemo(() => {
+    // Company admins get a fixed, simplified column order.
+    const order = scopedTenantId ? SCOPED_COLUMNS : columnPrefs.order;
+    return order.filter(
+      (id) => columnPrefs.visible[id] && availableColumns.some((c) => c.id === id)
+    );
+  }, [columnPrefs, availableColumns, scopedTenantId]);
 
   // ---- modals ----
   const [createOpen, setCreateOpen] = useState(false);
@@ -646,7 +665,10 @@ const UserManagement = () => {
   if (!allowed) return null;
 
   const filterCount =
-    (filterCompanies.length > 0 ? 1 : 0) + (filterStatuses.length > 0 ? 1 : 0) + (filterTags.length > 0 ? 1 : 0);
+    (filterCompanies.length > 0 ? 1 : 0) +
+    (filterStatuses.length > 0 ? 1 : 0) +
+    (filterTags.length > 0 ? 1 : 0) +
+    (filterRoles.length > 0 ? 1 : 0);
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
@@ -664,7 +686,7 @@ const UserManagement = () => {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search name, email, company, tag"
+                placeholder="Search by email, name, status, role"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9 w-72"
