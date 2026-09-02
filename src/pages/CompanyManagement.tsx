@@ -517,6 +517,9 @@ const CompanyDialog = ({
   const [saving, setSaving] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoRemoved, setLogoRemoved] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
 
   // Staged member list — nothing is written until Save.
   const [rows, setRows] = useState<MemberRow[]>([]);
