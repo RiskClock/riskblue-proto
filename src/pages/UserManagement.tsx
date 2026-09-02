@@ -123,6 +123,7 @@ interface UserRow {
   has_profile: boolean;
   tags: TagOption[];
   projects: ProjectAssignment[];
+  projects_created_count: number;
 }
 
 type SortKey =
@@ -494,8 +495,8 @@ const UserManagement = () => {
           vb = b.credits_balance ?? 0;
           break;
         case "projects":
-          va = a.projects.length;
-          vb = b.projects.length;
+          va = a.projects_created_count ?? 0;
+          vb = b.projects_created_count ?? 0;
           break;
         case "created_at":
         default:
@@ -899,8 +900,8 @@ const UserManagement = () => {
                           case "projects":
                             return (
                               <TableCell key={colId} className={cn("text-center tabular-nums", dim)}>
-                                {u.projects.length > 0 ? (
-                                  u.projects.length
+                                {u.projects_created_count > 0 ? (
+                                  u.projects_created_count
                                 ) : (
                                   <span className="text-muted-foreground">-</span>
                                 )}
