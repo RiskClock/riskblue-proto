@@ -358,6 +358,7 @@ const UserManagement = () => {
         companies: string[];
         tags: TagOption[];
         all_projects: ProjectOption[];
+        invitations?: InvitationRow[];
       }>("admin-users", { body: { action: "list", tenant_id: scopedTenantId } });
     },
     enabled: allowed,
@@ -664,13 +665,13 @@ const UserManagement = () => {
       return res;
     },
     onSuccess: () => {
-      toast({ title: "User created" });
+      toast({ title: scopedTenantId ? "Invitation sent" : "User created" });
       setCreateOpen(false);
       refresh();
     },
     onError: (e: any) =>
       toast({
-        title: e?.status === 409 ? "Email already in use" : "Couldn't create user",
+        title: e?.status === 409 ? "Already a member" : scopedTenantId ? "Couldn't send invitation" : "Couldn't create user",
         description: e?.message,
         variant: "destructive",
       }),
@@ -697,6 +698,10 @@ const UserManagement = () => {
           ? "User deactivated"
           : vars.action === "reactivate"
           ? "User reactivated"
+          : vars.action === "resend_invite"
+          ? "Invitation sent"
+          : vars.action === "cancel_invite"
+          ? "Invitation cancelled"
           : "Password reset email sent";
       toast({ title: t });
       setConfirmAction(null);
@@ -964,9 +969,7 @@ const UserManagement = () => {
                             );
                           }
                           case "role": {
-                            const r = scopedTenantId
-                              ? (membershipsByUser.get(u.user_id) || []).find((m) => m.tenant_id === scopedTenantId)?.role
-                              : undefined;
+                            const r = roleFor(u);
                             return (
                               <TableCell key={colId} className={dim}>
                                 {r ? (
@@ -1059,6 +1062,28 @@ const UserManagement = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            {u.invitation_id ? (
+                              <>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    actionMutation.mutate({ action: "resend_invite", invitation_id: u.invitation_id })
+                                  }
+                                >
+                                  <Mail className="h-4 w-4 mr-2" />
+                                  Resend invitation
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() =>
+                                    actionMutation.mutate({ action: "cancel_invite", invitation_id: u.invitation_id })
+                                  }
+                                >
+                                  <UserX className="h-4 w-4 mr-2" />
+                                  Cancel invitation
+                                </DropdownMenuItem>
+                              </>
+                            ) : (
+                            <>
                             <DropdownMenuItem onClick={() => setEditing(u)}>
                               <Pencil className="h-4 w-4 mr-2" />
                               Edit
@@ -1069,8 +1094,8 @@ const UserManagement = () => {
                                 Reset Password
                               </DropdownMenuItem>
                             )}
-                            <DropdownMenuSeparator />
-                            {u.is_active ? (
+                            {u.user_id !== user.id && <DropdownMenuSeparator />}
+                            {u.user_id === user.id ? null : u.is_active ? (
                               <DropdownMenuItem
                                 className="text-destructive focus:text-destructive"
                                 onClick={() =>
@@ -1090,6 +1115,8 @@ const UserManagement = () => {
                                 Reactivate
                               </DropdownMenuItem>
                             )}
+                            </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -1103,6 +1130,7 @@ const UserManagement = () => {
       </main>
 
       <CreateUserDialog
+        isInternal={isInternal}
         open={createOpen}
         onOpenChange={setCreateOpen}
         companies={companies}
@@ -1371,6 +1399,7 @@ function CompanyCombobox({
 // ---------- Create dialog ----------
 
 function CreateUserDialog({
+  isInternal,
   open,
   onOpenChange,
   availableTags,
@@ -1380,6 +1409,7 @@ function CreateUserDialog({
   onSubmit,
   loading,
 }: {
+  isInternal: boolean;
   open: boolean;
   onOpenChange: (o: boolean) => void;
   companies?: string[];
@@ -1474,6 +1504,7 @@ function CreateUserDialog({
             {password && password.length > 0 && password.length < 6 && (
               <p className="text-xs text-destructive mt-1">Must be at least 6 characters</p>
             )}
+            {isInternal && (
             <div className="flex items-center gap-2 mt-2">
               <Checkbox
                 id="send-welcome-email"
@@ -1485,6 +1516,7 @@ function CreateUserDialog({
                 Send notification email
               </Label>
             </div>
+            )}
           </div>
 
           {scopedTenant ? (
