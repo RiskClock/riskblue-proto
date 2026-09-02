@@ -224,6 +224,7 @@ async function actionList(scopeTenantId: string | null) {
       has_profile: !!profileMap.get(u.id),
       tags,
       projects,
+      projects_created_count: createdCountByUser.get(u.id) || 0,
     };
   });
 
