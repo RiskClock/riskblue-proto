@@ -79,6 +79,7 @@ import {
   RotateCcw,
   Settings2,
   GripVertical,
+  Mail,
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -1486,6 +1487,7 @@ function CreateUserDialog({
             <Label>Name</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1" />
           </div>
+          {isInternal && (
           <div>
             <Label>Password (optional)</Label>
             <Input
@@ -1518,6 +1520,7 @@ function CreateUserDialog({
             </div>
             )}
           </div>
+          )}
 
           {scopedTenant ? (
             <div>
