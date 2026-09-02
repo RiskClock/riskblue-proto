@@ -497,14 +497,16 @@ interface MemberRow {
 }
 
 const CompanyDialog = ({
-  tenant, open, onOpenChange, onChanged, onOpenWorkspace,
+  tenant, allTenants, open, onOpenChange, onChanged, onOpenWorkspace,
 }: {
   tenant: TenantSummary | null;
+  allTenants: TenantSummary[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onChanged: () => void;
   onOpenWorkspace: (tenantId: string) => void;
 }) => {
+
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
