@@ -157,16 +157,15 @@ interface ColumnDef {
 
 const ALL_COLUMNS: ColumnDef[] = [
   { id: "user", label: "User" },
-  { id: "company", label: "Company" },
-  { id: "tenant", label: "Tenant" },
+  { id: "tenant", label: "Company" },
   { id: "projects", label: "Projects" },
   { id: "tags", label: "Tags" },
   { id: "type", label: "Type" },
-  { id: "credits", label: "Credits" },
   { id: "status", label: "Status" },
   { id: "created", label: "Created" },
   { id: "last_sign_in", label: "Last Sign-In" },
 ];
+
 
 const COLUMN_PREFS_KEY = "user-management-columns:v2";
 
