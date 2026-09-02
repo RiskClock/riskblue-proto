@@ -763,7 +763,7 @@ const UserManagement = () => {
                       case "tenant":
                         return (
                           <TableHead key={colId} className="cursor-pointer select-none" onClick={() => toggleSort("tenant")}>
-                            Tenant <SortIcon k="tenant" />
+                            Company <SortIcon k="tenant" />
                           </TableHead>
                         );
                       case "projects":
