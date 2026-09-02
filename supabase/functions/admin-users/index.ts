@@ -322,15 +322,20 @@ async function setUserTags(userId: string, tagNames: string[], assignedBy: strin
   if (error) throw error;
 }
 
-async function actionCreate(body: any, actor: { id: string | null; email: string | null }) {
+async function actionCreate(
+  body: any,
+  actor: { id: string | null; email: string | null },
+  scopeTenantId: string | null = null,
+) {
   const actorId = actor.id;
   const email = String(body.email || "").trim().toLowerCase();
   const name = String(body.name || "").trim();
   const password = body.password ? String(body.password) : null;
-  const isWmsv = !!body.is_wmsv;
+  // Every account is a WMSV account now; the toggle was removed from the UI.
+  const isWmsv = body.is_wmsv === undefined ? true : !!body.is_wmsv;
   const company = body.company ? String(body.company).trim() : null;
   const tagNames: string[] = Array.isArray(body.tags) ? body.tags : [];
-  const credits = Number.isFinite(Number(body.credits)) ? Math.max(0, Math.floor(Number(body.credits))) : 20;
+  const credits = Number.isFinite(Number(body.credits)) ? Math.max(0, Math.floor(Number(body.credits))) : 0;
   // Default true to preserve prior behaviour for any caller not passing the flag.
   const sendWelcomeEmail = body.send_welcome_email === undefined ? true : !!body.send_welcome_email;
 
@@ -399,6 +404,20 @@ async function actionCreate(body: any, actor: { id: string | null; email: string
     await setUserProjects(created.user.id, projectAssignments);
   } catch (e) {
     console.error("setUserProjects create err:", e);
+  }
+
+  // Company admins can only ever create users inside their own company.
+  if (scopeTenantId) {
+    const role = ["admin", "member", "guest"].includes(String(body.tenant_role))
+      ? String(body.tenant_role)
+      : "member";
+    const { error: tmErr } = await adminClient
+      .from("tenant_members")
+      .upsert(
+        { tenant_id: scopeTenantId, user_id: created.user.id, role, status: "active", invited_by: actorId },
+        { onConflict: "tenant_id,user_id" },
+      );
+    if (tmErr) console.error("tenant member upsert err:", tmErr);
   }
 
   // Send email
@@ -716,7 +735,7 @@ Deno.serve(async (req) => {
       case "list":
         return json({ success: true, ...(await actionList(scopeTenantId)) });
       case "create":
-        return await actionCreate(body, actor);
+        return await actionCreate(body, actor, scopeTenantId);
       case "update":
         return await actionUpdate(body, actor);
       case "deactivate":
