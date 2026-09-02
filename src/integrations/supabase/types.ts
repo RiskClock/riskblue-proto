@@ -3466,6 +3466,7 @@ export type Database = {
         Returns: Json
       }
       current_share_token: { Args: never; Returns: string }
+      delete_tenant: { Args: { p_tenant_id: string }; Returns: Json }
       find_orphaned_uploaded_drawings: {
         Args: never
         Returns: {
