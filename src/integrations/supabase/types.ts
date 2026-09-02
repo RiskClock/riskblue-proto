@@ -3373,6 +3373,10 @@ export type Database = {
         Args: { p_new_balance: number; p_reason?: string; p_tenant_id: string }
         Returns: Json
       }
+      can_edit_project: {
+        Args: { _project_id: string; _user_id: string }
+        Returns: boolean
+      }
       claim_next_analysis_jobs: {
         Args: { p_batch_size?: number; p_worker_id: string }
         Returns: {

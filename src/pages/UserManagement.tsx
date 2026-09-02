@@ -79,6 +79,7 @@ import {
   RotateCcw,
   Settings2,
   GripVertical,
+  Mail,
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -124,7 +125,19 @@ interface UserRow {
   tags: TagOption[];
   projects: ProjectAssignment[];
   projects_created_count: number;
+  /** Set when the row represents an outstanding company invitation. */
+  invitation_id?: string;
+  invited_role?: string;
 }
+
+interface InvitationRow {
+  id: string;
+  email: string;
+  role: string;
+  created_at: string;
+  expires_at: string;
+}
+
 
 type SortKey =
   | "created_at"
@@ -258,6 +271,7 @@ interface PersistedPrefs {
   filterCompanies: string[];
   filterStatuses: string[];
   filterTags: string[]; // tag names
+  filterRoles: string[];
   sortKey: SortKey;
   sortDir: SortDir;
 }
@@ -269,6 +283,7 @@ function loadPrefs(): PersistedPrefs {
       filterCompanies: [],
       filterStatuses: [],
       filterTags: [],
+      filterRoles: [],
       sortKey: DEFAULT_SORT_KEY,
       sortDir: DEFAULT_SORT_DIR,
     };
@@ -285,6 +300,7 @@ function loadPrefs(): PersistedPrefs {
       filterCompanies: Array.isArray(parsed.filterCompanies) ? parsed.filterCompanies : legacyCompany,
       filterStatuses: Array.isArray(parsed.filterStatuses) ? parsed.filterStatuses : legacyStatus,
       filterTags: Array.isArray(parsed.filterTags) ? parsed.filterTags : [],
+      filterRoles: Array.isArray(parsed.filterRoles) ? parsed.filterRoles : [],
       sortKey: parsed.sortKey || DEFAULT_SORT_KEY,
       sortDir: parsed.sortDir === "asc" ? "asc" : parsed.sortDir === "desc" ? "desc" : DEFAULT_SORT_DIR,
     };
@@ -294,6 +310,7 @@ function loadPrefs(): PersistedPrefs {
       filterCompanies: [],
       filterStatuses: [],
       filterTags: [],
+      filterRoles: [],
       sortKey: DEFAULT_SORT_KEY,
       sortDir: DEFAULT_SORT_DIR,
     };
@@ -342,12 +359,14 @@ const UserManagement = () => {
         companies: string[];
         tags: TagOption[];
         all_projects: ProjectOption[];
+        invitations?: InvitationRow[];
       }>("admin-users", { body: { action: "list", tenant_id: scopedTenantId } });
     },
     enabled: allowed,
   });
 
-  const users = data?.users || [];
+  const baseUsers = data?.users || [];
+  const invitations = (data?.invitations || []) as InvitationRow[];
   const companies = data?.companies || [];
   const allTags = data?.tags || [];
   const allProjects = data?.all_projects || [];
@@ -394,6 +413,41 @@ const UserManagement = () => {
       .filter(Boolean)
       .sort();
 
+  /** Outstanding invitations render as Pending rows alongside real members. */
+  const users: UserRow[] = useMemo(
+    () => [
+      ...baseUsers,
+      ...invitations.map((i) => ({
+        user_id: `invite:${i.id}`,
+        email: i.email,
+        display_name: null,
+        account_type: "wmsv",
+        company: null,
+        credits_balance: 0,
+        is_active: true,
+        deactivated_at: null,
+        created_at: i.created_at,
+        last_sign_in_at: null,
+        email_confirmed_at: null,
+        banned_until: null,
+        has_profile: false,
+        tags: [],
+        projects: [],
+        projects_created_count: 0,
+        invitation_id: i.id,
+        invited_role: i.role,
+      })),
+    ],
+    [baseUsers, invitations],
+  );
+
+  const roleFor = (u: UserRow): string | null => {
+    if (u.invited_role) return u.invited_role;
+    const ms = membershipsByUser.get(u.user_id) || [];
+    if (scopedTenantId) return ms.find((m) => m.tenant_id === scopedTenantId)?.role ?? null;
+    return ms[0]?.role ?? null;
+  };
+
   /** Reconciles tenant_members rows for a user with the desired assignments. */
   const syncTenantMemberships = async (userId: string, desired: TenantAssignment[]) => {
     const existing = membershipsByUser.get(userId) || [];
@@ -414,7 +468,7 @@ const UserManagement = () => {
 
   // ---- persisted filters / sort ----
   const [prefs, setPrefs] = useState<PersistedPrefs>(() => loadPrefs());
-  const { search, filterCompanies, filterStatuses, filterTags, sortKey, sortDir } = prefs;
+  const { search, filterCompanies, filterStatuses, filterTags, filterRoles, sortKey, sortDir } = prefs;
 
   useEffect(() => {
     try {
@@ -430,6 +484,7 @@ const UserManagement = () => {
   const setFilterStatuses = (v: string[]) =>
     setPrefs((p) => ({ ...p, filterStatuses: v }));
   const setFilterTags = (v: string[]) => setPrefs((p) => ({ ...p, filterTags: v }));
+  const setFilterRoles = (v: string[]) => setPrefs((p) => ({ ...p, filterRoles: v }));
 
   const filteredSorted = useMemo(() => {
     let rows = [...users];
@@ -445,6 +500,13 @@ const UserManagement = () => {
       const set = new Set(filterStatuses);
       rows = rows.filter((u) => set.has(getStatus(u)));
     }
+    if (filterRoles.length > 0) {
+      const set = new Set(filterRoles);
+      rows = rows.filter((u) => {
+        const r = roleFor(u);
+        return !!r && set.has(r);
+      });
+    }
     if (filterTags.length > 0) {
       const wanted = new Set(filterTags.map((t) => t.toLowerCase()));
       rows = rows.filter((u) =>
@@ -458,6 +520,8 @@ const UserManagement = () => {
           (u.display_name || "").toLowerCase().includes(q) ||
           (u.email || "").toLowerCase().includes(q) ||
           tenantNamesFor(u.user_id).some((n) => n.toLowerCase().includes(q)) ||
+          getStatus(u).includes(q) ||
+          (roleFor(u) || "").includes(q) ||
           u.tags.some((t) => t.name.toLowerCase().includes(q))
       );
     }
@@ -508,7 +572,7 @@ const UserManagement = () => {
       return 0;
     });
     return rows;
-  }, [users, search, filterCompanies, filterStatuses, filterTags, sortKey, sortDir, membershipsByUser, tenantNameById]);
+  }, [users, search, filterCompanies, filterStatuses, filterTags, filterRoles, sortKey, sortDir, membershipsByUser, tenantNameById]);
 
   const toggleSort = (key: SortKey) => {
     setPrefs((p) => {
@@ -538,6 +602,7 @@ const UserManagement = () => {
     filterCompanies.length > 0 ||
     filterStatuses.length > 0 ||
     filterTags.length > 0 ||
+    filterRoles.length > 0 ||
     sortKey !== DEFAULT_SORT_KEY ||
     sortDir !== DEFAULT_SORT_DIR;
 
@@ -547,6 +612,7 @@ const UserManagement = () => {
       filterCompanies: [],
       filterStatuses: [],
       filterTags: [],
+      filterRoles: [],
       sortKey: DEFAULT_SORT_KEY,
       sortDir: DEFAULT_SORT_DIR,
     });
@@ -563,7 +629,7 @@ const UserManagement = () => {
   }, [columnPrefs]);
 
   // Company admins only ever see identity/status columns.
-  const SCOPED_COLUMNS: ColumnId[] = ["user", "role", "status", "created"];
+  const SCOPED_COLUMNS: ColumnId[] = ["user", "status", "role", "created"];
   const availableColumns = useMemo(
     () =>
       scopedTenantId
@@ -571,13 +637,13 @@ const UserManagement = () => {
         : ALL_COLUMNS.filter((c) => c.id !== "role"),
     [scopedTenantId]
   );
-  const visibleColumns = useMemo(
-    () =>
-      columnPrefs.order.filter(
-        (id) => columnPrefs.visible[id] && availableColumns.some((c) => c.id === id)
-      ),
-    [columnPrefs, availableColumns]
-  );
+  const visibleColumns = useMemo(() => {
+    // Company admins get a fixed, simplified column order.
+    const order = scopedTenantId ? SCOPED_COLUMNS : columnPrefs.order;
+    return order.filter(
+      (id) => columnPrefs.visible[id] && availableColumns.some((c) => c.id === id)
+    );
+  }, [columnPrefs, availableColumns, scopedTenantId]);
 
   // ---- modals ----
   const [createOpen, setCreateOpen] = useState(false);
@@ -600,13 +666,13 @@ const UserManagement = () => {
       return res;
     },
     onSuccess: () => {
-      toast({ title: "User created" });
+      toast({ title: scopedTenantId ? "Invitation sent" : "User created" });
       setCreateOpen(false);
       refresh();
     },
     onError: (e: any) =>
       toast({
-        title: e?.status === 409 ? "Email already in use" : "Couldn't create user",
+        title: e?.status === 409 ? "Already a member" : scopedTenantId ? "Couldn't send invitation" : "Couldn't create user",
         description: e?.message,
         variant: "destructive",
       }),
@@ -633,6 +699,10 @@ const UserManagement = () => {
           ? "User deactivated"
           : vars.action === "reactivate"
           ? "User reactivated"
+          : vars.action === "resend_invite"
+          ? "Invitation sent"
+          : vars.action === "cancel_invite"
+          ? "Invitation cancelled"
           : "Password reset email sent";
       toast({ title: t });
       setConfirmAction(null);
@@ -646,7 +716,10 @@ const UserManagement = () => {
   if (!allowed) return null;
 
   const filterCount =
-    (filterCompanies.length > 0 ? 1 : 0) + (filterStatuses.length > 0 ? 1 : 0) + (filterTags.length > 0 ? 1 : 0);
+    (filterCompanies.length > 0 ? 1 : 0) +
+    (filterStatuses.length > 0 ? 1 : 0) +
+    (filterTags.length > 0 ? 1 : 0) +
+    (filterRoles.length > 0 ? 1 : 0);
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
@@ -664,7 +737,7 @@ const UserManagement = () => {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search name, email, company, tag"
+                placeholder="Search by email, name, status, role"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9 w-72"
@@ -708,6 +781,19 @@ const UserManagement = () => {
                     selected={filterStatuses}
                     onChange={setFilterStatuses}
                     allLabel="All statuses"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs uppercase text-muted-foreground">Role</Label>
+                  <MultiSelectChecklist
+                    options={[
+                      { value: "admin", label: "Admin" },
+                      { value: "member", label: "Member" },
+                      { value: "guest", label: "Guest" },
+                    ]}
+                    selected={filterRoles}
+                    onChange={setFilterRoles}
+                    allLabel="All roles"
                   />
                 </div>
                 {!scopedTenantId && (
@@ -884,9 +970,7 @@ const UserManagement = () => {
                             );
                           }
                           case "role": {
-                            const r = scopedTenantId
-                              ? (membershipsByUser.get(u.user_id) || []).find((m) => m.tenant_id === scopedTenantId)?.role
-                              : undefined;
+                            const r = roleFor(u);
                             return (
                               <TableCell key={colId} className={dim}>
                                 {r ? (
@@ -979,6 +1063,28 @@ const UserManagement = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            {u.invitation_id ? (
+                              <>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    actionMutation.mutate({ action: "resend_invite", invitation_id: u.invitation_id })
+                                  }
+                                >
+                                  <Mail className="h-4 w-4 mr-2" />
+                                  Resend invitation
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() =>
+                                    actionMutation.mutate({ action: "cancel_invite", invitation_id: u.invitation_id })
+                                  }
+                                >
+                                  <UserX className="h-4 w-4 mr-2" />
+                                  Cancel invitation
+                                </DropdownMenuItem>
+                              </>
+                            ) : (
+                            <>
                             <DropdownMenuItem onClick={() => setEditing(u)}>
                               <Pencil className="h-4 w-4 mr-2" />
                               Edit
@@ -989,8 +1095,8 @@ const UserManagement = () => {
                                 Reset Password
                               </DropdownMenuItem>
                             )}
-                            <DropdownMenuSeparator />
-                            {u.is_active ? (
+                            {u.user_id !== user.id && <DropdownMenuSeparator />}
+                            {u.user_id === user.id ? null : u.is_active ? (
                               <DropdownMenuItem
                                 className="text-destructive focus:text-destructive"
                                 onClick={() =>
@@ -1010,6 +1116,8 @@ const UserManagement = () => {
                                 Reactivate
                               </DropdownMenuItem>
                             )}
+                            </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -1023,6 +1131,7 @@ const UserManagement = () => {
       </main>
 
       <CreateUserDialog
+        isInternal={isInternal}
         open={createOpen}
         onOpenChange={setCreateOpen}
         companies={companies}
@@ -1291,6 +1400,7 @@ function CompanyCombobox({
 // ---------- Create dialog ----------
 
 function CreateUserDialog({
+  isInternal,
   open,
   onOpenChange,
   availableTags,
@@ -1300,6 +1410,7 @@ function CreateUserDialog({
   onSubmit,
   loading,
 }: {
+  isInternal: boolean;
   open: boolean;
   onOpenChange: (o: boolean) => void;
   companies?: string[];
@@ -1376,6 +1487,7 @@ function CreateUserDialog({
             <Label>Name</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1" />
           </div>
+          {isInternal && (
           <div>
             <Label>Password (optional)</Label>
             <Input
@@ -1394,6 +1506,7 @@ function CreateUserDialog({
             {password && password.length > 0 && password.length < 6 && (
               <p className="text-xs text-destructive mt-1">Must be at least 6 characters</p>
             )}
+            {isInternal && (
             <div className="flex items-center gap-2 mt-2">
               <Checkbox
                 id="send-welcome-email"
@@ -1405,7 +1518,9 @@ function CreateUserDialog({
                 Send notification email
               </Label>
             </div>
+            )}
           </div>
+          )}
 
           {scopedTenant ? (
             <div>
