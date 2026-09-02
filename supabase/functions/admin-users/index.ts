@@ -151,13 +151,20 @@ async function actionList(scopeTenantId: string | null) {
   const profileMap = new Map((profiles || []).map((p) => [p.user_id, p]));
 
 
-  // Projects index (all projects + per-user role assignments)
+  // Projects index (all projects + per-user role assignments + created counts)
   const { data: allProjectsData } = await adminClient
     .from("projects")
-    .select("id, name")
+    .select("id, name, user_id, tenant_id")
     .order("name", { ascending: true });
-  const allProjects = (allProjectsData || []) as { id: string; name: string }[];
+  const allProjects = (allProjectsData || []) as { id: string; name: string; user_id: string | null; tenant_id: string | null }[];
   const projectNameById = new Map(allProjects.map((p) => [p.id, p.name]));
+
+  const createdCountByUser = new Map<string, number>();
+  for (const p of allProjects) {
+    if (!p.user_id) continue;
+    if (scopeTenantId && p.tenant_id !== scopeTenantId) continue;
+    createdCountByUser.set(p.user_id, (createdCountByUser.get(p.user_id) || 0) + 1);
+  }
 
   const { data: rolesData } = await adminClient
     .from("project_user_roles")
