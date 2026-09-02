@@ -670,15 +670,51 @@ Deno.serve(async (req) => {
   try {
     const user = await getAuthedUser(req);
     if (!user) return json({ success: false, error: "Unauthorized" }, 401);
-    if (!isInternal(user.email)) return json({ success: false, error: "Forbidden" }, 403);
 
     const body = await req.json().catch(() => ({}));
     const action = String(body.action || "");
 
+    // Internal staff have unrestricted access. Everyone else must be an active
+    // admin of the company they claim, and is limited to that company's users.
+    let scopeTenantId: string | null = null;
+    if (!isInternal(user.email)) {
+      const tenantId = String(body.tenant_id || "");
+      if (!tenantId) return json({ success: false, error: "Forbidden" }, 403);
+      const { data: membership } = await adminClient
+        .from("tenant_members")
+        .select("role, status")
+        .eq("tenant_id", tenantId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (!membership || membership.role !== "admin" || (membership.status || "active") !== "active") {
+        return json({ success: false, error: "Forbidden" }, 403);
+      }
+      scopeTenantId = tenantId;
+
+      // Company admins may not touch users outside their company, and may only
+      // perform the member-management actions.
+      const allowed = ["list", "create", "update", "deactivate", "reactivate"];
+      if (!allowed.includes(action)) return json({ success: false, error: "Forbidden" }, 403);
+      if (action !== "list" && action !== "create") {
+        const targetId = String(body.user_id || "");
+        const members = await tenantMemberIds(scopeTenantId);
+        if (!targetId || !members.has(targetId)) {
+          return json({ success: false, error: "Forbidden" }, 403);
+        }
+      }
+      // Strip privileged fields regardless of what the client sent.
+      delete body.credits;
+      delete body.company;
+      delete body.is_wmsv;
+      delete body.tags;
+      delete body.projects;
+      delete body.password;
+    }
+
     const actor = { id: user.id, email: user.email ?? null };
     switch (action) {
       case "list":
-        return json({ success: true, ...(await actionList()) });
+        return json({ success: true, ...(await actionList(scopeTenantId)) });
       case "create":
         return await actionCreate(body, actor);
       case "update":
@@ -697,3 +733,4 @@ Deno.serve(async (req) => {
     return json({ success: false, error: e?.message || "Internal error" }, 500);
   }
 });
+
