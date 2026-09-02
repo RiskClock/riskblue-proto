@@ -1,53 +1,55 @@
-# Adding an existing person to a company + role permission reference
+# Inviting existing users + role model and User Management cleanups
 
-## 1. What happens today when the person already exists
+## 1. Inviting someone who already has an account
 
-Verified in the invite path used by the User Management page:
+Today the "Invite user" modal always tries to create a brand-new account. If the email already exists anywhere — another company, or no company — it fails with "A user with this email already exists". No membership, no email. There is no way for a company admin to bring an existing person into their company.
 
-- The "Invite user" modal always calls the create action.
-- That action first looks up the email in the auth directory. If any account already exists — in another company, or in no company at all — it stops with `A user with this email already exists` (HTTP 409).
-- No company membership is created, no email is sent. There is no way for a company admin to pull an existing account into their company from this screen.
+New behaviour, identical from the inviter's point of view in every case:
 
-Note: a separate company-invite path does exist (used by the internal Company Management members modal) that creates a pending invitation, emails an accept link, and adds the person on acceptance. It correctly rejects only people who are already members of that same company. The User Management "Invite user" modal does not use it.
+1. Already an active member of this company -> "That person is already a member of this company."
+2. Otherwise -> a pending company invitation is created for that email with the chosen role and the invitation email is sent. If no account exists, the account is created as it is today and the setup-link email is sent. Either way the toast is simply **"Invitation sent"**.
+3. The invited person appears in the list immediately with status **Pending**. They become Active once they accept the invitation (existing account) or set their password and sign in (new account).
+4. Accepting never touches an existing account's password, name, or their other companies' projects — it only adds the company membership with the invited role.
 
-### Proposed fix
+To make step 3 work, the user list for a company also surfaces outstanding invitations that have no membership yet, shown as Pending rows with the invited email and role. The row menu for a pending invitation offers "Resend invitation" and "Cancel invitation".
 
-When the email already belongs to an account:
-
-1. If they are already an active member of this company -> show "That person is already a member of this company."
-2. Otherwise -> do not error. Create a pending company invitation for that email with the chosen role and send the existing "You've been invited to join {Company}" email. When they click the link while signed in, they are added to the company with that role; the account, password, name, and existing projects are untouched.
-3. Only when no account exists at all does the current create-account-and-send-setup-link flow run.
-
-The modal copy adapts: after submitting for an existing account, the toast reads "Invitation sent — {email} already has a RiskBlue account and will join {Company} once they accept."
-
-Open question for you at the end of this plan.
-
-## 2. Role permission breakdown
-
-These are the current server-side role templates (resolved in the database, so UI, API, and edge functions all agree). No member in the system currently has a per-person override.
+## 2. Role permissions (updated: Guest is read-only)
 
 | Capability | Admin | Member | Guest |
 |---|---|---|---|
 | View company projects | Yes | Yes | Yes |
 | Create projects | Yes | Yes | No |
-| Edit projects | Yes | Yes | Yes |
+| Edit projects | Yes | Yes | **No** |
 | Delete projects | Yes | No | No |
 | Export reports | Yes | Yes | Yes |
 | See credit balance | Yes | Yes | No |
 | Buy credits | Yes | Yes | No |
 | Manage members (invite, change roles, deactivate) | Yes | No | No |
-| Manage company settings (name, logo) | Yes | No | No |
-| Access the company User Management page | Yes | No | No |
+| Manage company settings | Yes | No | No |
+| Access company User Management | Yes | No | No |
 
-Other notes:
+Guest becomes strictly read-only: they can open projects and export reports, but every editing control (wizard fields, annotations, uploads, status changes, agents) is disabled for them, enforced both in the UI and in the database rules.
 
-- Deactivating a company instantly cuts off access for every member, whatever the role.
-- A database rule prevents removing or downgrading the last remaining active Admin of a company.
-- Internal RiskClock staff sit outside this table: they get Admin-level access to every active company plus the internal-only pages (Workbench, Company Management, Configuration).
-- Guests can still edit projects they can see — that is deliberate, for contractors working on assigned projects. Tell me if you want Guest to be read-only instead.
+Other rules that stay as they are:
+
+- Deactivating a company instantly cuts off all its members.
+- The last active Admin of a company cannot be removed or downgraded.
+- Internal RiskClock staff get Admin-level access to every active company plus the internal-only pages.
+
+## 3. User Management cleanups
+
+- **Send notification email** checkbox: internal-only. For company admins the field is hidden and the email always sends.
+- **Filter by role** added next to the status filter (Admin / Member / Guest / All roles).
+- Search placeholder becomes **"Search by email, name, status, role"** and the search matches those four fields.
+- Default columns for the company (end-user) view, in this order: **User, Status, Role, Created**.
+- You cannot deactivate your own account: the Deactivate action is hidden on your own row, and the server rejects it as a safeguard.
 
 ## Technical notes
 
-- Change is limited to the create action in the `admin-users` edge function plus the submit handler in `src/pages/UserManagement.tsx`; it reuses the existing `tenant_invitations` table, `send-tenant-invite`, and `accept-tenant-invite` logic rather than duplicating it.
-- Company admins can only ever invite into their own company; the server re-derives the company from the caller's membership and ignores any company sent by the client.
-- No schema migration required.
+- Invite path: the `admin-users` create action branches to the existing `tenant_invitations` + `send-tenant-invite` / `accept-tenant-invite` flow when the email already resolves to an account; the list action left-joins pending invitations so they render as Pending rows.
+- Guest read-only: `tenant_role_permissions` flips `edit_project` to false for `guest` (a database migration), and the frontend permission hook gates edit controls on that flag.
+- Column, filter, placeholder, and self-deactivation changes are confined to `src/pages/UserManagement.tsx`, with a server-side self-deactivation guard in `admin-users`.
+
+## One question
+
+When a Guest opens a project, should the Export/Download buttons stay enabled (read + export) or should Guest be view-only in the app with no export either?
