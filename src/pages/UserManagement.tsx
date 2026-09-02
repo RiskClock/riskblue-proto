@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeFunction } from "@/lib/functionsError";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -82,6 +83,13 @@ import {
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { TagPicker, TagChip } from "@/components/users/TagPicker";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface TagOption {
   id: string;
@@ -310,22 +318,31 @@ const UserManagement = () => {
   const { toast } = useToast();
 
   const isInternal = !!user?.email?.toLowerCase().endsWith("@riskclock.com");
+  const { tenantId, tenant, tenants: myTenants, loading: tenantsLoading } = useTenant();
+
+  // Company admins get a company-scoped version of this page.
+  const scopedTenantId = !isInternal && tenantId ? tenantId : null;
+  const isTenantAdmin = !!scopedTenantId && tenant?.role === "admin";
+  const allowed = isInternal || isTenantAdmin;
+  const scopedTenant = scopedTenantId
+    ? { id: scopedTenantId, name: tenant?.name || myTenants.find((t) => t.id === scopedTenantId)?.name || "Company" }
+    : null;
 
   useEffect(() => {
-    if (user && !isInternal) navigate("/projects");
-  }, [user, isInternal, navigate]);
+    if (user && !tenantsLoading && !allowed) navigate("/projects");
+  }, [user, allowed, tenantsLoading, navigate]);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["admin-users"],
+    queryKey: ["admin-users", scopedTenantId],
     queryFn: async () => {
       return await invokeFunction<{
         users: UserRow[];
         companies: string[];
         tags: TagOption[];
         all_projects: ProjectOption[];
-      }>("admin-users", { body: { action: "list" } });
+      }>("admin-users", { body: { action: "list", tenant_id: scopedTenantId } });
     },
-    enabled: isInternal,
+    enabled: allowed,
   });
 
   const users = data?.users || [];
@@ -348,7 +365,7 @@ const UserManagement = () => {
         members: (members || []) as { tenant_id: string; user_id: string; role: TenantAssignment["role"] }[],
       };
     },
-    enabled: isInternal,
+    enabled: allowed,
   });
 
   const allTenants = tenantData?.tenants || [];
@@ -534,9 +551,18 @@ const UserManagement = () => {
     }
   }, [columnPrefs]);
 
+  // Company admins only ever see identity/status columns.
+  const SCOPED_COLUMNS: ColumnId[] = ["user", "status", "created", "last_sign_in"];
+  const availableColumns = useMemo(
+    () => (scopedTenantId ? ALL_COLUMNS.filter((c) => SCOPED_COLUMNS.includes(c.id)) : ALL_COLUMNS),
+    [scopedTenantId]
+  );
   const visibleColumns = useMemo(
-    () => columnPrefs.order.filter((id) => columnPrefs.visible[id]),
-    [columnPrefs]
+    () =>
+      columnPrefs.order.filter(
+        (id) => columnPrefs.visible[id] && availableColumns.some((c) => c.id === id)
+      ),
+    [columnPrefs, availableColumns]
   );
 
   // ---- modals ----
@@ -548,9 +574,10 @@ const UserManagement = () => {
   } | null>(null);
 
   // ---- mutations ----
-  const invokeAction = async (body: any) => invokeFunction("admin-users", { body });
+  const invokeAction = async (body: any) =>
+    invokeFunction("admin-users", { body: { ...body, tenant_id: scopedTenantId } });
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin-users", scopedTenantId] });
 
   const createMutation = useMutation({
     mutationFn: async ({ tenants, ...body }: any) => {
@@ -602,7 +629,7 @@ const UserManagement = () => {
   });
 
   if (!user) return null;
-  if (!isInternal) return null;
+  if (!allowed) return null;
 
   const filterCount =
     (filterCompanies.length > 0 ? 1 : 0) + (filterStatuses.length > 0 ? 1 : 0) + (filterTags.length > 0 ? 1 : 0);
@@ -612,7 +639,7 @@ const UserManagement = () => {
       <AppHeader
         title="User Management"
         infoTitle="About User Management"
-        infoContent={<p>Manage internal and external user accounts, companies, tags, credit balances, and access status across the platform.</p>}
+        infoContent={<p>{scopedTenant ? `Manage the users in ${scopedTenant.name}: invite new users, edit their name and role, and deactivate access.` : "Manage internal and external user accounts, companies, tags, credit balances, and access status across the platform."}</p>}
       />
       <main className="container mx-auto px-6 py-8 flex-1 overflow-auto flex flex-col min-h-0">
         <div className="flex items-center justify-end mb-6 shrink-0">
@@ -643,6 +670,7 @@ const UserManagement = () => {
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-80 space-y-4">
+                {!scopedTenantId && (
                 <div>
                   <Label className="text-xs uppercase text-muted-foreground">Company</Label>
                   <MultiSelectChecklist
@@ -654,6 +682,7 @@ const UserManagement = () => {
                     searchable
                   />
                 </div>
+                )}
                 <div>
                   <Label className="text-xs uppercase text-muted-foreground">Status</Label>
                   <MultiSelectChecklist
@@ -663,17 +692,19 @@ const UserManagement = () => {
                     allLabel="All statuses"
                   />
                 </div>
-                <div>
-                  <Label className="text-xs uppercase text-muted-foreground">Tags</Label>
-                  <div className="mt-1">
-                    <TagPicker
-                      selected={filterTags}
-                      onChange={setFilterTags}
-                      available={allTags}
-                      placeholder={filterTags.length > 0 ? "Edit tags" : "Any tags"}
-                    />
+                {!scopedTenantId && (
+                  <div>
+                    <Label className="text-xs uppercase text-muted-foreground">Tags</Label>
+                    <div className="mt-1">
+                      <TagPicker
+                        selected={filterTags}
+                        onChange={setFilterTags}
+                        available={allTags}
+                        placeholder={filterTags.length > 0 ? "Edit tags" : "Any tags"}
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
               </PopoverContent>
             </Popover>
 
@@ -779,7 +810,7 @@ const UserManagement = () => {
                     }
                   })}
                   <TableHead className="w-[60px] text-center">
-                    <ColumnEditDropdown columnPrefs={columnPrefs} setColumnPrefs={setColumnPrefs} />
+                    <ColumnEditDropdown columnPrefs={columnPrefs} setColumnPrefs={setColumnPrefs} columns={availableColumns} />
                   </TableHead>
                 </TableRow>
               </TableHeader>
@@ -916,10 +947,12 @@ const UserManagement = () => {
                               <Pencil className="h-4 w-4 mr-2" />
                               Edit
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setConfirmAction({ type: "reset", user: u })}>
-                              <KeyRound className="h-4 w-4 mr-2" />
-                              Reset Password
-                            </DropdownMenuItem>
+                            {isInternal && (
+                              <DropdownMenuItem onClick={() => setConfirmAction({ type: "reset", user: u })}>
+                                <KeyRound className="h-4 w-4 mr-2" />
+                                Reset Password
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuSeparator />
                             {u.is_active ? (
                               <DropdownMenuItem
@@ -960,6 +993,7 @@ const UserManagement = () => {
         availableTags={allTags}
         allProjects={allProjects}
         allTenants={allTenants}
+        scopedTenant={scopedTenant}
         onSubmit={(payload) => createMutation.mutate({ action: "create", ...payload })}
         loading={createMutation.isPending}
       />
@@ -971,6 +1005,7 @@ const UserManagement = () => {
         availableTags={allTags}
         allProjects={allProjects}
         allTenants={allTenants}
+        scopedTenant={scopedTenant}
         initialTenants={editing ? membershipsByUser.get(editing.user_id) || [] : []}
         onSubmit={(payload) =>
           updateMutation.mutate({ action: "update", user_id: editing!.user_id, ...payload })
