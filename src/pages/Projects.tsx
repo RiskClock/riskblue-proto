@@ -224,7 +224,7 @@ const Projects = () => {
         ) : (
           <div className="bg-card rounded-lg border overflow-hidden">
             <table className="w-full">
-              <thead className="bg-muted/50">
+              <thead className="bg-muted/50 [&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-muted [&_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
                 <tr className="text-left">
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Project Name</th>
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Status</th>
