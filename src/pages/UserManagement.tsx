@@ -678,7 +678,10 @@ const UserManagement = () => {
                 <div>
                   <Label className="text-xs uppercase text-muted-foreground">Company</Label>
                   <MultiSelectChecklist
-                    options={companies.map((c) => ({ value: c, label: c }))}
+                    options={[
+                      ...allTenants.map((t) => ({ value: t.id, label: t.name })),
+                      { value: "__none__", label: "No company" },
+                    ]}
                     selected={filterCompanies}
                     onChange={setFilterCompanies}
                     allLabel="All companies"
@@ -687,6 +690,7 @@ const UserManagement = () => {
                   />
                 </div>
                 )}
+
                 <div>
                   <Label className="text-xs uppercase text-muted-foreground">Status</Label>
                   <MultiSelectChecklist
