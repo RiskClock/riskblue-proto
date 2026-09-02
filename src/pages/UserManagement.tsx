@@ -428,7 +428,11 @@ const UserManagement = () => {
     let rows = [...users];
     if (filterCompanies.length > 0) {
       const set = new Set(filterCompanies);
-      rows = rows.filter((u) => set.has(u.company || ""));
+      rows = rows.filter((u) => {
+        const ids = (membershipsByUser.get(u.user_id) || []).map((a) => a.tenant_id);
+        if (set.has("__none__") && ids.length === 0) return true;
+        return ids.some((id) => set.has(id));
+      });
     }
     if (filterStatuses.length > 0) {
       const set = new Set(filterStatuses);
@@ -446,10 +450,11 @@ const UserManagement = () => {
         (u) =>
           (u.display_name || "").toLowerCase().includes(q) ||
           (u.email || "").toLowerCase().includes(q) ||
-          (u.company || "").toLowerCase().includes(q) ||
+          tenantNamesFor(u.user_id).some((n) => n.toLowerCase().includes(q)) ||
           u.tags.some((t) => t.name.toLowerCase().includes(q))
       );
     }
+
     rows.sort((a, b) => {
       let va: any;
       let vb: any;
