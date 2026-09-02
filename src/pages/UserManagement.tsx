@@ -1394,7 +1394,6 @@ function CreateUserDialog({
                   <TagPicker selected={tags} onChange={setTags} available={availableTags} />
                 </div>
               </div>
-              <ProjectsAssigner allProjects={allProjects} value={projects} onChange={setProjects} />
             </>
           )}
         </div>
@@ -1523,7 +1522,7 @@ function EditUserDialog({
                   <TagPicker selected={tags} onChange={setTags} available={availableTags} />
                 </div>
               </div>
-              <ProjectsAssigner allProjects={allProjects} value={projects} onChange={setProjects} />
+              
             </>
           )}
         </div>
