@@ -27,7 +27,10 @@ export const SwitchCompanyModal = ({ open, onOpenChange }: SwitchCompanyModalPro
           <DialogTitle>Switch Company</DialogTitle>
           <DialogDescription>Choose the company you want to work in.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-1">
+        <div
+          className="space-y-1 max-h-[60vh] overflow-y-auto -mr-2 pr-2"
+          onWheel={(e) => e.stopPropagation()}
+        >
           {isLoading && (
             <div className="flex items-center gap-2 py-6 justify-center text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading companies...
