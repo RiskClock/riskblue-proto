@@ -756,8 +756,17 @@ const CompanyDialog = ({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-2 sm:col-span-2">
                 <Label>Company Name</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Water Co." />
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Acme Water Co."
+                  className={cn(duplicateName && "border-destructive focus-visible:ring-destructive")}
+                />
+                {duplicateName && (
+                  <p className="text-xs text-destructive">A company with this name already exists.</p>
+                )}
               </div>
+
               <div className="space-y-2">
                 <Label>Credits</Label>
                 <Input type="number" min={0} value={credits} onChange={(e) => setCredits(e.target.value)} />
