@@ -17,6 +17,7 @@ import { TenantMembersModal } from "@/components/TenantMembersModal";
 import { useBrandLogo } from "@/hooks/useBrandLogo";
 import { APP_VERSION } from "@/lib/appVersion";
 import { useUpdateAvailable } from "@/hooks/useVersionCheck";
+import { preloadRoute, preloadRoutes, type RouteKey } from "@/lib/routePreload";
 
 
 import { useCredits } from "@/hooks/useCredits";
@@ -49,6 +50,7 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const updateAvailable = useUpdateAvailable();
 
 
@@ -62,6 +64,34 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
   const displayedCredits = tenantId ? (tenant?.credits_balance ?? 0) : credits;
 
   const isActive = (path: string) => location.pathname === path;
+
+  // Close the menu first, then navigate on the next frame. Navigating
+  // synchronously makes the first click stall while the lazily loaded page
+  // chunk downloads and parses, which freezes the close animation.
+  const runAfterMenuCloses = (fn: () => void) => {
+    setMenuOpen(false);
+    requestAnimationFrame(() => requestAnimationFrame(fn));
+  };
+
+  const menuNavigate = (path: string) => runAfterMenuCloses(() => navigate(path));
+
+  const menuItemProps = (route: RouteKey) => ({
+    onPointerEnter: () => preloadRoute(route),
+    onFocus: () => preloadRoute(route),
+  });
+
+  const handleMenuOpenChange = (open: boolean) => {
+    setMenuOpen(open);
+    if (!open) return;
+    const keys: RouteKey[] = ["projects"];
+    if (isInternalUser) {
+      keys.push("companyManagement", "userManagement", "configuration", "workbench", "logs");
+      if (isRefineryAdmin) keys.push("promptRefinery");
+    } else if (tenantId && tenant?.role === "admin") {
+      keys.push("userManagement");
+    }
+    preloadRoutes(keys);
+  };
 
   return (
     <header className="sticky top-0 z-20 border-b bg-card no-print">
@@ -109,7 +139,7 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
               <span>Credits: <span className="tabular-nums font-medium text-foreground">{displayedCredits}</span></span>
             </button>
           )}
-          <DropdownMenu>
+          <DropdownMenu open={menuOpen} onOpenChange={handleMenuOpenChange}>
             <DropdownMenuTrigger asChild>
               <Avatar className="cursor-pointer">
                 {avatarUrl && <AvatarImage src={avatarUrl} alt="Profile photo" />}
@@ -132,40 +162,40 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
                   <DropdownMenuSeparator />
                 </>
               )}
-              <DropdownMenuItem onClick={() => setEditProfileOpen(true)} className="cursor-pointer">
+              <DropdownMenuItem onClick={() => runAfterMenuCloses(() => setEditProfileOpen(true))} className="cursor-pointer">
                 <UserCog className="h-4 w-4 mr-2" />
                 Edit Profile
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setChangePasswordOpen(true)} className="cursor-pointer">
+              <DropdownMenuItem onClick={() => runAfterMenuCloses(() => setChangePasswordOpen(true))} className="cursor-pointer">
                 <KeyRound className="h-4 w-4 mr-2" />
                 Change Password
               </DropdownMenuItem>
               {isInternalUser && (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => navigate("/internal/companies")} className="cursor-pointer">
+                  <DropdownMenuItem onClick={() => menuNavigate("/internal/companies")} className="cursor-pointer" {...menuItemProps("companyManagement")}>
                     <Building2 className="h-4 w-4 mr-2" />
                     Company Management
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate("/internal/users")} className="cursor-pointer">
+                  <DropdownMenuItem onClick={() => menuNavigate("/internal/users")} className="cursor-pointer" {...menuItemProps("userManagement")}>
                     <Users className="h-4 w-4 mr-2" />
                     User Management
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate("/configuration")} className="cursor-pointer">
+                  <DropdownMenuItem onClick={() => menuNavigate("/configuration")} className="cursor-pointer" {...menuItemProps("configuration")}>
                     <Settings className="h-4 w-4 mr-2" />
                     App Configuration
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate("/workbench")} className="cursor-pointer">
+                  <DropdownMenuItem onClick={() => menuNavigate("/workbench")} className="cursor-pointer" {...menuItemProps("workbench")}>
                     <LayoutGrid className="h-4 w-4 mr-2" />
                     Workbench
                   </DropdownMenuItem>
                   {isRefineryAdmin && (
-                    <DropdownMenuItem onClick={() => navigate("/prompt-refinery")} className="cursor-pointer">
+                    <DropdownMenuItem onClick={() => menuNavigate("/prompt-refinery")} className="cursor-pointer" {...menuItemProps("promptRefinery")}>
                       <FlaskConical className="h-4 w-4 mr-2" />
                       Prompt Refinery
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem onClick={() => navigate("/logs")} className="cursor-pointer">
+                  <DropdownMenuItem onClick={() => menuNavigate("/logs")} className="cursor-pointer" {...menuItemProps("logs")}>
                     <BarChart3 className="h-4 w-4 mr-2" />
                     Logs
                   </DropdownMenuItem>
@@ -174,20 +204,21 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
               <DropdownMenuSeparator />
               {tenantId && !isInternalUser && tenant?.role === "admin" && (
                 <DropdownMenuItem
-                  onClick={() => navigate(tenantPath("/users"))}
+                  onClick={() => menuNavigate(tenantPath("/users"))}
                   className="cursor-pointer"
+                  {...menuItemProps("userManagement")}
                 >
                   <Users className="h-4 w-4 mr-2" />
                   User Management
                 </DropdownMenuItem>
               )}
               {(myTenants.length > 0 || isInternalUser) && (
-                <DropdownMenuItem onClick={() => setSwitchCompanyOpen(true)} className="cursor-pointer">
+                <DropdownMenuItem onClick={() => runAfterMenuCloses(() => setSwitchCompanyOpen(true))} className="cursor-pointer">
                   <ArrowLeftRight className="h-4 w-4 mr-2" />
                   Switch Company
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem onClick={signOut} className="cursor-pointer">
+              <DropdownMenuItem onClick={() => runAfterMenuCloses(signOut)} className="cursor-pointer">
                 <LogOut className="h-4 w-4 mr-2" />
                 Logout
               </DropdownMenuItem>
