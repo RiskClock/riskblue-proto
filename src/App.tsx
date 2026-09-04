@@ -11,15 +11,16 @@ import { ExportProgressPanel } from "./components/export/ExportProgressPanel";
 import { PaymentTestModeBanner } from "./components/PaymentTestModeBanner";
 import { useVersionCheck } from "./hooks/useVersionCheck";
 import { TenantLayout, RootRedirect } from "./components/TenantLayout";
+import { routeLoaders } from "./lib/routePreload";
 
 const queryClient = new QueryClient();
 
 const Auth = lazy(() => import("./pages/Auth"));
-const Projects = lazy(() => import("./pages/Projects"));
+const Projects = lazy(routeLoaders.projects);
 const ProjectWizard = lazy(() => import("./pages/ProjectWizard"));
 const SolutionProviderPortal = lazy(() => import("./pages/SolutionProviderPortal"));
-const Configuration = lazy(() => import("./pages/Configuration"));
-const Logs = lazy(() => import("./pages/Logs"));
+const Configuration = lazy(routeLoaders.configuration);
+const Logs = lazy(routeLoaders.logs);
 const AcceptInvite = lazy(() => import("./pages/AcceptInvite"));
 const AcceptCompanyInvite = lazy(() => import("./pages/AcceptCompanyInvite"));
 const OAuthCallback = lazy(() => import("./pages/OAuthCallback"));
@@ -28,11 +29,11 @@ const ProcoreConnect = lazy(() => import("./pages/ProcoreConnect"));
 const SharePointConnect = lazy(() => import("./pages/SharePointConnect"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const SetupAccount = lazy(() => import("./pages/SetupAccount"));
-const InternalWorkbench = lazy(() => import("./pages/InternalWorkbench"));
+const InternalWorkbench = lazy(routeLoaders.workbench);
 const WorkbenchProjectDetail = lazy(() => import("./pages/WorkbenchProjectDetail"));
-const PromptRefinery = lazy(() => import("./pages/PromptRefinery"));
+const PromptRefinery = lazy(routeLoaders.promptRefinery);
 const PromptRefineryDetail = lazy(() => import("./pages/PromptRefineryDetail"));
-const UserManagement = lazy(() => import("./pages/UserManagement"));
+const UserManagement = lazy(routeLoaders.userManagement);
 const Controls = lazy(() => import("./pages/Controls"));
 const InternalViewerTest = lazy(() => import("./pages/InternalViewerTest"));
 const InternalActivity = lazy(() => import("./pages/InternalActivity"));
@@ -40,7 +41,7 @@ const CheckoutReturn = lazy(() => import("./pages/CheckoutReturn"));
 const ThreatReportDownload = lazy(() => import("./pages/ThreatReportDownload"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
-const CompanyManagement = lazy(() => import("./pages/CompanyManagement"));
+const CompanyManagement = lazy(routeLoaders.companyManagement);
 
 const VersionWatcher = () => {
   useVersionCheck();
