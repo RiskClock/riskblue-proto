@@ -90,7 +90,6 @@ const App = () => (
             <Route path="/solution-provider-portal" element={<ProtectedRoute><SolutionProviderPortal /></ProtectedRoute>} />
             <Route path="/configuration" element={<ProtectedRoute><Configuration /></ProtectedRoute>} />
             <Route path="/logs" element={<ProtectedRoute><Logs /></ProtectedRoute>} />
-            <Route path="/controls" element={<ProtectedRoute><Controls /></ProtectedRoute>} />
             <Route path="/workbench" element={<ProtectedRoute><InternalWorkbench /></ProtectedRoute>} />
             <Route path="/workbench/project/:projectId" element={<ProtectedRoute><WorkbenchProjectDetail /></ProtectedRoute>} />
 
@@ -106,6 +105,7 @@ const App = () => (
               <Route index element={<Navigate to="projects" replace />} />
               <Route path="projects" element={<Projects />} />
               <Route path="users" element={<UserManagement />} />
+              <Route path="controls" element={<Controls />} />
               <Route path="project/:id" element={<ProjectWizard />} />
               <Route path="workbench/project/:projectId" element={<WorkbenchProjectDetail />} />
             </Route>
