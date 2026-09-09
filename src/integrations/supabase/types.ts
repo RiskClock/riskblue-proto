@@ -968,6 +968,7 @@ export type Database = {
           created_by: string | null
           id: string
           sub_options: Json
+          tenant_id: string | null
           updated_at: string
           updated_by: string | null
         }
@@ -979,6 +980,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           sub_options?: Json
+          tenant_id?: string | null
           updated_at?: string
           updated_by?: string | null
         }
@@ -990,10 +992,19 @@ export type Database = {
           created_by?: string | null
           id?: string
           sub_options?: Json
+          tenant_id?: string | null
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "company_control_selections_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       company_logos: {
         Row: {
@@ -3375,6 +3386,10 @@ export type Database = {
       }
       can_edit_project: {
         Args: { _project_id: string; _user_id: string }
+        Returns: boolean
+      }
+      can_manage_tenant_controls: {
+        Args: { _tenant_id: string; _user_id: string }
         Returns: boolean
       }
       claim_next_analysis_jobs: {

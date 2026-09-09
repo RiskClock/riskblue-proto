@@ -14,6 +14,7 @@ export const routeLoaders = {
   userManagement: () => import("@/pages/UserManagement"),
   companyManagement: () => import("@/pages/CompanyManagement"),
   promptRefinery: () => import("@/pages/PromptRefinery"),
+  controls: () => import("@/pages/Controls"),
 } as const;
 
 export type RouteKey = keyof typeof routeLoaders;

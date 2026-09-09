@@ -1,26 +1,16 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { AppHeader } from "@/components/AppHeader";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { useAccountType } from "@/hooks/useAccountType";
-import { Loader2, ShieldCheck, Mail, CheckCircle2, Plus, Pencil, Trash2, Upload, ImageIcon, X, Check } from "lucide-react";
+import { useTenant } from "@/contexts/TenantContext";
+import { Loader2, X } from "lucide-react";
 import { toast } from "sonner";
-import { z } from "zod";
 
 interface MitigationControl {
   id: string;
   name: string;
-}
-
-interface CompanyContact {
-  id: string;
-  name: string;
-  email: string;
 }
 
 const SPECIAL_CONTROLS: Record<string, string[]> = {
@@ -38,33 +28,17 @@ const CATEGORIES = [
 
 type CategoryKey = typeof CATEGORIES[number]["key"];
 
-const REQUEST_STORAGE_KEY = (userId: string) => `control-library-access-requested:${userId}`;
-
-const contactSchema = z.object({
-  name: z.string().trim().min(1, "Name is required").max(100, "Name must be 100 characters or less"),
-  email: z.string().trim().email("Invalid email address").max(255, "Email must be 255 characters or less"),
-});
-
 export default function Controls() {
   const { user } = useAuth();
-  const { isWMSV, company, loading: accountLoading } = useAccountType();
-  const queryClient = useQueryClient();
+  const { tenant, tenantId, loading: tenantLoading } = useTenant();
+
+  const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
+  // Guests are read-only; admins and members (and internal staff) may edit.
+  const canEdit = isInternalUser || tenant?.role === "admin" || tenant?.role === "member";
 
   // Selections: Map<`${category}::${controlId}`, sub_options[]>
   const [selections, setSelections] = useState<Map<string, string[]>>(new Map());
   const [expandedControls, setExpandedControls] = useState<Set<string>>(new Set());
-  const [requesting, setRequesting] = useState(false);
-  const [hasRequested, setHasRequested] = useState(false);
-
-  // Contacts UI state
-  const [editingContactId, setEditingContactId] = useState<string | null>(null);
-  const [draftName, setDraftName] = useState("");
-  const [draftEmail, setDraftEmail] = useState("");
-  const [adding, setAdding] = useState(false);
-
-  // Logo state
-  const [uploadingLogo, setUploadingLogo] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Description banner dismissal
   const [showDescription, setShowDescription] = useState(() =>
@@ -74,15 +48,6 @@ export default function Controls() {
     setShowDescription(false);
     sessionStorage.setItem("riskblue_controls_description_dismissed", "true");
   };
-
-  const hasCompany = !!(company && company.trim());
-  const showAccessGate = !accountLoading && isWMSV && !hasCompany;
-
-  useEffect(() => {
-    if (user?.id) {
-      setHasRequested(localStorage.getItem(REQUEST_STORAGE_KEY(user.id)) === "1");
-    }
-  }, [user?.id]);
 
   // Fetch unique control IDs per category
   const { data: categoryControlIds = {}, isLoading: awpLoading } = useQuery({
@@ -106,7 +71,7 @@ export default function Controls() {
         processes: collectUnique(processesRes.data),
       };
     },
-    enabled: !showAccessGate,
+    enabled: !!tenantId,
   });
 
   const { data: allControls = [], isLoading: controlsLoading } = useQuery({
@@ -120,60 +85,22 @@ export default function Controls() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !showAccessGate,
+    enabled: !!tenantId,
   });
 
-  // Fetch existing selections for the user's company
+  // Existing selections for the active company
   const { data: existingSelections = [], isLoading: selectionsLoading } = useQuery({
-    queryKey: ["company-control-selections", company],
+    queryKey: ["company-control-selections", tenantId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("company_control_selections")
         .select("*")
-        .ilike("company", company!);
+        .eq("tenant_id", tenantId!);
       if (error) throw error;
       return data || [];
     },
-    enabled: !!user && hasCompany,
+    enabled: !!user && !!tenantId,
   });
-
-  // Contacts
-  const { data: contacts = [], isLoading: contactsLoading } = useQuery({
-    queryKey: ["company-contacts", company],
-    queryFn: async (): Promise<CompanyContact[]> => {
-      const { data, error } = await supabase
-        .from("company_contacts")
-        .select("id, name, email")
-        .ilike("company", company!)
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!user && hasCompany,
-  });
-
-  // Logo
-  const { data: logoRow } = useQuery({
-    queryKey: ["company-logo", company],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("company_logos")
-        .select("storage_path")
-        .ilike("company", company!)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!user && hasCompany,
-  });
-
-  const logoUrl = useMemo(() => {
-    if (!logoRow?.storage_path) return null;
-    const { data } = supabase.storage.from("company-logos").getPublicUrl(logoRow.storage_path);
-    // Cache-bust on update
-    return `${data.publicUrl}?t=${Date.now()}`;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [logoRow?.storage_path]);
 
   const controlMap = useMemo(() => {
     const m = new Map<string, MitigationControl>();
@@ -181,14 +108,13 @@ export default function Controls() {
     return m;
   }, [allControls]);
 
-  // Sync selections from DB ONCE per company load. Subsequent local edits are
-  // authoritative - a stale refetch (e.g. after logo invalidation, window focus)
-  // must NOT overwrite in-flight user edits.
-  const syncedCompanyRef = useRef<string | null>(null);
+  // Sync selections from the database ONCE per company load. Later local edits
+  // are authoritative - a stale refetch must not overwrite in-flight changes.
+  const syncedTenantRef = useRef<string | null>(null);
   useEffect(() => {
     if (selectionsLoading) return;
-    if (!company) return;
-    if (syncedCompanyRef.current === company) return;
+    if (!tenantId) return;
+    if (syncedTenantRef.current === tenantId) return;
     const map = new Map<string, string[]>();
     existingSelections.forEach((s: any) => {
       const key = `${s.category}::${s.control_id}`;
@@ -199,33 +125,28 @@ export default function Controls() {
       }
     });
     setSelections(map);
-    syncedCompanyRef.current = company;
-  }, [existingSelections, controlMap, company, selectionsLoading]);
+    syncedTenantRef.current = tenantId;
+  }, [existingSelections, controlMap, tenantId, selectionsLoading]);
 
   const makeKey = (category: string, controlId: string) => `${category}::${controlId}`;
 
   // Per-key write queue: serialize writes so rapid toggles always end with the
-  // user's last intended state (prevents delete-then-insert races where a stale
-  // delete clobbers a fresh insert, or vice-versa).
+  // user's last intended state.
   const writeQueueRef = useRef<Map<string, Promise<void>>>(new Map());
-  // Track the latest intended state per key. null = deleted, array = subs.
   const desiredStateRef = useRef<Map<string, string[] | null>>(new Map());
 
   const flushWrite = async (category: CategoryKey, controlId: string, key: string) => {
-    if (!company || !user) return;
-    // Loop until the desired state is stable across a write - this collapses
-    // multiple rapid toggles into the final state.
+    if (!tenantId || !user) return;
     while (true) {
       const desired = desiredStateRef.current.get(key);
       if (desired === undefined) return;
-      // Mark as in-flight by clearing; if another toggle arrives it will reset it.
       desiredStateRef.current.delete(key);
 
       if (desired === null) {
         const { error } = await supabase
           .from("company_control_selections")
           .delete()
-          .ilike("company", company)
+          .eq("tenant_id", tenantId)
           .eq("category", category)
           .eq("control_id", controlId);
         if (error) {
@@ -234,20 +155,20 @@ export default function Controls() {
       } else {
         const { error } = await supabase.from("company_control_selections").upsert(
           {
-            company,
+            tenant_id: tenantId,
+            company: tenant?.name || "",
             category,
             control_id: controlId,
             sub_options: desired,
             updated_by: user.id,
             created_by: user.id,
-          },
-          { onConflict: "company,category,control_id" }
+          } as any,
+          { onConflict: "tenant_id,category,control_id" }
         );
         if (error) {
           toast.error((error as any)?.message || "Failed to save selection");
         }
       }
-      // If a new desired state arrived during the write, loop again.
       if (!desiredStateRef.current.has(key)) return;
     }
   };
@@ -256,13 +177,12 @@ export default function Controls() {
     const key = makeKey(category, controlId);
     desiredStateRef.current.set(key, desired);
     const prev = writeQueueRef.current.get(key) || Promise.resolve();
-    const next = prev
-      .catch(() => {})
-      .then(() => flushWrite(category, controlId, key));
+    const next = prev.catch(() => {}).then(() => flushWrite(category, controlId, key));
     writeQueueRef.current.set(key, next);
   };
 
   const toggleControl = (category: CategoryKey, controlId: string) => {
+    if (!canEdit) return;
     const key = makeKey(category, controlId);
     const isSelected = selections.has(key);
     const control = controlMap.get(controlId);
@@ -282,6 +202,7 @@ export default function Controls() {
   };
 
   const toggleSubOption = (category: CategoryKey, controlId: string, subOption: string) => {
+    if (!canEdit) return;
     const key = makeKey(category, controlId);
     const currentSubs = selections.get(key) || [];
     const newSubs = currentSubs.includes(subOption)
@@ -297,173 +218,11 @@ export default function Controls() {
     }
   };
 
-  const handleRequestAccess = async () => {
-    if (!user) return;
-    setRequesting(true);
-    try {
-      const fullName = (user.user_metadata?.display_name as string) || user.email?.split("@")[0] || "Unknown";
-      const workEmail = user.email || "";
+  const pageTitle = tenant?.name
+    ? `${tenant.name}'s Marketplace Control Listing`
+    : "Marketplace Control Listing";
 
-      await supabase.from("access_requests").insert({
-        full_name: fullName,
-        work_email: workEmail,
-        company_name: company || "(not set)",
-        request_type: "control_library",
-        requesting_user_id: user.id,
-        status: "pending",
-      } as any);
-
-      const { error } = await supabase.functions.invoke("notify-access-request", {
-        body: {
-          fullName,
-          workEmail,
-          companyName: company || "",
-          requestType: "control_library",
-          context: "WMSV user without company tried to access the Marketplace Control Listing page.",
-        },
-      });
-      if (error) throw error;
-
-      localStorage.setItem(REQUEST_STORAGE_KEY(user.id), "1");
-      setHasRequested(true);
-      toast.success("Request sent. We'll be in touch shortly.");
-    } catch (e: any) {
-      console.error(e);
-      toast.error((e as any)?.message || "Failed to send request");
-    } finally {
-      setRequesting(false);
-    }
-  };
-
-  // ============ Contact CRUD ============
-  const startAdd = () => {
-    setAdding(true);
-    setEditingContactId(null);
-    setDraftName("");
-    setDraftEmail("");
-  };
-
-  const startEdit = (c: CompanyContact) => {
-    setEditingContactId(c.id);
-    setAdding(false);
-    setDraftName(c.name);
-    setDraftEmail(c.email);
-  };
-
-  const cancelEdit = () => {
-    setAdding(false);
-    setEditingContactId(null);
-    setDraftName("");
-    setDraftEmail("");
-  };
-
-  const saveContact = async () => {
-    if (!company || !user) return;
-    const parsed = contactSchema.safeParse({ name: draftName, email: draftEmail });
-    if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message || "Invalid input");
-      return;
-    }
-    try {
-      if (editingContactId) {
-        const { error } = await supabase
-          .from("company_contacts")
-          .update({ name: parsed.data.name, email: parsed.data.email, updated_by: user.id })
-          .eq("id", editingContactId);
-        if (error) throw error;
-        toast.success("Contact updated");
-      } else {
-        const { error } = await supabase.from("company_contacts").insert({
-          company,
-          name: parsed.data.name,
-          email: parsed.data.email,
-          created_by: user.id,
-          updated_by: user.id,
-        });
-        if (error) throw error;
-        toast.success("Contact added");
-      }
-      cancelEdit();
-      queryClient.invalidateQueries({ queryKey: ["company-contacts", company] });
-    } catch (e) {
-      toast.error((e as any)?.message || "Failed to save contact");
-    }
-  };
-
-  const deleteContact = async (id: string) => {
-    if (!confirm("Delete this contact?")) return;
-    try {
-      const { error } = await supabase.from("company_contacts").delete().eq("id", id);
-      if (error) throw error;
-      toast.success("Contact deleted");
-      queryClient.invalidateQueries({ queryKey: ["company-contacts", company] });
-    } catch (e) {
-      toast.error((e as any)?.message || "Failed to delete contact");
-    }
-  };
-
-  // ============ Logo upload ============
-  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !company || !user) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please select an image file");
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Logo must be 5MB or smaller");
-      return;
-    }
-    setUploadingLogo(true);
-    try {
-      const slug = company.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "company";
-      const ext = (file.name.split(".").pop() || "png").toLowerCase();
-      const path = `${slug}/logo-${Date.now()}.${ext}`;
-
-      const { error: upErr } = await supabase.storage
-        .from("company-logos")
-        .upload(path, file, { upsert: true, contentType: file.type });
-      if (upErr) throw upErr;
-
-      // Delete old file if exists
-      if (logoRow?.storage_path && logoRow.storage_path !== path) {
-        await supabase.storage.from("company-logos").remove([logoRow.storage_path]);
-      }
-
-      const { error: rowErr } = await supabase.from("company_logos").upsert(
-        { company, storage_path: path, updated_by: user.id, updated_at: new Date().toISOString() },
-        { onConflict: "company" }
-      );
-      if (rowErr) throw rowErr;
-
-      toast.success("Logo updated");
-      queryClient.invalidateQueries({ queryKey: ["company-logo", company] });
-    } catch (e) {
-      toast.error((e as any)?.message || "Failed to upload logo");
-    } finally {
-      setUploadingLogo(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  };
-
-  const handleRemoveLogo = async () => {
-    if (!user || !company || !logoRow?.storage_path) return;
-    if (!window.confirm("Remove company logo?")) return;
-    setUploadingLogo(true);
-    try {
-      await supabase.storage.from("company-logos").remove([logoRow.storage_path]);
-      const { error } = await supabase.from("company_logos").delete().eq("company", company);
-      if (error) throw error;
-      toast.success("Logo removed");
-      queryClient.invalidateQueries({ queryKey: ["company-logo", company] });
-    } catch (e) {
-      toast.error((e as any)?.message || "Failed to remove logo");
-    } finally {
-      setUploadingLogo(false);
-    }
-  };
-
-  if (accountLoading) {
+  if (tenantLoading) {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader title="Marketplace Control Listing" />
@@ -474,61 +233,15 @@ export default function Controls() {
     );
   }
 
-  if (!isWMSV) {
+  if (!tenantId) {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader title="Marketplace Control Listing" />
         <div className="flex items-center justify-center py-20">
-          <p className="text-muted-foreground">You don't have access to this page.</p>
+          <p className="text-muted-foreground">
+            Select a company to manage its Marketplace Control Listing.
+          </p>
         </div>
-      </div>
-    );
-  }
-
-  if (showAccessGate) {
-    return (
-      <div className="min-h-screen bg-background">
-        <AppHeader title="Marketplace Control Listing" />
-        <Dialog open={true} onOpenChange={() => { /* non-dismissable */ }}>
-          <DialogContent className="sm:max-w-lg" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
-            <DialogHeader>
-              <div className="flex items-center gap-3 mb-1">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <ShieldCheck className="w-5 h-5 text-primary" />
-                </div>
-                <DialogTitle className="text-lg">Marketplace Control Listing</DialogTitle>
-              </div>
-              <DialogDescription className="text-sm leading-relaxed pt-2 space-y-3">
-                <p>
-                  The Marketplace Control Listing lets your company specify which water mitigation
-                  controls you can offer end customers. Your selections are surfaced inside
-                  RiskBlue's Water Mitigation Guideline (WMG) builder, so when a project
-                  needs a control your company supports, you appear as an available vendor.
-                </p>
-                <p className="text-foreground font-medium">
-                  Your account isn't yet configured to manage a company's Marketplace Control Listing.
-                </p>
-                <p>
-                  Request access and we'll set up your company so you can start managing your
-                  offered controls.
-                </p>
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter className="mt-2">
-              {hasRequested ? (
-                <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Access requested. We'll reach out soon.</span>
-                </div>
-              ) : (
-                <Button onClick={handleRequestAccess} disabled={requesting} className="gap-2">
-                  {requesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-                  {requesting ? "Sending request…" : "Request access"}
-                </Button>
-              )}
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     );
   }
@@ -536,7 +249,7 @@ export default function Controls() {
   if (awpLoading || controlsLoading || selectionsLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <AppHeader title="Marketplace Control Listing" />
+        <AppHeader title={pageTitle} />
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
         </div>
@@ -560,16 +273,23 @@ export default function Controls() {
         const someChecked = isSelected && currentSubs.length > 0 && currentSubs.length < specialSubs.length;
         const optionCount = specialSubs.length;
 
-        const handleParentToggle = async () => {
-          if (isSelected && allChecked) {
-            await toggleControl(category, control.id);
-          } else if (isSelected && someChecked) {
+        const handleParentToggle = () => {
+          if (!canEdit) return;
+          if (isSelected && someChecked) {
             const allSubs = [...specialSubs];
             setSelections(prev => new Map(prev).set(key, allSubs));
             enqueueWrite(category, control.id, allSubs);
           } else {
-            await toggleControl(category, control.id);
+            toggleControl(category, control.id);
           }
+        };
+
+        const toggleExpanded = () => {
+          setExpandedControls(prev => {
+            const n = new Set(prev);
+            if (n.has(key)) n.delete(key); else n.add(key);
+            return n;
+          });
         };
 
         return (
@@ -578,28 +298,14 @@ export default function Controls() {
               <Checkbox
                 checked={allChecked ? true : someChecked ? "indeterminate" : false}
                 indeterminate={someChecked}
+                disabled={!canEdit}
                 onCheckedChange={handleParentToggle}
               />
-              <span
-                className="text-sm cursor-pointer select-none flex-1"
-                onClick={() => {
-                  setExpandedControls(prev => {
-                    const n = new Set(prev);
-                    if (n.has(key)) n.delete(key); else n.add(key);
-                    return n;
-                  });
-                }}
-              >
+              <span className="text-sm cursor-pointer select-none flex-1" onClick={toggleExpanded}>
                 {control.name} <span className="underline">({optionCount} option{optionCount === 1 ? "" : "s"})</span>
               </span>
               <button
-                onClick={() => {
-                  setExpandedControls(prev => {
-                    const n = new Set(prev);
-                    if (n.has(key)) n.delete(key); else n.add(key);
-                    return n;
-                  });
-                }}
+                onClick={toggleExpanded}
                 className="text-muted-foreground hover:text-foreground p-0.5"
                 aria-label={isControlExpanded ? "Collapse options" : "Expand options"}
               >
@@ -620,6 +326,7 @@ export default function Controls() {
                   <div key={sub} className="flex items-center gap-2">
                     <Checkbox
                       checked={currentSubs.includes(sub)}
+                      disabled={!canEdit}
                       onCheckedChange={() => toggleSubOption(category, control.id, sub)}
                     />
                     <span
@@ -640,6 +347,7 @@ export default function Controls() {
         <div key={control.id} className="flex items-center gap-2 py-0.5">
           <Checkbox
             checked={isSelected}
+            disabled={!canEdit}
             onCheckedChange={() => toggleControl(category, control.id)}
           />
           <span
@@ -655,60 +363,8 @@ export default function Controls() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader title={company ? `${company}'s Marketplace Control Listing` : "Marketplace Control Listing"} />
+      <AppHeader title={pageTitle} />
       <main className="container mx-auto px-6 py-8">
-        {/* Logo uploader */}
-        <div className="flex items-center gap-4 mb-4">
-          <div
-            className="group relative rounded-lg border border-dashed border-border bg-muted/30 hover:border-primary/60 hover:bg-muted/50 overflow-hidden transition-colors"
-            style={{ width: 120, height: 80 }}
-          >
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploadingLogo}
-              className="w-full h-full flex items-center justify-center"
-              aria-label={logoUrl ? "Replace company logo" : "Add logo"}
-            >
-              {logoUrl ? (
-                <img src={logoUrl} alt={`${company} logo`} className="w-full h-full object-contain p-1" />
-              ) : (
-                <div className="flex flex-col items-center gap-1 text-muted-foreground">
-                  <ImageIcon className="w-6 h-6" />
-                  <span className="text-[10px]">Add logo</span>
-                </div>
-              )}
-              <div className="pointer-events-none absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                {uploadingLogo ? (
-                  <Loader2 className="w-5 h-5 animate-spin text-white" />
-                ) : (
-                  <Upload className="w-5 h-5 text-white" />
-                )}
-              </div>
-            </button>
-            {logoUrl && !uploadingLogo && (
-              <button
-                type="button"
-                onClick={handleRemoveLogo}
-                className="absolute top-1 right-1 z-10 p-1 rounded bg-black/60 hover:bg-destructive text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                aria-label="Remove company logo"
-                title="Remove logo"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleLogoChange}
-          />
-        </div>
-
-
-        {/* Explanation - styled like the welcome banner on Projects */}
         {showDescription && (
           <div className="bg-muted/50 p-6 rounded-lg mb-8 relative">
             <button
@@ -727,7 +383,12 @@ export default function Controls() {
           </div>
         )}
 
-        {/* Controls grid */}
+        {!canEdit && (
+          <p className="text-sm text-muted-foreground mb-4">
+            You have view-only access to this listing.
+          </p>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
           {CATEGORIES.map(cat => (
             <div key={cat.key} className="bg-card rounded-lg border p-6">
@@ -738,128 +399,7 @@ export default function Controls() {
             </div>
           ))}
         </div>
-
-        {/* Contacts */}
-        <div className="bg-card rounded-lg border p-6 max-w-3xl">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lg font-semibold text-foreground">Contacts</h2>
-              <p className="text-xs text-muted-foreground mt-1">
-                People to reach out to about this vendor's offered controls.
-              </p>
-            </div>
-            {!adding && !editingContactId && (
-              <Button size="sm" variant="outline" onClick={startAdd} className="gap-1">
-                <Plus className="w-4 h-4" /> Add contact
-              </Button>
-            )}
-          </div>
-
-          {contactsLoading ? (
-            <div className="flex items-center justify-center py-6">
-              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {contacts.length === 0 && !adding && (
-                <p className="text-sm text-muted-foreground py-2">No contacts yet.</p>
-              )}
-              {contacts.map((c) => {
-                const isEditing = editingContactId === c.id;
-                if (isEditing) {
-                  return (
-                    <ContactEditRow
-                      key={c.id}
-                      name={draftName}
-                      email={draftEmail}
-                      onName={setDraftName}
-                      onEmail={setDraftEmail}
-                      onSave={saveContact}
-                      onCancel={cancelEdit}
-                    />
-                  );
-                }
-                return (
-                  <div
-                    key={c.id}
-                    className="flex items-center gap-3 py-2 px-3 rounded-md border border-transparent hover:border-border hover:bg-muted/30"
-                  >
-                    <div className="flex-1 min-w-0 grid grid-cols-2 gap-3">
-                      <span className="text-sm font-medium truncate">{c.name}</span>
-                      <span className="text-sm text-muted-foreground truncate">{c.email}</span>
-                    </div>
-                    <Button size="icon" variant="ghost" onClick={() => startEdit(c)} aria-label="Edit contact">
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                    <Button size="icon" variant="ghost" onClick={() => deleteContact(c.id)} aria-label="Delete contact">
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </Button>
-                  </div>
-                );
-              })}
-              {adding && (
-                <ContactEditRow
-                  name={draftName}
-                  email={draftEmail}
-                  onName={setDraftName}
-                  onEmail={setDraftEmail}
-                  onSave={saveContact}
-                  onCancel={cancelEdit}
-                />
-              )}
-            </div>
-          )}
-        </div>
       </main>
-    </div>
-  );
-}
-
-function ContactEditRow({
-  name,
-  email,
-  onName,
-  onEmail,
-  onSave,
-  onCancel,
-}: {
-  name: string;
-  email: string;
-  onName: (v: string) => void;
-  onEmail: (v: string) => void;
-  onSave: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-2 py-2 px-3 rounded-md border border-primary/40 bg-primary/5">
-      <div className="flex-1 grid grid-cols-2 gap-2">
-        <Input
-          autoFocus
-          placeholder="Name"
-          value={name}
-          onChange={(e) => onName(e.target.value)}
-          maxLength={100}
-          className="h-8"
-        />
-        <Input
-          placeholder="Email"
-          type="email"
-          value={email}
-          onChange={(e) => onEmail(e.target.value)}
-          maxLength={255}
-          className="h-8"
-          onKeyDown={(e) => {
-            if (e.key === "Enter") onSave();
-            if (e.key === "Escape") onCancel();
-          }}
-        />
-      </div>
-      <Button size="icon" variant="ghost" onClick={onSave} aria-label="Save contact">
-        <Check className="w-4 h-4 text-emerald-600" />
-      </Button>
-      <Button size="icon" variant="ghost" onClick={onCancel} aria-label="Cancel">
-        <X className="w-4 h-4" />
-      </Button>
     </div>
   );
 }
