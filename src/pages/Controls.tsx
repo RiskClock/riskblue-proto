@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppHeader } from "@/components/AppHeader";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useTenant } from "@/contexts/TenantContext";
 import { Loader2, Search, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
@@ -35,12 +35,22 @@ const SPECIAL_CONTROLS: Record<string, string[]> = {
 };
 
 const CATEGORIES = [
-  { key: "critical_assets", label: "Critical Assets", table: "critical_assets" },
-  { key: "water_systems", label: "Water Systems", table: "water_systems" },
-  { key: "processes", label: "Contractor Processes", table: "processes" },
+  { key: "critical_assets", label: "Critical Assets" },
+  { key: "water_systems", label: "Water Systems" },
+  { key: "processes", label: "Contractor Processes" },
 ] as const;
 
 type CategoryKey = typeof CATEGORIES[number]["key"];
+
+interface ControlOverride {
+  control_id: string;
+  critical_asset_ids: string[];
+  water_system_ids: string[];
+  process_ids: string[];
+  assets_customized: boolean;
+  one_time_cost: number | null;
+  monthly_maint_cost: number | null;
+}
 
 const formatCost = (cost?: number | null) => {
   if (!cost) return "$0";
@@ -52,6 +62,7 @@ const formatCost = (cost?: number | null) => {
 export default function Controls() {
   const { user } = useAuth();
   const { tenant, tenantId, loading: tenantLoading } = useTenant();
+  const queryClient = useQueryClient();
 
   const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
   // Guests are read-only; admins and members (and internal staff) may edit.
@@ -59,11 +70,11 @@ export default function Controls() {
 
   // Selections: Map<`${category}::${controlId}`, sub_options[]>
   const [selections, setSelections] = useState<Map<string, string[]>>(new Map());
-  const [expandedControls, setExpandedControls] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
+  const [assetSearch, setAssetSearch] = useState("");
   const [previewControlId, setPreviewControlId] = useState<string | null>(null);
+  const [previewRowKey, setPreviewRowKey] = useState<string | null>(null);
 
-  // Catalog rows per category, including names for the details panel
   const emptyCatalog = useMemo(
     () => ({ critical_assets: [], water_systems: [], processes: [] }) as Record<CategoryKey, { id: string; name: string; default_control_ids: string[] }[]>,
     []
@@ -72,9 +83,9 @@ export default function Controls() {
     queryKey: ["controls-category-catalog"],
     queryFn: async (): Promise<Record<CategoryKey, { id: string; name: string; default_control_ids: string[] }[]>> => {
       const [assetsRes, systemsRes, processesRes] = await Promise.all([
-        supabase.from("critical_assets").select("id, name, default_control_ids").eq("is_active", true),
-        supabase.from("water_systems").select("id, name, default_control_ids").eq("is_active", true),
-        supabase.from("processes").select("id, name, default_control_ids").eq("is_active", true),
+        supabase.from("critical_assets").select("id, name, default_control_ids").eq("is_active", true).order("name"),
+        supabase.from("water_systems").select("id, name, default_control_ids").eq("is_active", true).order("name"),
+        supabase.from("processes").select("id, name, default_control_ids").eq("is_active", true).order("name"),
       ]);
       return {
         critical_assets: (assetsRes.data || []) as any,
@@ -113,13 +124,32 @@ export default function Controls() {
     enabled: !!user && !!tenantId,
   });
 
+  // Company-specific overrides (protected assets + costs)
+  const { data: overrides = [], isLoading: overridesLoading } = useQuery({
+    queryKey: ["tenant-control-overrides", tenantId],
+    queryFn: async (): Promise<ControlOverride[]> => {
+      const { data, error } = await supabase
+        .from("tenant_control_overrides")
+        .select("control_id, critical_asset_ids, water_system_ids, process_ids, assets_customized, one_time_cost, monthly_maint_cost")
+        .eq("tenant_id", tenantId!);
+      if (error) throw error;
+      return (data || []) as any;
+    },
+    enabled: !!user && !!tenantId,
+  });
+
+  const overrideMap = useMemo(() => {
+    const m = new Map<string, ControlOverride>();
+    overrides.forEach(o => m.set(o.control_id, o));
+    return m;
+  }, [overrides]);
+
   const controlMap = useMemo(() => {
     const m = new Map<string, MitigationControl>();
     allControls.forEach(c => m.set(c.id, c));
     return m;
   }, [allControls]);
 
-  // Unique control ids per category, from the catalog
   const categoryControlIds = useMemo(() => {
     const collect = (rows: { default_control_ids: string[] }[] | undefined): string[] => {
       const set = new Set<string>();
@@ -133,8 +163,7 @@ export default function Controls() {
     } as Record<CategoryKey, string[]>;
   }, [catalogRows]);
 
-  // Sync selections from the database ONCE per company load. Later local edits
-  // are authoritative - a stale refetch must not overwrite in-flight changes.
+  // Sync selections from the database ONCE per company load.
   const syncedTenantRef = useRef<string | null>(null);
   useEffect(() => {
     if (selectionsLoading) return;
@@ -142,16 +171,11 @@ export default function Controls() {
     if (syncedTenantRef.current === tenantId) return;
     const map = new Map<string, string[]>();
     existingSelections.forEach((s: any) => {
-      const key = `${s.category}::${s.control_id}`;
-      map.set(key, (s.sub_options as string[]) || []);
-      const control = controlMap.get(s.control_id);
-      if (control && SPECIAL_CONTROLS[control.name]) {
-        setExpandedControls(prev => new Set(prev).add(key));
-      }
+      map.set(`${s.category}::${s.control_id}`, (s.sub_options as string[]) || []);
     });
     setSelections(map);
     syncedTenantRef.current = tenantId;
-  }, [existingSelections, controlMap, tenantId, selectionsLoading]);
+  }, [existingSelections, tenantId, selectionsLoading]);
 
   const makeKey = (category: string, controlId: string) => `${category}::${controlId}`;
 
@@ -174,9 +198,7 @@ export default function Controls() {
           .eq("tenant_id", tenantId)
           .eq("category", category)
           .eq("control_id", controlId);
-        if (error) {
-          toast.error((error as any)?.message || "Failed to remove selection");
-        }
+        if (error) toast.error((error as any)?.message || "Failed to remove selection");
       } else {
         const { error } = await supabase.from("company_control_selections").upsert(
           {
@@ -190,9 +212,7 @@ export default function Controls() {
           } as any,
           { onConflict: "tenant_id,category,control_id" }
         );
-        if (error) {
-          toast.error((error as any)?.message || "Failed to save selection");
-        }
+        if (error) toast.error((error as any)?.message || "Failed to save selection");
       }
       if (!desiredStateRef.current.has(key)) return;
     }
@@ -206,60 +226,139 @@ export default function Controls() {
     writeQueueRef.current.set(key, next);
   };
 
-  const toggleControl = (category: CategoryKey, controlId: string) => {
+  // Toggle a flat row: a plain control (sub = null) or a single variant.
+  const toggleRow = (category: CategoryKey, controlId: string, sub: string | null) => {
     if (!canEdit) return;
     const key = makeKey(category, controlId);
-    const isSelected = selections.has(key);
-    const control = controlMap.get(controlId);
-    const specialSubs = control ? SPECIAL_CONTROLS[control.name] : undefined;
+    const current = selections.get(key);
 
-    if (isSelected) {
-      setSelections(prev => { const n = new Map(prev); n.delete(key); return n; });
-      enqueueWrite(category, controlId, null);
-    } else {
-      const defaultSubs = specialSubs ? [...specialSubs] : [];
-      setSelections(prev => new Map(prev).set(key, defaultSubs));
-      if (specialSubs) {
-        setExpandedControls(prev => new Set(prev).add(key));
+    if (sub === null) {
+      if (current) {
+        setSelections(prev => { const n = new Map(prev); n.delete(key); return n; });
+        enqueueWrite(category, controlId, null);
+      } else {
+        setSelections(prev => new Map(prev).set(key, []));
+        enqueueWrite(category, controlId, []);
       }
-      enqueueWrite(category, controlId, defaultSubs);
+      return;
     }
-  };
 
-  const toggleSubOption = (category: CategoryKey, controlId: string, subOption: string) => {
-    if (!canEdit) return;
-    const key = makeKey(category, controlId);
-    const currentSubs = selections.get(key) || [];
-    const newSubs = currentSubs.includes(subOption)
-      ? currentSubs.filter(s => s !== subOption)
-      : [...currentSubs, subOption];
-
-    if (newSubs.length === 0) {
+    const subs = current || [];
+    const nextSubs = subs.includes(sub) ? subs.filter(s => s !== sub) : [...subs, sub];
+    if (nextSubs.length === 0) {
       setSelections(prev => { const n = new Map(prev); n.delete(key); return n; });
       enqueueWrite(category, controlId, null);
     } else {
-      setSelections(prev => new Map(prev).set(key, newSubs));
-      enqueueWrite(category, controlId, newSubs);
+      setSelections(prev => new Map(prev).set(key, nextSubs));
+      enqueueWrite(category, controlId, nextSubs);
     }
   };
 
-  // Details for the previewed control
   const previewControl = previewControlId ? controlMap.get(previewControlId) : null;
+  const previewOverride = previewControlId ? overrideMap.get(previewControlId) : undefined;
 
-  const protectedAssets = useMemo((): CatalogItem[] => {
-    if (!previewControlId) return [];
-    const items: CatalogItem[] = [];
-    (catalogRows.critical_assets || []).forEach(r => {
-      if ((r.default_control_ids || []).includes(previewControlId)) items.push({ id: r.id, name: r.name, kind: "Critical Asset" });
-    });
-    (catalogRows.water_systems || []).forEach(r => {
-      if ((r.default_control_ids || []).includes(previewControlId)) items.push({ id: r.id, name: r.name, kind: "Water System" });
-    });
-    (catalogRows.processes || []).forEach(r => {
-      if ((r.default_control_ids || []).includes(previewControlId)) items.push({ id: r.id, name: r.name, kind: "Process" });
-    });
-    return items;
+  // Default (catalog) protected items for the previewed control
+  const defaultProtected = useMemo(() => {
+    const result = { critical_assets: [] as string[], water_systems: [] as string[], processes: [] as string[] };
+    if (!previewControlId) return result;
+    (catalogRows.critical_assets || []).forEach(r => { if ((r.default_control_ids || []).includes(previewControlId)) result.critical_assets.push(r.id); });
+    (catalogRows.water_systems || []).forEach(r => { if ((r.default_control_ids || []).includes(previewControlId)) result.water_systems.push(r.id); });
+    (catalogRows.processes || []).forEach(r => { if ((r.default_control_ids || []).includes(previewControlId)) result.processes.push(r.id); });
+    return result;
   }, [previewControlId, catalogRows]);
+
+  const selectedProtected = useMemo(() => {
+    if (previewOverride?.assets_customized) {
+      return {
+        critical_assets: previewOverride.critical_asset_ids || [],
+        water_systems: previewOverride.water_system_ids || [],
+        processes: previewOverride.process_ids || [],
+      };
+    }
+    return defaultProtected;
+  }, [previewOverride, defaultProtected]);
+
+  const allCatalogItems = useMemo((): (CatalogItem & { category: CategoryKey })[] => {
+    const items: (CatalogItem & { category: CategoryKey })[] = [];
+    (catalogRows.critical_assets || []).forEach(r => items.push({ id: r.id, name: r.name, kind: "Critical Asset", category: "critical_assets" }));
+    (catalogRows.water_systems || []).forEach(r => items.push({ id: r.id, name: r.name, kind: "Water System", category: "water_systems" }));
+    (catalogRows.processes || []).forEach(r => items.push({ id: r.id, name: r.name, kind: "Process", category: "processes" }));
+    return items;
+  }, [catalogRows]);
+
+  const saveOverride = async (controlId: string, patch: Partial<ControlOverride>) => {
+    if (!tenantId || !user) return;
+    const existing = overrideMap.get(controlId);
+    const base: ControlOverride = existing || {
+      control_id: controlId,
+      critical_asset_ids: defaultProtected.critical_assets,
+      water_system_ids: defaultProtected.water_systems,
+      process_ids: defaultProtected.processes,
+      assets_customized: false,
+      one_time_cost: null,
+      monthly_maint_cost: null,
+    };
+    const merged = { ...base, ...patch };
+    const { error } = await supabase.from("tenant_control_overrides").upsert(
+      {
+        tenant_id: tenantId,
+        control_id: controlId,
+        critical_asset_ids: merged.critical_asset_ids,
+        water_system_ids: merged.water_system_ids,
+        process_ids: merged.process_ids,
+        assets_customized: merged.assets_customized,
+        one_time_cost: merged.one_time_cost,
+        monthly_maint_cost: merged.monthly_maint_cost,
+        updated_by: user.id,
+        created_by: user.id,
+      } as any,
+      { onConflict: "tenant_id,control_id" }
+    );
+    if (error) {
+      toast.error((error as any)?.message || "Failed to save changes");
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ["tenant-control-overrides", tenantId] });
+  };
+
+  const toggleProtectedItem = (item: CatalogItem & { category: CategoryKey }) => {
+    if (!canEdit || !previewControlId) return;
+    const current = {
+      critical_assets: [...selectedProtected.critical_assets],
+      water_systems: [...selectedProtected.water_systems],
+      processes: [...selectedProtected.processes],
+    };
+    const list = current[item.category];
+    const idx = list.indexOf(item.id);
+    if (idx >= 0) list.splice(idx, 1); else list.push(item.id);
+    saveOverride(previewControlId, {
+      critical_asset_ids: current.critical_assets,
+      water_system_ids: current.water_systems,
+      process_ids: current.processes,
+      assets_customized: true,
+    });
+  };
+
+  // Cost edit buffers
+  const [costDraft, setCostDraft] = useState<{ one: string; monthly: string }>({ one: "", monthly: "" });
+  useEffect(() => {
+    if (!previewControl) return;
+    const one = previewOverride?.one_time_cost ?? previewControl.one_time_cost ?? 0;
+    const monthly = previewOverride?.monthly_maint_cost ?? previewControl.monthly_maint_cost ?? 0;
+    setCostDraft({ one: String(one ?? 0), monthly: String(monthly ?? 0) });
+  }, [previewControlId, previewOverride, previewControl]);
+
+  const commitCost = (field: "one" | "monthly") => {
+    if (!canEdit || !previewControlId) return;
+    const raw = field === "one" ? costDraft.one : costDraft.monthly;
+    const parsed = raw.trim() === "" ? 0 : Number(raw.replace(/[^0-9.]/g, ""));
+    if (Number.isNaN(parsed)) return;
+    const currentOne = previewOverride?.one_time_cost ?? previewControl?.one_time_cost ?? 0;
+    const currentMonthly = previewOverride?.monthly_maint_cost ?? previewControl?.monthly_maint_cost ?? 0;
+    if (field === "one" && parsed === Number(currentOne)) return;
+    if (field === "monthly" && parsed === Number(currentMonthly)) return;
+    saveOverride(previewControlId, field === "one" ? { one_time_cost: parsed } : { monthly_maint_cost: parsed });
+  };
 
   const pageTitle = "Mitigation Control Library";
 
@@ -287,7 +386,7 @@ export default function Controls() {
     );
   }
 
-  if (awpLoading || controlsLoading || selectionsLoading) {
+  if (awpLoading || controlsLoading || selectionsLoading || overridesLoading) {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader title={pageTitle} />
@@ -298,132 +397,76 @@ export default function Controls() {
     );
   }
 
-  const renderControlRow = (category: CategoryKey, control: MitigationControl) => {
-    const key = makeKey(category, control.id);
-    const isSelected = selections.has(key);
-    const specialSubs = SPECIAL_CONTROLS[control.name];
-    const isControlExpanded = expandedControls.has(key);
-    const currentSubs = selections.get(key) || [];
-    const isPreviewed = previewControlId === control.id;
-
-    const rowClass = `flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer select-none transition-colors ${
-      isPreviewed ? "bg-accent" : "hover:bg-muted/60"
-    }`;
-
-    if (specialSubs) {
-      const allChecked = isSelected && currentSubs.length === specialSubs.length;
-      const someChecked = isSelected && currentSubs.length > 0 && currentSubs.length < specialSubs.length;
-      const optionCount = specialSubs.length;
-
-      const handleParentToggle = () => {
-        if (!canEdit) return;
-        if (isSelected && someChecked) {
-          const allSubs = [...specialSubs];
-          setSelections(prev => new Map(prev).set(key, allSubs));
-          enqueueWrite(category, control.id, allSubs);
-        } else {
-          toggleControl(category, control.id);
-        }
-      };
-
-      const toggleExpanded = () => {
-        setExpandedControls(prev => {
-          const n = new Set(prev);
-          if (n.has(key)) n.delete(key); else n.add(key);
-          return n;
-        });
-      };
-
-      return (
-        <div key={control.id} className="space-y-1">
-          <div className={rowClass} onClick={() => setPreviewControlId(control.id)}>
-            <span onClick={(e) => e.stopPropagation()}>
-              <Checkbox
-                checked={allChecked ? true : someChecked ? "indeterminate" : false}
-                indeterminate={someChecked}
-                disabled={!canEdit}
-                onCheckedChange={handleParentToggle}
-              />
-            </span>
-            <span className="text-sm flex-1" onClick={(e) => { e.stopPropagation(); toggleExpanded(); }}>
-              {control.name} <span className="underline text-muted-foreground">({optionCount} option{optionCount === 1 ? "" : "s"})</span>
-            </span>
-            <button
-              onClick={(e) => { e.stopPropagation(); toggleExpanded(); }}
-              className="text-muted-foreground hover:text-foreground p-0.5"
-              aria-label={isControlExpanded ? "Collapse options" : "Expand options"}
-            >
-              <svg
-                width="10"
-                height="10"
-                viewBox="0 0 10 10"
-                className={`transition-transform ${isControlExpanded ? "rotate-180" : ""}`}
-                fill="currentColor"
-              >
-                <path d="M5 7.5L1 2.5h8z" />
-              </svg>
-            </button>
-          </div>
-          {isControlExpanded && (
-            <div className="ml-8 space-y-1">
-              {specialSubs.map(sub => (
-                <div key={sub} className="flex items-center gap-2">
-                  <Checkbox
-                    checked={currentSubs.includes(sub)}
-                    disabled={!canEdit}
-                    onCheckedChange={() => toggleSubOption(category, control.id, sub)}
-                  />
-                  <span
-                    className="text-sm text-muted-foreground cursor-pointer select-none"
-                    onClick={() => toggleSubOption(category, control.id, sub)}
-                  >
-                    {sub}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    return (
-      <div key={control.id} className={rowClass} onClick={() => setPreviewControlId(control.id)}>
-        <span onClick={(e) => e.stopPropagation()}>
-          <Checkbox
-            checked={isSelected}
-            disabled={!canEdit}
-            onCheckedChange={() => toggleControl(category, control.id)}
-          />
-        </span>
-        <span className="text-sm flex-1">{control.name}</span>
-      </div>
-    );
-  };
-
   const searchTerm = search.trim().toLowerCase();
 
-  const renderCategorySection = (category: CategoryKey, label: string) => {
+  interface FlatRow {
+    key: string;
+    label: string;
+    controlId: string;
+    sub: string | null;
+    category: CategoryKey;
+  }
+
+  const buildRows = (category: CategoryKey): FlatRow[] => {
     const controlIds = categoryControlIds[category] || [];
-    let controls = allControls.filter(c => controlIds.includes(c.id));
-    if (searchTerm) {
-      controls = controls.filter(c => c.name.toLowerCase().includes(searchTerm));
-    }
-    if (controls.length === 0) return null;
+    const rows: FlatRow[] = [];
+    allControls
+      .filter(c => controlIds.includes(c.id))
+      .forEach(c => {
+        const subs = SPECIAL_CONTROLS[c.name];
+        if (subs) {
+          subs.forEach(s =>
+            rows.push({ key: `${category}::${c.id}::${s}`, label: `${c.name} - ${s}`, controlId: c.id, sub: s, category })
+          );
+        } else {
+          rows.push({ key: `${category}::${c.id}`, label: c.name, controlId: c.id, sub: null, category });
+        }
+      });
+    return searchTerm ? rows.filter(r => r.label.toLowerCase().includes(searchTerm)) : rows;
+  };
+
+  const renderRow = (row: FlatRow) => {
+    const key = makeKey(row.category, row.controlId);
+    const subs = selections.get(key);
+    const isChecked = row.sub === null ? !!subs : !!subs && subs.includes(row.sub);
+    const isPreviewed = previewRowKey === row.key;
+
     return (
-      <div key={category}>
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground px-2 pt-3 pb-1">{label}</h3>
-        <div className="space-y-0.5">
-          {controls.map(c => renderControlRow(category, c))}
-        </div>
+      <div
+        key={row.key}
+        className={`flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer select-none transition-colors ${
+          isPreviewed ? "bg-primary/10 text-foreground" : "hover:bg-muted/50"
+        }`}
+        onClick={() => { setPreviewControlId(row.controlId); setPreviewRowKey(row.key); setAssetSearch(""); }}
+      >
+        <span onClick={(e) => e.stopPropagation()}>
+          <Checkbox
+            checked={isChecked}
+            disabled={!canEdit}
+            onCheckedChange={() => {
+              toggleRow(row.category, row.controlId, row.sub);
+              setPreviewControlId(row.controlId);
+              setPreviewRowKey(row.key);
+            }}
+          />
+        </span>
+        <span className="text-sm flex-1">{row.label}</span>
       </div>
     );
   };
 
-  const hasAnyResults = CATEGORIES.some(cat => {
-    const ids = categoryControlIds[cat.key] || [];
-    return allControls.some(c => ids.includes(c.id) && (!searchTerm || c.name.toLowerCase().includes(searchTerm)));
-  });
+  const sections = CATEGORIES.map(cat => ({ ...cat, rows: buildRows(cat.key) })).filter(s => s.rows.length > 0);
+
+  const assetSearchTerm = assetSearch.trim().toLowerCase();
+  const visibleCatalogItems = assetSearchTerm
+    ? allCatalogItems.filter(i => i.name.toLowerCase().includes(assetSearchTerm) || i.kind.toLowerCase().includes(assetSearchTerm))
+    : allCatalogItems;
+
+  const isProtected = (item: CatalogItem & { category: CategoryKey }) =>
+    selectedProtected[item.category].includes(item.id);
+
+  const protectedCount =
+    selectedProtected.critical_assets.length + selectedProtected.water_systems.length + selectedProtected.processes.length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -439,91 +482,143 @@ export default function Controls() {
           </p>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-          {/* Controls panel */}
-          <div className="bg-card rounded-lg border">
-            <div className="p-4 border-b">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search controls by name"
-                  className="pl-9"
-                />
+        {/* One card: controls list on the left, its details nested on the right */}
+        <div className="bg-card rounded-lg border overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+            {/* Controls */}
+            <div className="lg:border-r">
+              <div className="p-4 border-b">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search controls by name"
+                    className="pl-9"
+                  />
+                </div>
+              </div>
+              <div className="p-2 max-h-[70vh] overflow-y-auto">
+                {sections.map(section => (
+                  <div key={section.key}>
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground px-2 pt-3 pb-1">
+                      {section.label}
+                    </h3>
+                    <div className="space-y-0.5">{section.rows.map(renderRow)}</div>
+                  </div>
+                ))}
+                {sections.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-10">No controls match your search.</p>
+                )}
               </div>
             </div>
-            <div className="p-2 max-h-[70vh] overflow-y-auto">
-              {CATEGORIES.map(cat => renderCategorySection(cat.key, cat.label))}
-              {!hasAnyResults && (
-                <p className="text-sm text-muted-foreground text-center py-10">
-                  No controls match your search.
-                </p>
+
+            {/* Details (nested subsection) */}
+            <div className="bg-muted/30 p-5 lg:p-6">
+              {!previewControl ? (
+                <div className="flex flex-col items-center justify-center text-center py-16 text-muted-foreground">
+                  <ShieldCheck className="h-8 w-8 mb-3 opacity-50" />
+                  <p className="text-sm">Select a control to view its details.</p>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {/* List of Assets Protected */}
+                  <section className="rounded-md border bg-card p-4">
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <h3 className="text-sm font-semibold text-foreground">List of Assets Protected</h3>
+                      <span className="text-xs text-muted-foreground">{protectedCount} selected</span>
+                    </div>
+                    <div className="relative mb-3">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={assetSearch}
+                        onChange={(e) => setAssetSearch(e.target.value)}
+                        placeholder="Search assets, systems, processes"
+                        className="pl-9 h-9"
+                      />
+                    </div>
+                    <div className="max-h-72 overflow-y-auto pr-1 space-y-0.5">
+                      {visibleCatalogItems.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-6 text-center">No matches.</p>
+                      ) : (
+                        visibleCatalogItems.map(item => (
+                          <label
+                            key={`${item.category}-${item.id}`}
+                            className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50 cursor-pointer"
+                          >
+                            <Checkbox
+                              checked={isProtected(item)}
+                              disabled={!canEdit}
+                              onCheckedChange={() => toggleProtectedItem(item)}
+                            />
+                            <span className="text-sm flex-1 truncate">{item.name}</span>
+                            <span className="text-xs text-muted-foreground shrink-0">{item.kind}</span>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  </section>
+
+                  {/* Cost Estimate */}
+                  <section className="rounded-md border bg-card p-4">
+                    <h3 className="text-sm font-semibold text-foreground mb-3">Cost Estimate</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">One-time</p>
+                        {canEdit ? (
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                            <Input
+                              value={costDraft.one}
+                              onChange={(e) => setCostDraft(d => ({ ...d, one: e.target.value }))}
+                              onBlur={() => commitCost("one")}
+                              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                              inputMode="decimal"
+                              className="pl-6 h-9"
+                            />
+                          </div>
+                        ) : (
+                          <p className="text-lg font-semibold">
+                            {formatCost(previewOverride?.one_time_cost ?? previewControl.one_time_cost)}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Monthly</p>
+                        {canEdit ? (
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                            <Input
+                              value={costDraft.monthly}
+                              onChange={(e) => setCostDraft(d => ({ ...d, monthly: e.target.value }))}
+                              onBlur={() => commitCost("monthly")}
+                              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                              inputMode="decimal"
+                              className="pl-6 h-9"
+                            />
+                          </div>
+                        ) : (
+                          <p className="text-lg font-semibold">
+                            {formatCost(previewOverride?.monthly_maint_cost ?? previewControl.monthly_maint_cost)}
+                            <span className="text-xs font-normal text-muted-foreground">/mo</span>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {canEdit && previewOverride && (previewOverride.one_time_cost !== null || previewOverride.monthly_maint_cost !== null) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mt-3 h-7 text-xs"
+                        onClick={() => saveOverride(previewControlId!, { one_time_cost: null, monthly_maint_cost: null })}
+                      >
+                        Reset to default costs
+                      </Button>
+                    )}
+                  </section>
+                </div>
               )}
             </div>
-          </div>
-
-          {/* Details panel */}
-          <div className="bg-card rounded-lg border p-6 min-h-[300px]">
-            {!previewControl ? (
-              <div className="flex flex-col items-center justify-center text-center py-16 text-muted-foreground">
-                <ShieldCheck className="h-8 w-8 mb-3 opacity-50" />
-                <p className="text-sm">Select a control to view its details.</p>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <div>
-                  <h2 className="text-lg font-semibold text-foreground">{previewControl.name}</h2>
-                  <div className="flex items-center gap-2 flex-wrap mt-2">
-                    {previewControl.category && (
-                      <Badge variant="outline" className="text-xs">{previewControl.category}</Badge>
-                    )}
-                    {previewControl.points !== undefined && previewControl.points > 0 && (
-                      <Badge className="text-xs bg-emerald-500 text-white">
-                        {previewControl.points} derisk pts
-                      </Badge>
-                    )}
-                  </div>
-                  {previewControl.description && (
-                    <p className="text-sm text-muted-foreground mt-3 leading-relaxed">
-                      {previewControl.description}
-                    </p>
-                  )}
-                </div>
-
-                {/* List of Assets Protected */}
-                <div className="border-t pt-4">
-                  <h3 className="text-sm font-semibold text-foreground mb-2">List of Assets Protected</h3>
-                  {protectedAssets.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No catalog assets, systems, or processes use this control.</p>
-                  ) : (
-                    <ul className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
-                      {protectedAssets.map(item => (
-                        <li key={`${item.kind}-${item.id}`} className="flex items-center justify-between gap-2 text-sm">
-                          <span className="truncate">{item.name}</span>
-                          <span className="text-xs text-muted-foreground shrink-0">{item.kind}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-
-                {/* Cost Estimate */}
-                <div className="border-t pt-4">
-                  <h3 className="text-sm font-semibold text-foreground mb-2">Cost Estimate</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="rounded-md border p-3">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">One-time</p>
-                      <p className="text-lg font-semibold mt-1">{formatCost(previewControl.one_time_cost)}</p>
-                    </div>
-                    <div className="rounded-md border p-3">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Monthly</p>
-                      <p className="text-lg font-semibold mt-1">{formatCost(previewControl.monthly_maint_cost)}<span className="text-xs font-normal text-muted-foreground">/mo</span></p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </main>
