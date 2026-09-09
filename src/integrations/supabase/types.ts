@@ -2755,6 +2755,69 @@ export type Database = {
         }
         Relationships: []
       }
+      tenant_control_overrides: {
+        Row: {
+          assets_customized: boolean
+          control_id: string
+          created_at: string
+          created_by: string | null
+          critical_asset_ids: string[]
+          id: string
+          monthly_maint_cost: number | null
+          one_time_cost: number | null
+          process_ids: string[]
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+          water_system_ids: string[]
+        }
+        Insert: {
+          assets_customized?: boolean
+          control_id: string
+          created_at?: string
+          created_by?: string | null
+          critical_asset_ids?: string[]
+          id?: string
+          monthly_maint_cost?: number | null
+          one_time_cost?: number | null
+          process_ids?: string[]
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+          water_system_ids?: string[]
+        }
+        Update: {
+          assets_customized?: boolean
+          control_id?: string
+          created_at?: string
+          created_by?: string | null
+          critical_asset_ids?: string[]
+          id?: string
+          monthly_maint_cost?: number | null
+          one_time_cost?: number | null
+          process_ids?: string[]
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+          water_system_ids?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_control_overrides_control_id_fkey"
+            columns: ["control_id"]
+            isOneToOne: false
+            referencedRelation: "mitigation_controls"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_control_overrides_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_credit_transactions: {
         Row: {
           actor_user_id: string | null
