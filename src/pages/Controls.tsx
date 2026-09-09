@@ -64,7 +64,11 @@ export default function Controls() {
   const [previewControlId, setPreviewControlId] = useState<string | null>(null);
 
   // Catalog rows per category, including names for the details panel
-  const { data: catalogRows = {}, isLoading: awpLoading } = useQuery({
+  const emptyCatalog = useMemo(
+    () => ({ critical_assets: [], water_systems: [], processes: [] }) as Record<CategoryKey, { id: string; name: string; default_control_ids: string[] }[]>,
+    []
+  );
+  const { data: catalogRows = emptyCatalog, isLoading: awpLoading } = useQuery({
     queryKey: ["controls-category-catalog"],
     queryFn: async (): Promise<Record<CategoryKey, { id: string; name: string; default_control_ids: string[] }[]>> => {
       const [assetsRes, systemsRes, processesRes] = await Promise.all([
