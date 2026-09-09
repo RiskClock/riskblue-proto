@@ -212,6 +212,16 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
                   User Management
                 </DropdownMenuItem>
               )}
+              {tenantId && (isInternalUser || tenant?.role === "admin" || tenant?.role === "member") && (
+                <DropdownMenuItem
+                  onClick={() => menuNavigate(tenantPath("/controls"))}
+                  className="cursor-pointer"
+                  {...menuItemProps("controls")}
+                >
+                  <ShieldCheck className="h-4 w-4 mr-2" />
+                  Mitigation Control Library
+                </DropdownMenuItem>
+              )}
               {(myTenants.length > 0 || isInternalUser) && (
                 <DropdownMenuItem onClick={() => runAfterMenuCloses(() => setSwitchCompanyOpen(true))} className="cursor-pointer">
                   <ArrowLeftRight className="h-4 w-4 mr-2" />
