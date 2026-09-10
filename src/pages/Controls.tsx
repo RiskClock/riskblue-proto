@@ -468,26 +468,33 @@ export default function Controls() {
   const protectedCount =
     selectedProtected.critical_assets.length + selectedProtected.water_systems.length + selectedProtected.processes.length;
 
+  const previewSub = previewRowKey ? previewRowKey.split("::")[2] : undefined;
+  const previewLabel = previewControl
+    ? previewSub
+      ? `${previewControl.name} - ${previewSub}`
+      : previewControl.name
+    : "";
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
       <AppHeader
         title={pageTitle}
         infoTitle="About Mitigation Control Library"
         infoContent={<p>Description coming soon.</p>}
       />
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-6 py-6 flex-1 min-h-0 flex flex-col">
         {!canEdit && (
-          <p className="text-sm text-muted-foreground mb-4">
+          <p className="text-sm text-muted-foreground mb-3">
             You have view-only access to this listing.
           </p>
         )}
 
         {/* One card: controls list on the left, its details nested on the right */}
-        <div className="bg-card rounded-lg border overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+        <div className="bg-card rounded-lg border overflow-hidden flex-1 min-h-0">
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] h-full min-h-0">
             {/* Controls */}
-            <div className="lg:border-r">
-              <div className="p-4 border-b">
+            <div className="lg:border-r flex flex-col min-h-0">
+              <div className="p-4 border-b shrink-0">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -498,7 +505,7 @@ export default function Controls() {
                   />
                 </div>
               </div>
-              <div className="p-2 max-h-[70vh] overflow-y-auto">
+              <div className="p-2 flex-1 min-h-0 overflow-y-auto">
                 {sections.map(section => (
                   <div key={section.key}>
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground px-2 pt-3 pb-1">
@@ -514,17 +521,18 @@ export default function Controls() {
             </div>
 
             {/* Details (nested subsection) */}
-            <div className="bg-muted/30 p-5 lg:p-6 flex flex-col">
+            <div className="bg-muted/30 p-5 lg:p-6 flex flex-col min-h-0 overflow-hidden">
               {!previewControl ? (
                 <div className="flex flex-col items-center justify-center text-center py-16 text-muted-foreground">
                   <ShieldCheck className="h-8 w-8 mb-3 opacity-50" />
                   <p className="text-sm">Select a control to view its details.</p>
                 </div>
               ) : (
-                <div className="flex flex-col gap-5 flex-1 min-h-0">
+                <div className="flex flex-col gap-4 flex-1 min-h-0">
+                  <h2 className="text-base font-semibold text-foreground shrink-0 truncate">{previewLabel}</h2>
                   {/* List of Assets Protected */}
-                  <section className="rounded-md border bg-card p-4 flex-1 min-h-0 flex flex-col">
-                    <div className="flex items-center justify-between gap-2 mb-3">
+                  <section className="rounded-md border bg-card p-4 flex-1 min-h-0 flex flex-col overflow-hidden">
+                    <div className="flex items-center justify-between gap-2 mb-3 shrink-0">
                       <h3 className="text-sm font-semibold text-foreground">List of Assets Protected</h3>
                       <span className="text-xs text-muted-foreground">{protectedCount} selected</span>
                     </div>
@@ -560,7 +568,7 @@ export default function Controls() {
                   </section>
 
                   {/* Cost Estimate */}
-                  <section className="rounded-md border bg-card p-4">
+                  <section className="rounded-md border bg-card p-4 shrink-0">
                     <h3 className="text-sm font-semibold text-foreground mb-3">Cost Estimate</h3>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
