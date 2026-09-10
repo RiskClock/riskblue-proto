@@ -166,8 +166,10 @@ export default function Controls() {
   // Sync selections from the database ONCE per company load.
   const syncedTenantRef = useRef<string | null>(null);
   useEffect(() => {
-    if (selectionsLoading) return;
     if (!tenantId) return;
+    // Wait for a real fetch: a disabled query reports isLoading === false with
+    // empty data, which would otherwise mark the tenant as synced too early.
+    if (!selectionsFetched || selectionsLoading) return;
     if (syncedTenantRef.current === tenantId) return;
     const map = new Map<string, string[]>();
     existingSelections.forEach((s: any) => {
@@ -175,7 +177,7 @@ export default function Controls() {
     });
     setSelections(map);
     syncedTenantRef.current = tenantId;
-  }, [existingSelections, tenantId, selectionsLoading]);
+  }, [existingSelections, tenantId, selectionsLoading, selectionsFetched]);
 
   const makeKey = (category: string, controlId: string) => `${category}::${controlId}`;
 
