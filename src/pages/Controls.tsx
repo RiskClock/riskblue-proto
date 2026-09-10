@@ -568,7 +568,7 @@ export default function Controls() {
                   </section>
 
                   {/* Cost Estimate */}
-                  <section className="rounded-md border bg-card p-4">
+                  <section className="rounded-md border bg-card p-4 shrink-0">
                     <h3 className="text-sm font-semibold text-foreground mb-3">Cost Estimate</h3>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
