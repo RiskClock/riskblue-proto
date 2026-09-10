@@ -514,16 +514,16 @@ export default function Controls() {
             </div>
 
             {/* Details (nested subsection) */}
-            <div className="bg-muted/30 p-5 lg:p-6">
+            <div className="bg-muted/30 p-5 lg:p-6 flex flex-col">
               {!previewControl ? (
                 <div className="flex flex-col items-center justify-center text-center py-16 text-muted-foreground">
                   <ShieldCheck className="h-8 w-8 mb-3 opacity-50" />
                   <p className="text-sm">Select a control to view its details.</p>
                 </div>
               ) : (
-                <div className="space-y-5">
+                <div className="flex flex-col gap-5 flex-1 min-h-0">
                   {/* List of Assets Protected */}
-                  <section className="rounded-md border bg-card p-4">
+                  <section className="rounded-md border bg-card p-4 flex-1 min-h-0 flex flex-col">
                     <div className="flex items-center justify-between gap-2 mb-3">
                       <h3 className="text-sm font-semibold text-foreground">List of Assets Protected</h3>
                       <span className="text-xs text-muted-foreground">{protectedCount} selected</span>
@@ -537,7 +537,7 @@ export default function Controls() {
                         className="pl-9 h-9"
                       />
                     </div>
-                    <div className="max-h-72 overflow-y-auto pr-1 space-y-0.5">
+                    <div className="flex-1 min-h-[8rem] overflow-y-auto pr-1 space-y-0.5">
                       {visibleCatalogItems.length === 0 ? (
                         <p className="text-sm text-muted-foreground py-6 text-center">No matches.</p>
                       ) : (
