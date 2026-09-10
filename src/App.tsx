@@ -31,6 +31,7 @@ const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const SetupAccount = lazy(() => import("./pages/SetupAccount"));
 const InternalWorkbench = lazy(routeLoaders.workbench);
 const WorkbenchProjectDetail = lazy(() => import("./pages/WorkbenchProjectDetail"));
+const WaterMitigationPlan = lazy(() => import("./pages/WaterMitigationPlan"));
 const PromptRefinery = lazy(routeLoaders.promptRefinery);
 const PromptRefineryDetail = lazy(() => import("./pages/PromptRefineryDetail"));
 const UserManagement = lazy(routeLoaders.userManagement);
@@ -92,6 +93,7 @@ const App = () => (
             <Route path="/logs" element={<ProtectedRoute><Logs /></ProtectedRoute>} />
             <Route path="/workbench" element={<ProtectedRoute><InternalWorkbench /></ProtectedRoute>} />
             <Route path="/workbench/project/:projectId" element={<ProtectedRoute><WorkbenchProjectDetail /></ProtectedRoute>} />
+            <Route path="/project/:projectId/mitigation-plan" element={<ProtectedRoute><WaterMitigationPlan /></ProtectedRoute>} />
 
             <Route path="/prompt-refinery" element={<ProtectedRoute><PromptRefinery /></ProtectedRoute>} />
             <Route path="/prompt-refinery/:promptId" element={<ProtectedRoute><PromptRefineryDetail /></ProtectedRoute>} />
@@ -108,6 +110,7 @@ const App = () => (
               <Route path="controls" element={<Controls />} />
               <Route path="project/:id" element={<ProjectWizard />} />
               <Route path="workbench/project/:projectId" element={<WorkbenchProjectDetail />} />
+              <Route path="project/:projectId/mitigation-plan" element={<WaterMitigationPlan />} />
             </Route>
 
             <Route path="/accept-invite" element={<AcceptInvite />} />
