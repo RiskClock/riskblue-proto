@@ -17,7 +17,7 @@ import {
 import { ArrowLeft, ChevronDown, ChevronRight, Loader2, Plus, Trash2, MoreVertical } from "lucide-react";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errorHandling";
-import FileViewerModal from "@/components/wizard/FileViewerModal";
+import { FileViewerModal } from "@/components/wizard/FileViewerModal";
 import type { DocumentSourceDescriptor } from "@/components/viewer";
 import {
   parseSurveyFloorPlans,
@@ -850,7 +850,7 @@ export default function WaterMitigationPlan() {
           fileNameById={viewerData.fileNameById}
           preselectClass={viewer.className}
           persistKey={projectId}
-          readOnly
+          readOnly={!canEdit}
         />
       )}
     </div>
