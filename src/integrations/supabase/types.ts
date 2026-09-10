@@ -2059,6 +2059,7 @@ export type Database = {
           control_counts: Json
           created_at: string
           created_by: string | null
+          excluded_instances: Json
           id: string
           name: string
           project_id: string
@@ -2070,6 +2071,7 @@ export type Database = {
           control_counts?: Json
           created_at?: string
           created_by?: string | null
+          excluded_instances?: Json
           id?: string
           name?: string
           project_id: string
@@ -2081,6 +2083,7 @@ export type Database = {
           control_counts?: Json
           created_at?: string
           created_by?: string | null
+          excluded_instances?: Json
           id?: string
           name?: string
           project_id?: string
