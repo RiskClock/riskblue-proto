@@ -468,6 +468,13 @@ export default function Controls() {
   const protectedCount =
     selectedProtected.critical_assets.length + selectedProtected.water_systems.length + selectedProtected.processes.length;
 
+  const previewSub = previewRowKey ? previewRowKey.split("::")[2] : undefined;
+  const previewLabel = previewControl
+    ? previewSub
+      ? `${previewControl.name} - ${previewSub}`
+      : previewControl.name
+    : "";
+
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
       <AppHeader
