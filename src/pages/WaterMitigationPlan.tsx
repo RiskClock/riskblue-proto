@@ -14,9 +14,25 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ArrowLeft, Loader2, Plus, Trash2, MoreVertical } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, Loader2, Plus, Trash2, MoreVertical } from "lucide-react";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errorHandling";
+import FileViewerModal from "@/components/wizard/FileViewerModal";
+import type { DocumentSourceDescriptor } from "@/components/viewer";
+import {
+  parseSurveyFloorPlans,
+  getAddedUnitPlans,
+  addedUnitPlanToParsed,
+  getDeletedPlanIds,
+  getEffectiveBbox,
+  getEffectiveLabel,
+  getEffectivePoints,
+  getEffectiveType,
+  isPointInsidePlan,
+  planAreaPct,
+  asPointsPct,
+  type ParsedFloorPlan,
+} from "@/lib/surveyFloorPlans";
 
 interface Plan {
   id: string;
@@ -32,14 +48,73 @@ interface ControlRow {
   unitCost: number;
 }
 
+interface DetectionRow {
+  id: string;
+  name: string;
+  space: string;
+  sheetId: string | null;
+  fileId: string | null;
+  pageIndex: number | null;
+}
+
 const CATEGORY_TABLE: Record<string, "critical_assets" | "water_systems" | "processes"> = {
   Asset: "critical_assets",
   "Water System": "water_systems",
   Process: "processes",
 };
 
-const currency = (n: number) =>
-  `$${Math.round(n).toLocaleString("en-US")}`;
+const UNASSIGNED = "Unassigned";
+
+const currency = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
+
+const bucketForSource = (sourceType?: string | null) =>
+  sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
+
+/** Floor plans that only exist as overrides on the sheet (manually created). */
+function overrideOnlyPlans(
+  overrides: Record<string, any> | null | undefined,
+  page: number,
+  knownIds: Set<string>,
+  deletedIds: Set<string>,
+): ParsedFloorPlan[] {
+  if (!overrides) return [];
+  const out: ParsedFloorPlan[] = [];
+  for (const [planId, raw] of Object.entries(overrides)) {
+    if (planId.startsWith("__") || knownIds.has(planId) || deletedIds.has(planId)) continue;
+    const ovr = raw as any;
+    const type = typeof ovr?.type === "string" && ovr.type ? ovr.type : null;
+    const name = typeof ovr?.name === "string" && ovr.name.trim() ? ovr.name.trim() : null;
+    const bbox = Array.isArray(ovr?.bbox_pct) && ovr.bbox_pct.length === 4 ? ovr.bbox_pct : null;
+    if (!type && !name && !bbox) continue;
+    out.push({
+      plan_id: planId,
+      type: type || "level_floor_plan",
+      reference_id: name || planId,
+      xy_width_height_pct: bbox,
+      points_pct: asPointsPct(ovr?.points_pct),
+      page_number: page,
+      floors: [],
+      referenced_unit_ids: [],
+    });
+  }
+  return out;
+}
+
+function planSpaceLabels(fp: ParsedFloorPlan, overrides: Record<string, any> | null | undefined): string[] {
+  const ovr = overrides?.[fp.plan_id];
+  const overrideFloors: string[] = Array.isArray(ovr?.floors)
+    ? ovr.floors.filter((f: any) => typeof f === "string" && f.trim())
+    : [];
+  const type = getEffectiveType(fp, overrides);
+  if (type === "unit_floor_plan") {
+    const label = getEffectiveLabel(fp, overrides);
+    return label ? [label] : [];
+  }
+  if (overrideFloors.length > 0) return overrideFloors.map((f) => f.trim());
+  if (fp.floors.length > 0) return fp.floors;
+  const label = getEffectiveLabel(fp, overrides);
+  return label ? [label] : [];
+}
 
 export default function WaterMitigationPlan() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -137,30 +212,52 @@ export default function WaterMitigationPlan() {
     enabled: !!projectId,
   });
 
-  const { data: detections = [] } = useQuery({
-    queryKey: ["wmp-detections", projectId],
+  // Drawing detections plus the file/sheet context needed to resolve spaces
+  // and to open the drawing modal on the right page.
+  const { data: drawing } = useQuery({
+    queryKey: ["wmp-drawing", projectId],
     queryFn: async () => {
       const { data: reqs, error: reqErr } = await supabase
         .from("analysis_requests")
-        .select("id")
+        .select("id, source_type")
         .eq("project_id", projectId!);
       if (reqErr) throw reqErr;
-      const ids = (reqs || []).map((r: any) => r.id);
-      if (ids.length === 0) return [] as { name: string }[];
-      const all: { name: string }[] = [];
+      const requests = reqs || [];
+      const ids = requests.map((r: any) => r.id);
+      if (ids.length === 0) return { requests, files: [], sheets: [], instances: [] as any[] };
+
+      const [filesRes, sheetsRes] = await Promise.all([
+        supabase
+          .from("analysis_request_files")
+          .select("id, analysis_request_id, name, storage_path, mime_type, size_bytes, survey_raw_response")
+          .in("analysis_request_id", ids),
+        supabase
+          .from("analysis_request_sheets")
+          .select("id, parent_file_id, page_index, storage_path, floor_plan_overrides, updated_at")
+          .in("analysis_request_id", ids),
+      ]);
+      if (filesRes.error) throw filesRes.error;
+      if (sheetsRes.error) throw sheetsRes.error;
+
+      const instances: any[] = [];
       const pageSize = 1000;
       for (let from = 0; ; from += pageSize) {
         const { data, error } = await supabase
           .from("drawing_instances")
-          .select("awp_class_name")
+          .select("id, awp_class_name, file_id, sheet_id, page_index, nx, ny, analysis_request_id")
           .in("analysis_request_id", ids)
           .range(from, from + pageSize - 1);
         if (error) throw error;
         const rows = data || [];
-        rows.forEach((r: any) => all.push({ name: r.awp_class_name }));
+        instances.push(...rows);
         if (rows.length < pageSize) break;
       }
-      return all;
+      return {
+        requests,
+        files: filesRes.data || [],
+        sheets: sheetsRes.data || [],
+        instances,
+      };
     },
     enabled: !!projectId,
   });
@@ -200,20 +297,88 @@ export default function WaterMitigationPlan() {
       }));
   }, [controls, selections, overrideMap]);
 
-  // Derived counts: detections whose catalog entry is in the control's
-  // protected-assets list (company override, else catalog defaults).
-  const derivedCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    if (!catalog) return counts;
+  // sheetId -> materialized floor plans + overrides (used for space attribution)
+  const sheetPlans = useMemo(() => {
+    const m = new Map<string, { plans: ParsedFloorPlan[]; overrides: Record<string, any> }>();
+    if (!drawing) return m;
+    const surveyByFile = new Map<string, Map<number, ParsedFloorPlan[]>>();
+    (drawing.files as any[]).forEach((f) => {
+      surveyByFile.set(f.id, f.survey_raw_response ? parseSurveyFloorPlans(f.survey_raw_response) : new Map());
+    });
+    (drawing.sheets as any[]).forEach((s) => {
+      const ovr = (s.floor_plan_overrides || {}) as Record<string, any>;
+      const deleted = getDeletedPlanIds(ovr);
+      const base = (surveyByFile.get(s.parent_file_id)?.get(s.page_index) || []).filter(
+        (p) => !deleted.has(p.plan_id),
+      );
+      const addedRaw = getAddedUnitPlans(ovr, s.page_index).filter((p) => !deleted.has(p.plan_id));
+      const added = addedRaw.map(addedUnitPlanToParsed);
+      const known = new Set<string>([...base.map((p) => p.plan_id), ...addedRaw.map((p) => p.plan_id)]);
+      const manual = overrideOnlyPlans(ovr, s.page_index, known, deleted);
+      const plans = [...base, ...added, ...manual].map((p) => ({
+        ...p,
+        type: getEffectiveType(p, ovr),
+        reference_id: getEffectiveLabel(p, ovr) || p.reference_id,
+        xy_width_height_pct: getEffectiveBbox(p, ovr),
+        points_pct: getEffectivePoints(p, ovr),
+      }));
+      m.set(s.id, { plans, overrides: ovr });
+    });
+    return m;
+  }, [drawing]);
 
-    // controlId -> set of protected catalog item ids
+  const detectionRows: DetectionRow[] = useMemo(() => {
+    if (!drawing) return [];
+    return (drawing.instances as any[]).map((d) => {
+      let space = UNASSIGNED;
+      const entry = d.sheet_id ? sheetPlans.get(d.sheet_id) : undefined;
+      if (entry && entry.plans.length > 0) {
+        const withGeom = entry.plans.filter(
+          (p) => p.xy_width_height_pct || (p.points_pct && p.points_pct.length >= 3),
+        );
+        let chosen: ParsedFloorPlan | null = null;
+        if (typeof d.nx === "number" && typeof d.ny === "number") {
+          const containing = withGeom.filter((p) => isPointInsidePlan(p, entry.overrides, d.nx, d.ny));
+          if (containing.length > 0) {
+            chosen = containing.reduce((a, b) =>
+              planAreaPct(a, entry.overrides) <= planAreaPct(b, entry.overrides) ? a : b,
+            );
+          }
+        }
+        if (!chosen && entry.plans.length === 1) chosen = entry.plans[0];
+        if (chosen) {
+          const labels = planSpaceLabels(chosen, entry.overrides);
+          if (labels.length > 0) space = labels[0];
+        }
+      }
+      return {
+        id: d.id,
+        name: d.awp_class_name,
+        space,
+        sheetId: d.sheet_id ?? null,
+        fileId: d.file_id ?? null,
+        pageIndex: typeof d.page_index === "number" ? d.page_index : null,
+      };
+    });
+  }, [drawing, sheetPlans]);
+
+  // Derived counts + per-space breakdown per control.
+  const { derivedCounts, spaceBreakdown } = useMemo(() => {
+    const counts: Record<string, number> = {};
+    // controlId -> space -> { count, classes, sheets }
+    const breakdown = new Map<
+      string,
+      Map<string, { count: number; classes: Map<string, number>; sheets: Map<string, number> }>
+    >();
+    if (!catalog) return { derivedCounts: counts, spaceBreakdown: breakdown };
+
     const protectedByControl = new Map<string, Set<string>>();
     controlRows.forEach((row) => {
       const ov = overrideMap.get(row.id);
       const set = new Set<string>();
       if (ov?.assets_customized) {
-        [...(ov.critical_asset_ids || []), ...(ov.water_system_ids || []), ...(ov.process_ids || [])].forEach((id: string) =>
-          set.add(id)
+        [...(ov.critical_asset_ids || []), ...(ov.water_system_ids || []), ...(ov.process_ids || [])].forEach(
+          (id: string) => set.add(id),
         );
       } else {
         (["critical_assets", "water_systems", "processes"] as const).forEach((key) => {
@@ -235,11 +400,23 @@ export default function WaterMitigationPlan() {
       });
     });
 
-    const bump = (catalogId: string) => {
+    const bump = (catalogId: string, space: string, className: string, sheetId: string | null) => {
       controlRows.forEach((row) => {
-        if (protectedByControl.get(row.id)?.has(catalogId)) {
-          counts[row.id] = (counts[row.id] || 0) + 1;
+        if (!protectedByControl.get(row.id)?.has(catalogId)) return;
+        counts[row.id] = (counts[row.id] || 0) + 1;
+        let spaces = breakdown.get(row.id);
+        if (!spaces) {
+          spaces = new Map();
+          breakdown.set(row.id, spaces);
         }
+        let cell = spaces.get(space);
+        if (!cell) {
+          cell = { count: 0, classes: new Map(), sheets: new Map() };
+          spaces.set(space, cell);
+        }
+        cell.count += 1;
+        cell.classes.set(className, (cell.classes.get(className) || 0) + 1);
+        if (sheetId) cell.sheets.set(sheetId, (cell.sheets.get(sheetId) || 0) + 1);
       });
     };
 
@@ -248,18 +425,17 @@ export default function WaterMitigationPlan() {
       if (!table) return;
       const catalogId = byName.get(`${table}::${(item.name || "").toLowerCase()}`);
       if (!catalogId) return;
-      bump(catalogId);
+      bump(catalogId, UNASSIGNED, item.name, null);
     });
 
-    // Workbench detections are only labelled with the AWP class name.
-    (detections as { name: string }[]).forEach((d) => {
+    detectionRows.forEach((d) => {
       const catalogId = byAnyName.get((d.name || "").toLowerCase().trim());
       if (!catalogId) return;
-      bump(catalogId);
+      bump(catalogId, d.space, d.name, d.sheetId);
     });
 
-    return counts;
-  }, [catalog, controlRows, overrideMap, items, detections]);
+    return { derivedCounts: counts, spaceBreakdown: breakdown };
+  }, [catalog, controlRows, overrideMap, items, detectionRows]);
 
   // Seed the first plan from the detected instances.
   const [seeding, setSeeding] = useState(false);
@@ -303,18 +479,6 @@ export default function WaterMitigationPlan() {
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, plansLoading, plans, derivedCounts, catalog, canEdit, backfilled]);
-
-
-  const [drafts, setDrafts] = useState<Record<string, { name: string; summary: string }>>({});
-  useEffect(() => {
-    setDrafts((prev) => {
-      const next = { ...prev };
-      plans.forEach((p) => {
-        if (!next[p.id]) next[p.id] = { name: p.name, summary: p.summary || "" };
-      });
-      return next;
-    });
-  }, [plans]);
 
   const savePlan = async (planId: string, fields: { name?: string; summary?: string }) => {
     const { error } = await supabase.from("project_mitigation_plans").update(fields).eq("id", planId);
@@ -363,6 +527,76 @@ export default function WaterMitigationPlan() {
     return { count, cost };
   };
 
+  // --- inline editing -------------------------------------------------
+  const [editing, setEditing] = useState<{ id: string; field: "name" | "summary" } | null>(null);
+  const [draft, setDraft] = useState("");
+
+  const beginEdit = (plan: Plan, field: "name" | "summary") => {
+    if (!canEdit) return;
+    setEditing({ id: plan.id, field });
+    setDraft(field === "name" ? plan.name : plan.summary || "");
+  };
+
+  const commitEdit = (plan: Plan, field: "name" | "summary") => {
+    const current = field === "name" ? plan.name : plan.summary || "";
+    if (draft !== current) savePlan(plan.id, { [field]: draft } as any);
+    setEditing(null);
+  };
+
+  // --- expansion + drawing modal --------------------------------------
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleExpanded = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const [viewer, setViewer] = useState<{
+    sheetId: string;
+    className: string | null;
+  } | null>(null);
+
+  const viewerData = useMemo(() => {
+    if (!viewer || !drawing) return null;
+    const sheet = (drawing.sheets as any[]).find((s) => s.id === viewer.sheetId);
+    if (!sheet || !sheet.storage_path) return null;
+    const file = (drawing.files as any[]).find((f) => f.id === sheet.parent_file_id);
+    const request = (drawing.requests as any[]).find((r) => r.id === file?.analysis_request_id);
+    const source: DocumentSourceDescriptor = {
+      kind: "supabase-storage",
+      bucket: bucketForSource(request?.source_type),
+      path: sheet.storage_path,
+      mimeType: "application/pdf",
+      version: sheet.updated_at ?? undefined,
+    };
+    const classNames = Array.from(new Set(detectionRows.map((d) => d.name).filter(Boolean)));
+    return {
+      sheet,
+      file,
+      request,
+      source,
+      classNames,
+      fileNameById: Object.fromEntries((drawing.files as any[]).map((f) => [f.id, f.name])),
+    };
+  }, [viewer, drawing, detectionRows]);
+
+  const openSpace = (controlId: string, space: string) => {
+    const cell = spaceBreakdown.get(controlId)?.get(space);
+    if (!cell || cell.sheets.size === 0) return;
+    const sheetId = [...cell.sheets.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    const className = [...cell.classes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    setViewer({ sheetId, className });
+  };
+
+  const spacesForControl = (controlId: string) => {
+    const spaces = spaceBreakdown.get(controlId);
+    if (!spaces) return [] as Array<[string, number]>;
+    return [...spaces.entries()]
+      .map(([space, cell]) => [space, cell.count] as [string, number])
+      .sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }));
+  };
+
   const labelCell = "sticky left-0 z-10 bg-card border-r px-4 py-3 text-sm font-medium text-foreground w-[280px] min-w-[280px]";
 
   return (
@@ -398,17 +632,33 @@ export default function WaterMitigationPlan() {
                   {plans.map((plan) => (
                     <td key={plan.id} className="border-r px-4 py-2 min-w-[220px] align-top">
                       <div className="flex items-center gap-1">
-                        <Input
-                          className="h-8 text-sm"
-                          value={drafts[plan.id]?.name ?? plan.name}
-                          disabled={!canEdit}
-                          onChange={(e) =>
-                            setDrafts((d) => ({ ...d, [plan.id]: { ...d[plan.id], name: e.target.value } }))
-                          }
-                          onBlur={(e) => {
-                            if (e.target.value !== plan.name) savePlan(plan.id, { name: e.target.value });
-                          }}
-                        />
+                        {editing?.id === plan.id && editing.field === "name" ? (
+                          <Input
+                            autoFocus
+                            className="h-8 text-sm"
+                            value={draft}
+                            onChange={(e) => setDraft(e.target.value)}
+                            onBlur={() => commitEdit(plan, "name")}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                commitEdit(plan, "name");
+                              } else if (e.key === "Escape") {
+                                setEditing(null);
+                              }
+                            }}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            className={`flex-1 text-left text-sm px-2 py-1 rounded ${
+                              canEdit ? "hover:bg-muted cursor-text" : "cursor-default"
+                            }`}
+                            onClick={() => beginEdit(plan, "name")}
+                          >
+                            {plan.name}
+                          </button>
+                        )}
                         {canEdit && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -418,10 +668,7 @@ export default function WaterMitigationPlan() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => addPlan(plan)}>Duplicate plan</DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="text-destructive"
-                                onClick={() => deletePlan(plan.id)}
-                              >
+                              <DropdownMenuItem className="text-destructive" onClick={() => deletePlan(plan.id)}>
                                 <Trash2 className="h-4 w-4 mr-2" /> Delete plan
                               </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -443,18 +690,34 @@ export default function WaterMitigationPlan() {
                   <th className={`${labelCell} text-left`}>Summary</th>
                   {plans.map((plan) => (
                     <td key={plan.id} className="border-r px-4 py-2 align-top">
-                      <Textarea
-                        className="text-sm min-h-[72px]"
-                        placeholder="Describe this plan"
-                        disabled={!canEdit}
-                        value={drafts[plan.id]?.summary ?? plan.summary ?? ""}
-                        onChange={(e) =>
-                          setDrafts((d) => ({ ...d, [plan.id]: { ...d[plan.id], summary: e.target.value } }))
-                        }
-                        onBlur={(e) => {
-                          if (e.target.value !== (plan.summary || "")) savePlan(plan.id, { summary: e.target.value });
-                        }}
-                      />
+                      {editing?.id === plan.id && editing.field === "summary" ? (
+                        <Textarea
+                          autoFocus
+                          className="text-sm min-h-[72px]"
+                          placeholder="Describe this plan"
+                          value={draft}
+                          onChange={(e) => setDraft(e.target.value)}
+                          onBlur={() => commitEdit(plan, "summary")}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                              e.preventDefault();
+                              commitEdit(plan, "summary");
+                            } else if (e.key === "Escape") {
+                              setEditing(null);
+                            }
+                          }}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          className={`w-full text-left text-sm px-2 py-1 rounded whitespace-pre-wrap ${
+                            canEdit ? "hover:bg-muted cursor-text" : "cursor-default"
+                          } ${plan.summary ? "" : "text-muted-foreground"}`}
+                          onClick={() => beginEdit(plan, "summary")}
+                        >
+                          {plan.summary || "Describe this plan"}
+                        </button>
+                      )}
                     </td>
                   ))}
                   <td />
@@ -495,27 +758,101 @@ export default function WaterMitigationPlan() {
                     </td>
                   </tr>
                 ) : (
-                  controlRows.map((row) => (
-                    <tr key={row.id} className="border-b align-top">
-                      <th className={`${labelCell} text-left font-normal`}>{row.name}</th>
-                      {plans.map((plan) => {
-                        const n = plan.control_counts[row.id] ?? 0;
-                        return (
-                          <td key={plan.id} className="border-r px-4 py-2 text-right text-sm tabular-nums">
-                            <div>{n} locations</div>
-                            <div className="text-muted-foreground">{currency(n * row.unitCost)}</div>
-                          </td>
-                        );
-                      })}
-                      <td />
-                    </tr>
-                  ))
+                  controlRows.map((row) => {
+                    const spaces = spacesForControl(row.id);
+                    const isOpen = expanded.has(row.id);
+                    return (
+                      <>
+                        <tr key={row.id} className="border-b align-top">
+                          <th className={`${labelCell} text-left font-normal`}>
+                            <button
+                              type="button"
+                              className="flex items-center gap-1.5 text-left w-full hover:text-primary disabled:hover:text-foreground"
+                              onClick={() => toggleExpanded(row.id)}
+                              disabled={spaces.length === 0}
+                            >
+                              {spaces.length > 0 ? (
+                                isOpen ? (
+                                  <ChevronDown className="h-4 w-4 shrink-0" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4 shrink-0" />
+                                )
+                              ) : (
+                                <span className="w-4 shrink-0" />
+                              )}
+                              <span>{row.name}</span>
+                            </button>
+                          </th>
+                          {plans.map((plan) => {
+                            const n = plan.control_counts[row.id] ?? 0;
+                            return (
+                              <td key={plan.id} className="border-r px-4 py-2 text-right text-sm tabular-nums">
+                                {n} locations ({currency(n * row.unitCost)})
+                              </td>
+                            );
+                          })}
+                          <td />
+                        </tr>
+                        {isOpen &&
+                          spaces.map(([space, count]) => (
+                            <tr key={`${row.id}::${space}`} className="border-b bg-muted/30">
+                              <th className={`${labelCell} text-left font-normal bg-muted/30`}>
+                                <span className="pl-6 text-muted-foreground">{space}</span>
+                              </th>
+                              {plans.map((plan) => (
+                                <td
+                                  key={plan.id}
+                                  className="border-r px-4 py-2 text-right text-sm tabular-nums"
+                                >
+                                  <button
+                                    type="button"
+                                    className="hover:underline text-primary disabled:text-muted-foreground disabled:no-underline"
+                                    disabled={!spaceBreakdown.get(row.id)?.get(space)?.sheets.size}
+                                    onClick={() => openSpace(row.id, space)}
+                                  >
+                                    {count} locations
+                                  </button>
+                                </td>
+                              ))}
+                              <td />
+                            </tr>
+                          ))}
+                      </>
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </div>
         )}
       </main>
+
+      {viewer && viewerData && (
+        <FileViewerModal
+          isOpen
+          onClose={() => setViewer(null)}
+          fileId={viewerData.sheet.id}
+          fileName={`${viewerData.file?.name || "Drawing"} | Page ${viewerData.sheet.page_index}`}
+          mimeType="application/pdf"
+          accessToken=""
+          detections={[]}
+          sourceOverride={viewerData.source}
+          analysisRequestId={viewerData.request?.id}
+          parentFileId={viewerData.sheet.parent_file_id}
+          sheetId={viewerData.sheet.id}
+          pageIndex={viewerData.sheet.page_index}
+          awpClasses={viewerData.classNames.map((name) => ({
+            name,
+            prefix: null,
+            label: name,
+            analysisCount: 0,
+          }))}
+          fileNameById={viewerData.fileNameById}
+          preselectClass={viewer.className}
+          persistKey={projectId}
+          readOnly
+        />
+      )}
     </div>
   );
 }
