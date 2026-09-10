@@ -80,6 +80,8 @@ Deno.serve(async (req) => {
     const projectId: string | undefined = body?.projectId;
     const context = body?.context;
     const messages: Array<{ role: string; content: string }> = body?.messages || [];
+    const actionSpec: string | undefined =
+      typeof body?.actionSpec === "string" && body.actionSpec.trim() ? body.actionSpec.trim() : undefined;
 
     if (!projectId) return json({ error: "projectId is required" }, 400);
     if (!Array.isArray(messages) || messages.length === 0) {
