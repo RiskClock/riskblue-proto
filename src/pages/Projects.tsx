@@ -9,7 +9,7 @@ import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import { formatDateShort } from "@/lib/reportGenerator";
 import { AppHeader } from "@/components/AppHeader";
-import { Trash2, X, Download } from "lucide-react";
+import { Trash2, X, ClipboardList } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CreateProjectModal } from "@/components/CreateProjectModal";
@@ -294,39 +294,19 @@ const Projects = () => {
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <span>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  disabled={!project.report_file_path}
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    if (!project.report_file_path) return;
-                                    const { data, error } = await supabase.storage
-                                      .from("project-reports")
-                                      .createSignedUrl(project.report_file_path, 60, {
-                                        download: project.report_file_name || true,
-                                      });
-                                    if (error || !data?.signedUrl) {
-                                      toast({
-                                        variant: "destructive",
-                                        title: "Download failed",
-                                        description: getUserFriendlyError(error),
-                                      });
-                                      return;
-                                    }
-                                    window.open(data.signedUrl, "_blank");
-                                  }}
-                                >
-                                  <Download className="h-4 w-4" />
-                                </Button>
-                              </span>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label="Water Mitigation Plan"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(tenantPath(`/project/${project.id}/mitigation-plan`));
+                                }}
+                              >
+                                <ClipboardList className="h-4 w-4" />
+                              </Button>
                             </TooltipTrigger>
-                            <TooltipContent>
-                              {project.report_file_path
-                                ? `Download ${project.report_file_name || "report"}`
-                                : "No report available"}
-                            </TooltipContent>
+                            <TooltipContent>Water Mitigation Plan</TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                         {userProjectRoles.get(project.id) === "admin" && canDeleteProject && (
