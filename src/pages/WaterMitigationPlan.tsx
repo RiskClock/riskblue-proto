@@ -224,7 +224,7 @@ export default function WaterMitigationPlan() {
     queryFn: async () => {
       const { data: reqs, error: reqErr } = await supabase
         .from("analysis_requests")
-        .select("id, source_type")
+        .select("id, source_type, space_hierarchy_json")
         .eq("project_id", projectId!);
       if (reqErr) throw reqErr;
       const requests = reqs || [];
@@ -249,7 +249,9 @@ export default function WaterMitigationPlan() {
       for (let from = 0; ; from += pageSize) {
         const { data, error } = await supabase
           .from("drawing_instances")
-          .select("id, awp_class_name, file_id, sheet_id, page_index, nx, ny, analysis_request_id")
+          .select(
+            "id, awp_class_name, file_id, sheet_id, page_index, nx, ny, instance_number, analysis_request_id",
+          )
           .in("analysis_request_id", ids)
           .range(from, from + pageSize - 1);
         if (error) throw error;
