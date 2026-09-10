@@ -226,26 +226,40 @@ export default function WaterMitigationPlan() {
     });
 
     const byName = new Map<string, string>();
+    const byAnyName = new Map<string, string>();
     (["critical_assets", "water_systems", "processes"] as const).forEach((key) => {
       (catalog[key] || []).forEach((entry: any) => {
-        byName.set(`${key}::${(entry.name || "").toLowerCase()}`, entry.id);
+        const n = (entry.name || "").toLowerCase().trim();
+        byName.set(`${key}::${n}`, entry.id);
+        if (!byAnyName.has(n)) byAnyName.set(n, entry.id);
       });
     });
+
+    const bump = (catalogId: string) => {
+      controlRows.forEach((row) => {
+        if (protectedByControl.get(row.id)?.has(catalogId)) {
+          counts[row.id] = (counts[row.id] || 0) + 1;
+        }
+      });
+    };
 
     (items as any[]).forEach((item) => {
       const table = CATEGORY_TABLE[item.category];
       if (!table) return;
       const catalogId = byName.get(`${table}::${(item.name || "").toLowerCase()}`);
       if (!catalogId) return;
-      controlRows.forEach((row) => {
-        if (protectedByControl.get(row.id)?.has(catalogId)) {
-          counts[row.id] = (counts[row.id] || 0) + 1;
-        }
-      });
+      bump(catalogId);
+    });
+
+    // Workbench detections are only labelled with the AWP class name.
+    (detections as { name: string }[]).forEach((d) => {
+      const catalogId = byAnyName.get((d.name || "").toLowerCase().trim());
+      if (!catalogId) return;
+      bump(catalogId);
     });
 
     return counts;
-  }, [catalog, controlRows, overrideMap, items]);
+  }, [catalog, controlRows, overrideMap, items, detections]);
 
   // Seed the first plan from the detected instances.
   const [seeding, setSeeding] = useState(false);
