@@ -39,6 +39,8 @@ interface Plan {
   name: string;
   summary: string | null;
   control_counts: Record<string, number>;
+  /** controlId -> detection ids this plan has switched the control off for. */
+  excluded_instances: Record<string, string[]>;
   sort_order: number;
 }
 
@@ -55,6 +57,9 @@ interface DetectionRow {
   sheetId: string | null;
   fileId: string | null;
   pageIndex: number | null;
+  nx: number | null;
+  ny: number | null;
+  instanceLabel: string;
 }
 
 const CATEGORY_TABLE: Record<string, "critical_assets" | "water_systems" | "processes"> = {
