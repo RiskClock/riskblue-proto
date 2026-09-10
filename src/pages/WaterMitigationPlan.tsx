@@ -747,6 +747,173 @@ export default function WaterMitigationPlan() {
     };
   };
 
+  const WADE_ACTION_SPEC = `You can CHANGE the mitigation plans on this page, not just describe them.
+When the user asks for a change, apply it immediately (no confirmation step) by ending your reply
+with a fenced code block tagged wade-actions containing JSON: {"actions":[...]}.
+Supported actions (use the exact plan / control / space names from the context):
+- {"type":"set_control","plan":"Plan 3","control":"Automatic Shut Off Valve - 1\\"","enabled":false}
+- {"type":"set_control_space","plan":"Plan 3","control":"...","space":"Level 6","enabled":true}
+- {"type":"rename_plan","plan":"Plan 3","name":"New name"}
+- {"type":"set_summary","plan":"Plan 3","summary":"..."}
+- {"type":"duplicate_plan","plan":"Plan 1","name":"Plan 4"}
+- {"type":"delete_plan","plan":"Plan 4"}
+Rules: keep the visible reply short (one or two sentences saying what you are doing); never show the
+JSON block contents in prose; only emit actions when the user actually asks for a change; if the
+request is ambiguous, ask instead of guessing. The app applies the actions and posts its own recap.`;
+
+  const applyWadeActions = async (actions: any[]): Promise<string | null> => {
+    if (!canEdit) return "I can't change these plans — your access here is read-only.";
+
+    const norm = (s: unknown) => String(s ?? "").toLowerCase().trim();
+    const findPlan = (name: unknown) => {
+      const n = norm(name);
+      return (
+        plans.find((p) => norm(p.name) === n) ||
+        plans.find((p) => norm(p.name).includes(n) && n.length > 0) ||
+        null
+      );
+    };
+    const findControl = (name: unknown) => {
+      const n = norm(name);
+      return (
+        controlRows.find((c) => norm(c.name) === n) ||
+        controlRows.find((c) => n.length > 2 && norm(c.name).includes(n)) ||
+        null
+      );
+    };
+    const findSpace = (controlId: string, name: unknown) => {
+      const n = norm(name);
+      return spacesForControl(controlId).find((s) => norm(s) === n) ||
+        spacesForControl(controlId).find((s) => n.length > 1 && norm(s).includes(n)) ||
+        null;
+    };
+
+    // Accumulate exclusion edits so each plan is written once.
+    const pending = new Map<string, Record<string, string[]>>();
+    const exclusionsFor = (plan: Plan) =>
+      pending.get(plan.id) ??
+      (pending.set(plan.id, JSON.parse(JSON.stringify(plan.excluded_instances || {}))),
+        pending.get(plan.id)!);
+
+    const lines: string[] = [];
+
+    for (const a of actions) {
+      const type = String(a?.type || "");
+      try {
+        if (type === "set_control" || type === "set_control_space") {
+          const plan = findPlan(a.plan);
+          const control = findControl(a.control);
+          if (!plan || !control) {
+            lines.push(`Skipped ${type}: could not match ${!plan ? `plan "${a.plan}"` : `control "${a.control}"`}.`);
+            continue;
+          }
+          const enabled = a.enabled !== false;
+          const spaces = spaceBreakdown.get(control.id);
+          if (!spaces) {
+            lines.push(`Skipped: ${control.name} has no locations in this project.`);
+            continue;
+          }
+          let space: string | null = null;
+          if (type === "set_control_space") {
+            space = findSpace(control.id, a.space);
+            if (!space) {
+              lines.push(`Skipped: could not match space "${a.space}".`);
+              continue;
+            }
+          }
+          const targetIds: string[] = [];
+          spaces.forEach((cell, spaceName) => {
+            if (space && spaceName !== space) return;
+            cell.instances.forEach((i) => targetIds.push(i.id));
+          });
+          const ex = exclusionsFor(plan);
+          const cur = new Set(ex[control.id] || []);
+          const before = cur.size;
+          targetIds.forEach((id) => (enabled ? cur.delete(id) : cur.add(id)));
+          if (cur.size > 0) ex[control.id] = [...cur];
+          else delete ex[control.id];
+          if (cur.size !== before) {
+            lines.push(
+              `${enabled ? "Switched on" : "Switched off"} ${control.name}${space ? ` in ${space}` : ""} for ${plan.name} (${Math.abs(cur.size - before)} location${Math.abs(cur.size - before) === 1 ? "" : "s"}).`,
+            );
+          } else {
+            lines.push(`${control.name}${space ? ` in ${space}` : ""} was already ${enabled ? "on" : "off"} in ${plan.name}.`);
+          }
+        } else if (type === "rename_plan") {
+          const plan = findPlan(a.plan);
+          const name = String(a.name || "").trim();
+          if (!plan || !name) {
+            lines.push(`Skipped rename: could not match plan "${a.plan}".`);
+            continue;
+          }
+          const { error } = await supabase
+            .from("project_mitigation_plans")
+            .update({ name })
+            .eq("id", plan.id);
+          if (error) throw error;
+          lines.push(`Renamed "${plan.name}" to "${name}".`);
+        } else if (type === "set_summary") {
+          const plan = findPlan(a.plan);
+          if (!plan) {
+            lines.push(`Skipped summary update: could not match plan "${a.plan}".`);
+            continue;
+          }
+          const { error } = await supabase
+            .from("project_mitigation_plans")
+            .update({ summary: String(a.summary ?? "") })
+            .eq("id", plan.id);
+          if (error) throw error;
+          lines.push(`Updated the summary for ${plan.name}.`);
+        } else if (type === "duplicate_plan") {
+          const source = findPlan(a.plan);
+          if (!source) {
+            lines.push(`Skipped duplicate: could not match plan "${a.plan}".`);
+            continue;
+          }
+          const nextOrder = plans.length ? Math.max(...plans.map((p) => p.sort_order)) + 1 : 0;
+          const name = String(a.name || "").trim() || `${source.name} (copy)`;
+          const { error } = await supabase.from("project_mitigation_plans").insert({
+            project_id: projectId!,
+            name,
+            summary: source.summary,
+            control_counts: source.control_counts,
+            excluded_instances: source.excluded_instances,
+            sort_order: nextOrder,
+            created_by: user?.id ?? null,
+          } as any);
+          if (error) throw error;
+          lines.push(`Created "${name}" from ${source.name}.`);
+        } else if (type === "delete_plan") {
+          const plan = findPlan(a.plan);
+          if (!plan) {
+            lines.push(`Skipped delete: could not match plan "${a.plan}".`);
+            continue;
+          }
+          const { error } = await supabase.from("project_mitigation_plans").delete().eq("id", plan.id);
+          if (error) throw error;
+          lines.push(`Deleted ${plan.name}.`);
+        } else {
+          lines.push(`Skipped unknown action "${type}".`);
+        }
+      } catch (e: any) {
+        lines.push(`Failed ${type}: ${getUserFriendlyError(e)}`);
+      }
+    }
+
+    for (const [planId, excluded] of pending) {
+      const { error } = await supabase
+        .from("project_mitigation_plans")
+        .update({ excluded_instances: excluded } as any)
+        .eq("id", planId);
+      if (error) lines.push(`Failed to save changes: ${getUserFriendlyError(error)}`);
+    }
+
+    await queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
+
+    if (lines.length === 0) return null;
+    return `**Applied to the plans:**\n${lines.map((l) => `- ${l}`).join("\n")}`;
+  };
+
   const labelCell = "sticky left-0 z-10 bg-card border-r px-4 py-3 text-sm font-medium text-foreground w-[280px] min-w-[280px]";
 
   return (
