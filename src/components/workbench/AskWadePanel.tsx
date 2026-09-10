@@ -18,7 +18,22 @@ interface WadeMessage {
 // is still rendered and persisted.
 const MAX_HISTORY_TURNS = 10;
 
-
+/** Pulls a ```wade-actions fenced JSON block out of an assistant reply. */
+function extractActions(text: string): { visible: string; actions: any[] } {
+  const re = /```wade-actions\s*([\s\S]*?)```/gi;
+  const actions: any[] = [];
+  const visible = text.replace(re, (_m, body) => {
+    try {
+      const parsed = JSON.parse(String(body).trim());
+      const list = Array.isArray(parsed) ? parsed : parsed?.actions;
+      if (Array.isArray(list)) actions.push(...list);
+    } catch (e) {
+      console.warn("Wade action block was not valid JSON", e);
+    }
+    return "";
+  });
+  return { visible: visible.trim(), actions };
+}
 
 export function AskWadePanel({
   projectId,
@@ -28,6 +43,8 @@ export function AskWadePanel({
   title = "Ask Wade",
   emptyHint,
   onAssistantMessage,
+  actionSpec,
+  onActions,
 }: {
   projectId: string;
   onClose: () => void;
@@ -38,6 +55,10 @@ export function AskWadePanel({
   emptyHint?: string;
   /** Called with each assistant reply, for callers that extract content from it. */
   onAssistantMessage?: (content: string) => void;
+  /** Extra system guidance describing the actions Wade may perform. */
+  actionSpec?: string;
+  /** Executes actions Wade requested; returns a markdown summary of what changed. */
+  onActions?: (actions: any[]) => Promise<string | null>;
 }) {
   const { toast } = useToast();
   const [messages, setMessages] = useState<WadeMessage[]>([]);
@@ -156,18 +177,34 @@ export function AskWadePanel({
           projectId,
           context: buildContext(),
           messages: windowed.map((m) => ({ role: m.role, content: m.content })),
+          actionSpec: onActions ? actionSpec : undefined,
         },
       });
       if (error) throw await normalizeFunctionError(error);
       if ((data as any)?.error) throw new Error((data as any).error);
 
-      const answer = (data as any).response as string;
-      
+      const raw = (data as any).response as string;
+      const { visible, actions } = onActions ? extractActions(raw) : { visible: raw, actions: [] };
+      const answer = visible || (actions.length > 0 ? "Applying the requested changes…" : raw);
+
       setMessages((prev) => [...prev, { role: "user", content: text }, { role: "assistant", content: answer }]);
       onAssistantMessage?.(answer);
       await persist("user", text);
       await persist("assistant", answer);
       sessionCountRef.current += 1;
+
+      if (onActions && actions.length > 0) {
+        let recap: string | null = null;
+        try {
+          recap = await onActions(actions);
+        } catch (actionErr: any) {
+          recap = `I could not apply the changes: ${actionErr?.message || "unknown error"}`;
+        }
+        if (recap) {
+          setMessages((prev) => [...prev, { role: "assistant", content: recap! }]);
+          await persist("assistant", recap);
+        }
+      }
     } catch (e: any) {
       setInput((cur) => (cur.trim() ? cur : text));
       toast({

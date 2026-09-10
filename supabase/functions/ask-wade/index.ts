@@ -80,6 +80,8 @@ Deno.serve(async (req) => {
     const projectId: string | undefined = body?.projectId;
     const context = body?.context;
     const messages: Array<{ role: string; content: string }> = body?.messages || [];
+    const actionSpec: string | undefined =
+      typeof body?.actionSpec === "string" && body.actionSpec.trim() ? body.actionSpec.trim() : undefined;
 
     if (!projectId) return json({ error: "projectId is required" }, 400);
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -129,7 +131,8 @@ Deno.serve(async (req) => {
 
     // Stable prefix: system prompt + project context. Everything after this is
     // the conversation, so the prefix can be cached across turns.
-    const prefixText = `PROJECT CONTEXT JSON (project "${project.name}"):\n${contextText}`;
+    const prefixText = `PROJECT CONTEXT JSON (project "${project.name}"):\n${contextText}` +
+      (actionSpec ? `\n\nACTION CAPABILITIES:\n${actionSpec}` : "");
     const contextHash = await sha256Hex(`${modelId}\n${systemPrompt}\n${prefixText}`);
 
     // Sliding window: only the last N turns are sent to the model. The UI keeps
