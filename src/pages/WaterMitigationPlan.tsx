@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,10 +14,20 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ArrowLeft, ChevronDown, ChevronRight, Loader2, Plus, Trash2, MoreVertical } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  MessageSquare,
+  Plus,
+  Trash2,
+  MoreVertical,
+} from "lucide-react";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errorHandling";
-import { FileViewerModal } from "@/components/wizard/FileViewerModal";
+import { ControlInstancesModal } from "@/components/wizard/ControlInstancesModal";
+import { AskWadePanel } from "@/components/workbench/AskWadePanel";
 import type { DocumentSourceDescriptor } from "@/components/viewer";
 import {
   parseSurveyFloorPlans,
@@ -39,6 +49,8 @@ interface Plan {
   name: string;
   summary: string | null;
   control_counts: Record<string, number>;
+  /** controlId -> detection ids this plan has switched the control off for. */
+  excluded_instances: Record<string, string[]>;
   sort_order: number;
 }
 
@@ -55,6 +67,9 @@ interface DetectionRow {
   sheetId: string | null;
   fileId: string | null;
   pageIndex: number | null;
+  nx: number | null;
+  ny: number | null;
+  instanceLabel: string;
 }
 
 const CATEGORY_TABLE: Record<string, "critical_assets" | "water_systems" | "processes"> = {
@@ -219,7 +234,7 @@ export default function WaterMitigationPlan() {
     queryFn: async () => {
       const { data: reqs, error: reqErr } = await supabase
         .from("analysis_requests")
-        .select("id, source_type")
+        .select("id, source_type, space_hierarchy_json")
         .eq("project_id", projectId!);
       if (reqErr) throw reqErr;
       const requests = reqs || [];
@@ -244,7 +259,9 @@ export default function WaterMitigationPlan() {
       for (let from = 0; ; from += pageSize) {
         const { data, error } = await supabase
           .from("drawing_instances")
-          .select("id, awp_class_name, file_id, sheet_id, page_index, nx, ny, analysis_request_id")
+          .select(
+            "id, awp_class_name, file_id, sheet_id, page_index, nx, ny, instance_number, analysis_request_id",
+          )
           .in("analysis_request_id", ids)
           .range(from, from + pageSize - 1);
         if (error) throw error;
@@ -267,13 +284,14 @@ export default function WaterMitigationPlan() {
     queryFn: async (): Promise<Plan[]> => {
       const { data, error } = await supabase
         .from("project_mitigation_plans")
-        .select("id, name, summary, control_counts, sort_order")
+        .select("id, name, summary, control_counts, excluded_instances, sort_order")
         .eq("project_id", projectId!)
         .order("sort_order");
       if (error) throw error;
       return (data || []).map((p: any) => ({
         ...p,
         control_counts: (p.control_counts || {}) as Record<string, number>,
+        excluded_instances: (p.excluded_instances || {}) as Record<string, string[]>,
       }));
     },
     enabled: !!projectId,
@@ -358,19 +376,42 @@ export default function WaterMitigationPlan() {
         sheetId: d.sheet_id ?? null,
         fileId: d.file_id ?? null,
         pageIndex: typeof d.page_index === "number" ? d.page_index : null,
+        nx: typeof d.nx === "number" ? d.nx : null,
+        ny: typeof d.ny === "number" ? d.ny : null,
+        instanceLabel: d.instance_number
+          ? `${d.awp_class_name} ${String(d.instance_number).padStart(3, "0")}`
+          : d.awp_class_name,
       };
     });
   }, [drawing, sheetPlans]);
 
-  // Derived counts + per-space breakdown per control.
-  const { derivedCounts, spaceBreakdown } = useMemo(() => {
-    const counts: Record<string, number> = {};
-    // controlId -> space -> { count, classes, sheets }
-    const breakdown = new Map<
-      string,
-      Map<string, { count: number; classes: Map<string, number>; sheets: Map<string, number> }>
-    >();
-    if (!catalog) return { derivedCounts: counts, spaceBreakdown: breakdown };
+  // Every space in the spatial model, in model order, then any extra spaces
+  // that only appear on detections, with the unassigned bucket last.
+  const orderedSpaces = useMemo(() => {
+    const ordered: string[] = [];
+    const seen = new Set<string>();
+    const push = (name: string) => {
+      const n = (name || "").trim();
+      if (!n || seen.has(n) || n === UNASSIGNED) return;
+      seen.add(n);
+      ordered.push(n);
+    };
+    ((drawing?.requests as any[]) || []).forEach((r) => {
+      const recs = r?.space_hierarchy_json?.parsed?.spatial_records;
+      if (Array.isArray(recs)) {
+        recs.forEach((rec: any) => push(rec?.standardized_space_name || rec?.name));
+      }
+    });
+    detectionRows.forEach((d) => push(d.space));
+    ordered.push(UNASSIGNED);
+    return ordered;
+  }, [drawing, detectionRows]);
+
+  // Derived per-space instance breakdown per control.
+  const spaceBreakdown = useMemo(() => {
+    // controlId -> space -> { instances, legacy }
+    const breakdown = new Map<string, Map<string, { instances: DetectionRow[]; legacy: number }>>();
+    if (!catalog) return breakdown;
 
     const protectedByControl = new Map<string, Set<string>>();
     controlRows.forEach((row) => {
@@ -400,24 +441,18 @@ export default function WaterMitigationPlan() {
       });
     });
 
-    const bump = (catalogId: string, space: string, className: string, sheetId: string | null) => {
-      controlRows.forEach((row) => {
-        if (!protectedByControl.get(row.id)?.has(catalogId)) return;
-        counts[row.id] = (counts[row.id] || 0) + 1;
-        let spaces = breakdown.get(row.id);
-        if (!spaces) {
-          spaces = new Map();
-          breakdown.set(row.id, spaces);
-        }
-        let cell = spaces.get(space);
-        if (!cell) {
-          cell = { count: 0, classes: new Map(), sheets: new Map() };
-          spaces.set(space, cell);
-        }
-        cell.count += 1;
-        cell.classes.set(className, (cell.classes.get(className) || 0) + 1);
-        if (sheetId) cell.sheets.set(sheetId, (cell.sheets.get(sheetId) || 0) + 1);
-      });
+    const cellFor = (controlId: string, space: string) => {
+      let spaces = breakdown.get(controlId);
+      if (!spaces) {
+        spaces = new Map();
+        breakdown.set(controlId, spaces);
+      }
+      let cell = spaces.get(space);
+      if (!cell) {
+        cell = { instances: [], legacy: 0 };
+        spaces.set(space, cell);
+      }
+      return cell;
     };
 
     (items as any[]).forEach((item) => {
@@ -425,17 +460,35 @@ export default function WaterMitigationPlan() {
       if (!table) return;
       const catalogId = byName.get(`${table}::${(item.name || "").toLowerCase()}`);
       if (!catalogId) return;
-      bump(catalogId, UNASSIGNED, item.name, null);
+      controlRows.forEach((row) => {
+        if (!protectedByControl.get(row.id)?.has(catalogId)) return;
+        cellFor(row.id, UNASSIGNED).legacy += 1;
+      });
     });
 
     detectionRows.forEach((d) => {
       const catalogId = byAnyName.get((d.name || "").toLowerCase().trim());
       if (!catalogId) return;
-      bump(catalogId, d.space, d.name, d.sheetId);
+      controlRows.forEach((row) => {
+        if (!protectedByControl.get(row.id)?.has(catalogId)) return;
+        cellFor(row.id, d.space).instances.push(d);
+      });
     });
 
-    return { derivedCounts: counts, spaceBreakdown: breakdown };
+    return breakdown;
   }, [catalog, controlRows, overrideMap, items, detectionRows]);
+
+  const derivedCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    spaceBreakdown.forEach((spaces, controlId) => {
+      let total = 0;
+      spaces.forEach((cell) => {
+        total += cell.instances.length + cell.legacy;
+      });
+      counts[controlId] = total;
+    });
+    return counts;
+  }, [spaceBreakdown]);
 
   // Seed the first plan from the detected instances.
   const [seeding, setSeeding] = useState(false);
@@ -516,15 +569,60 @@ export default function WaterMitigationPlan() {
     queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
   };
 
+  // --- per-plan instance toggles ---------------------------------------
+  const excludedFor = (plan: Plan, controlId: string) =>
+    new Set((plan.excluded_instances || {})[controlId] || []);
+
+  const countForSpace = (plan: Plan, controlId: string, space: string) => {
+    const cell = spaceBreakdown.get(controlId)?.get(space);
+    if (!cell) return 0;
+    const ex = excludedFor(plan, controlId);
+    return cell.legacy + cell.instances.filter((i) => !ex.has(i.id)).length;
+  };
+
+  const countFor = (plan: Plan, controlId: string) => {
+    const spaces = spaceBreakdown.get(controlId);
+    if (!spaces) return 0;
+    const ex = excludedFor(plan, controlId);
+    let n = 0;
+    spaces.forEach((cell) => {
+      n += cell.legacy + cell.instances.filter((i) => !ex.has(i.id)).length;
+    });
+    return n;
+  };
+
   const planTotals = (plan: Plan) => {
     let count = 0;
     let cost = 0;
     controlRows.forEach((row) => {
-      const n = plan.control_counts[row.id] ?? 0;
+      const n = countFor(plan, row.id);
       count += n;
       cost += n * row.unitCost;
     });
     return { count, cost };
+  };
+
+  const toggleInstance = async (planId: string, controlId: string, instanceId: string) => {
+    if (!canEdit) return;
+    const plan = plans.find((p) => p.id === planId);
+    if (!plan) return;
+    const cur = new Set((plan.excluded_instances || {})[controlId] || []);
+    cur.has(instanceId) ? cur.delete(instanceId) : cur.add(instanceId);
+    const next: Record<string, string[]> = { ...(plan.excluded_instances || {}) };
+    if (cur.size > 0) next[controlId] = [...cur];
+    else delete next[controlId];
+
+    queryClient.setQueryData(["wmp-plans", projectId], (old: Plan[] | undefined) =>
+      (old || []).map((p) => (p.id === planId ? { ...p, excluded_instances: next } : p)),
+    );
+    const { error } = await supabase
+      .from("project_mitigation_plans")
+      .update({ excluded_instances: next } as any)
+      .eq("id", planId);
+    if (error) {
+      toast.error(getUserFriendlyError(error));
+      queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
+    }
   };
 
   // --- inline editing -------------------------------------------------
@@ -543,7 +641,7 @@ export default function WaterMitigationPlan() {
     setEditing(null);
   };
 
-  // --- expansion + drawing modal --------------------------------------
+  // --- expansion + drawing review modal --------------------------------
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggleExpanded = (id: string) =>
     setExpanded((prev) => {
@@ -553,13 +651,24 @@ export default function WaterMitigationPlan() {
     });
 
   const [viewer, setViewer] = useState<{
-    sheetId: string;
-    className: string | null;
+    planId: string;
+    controlId: string;
+    space: string;
   } | null>(null);
 
   const viewerData = useMemo(() => {
     if (!viewer || !drawing) return null;
-    const sheet = (drawing.sheets as any[]).find((s) => s.id === viewer.sheetId);
+    const cell = spaceBreakdown.get(viewer.controlId)?.get(viewer.space);
+    const instances = cell?.instances ?? [];
+    // Page with the most instances for this space; fall back to the first sheet.
+    const counts = new Map<string, number>();
+    instances.forEach((i) => {
+      if (i.sheetId) counts.set(i.sheetId, (counts.get(i.sheetId) || 0) + 1);
+    });
+    const sheetId =
+      [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ??
+      ((drawing.sheets as any[])[0]?.id as string | undefined);
+    const sheet = (drawing.sheets as any[]).find((s) => s.id === sheetId);
     if (!sheet || !sheet.storage_path) return null;
     const file = (drawing.files as any[]).find((f) => f.id === sheet.parent_file_id);
     const request = (drawing.requests as any[]).find((r) => r.id === file?.analysis_request_id);
@@ -570,31 +679,72 @@ export default function WaterMitigationPlan() {
       mimeType: "application/pdf",
       version: sheet.updated_at ?? undefined,
     };
-    const classNames = Array.from(new Set(detectionRows.map((d) => d.name).filter(Boolean)));
     return {
       sheet,
-      file,
-      request,
       source,
-      classNames,
-      fileNameById: Object.fromEntries((drawing.files as any[]).map((f) => [f.id, f.name])),
+      fileName: file?.name || "Drawing",
+      instances: instances.filter((i) => i.sheetId === sheet.id),
     };
-  }, [viewer, drawing, detectionRows]);
+  }, [viewer, drawing, spaceBreakdown]);
 
-  const openSpace = (controlId: string, space: string) => {
-    const cell = spaceBreakdown.get(controlId)?.get(space);
-    if (!cell || cell.sheets.size === 0) return;
-    const sheetId = [...cell.sheets.entries()].sort((a, b) => b[1] - a[1])[0][0];
-    const className = [...cell.classes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-    setViewer({ sheetId, className });
+  const openSpace = (planId: string, controlId: string, space: string) => {
+    setViewer({ planId, controlId, space });
   };
 
+  /** Every space in spatial-model order (zero-location spaces included). */
   const spacesForControl = (controlId: string) => {
     const spaces = spaceBreakdown.get(controlId);
-    if (!spaces) return [] as Array<[string, number]>;
-    return [...spaces.entries()]
-      .map(([space, cell]) => [space, cell.count] as [string, number])
-      .sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }));
+    if (!spaces) return [] as string[];
+    const hasUnassigned = (spaces.get(UNASSIGNED)?.instances.length ?? 0) > 0 ||
+      (spaces.get(UNASSIGNED)?.legacy ?? 0) > 0;
+    return orderedSpaces.filter((s) => s !== UNASSIGNED || hasUnassigned);
+  };
+
+  // --- Wade popover -----------------------------------------------------
+  const [wadeOpen, setWadeOpen] = useState(false);
+  const [wadePos, setWadePos] = useState<{ x: number; y: number } | null>(null);
+  const wadeDrag = useRef<{ dx: number; dy: number } | null>(null);
+
+  const onWadePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
+    wadeDrag.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onWadePointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const d = wadeDrag.current;
+    if (!d) return;
+    const w = 420;
+    const h = 520;
+    setWadePos({
+      x: Math.min(Math.max(0, e.clientX - d.dx), window.innerWidth - w),
+      y: Math.min(Math.max(0, e.clientY - d.dy), window.innerHeight - 60),
+    });
+  };
+  const onWadePointerUp = () => {
+    wadeDrag.current = null;
+  };
+
+  const buildWadeContext = () => {
+    const plansCtx = plans.map((plan) => ({
+      name: plan.name,
+      summary: plan.summary,
+      totals: planTotals(plan),
+      controls: controlRows.map((row) => ({
+        control: row.name,
+        unit_cost: row.unitCost,
+        locations: countFor(plan, row.id),
+        by_space: spacesForControl(row.id).map((space) => ({
+          space,
+          locations: countForSpace(plan, row.id, space),
+        })),
+      })),
+    }));
+    return {
+      page: "water_mitigation_plan",
+      project: project?.name,
+      plans: plansCtx,
+      detections: detectionRows.map((d) => ({ class: d.name, space: d.space })),
+    };
   };
 
   const labelCell = "sticky left-0 z-10 bg-card border-r px-4 py-3 text-sm font-medium text-foreground w-[280px] min-w-[280px]";
@@ -784,7 +934,7 @@ export default function WaterMitigationPlan() {
                             </button>
                           </th>
                           {plans.map((plan) => {
-                            const n = plan.control_counts[row.id] ?? 0;
+                            const n = countFor(plan, row.id);
                             return (
                               <td key={plan.id} className="border-r px-4 py-2 text-right text-sm tabular-nums">
                                 {n} locations ({currency(n * row.unitCost)})
@@ -794,7 +944,7 @@ export default function WaterMitigationPlan() {
                           <td />
                         </tr>
                         {isOpen &&
-                          spaces.map(([space, count]) => (
+                          spaces.map((space) => (
                             <tr key={`${row.id}::${space}`} className="border-b bg-muted/30">
                               <th className={`${labelCell} text-left font-normal bg-muted/30`}>
                                 <span className="pl-6 text-muted-foreground">{space}</span>
@@ -806,11 +956,10 @@ export default function WaterMitigationPlan() {
                                 >
                                   <button
                                     type="button"
-                                    className="hover:underline text-primary disabled:text-muted-foreground disabled:no-underline"
-                                    disabled={!spaceBreakdown.get(row.id)?.get(space)?.sheets.size}
-                                    onClick={() => openSpace(row.id, space)}
+                                    className="hover:underline text-primary"
+                                    onClick={() => openSpace(plan.id, row.id, space)}
                                   >
-                                    {count} locations
+                                    {countForSpace(plan, row.id, space)} locations
                                   </button>
                                 </td>
                               ))}
@@ -821,6 +970,19 @@ export default function WaterMitigationPlan() {
                     );
                   })
                 )}
+
+                <tr>
+                  <td colSpan={plans.length + 2} className="px-4 py-3 text-center">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => setWadeOpen(true)}
+                    >
+                      <MessageSquare className="h-4 w-4 mr-1" /> Open Wade
+                    </Button>
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -828,30 +990,62 @@ export default function WaterMitigationPlan() {
       </main>
 
       {viewer && viewerData && (
-        <FileViewerModal
+        <ControlInstancesModal
           isOpen
           onClose={() => setViewer(null)}
-          fileId={viewerData.sheet.id}
-          fileName={`${viewerData.file?.name || "Drawing"} | Page ${viewerData.sheet.page_index}`}
-          mimeType="application/pdf"
-          accessToken=""
-          detections={[]}
-          sourceOverride={viewerData.source}
-          analysisRequestId={viewerData.request?.id}
-          parentFileId={viewerData.sheet.parent_file_id}
-          sheetId={viewerData.sheet.id}
+          source={viewerData.source}
+          fileName={viewerData.fileName}
           pageIndex={viewerData.sheet.page_index}
-          awpClasses={viewerData.classNames.map((name) => ({
-            name,
-            prefix: null,
-            label: name,
-            analysisCount: 0,
+          controlName={controlRows.find((c) => c.id === viewer.controlId)?.name || "Control"}
+          spaceName={viewer.space}
+          instances={viewerData.instances.map((i) => ({
+            id: i.id,
+            name: i.name,
+            nx: i.nx,
+            ny: i.ny,
+            instanceLabel: i.instanceLabel,
           }))}
-          fileNameById={viewerData.fileNameById}
-          preselectClass={viewer.className}
-          persistKey={projectId}
+          excludedIds={
+            excludedFor(
+              plans.find((p) => p.id === viewer.planId) ??
+                ({ excluded_instances: {} } as unknown as Plan),
+              viewer.controlId,
+            ) as Set<string>
+          }
+          onToggle={(instanceId) => toggleInstance(viewer.planId, viewer.controlId, instanceId)}
           readOnly={!canEdit}
         />
+      )}
+
+      {wadeOpen && (
+        <div
+          className="fixed z-50 w-[420px] h-[520px] rounded-lg border bg-card shadow-xl flex flex-col overflow-hidden"
+          style={{
+            left: wadePos ? wadePos.x : undefined,
+            top: wadePos ? wadePos.y : undefined,
+            right: wadePos ? undefined : 24,
+            bottom: wadePos ? undefined : 24,
+          }}
+        >
+          <div
+            className="h-6 shrink-0 cursor-move bg-muted/60 border-b"
+            onPointerDown={onWadePointerDown}
+            onPointerMove={onWadePointerMove}
+            onPointerUp={onWadePointerUp}
+          />
+          <div className="flex-1 min-h-0 flex">
+            <div className="flex-1 min-h-0 flex flex-col [&>div]:flex-1 [&>div]:border-0 [&>div]:rounded-none">
+              <AskWadePanel
+                projectId={projectId!}
+                onClose={() => setWadeOpen(false)}
+                buildContext={buildWadeContext}
+                persistHistory={false}
+                title="Ask Wade"
+                emptyHint="Ask about this project's mitigation plans, control counts, costs, or where detections sit."
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
