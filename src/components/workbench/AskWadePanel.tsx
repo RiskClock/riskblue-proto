@@ -18,7 +18,22 @@ interface WadeMessage {
 // is still rendered and persisted.
 const MAX_HISTORY_TURNS = 10;
 
-
+/** Pulls a ```wade-actions fenced JSON block out of an assistant reply. */
+function extractActions(text: string): { visible: string; actions: any[] } {
+  const re = /```wade-actions\s*([\s\S]*?)```/gi;
+  const actions: any[] = [];
+  const visible = text.replace(re, (_m, body) => {
+    try {
+      const parsed = JSON.parse(String(body).trim());
+      const list = Array.isArray(parsed) ? parsed : parsed?.actions;
+      if (Array.isArray(list)) actions.push(...list);
+    } catch (e) {
+      console.warn("Wade action block was not valid JSON", e);
+    }
+    return "";
+  });
+  return { visible: visible.trim(), actions };
+}
 
 export function AskWadePanel({
   projectId,
@@ -28,6 +43,8 @@ export function AskWadePanel({
   title = "Ask Wade",
   emptyHint,
   onAssistantMessage,
+  actionSpec,
+  onActions,
 }: {
   projectId: string;
   onClose: () => void;
@@ -38,6 +55,10 @@ export function AskWadePanel({
   emptyHint?: string;
   /** Called with each assistant reply, for callers that extract content from it. */
   onAssistantMessage?: (content: string) => void;
+  /** Extra system guidance describing the actions Wade may perform. */
+  actionSpec?: string;
+  /** Executes actions Wade requested; returns a markdown summary of what changed. */
+  onActions?: (actions: any[]) => Promise<string | null>;
 }) {
   const { toast } = useToast();
   const [messages, setMessages] = useState<WadeMessage[]>([]);
