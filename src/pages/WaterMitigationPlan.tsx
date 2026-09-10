@@ -122,6 +122,8 @@ export default function WaterMitigationPlan() {
     enabled: !!planTenantId,
   });
 
+  // Detections come from two places: AWP wizard items (project_analysis_items)
+  // and workbench drawing detections (drawing_instances, keyed by class name).
   const { data: items = [] } = useQuery({
     queryKey: ["wmp-items", projectId],
     queryFn: async () => {
@@ -131,6 +133,34 @@ export default function WaterMitigationPlan() {
         .eq("project_id", projectId!);
       if (error) throw error;
       return data || [];
+    },
+    enabled: !!projectId,
+  });
+
+  const { data: detections = [] } = useQuery({
+    queryKey: ["wmp-detections", projectId],
+    queryFn: async () => {
+      const { data: reqs, error: reqErr } = await supabase
+        .from("analysis_requests")
+        .select("id")
+        .eq("project_id", projectId!);
+      if (reqErr) throw reqErr;
+      const ids = (reqs || []).map((r: any) => r.id);
+      if (ids.length === 0) return [] as { name: string }[];
+      const all: { name: string }[] = [];
+      const pageSize = 1000;
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await supabase
+          .from("drawing_instances")
+          .select("awp_class_name")
+          .in("analysis_request_id", ids)
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        const rows = data || [];
+        rows.forEach((r: any) => all.push({ name: r.awp_class_name }));
+        if (rows.length < pageSize) break;
+      }
+      return all;
     },
     enabled: !!projectId,
   });
@@ -196,26 +226,40 @@ export default function WaterMitigationPlan() {
     });
 
     const byName = new Map<string, string>();
+    const byAnyName = new Map<string, string>();
     (["critical_assets", "water_systems", "processes"] as const).forEach((key) => {
       (catalog[key] || []).forEach((entry: any) => {
-        byName.set(`${key}::${(entry.name || "").toLowerCase()}`, entry.id);
+        const n = (entry.name || "").toLowerCase().trim();
+        byName.set(`${key}::${n}`, entry.id);
+        if (!byAnyName.has(n)) byAnyName.set(n, entry.id);
       });
     });
+
+    const bump = (catalogId: string) => {
+      controlRows.forEach((row) => {
+        if (protectedByControl.get(row.id)?.has(catalogId)) {
+          counts[row.id] = (counts[row.id] || 0) + 1;
+        }
+      });
+    };
 
     (items as any[]).forEach((item) => {
       const table = CATEGORY_TABLE[item.category];
       if (!table) return;
       const catalogId = byName.get(`${table}::${(item.name || "").toLowerCase()}`);
       if (!catalogId) return;
-      controlRows.forEach((row) => {
-        if (protectedByControl.get(row.id)?.has(catalogId)) {
-          counts[row.id] = (counts[row.id] || 0) + 1;
-        }
-      });
+      bump(catalogId);
+    });
+
+    // Workbench detections are only labelled with the AWP class name.
+    (detections as { name: string }[]).forEach((d) => {
+      const catalogId = byAnyName.get((d.name || "").toLowerCase().trim());
+      if (!catalogId) return;
+      bump(catalogId);
     });
 
     return counts;
-  }, [catalog, controlRows, overrideMap, items]);
+  }, [catalog, controlRows, overrideMap, items, detections]);
 
   // Seed the first plan from the detected instances.
   const [seeding, setSeeding] = useState(false);
@@ -240,6 +284,26 @@ export default function WaterMitigationPlan() {
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, plansLoading, plans.length, catalog, controlRows.length, derivedCounts, canEdit]);
+
+  // Backfill the baseline plan when it was created before detections existed.
+  const [backfilled, setBackfilled] = useState(false);
+  useEffect(() => {
+    if (!projectId || plansLoading || backfilled || !canEdit || !catalog) return;
+    if (Object.keys(derivedCounts).length === 0) return;
+    const baseline = plans.find((p) => p.sort_order === 0);
+    if (!baseline || Object.keys(baseline.control_counts || {}).length > 0) return;
+    setBackfilled(true);
+    supabase
+      .from("project_mitigation_plans")
+      .update({ control_counts: derivedCounts })
+      .eq("id", baseline.id)
+      .then(({ error }) => {
+        if (error) toast.error(getUserFriendlyError(error));
+        queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, plansLoading, plans, derivedCounts, catalog, canEdit, backfilled]);
+
 
   const [drafts, setDrafts] = useState<Record<string, { name: string; summary: string }>>({});
   useEffect(() => {
