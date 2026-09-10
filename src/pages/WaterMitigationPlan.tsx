@@ -274,13 +274,14 @@ export default function WaterMitigationPlan() {
     queryFn: async (): Promise<Plan[]> => {
       const { data, error } = await supabase
         .from("project_mitigation_plans")
-        .select("id, name, summary, control_counts, sort_order")
+        .select("id, name, summary, control_counts, excluded_instances, sort_order")
         .eq("project_id", projectId!)
         .order("sort_order");
       if (error) throw error;
       return (data || []).map((p: any) => ({
         ...p,
         control_counts: (p.control_counts || {}) as Record<string, number>,
+        excluded_instances: (p.excluded_instances || {}) as Record<string, string[]>,
       }));
     },
     enabled: !!projectId,
