@@ -111,7 +111,7 @@ export default function Controls() {
   });
 
   // Existing selections for the active company
-  const { data: existingSelections = [], isLoading: selectionsLoading } = useQuery({
+  const { data: existingSelections = [], isLoading: selectionsLoading, isFetched: selectionsFetched } = useQuery({
     queryKey: ["company-control-selections", tenantId],
     queryFn: async () => {
       const { data, error } = await supabase
