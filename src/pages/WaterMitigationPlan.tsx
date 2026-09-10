@@ -366,19 +366,42 @@ export default function WaterMitigationPlan() {
         sheetId: d.sheet_id ?? null,
         fileId: d.file_id ?? null,
         pageIndex: typeof d.page_index === "number" ? d.page_index : null,
+        nx: typeof d.nx === "number" ? d.nx : null,
+        ny: typeof d.ny === "number" ? d.ny : null,
+        instanceLabel: d.instance_number
+          ? `${d.awp_class_name} ${String(d.instance_number).padStart(3, "0")}`
+          : d.awp_class_name,
       };
     });
   }, [drawing, sheetPlans]);
 
-  // Derived counts + per-space breakdown per control.
-  const { derivedCounts, spaceBreakdown } = useMemo(() => {
-    const counts: Record<string, number> = {};
-    // controlId -> space -> { count, classes, sheets }
-    const breakdown = new Map<
-      string,
-      Map<string, { count: number; classes: Map<string, number>; sheets: Map<string, number> }>
-    >();
-    if (!catalog) return { derivedCounts: counts, spaceBreakdown: breakdown };
+  // Every space in the spatial model, in model order, then any extra spaces
+  // that only appear on detections, with the unassigned bucket last.
+  const orderedSpaces = useMemo(() => {
+    const ordered: string[] = [];
+    const seen = new Set<string>();
+    const push = (name: string) => {
+      const n = (name || "").trim();
+      if (!n || seen.has(n) || n === UNASSIGNED) return;
+      seen.add(n);
+      ordered.push(n);
+    };
+    ((drawing?.requests as any[]) || []).forEach((r) => {
+      const recs = r?.space_hierarchy_json?.parsed?.spatial_records;
+      if (Array.isArray(recs)) {
+        recs.forEach((rec: any) => push(rec?.standardized_space_name || rec?.name));
+      }
+    });
+    detectionRows.forEach((d) => push(d.space));
+    ordered.push(UNASSIGNED);
+    return ordered;
+  }, [drawing, detectionRows]);
+
+  // Derived per-space instance breakdown per control.
+  const spaceBreakdown = useMemo(() => {
+    // controlId -> space -> { instances, legacy }
+    const breakdown = new Map<string, Map<string, { instances: DetectionRow[]; legacy: number }>>();
+    if (!catalog) return breakdown;
 
     const protectedByControl = new Map<string, Set<string>>();
     controlRows.forEach((row) => {
@@ -408,24 +431,18 @@ export default function WaterMitigationPlan() {
       });
     });
 
-    const bump = (catalogId: string, space: string, className: string, sheetId: string | null) => {
-      controlRows.forEach((row) => {
-        if (!protectedByControl.get(row.id)?.has(catalogId)) return;
-        counts[row.id] = (counts[row.id] || 0) + 1;
-        let spaces = breakdown.get(row.id);
-        if (!spaces) {
-          spaces = new Map();
-          breakdown.set(row.id, spaces);
-        }
-        let cell = spaces.get(space);
-        if (!cell) {
-          cell = { count: 0, classes: new Map(), sheets: new Map() };
-          spaces.set(space, cell);
-        }
-        cell.count += 1;
-        cell.classes.set(className, (cell.classes.get(className) || 0) + 1);
-        if (sheetId) cell.sheets.set(sheetId, (cell.sheets.get(sheetId) || 0) + 1);
-      });
+    const cellFor = (controlId: string, space: string) => {
+      let spaces = breakdown.get(controlId);
+      if (!spaces) {
+        spaces = new Map();
+        breakdown.set(controlId, spaces);
+      }
+      let cell = spaces.get(space);
+      if (!cell) {
+        cell = { instances: [], legacy: 0 };
+        spaces.set(space, cell);
+      }
+      return cell;
     };
 
     (items as any[]).forEach((item) => {
@@ -433,17 +450,35 @@ export default function WaterMitigationPlan() {
       if (!table) return;
       const catalogId = byName.get(`${table}::${(item.name || "").toLowerCase()}`);
       if (!catalogId) return;
-      bump(catalogId, UNASSIGNED, item.name, null);
+      controlRows.forEach((row) => {
+        if (!protectedByControl.get(row.id)?.has(catalogId)) return;
+        cellFor(row.id, UNASSIGNED).legacy += 1;
+      });
     });
 
     detectionRows.forEach((d) => {
       const catalogId = byAnyName.get((d.name || "").toLowerCase().trim());
       if (!catalogId) return;
-      bump(catalogId, d.space, d.name, d.sheetId);
+      controlRows.forEach((row) => {
+        if (!protectedByControl.get(row.id)?.has(catalogId)) return;
+        cellFor(row.id, d.space).instances.push(d);
+      });
     });
 
-    return { derivedCounts: counts, spaceBreakdown: breakdown };
+    return breakdown;
   }, [catalog, controlRows, overrideMap, items, detectionRows]);
+
+  const derivedCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    spaceBreakdown.forEach((spaces, controlId) => {
+      let total = 0;
+      spaces.forEach((cell) => {
+        total += cell.instances.length + cell.legacy;
+      });
+      counts[controlId] = total;
+    });
+    return counts;
+  }, [spaceBreakdown]);
 
   // Seed the first plan from the detected instances.
   const [seeding, setSeeding] = useState(false);
