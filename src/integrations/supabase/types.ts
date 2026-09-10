@@ -2054,6 +2054,50 @@ export type Database = {
           },
         ]
       }
+      project_mitigation_plans: {
+        Row: {
+          control_counts: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          project_id: string
+          sort_order: number
+          summary: string | null
+          updated_at: string
+        }
+        Insert: {
+          control_counts?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          project_id: string
+          sort_order?: number
+          summary?: string | null
+          updated_at?: string
+        }
+        Update: {
+          control_counts?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          project_id?: string
+          sort_order?: number
+          summary?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_mitigation_plans_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_user_roles: {
         Row: {
           created_at: string
