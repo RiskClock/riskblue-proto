@@ -122,6 +122,8 @@ export default function WaterMitigationPlan() {
     enabled: !!planTenantId,
   });
 
+  // Detections come from two places: AWP wizard items (project_analysis_items)
+  // and workbench drawing detections (drawing_instances, keyed by class name).
   const { data: items = [] } = useQuery({
     queryKey: ["wmp-items", projectId],
     queryFn: async () => {
@@ -131,6 +133,34 @@ export default function WaterMitigationPlan() {
         .eq("project_id", projectId!);
       if (error) throw error;
       return data || [];
+    },
+    enabled: !!projectId,
+  });
+
+  const { data: detections = [] } = useQuery({
+    queryKey: ["wmp-detections", projectId],
+    queryFn: async () => {
+      const { data: reqs, error: reqErr } = await supabase
+        .from("analysis_requests")
+        .select("id")
+        .eq("project_id", projectId!);
+      if (reqErr) throw reqErr;
+      const ids = (reqs || []).map((r: any) => r.id);
+      if (ids.length === 0) return [] as { name: string }[];
+      const all: { name: string }[] = [];
+      const pageSize = 1000;
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await supabase
+          .from("drawing_instances")
+          .select("awp_class_name")
+          .in("analysis_request_id", ids)
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        const rows = data || [];
+        rows.forEach((r: any) => all.push({ name: r.awp_class_name }));
+        if (rows.length < pageSize) break;
+      }
+      return all;
     },
     enabled: !!projectId,
   });
