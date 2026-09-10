@@ -177,18 +177,34 @@ export function AskWadePanel({
           projectId,
           context: buildContext(),
           messages: windowed.map((m) => ({ role: m.role, content: m.content })),
+          actionSpec: onActions ? actionSpec : undefined,
         },
       });
       if (error) throw await normalizeFunctionError(error);
       if ((data as any)?.error) throw new Error((data as any).error);
 
-      const answer = (data as any).response as string;
-      
+      const raw = (data as any).response as string;
+      const { visible, actions } = onActions ? extractActions(raw) : { visible: raw, actions: [] };
+      const answer = visible || (actions.length > 0 ? "Applying the requested changes…" : raw);
+
       setMessages((prev) => [...prev, { role: "user", content: text }, { role: "assistant", content: answer }]);
       onAssistantMessage?.(answer);
       await persist("user", text);
       await persist("assistant", answer);
       sessionCountRef.current += 1;
+
+      if (onActions && actions.length > 0) {
+        let recap: string | null = null;
+        try {
+          recap = await onActions(actions);
+        } catch (actionErr: any) {
+          recap = `I could not apply the changes: ${actionErr?.message || "unknown error"}`;
+        }
+        if (recap) {
+          setMessages((prev) => [...prev, { role: "assistant", content: recap! }]);
+          await persist("assistant", recap);
+        }
+      }
     } catch (e: any) {
       setInput((cur) => (cur.trim() ? cur : text));
       toast({
