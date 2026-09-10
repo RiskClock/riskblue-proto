@@ -285,6 +285,26 @@ export default function WaterMitigationPlan() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, plansLoading, plans.length, catalog, controlRows.length, derivedCounts, canEdit]);
 
+  // Backfill the baseline plan when it was created before detections existed.
+  const [backfilled, setBackfilled] = useState(false);
+  useEffect(() => {
+    if (!projectId || plansLoading || backfilled || !canEdit || !catalog) return;
+    if (Object.keys(derivedCounts).length === 0) return;
+    const baseline = plans.find((p) => p.sort_order === 0);
+    if (!baseline || Object.keys(baseline.control_counts || {}).length > 0) return;
+    setBackfilled(true);
+    supabase
+      .from("project_mitigation_plans")
+      .update({ control_counts: derivedCounts })
+      .eq("id", baseline.id)
+      .then(({ error }) => {
+        if (error) toast.error(getUserFriendlyError(error));
+        queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, plansLoading, plans, derivedCounts, catalog, canEdit, backfilled]);
+
+
   const [drafts, setDrafts] = useState<Record<string, { name: string; summary: string }>>({});
   useEffect(() => {
     setDrafts((prev) => {
