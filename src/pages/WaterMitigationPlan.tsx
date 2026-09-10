@@ -559,15 +559,60 @@ export default function WaterMitigationPlan() {
     queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
   };
 
+  // --- per-plan instance toggles ---------------------------------------
+  const excludedFor = (plan: Plan, controlId: string) =>
+    new Set((plan.excluded_instances || {})[controlId] || []);
+
+  const countForSpace = (plan: Plan, controlId: string, space: string) => {
+    const cell = spaceBreakdown.get(controlId)?.get(space);
+    if (!cell) return 0;
+    const ex = excludedFor(plan, controlId);
+    return cell.legacy + cell.instances.filter((i) => !ex.has(i.id)).length;
+  };
+
+  const countFor = (plan: Plan, controlId: string) => {
+    const spaces = spaceBreakdown.get(controlId);
+    if (!spaces) return 0;
+    const ex = excludedFor(plan, controlId);
+    let n = 0;
+    spaces.forEach((cell) => {
+      n += cell.legacy + cell.instances.filter((i) => !ex.has(i.id)).length;
+    });
+    return n;
+  };
+
   const planTotals = (plan: Plan) => {
     let count = 0;
     let cost = 0;
     controlRows.forEach((row) => {
-      const n = plan.control_counts[row.id] ?? 0;
+      const n = countFor(plan, row.id);
       count += n;
       cost += n * row.unitCost;
     });
     return { count, cost };
+  };
+
+  const toggleInstance = async (planId: string, controlId: string, instanceId: string) => {
+    if (!canEdit) return;
+    const plan = plans.find((p) => p.id === planId);
+    if (!plan) return;
+    const cur = new Set((plan.excluded_instances || {})[controlId] || []);
+    cur.has(instanceId) ? cur.delete(instanceId) : cur.add(instanceId);
+    const next: Record<string, string[]> = { ...(plan.excluded_instances || {}) };
+    if (cur.size > 0) next[controlId] = [...cur];
+    else delete next[controlId];
+
+    queryClient.setQueryData(["wmp-plans", projectId], (old: Plan[] | undefined) =>
+      (old || []).map((p) => (p.id === planId ? { ...p, excluded_instances: next } : p)),
+    );
+    const { error } = await supabase
+      .from("project_mitigation_plans")
+      .update({ excluded_instances: next } as any)
+      .eq("id", planId);
+    if (error) {
+      toast.error(getUserFriendlyError(error));
+      queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
+    }
   };
 
   // --- inline editing -------------------------------------------------
@@ -586,7 +631,7 @@ export default function WaterMitigationPlan() {
     setEditing(null);
   };
 
-  // --- expansion + drawing modal --------------------------------------
+  // --- expansion + drawing review modal --------------------------------
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggleExpanded = (id: string) =>
     setExpanded((prev) => {
@@ -596,13 +641,24 @@ export default function WaterMitigationPlan() {
     });
 
   const [viewer, setViewer] = useState<{
-    sheetId: string;
-    className: string | null;
+    planId: string;
+    controlId: string;
+    space: string;
   } | null>(null);
 
   const viewerData = useMemo(() => {
     if (!viewer || !drawing) return null;
-    const sheet = (drawing.sheets as any[]).find((s) => s.id === viewer.sheetId);
+    const cell = spaceBreakdown.get(viewer.controlId)?.get(viewer.space);
+    const instances = cell?.instances ?? [];
+    // Page with the most instances for this space; fall back to the first sheet.
+    const counts = new Map<string, number>();
+    instances.forEach((i) => {
+      if (i.sheetId) counts.set(i.sheetId, (counts.get(i.sheetId) || 0) + 1);
+    });
+    const sheetId =
+      [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ??
+      ((drawing.sheets as any[])[0]?.id as string | undefined);
+    const sheet = (drawing.sheets as any[]).find((s) => s.id === sheetId);
     if (!sheet || !sheet.storage_path) return null;
     const file = (drawing.files as any[]).find((f) => f.id === sheet.parent_file_id);
     const request = (drawing.requests as any[]).find((r) => r.id === file?.analysis_request_id);
@@ -613,31 +669,72 @@ export default function WaterMitigationPlan() {
       mimeType: "application/pdf",
       version: sheet.updated_at ?? undefined,
     };
-    const classNames = Array.from(new Set(detectionRows.map((d) => d.name).filter(Boolean)));
     return {
       sheet,
-      file,
-      request,
       source,
-      classNames,
-      fileNameById: Object.fromEntries((drawing.files as any[]).map((f) => [f.id, f.name])),
+      fileName: file?.name || "Drawing",
+      instances: instances.filter((i) => i.sheetId === sheet.id),
     };
-  }, [viewer, drawing, detectionRows]);
+  }, [viewer, drawing, spaceBreakdown]);
 
-  const openSpace = (controlId: string, space: string) => {
-    const cell = spaceBreakdown.get(controlId)?.get(space);
-    if (!cell || cell.sheets.size === 0) return;
-    const sheetId = [...cell.sheets.entries()].sort((a, b) => b[1] - a[1])[0][0];
-    const className = [...cell.classes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-    setViewer({ sheetId, className });
+  const openSpace = (planId: string, controlId: string, space: string) => {
+    setViewer({ planId, controlId, space });
   };
 
+  /** Every space in spatial-model order (zero-location spaces included). */
   const spacesForControl = (controlId: string) => {
     const spaces = spaceBreakdown.get(controlId);
-    if (!spaces) return [] as Array<[string, number]>;
-    return [...spaces.entries()]
-      .map(([space, cell]) => [space, cell.count] as [string, number])
-      .sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }));
+    if (!spaces) return [] as string[];
+    const hasUnassigned = (spaces.get(UNASSIGNED)?.instances.length ?? 0) > 0 ||
+      (spaces.get(UNASSIGNED)?.legacy ?? 0) > 0;
+    return orderedSpaces.filter((s) => s !== UNASSIGNED || hasUnassigned);
+  };
+
+  // --- Wade popover -----------------------------------------------------
+  const [wadeOpen, setWadeOpen] = useState(false);
+  const [wadePos, setWadePos] = useState<{ x: number; y: number } | null>(null);
+  const wadeDrag = useRef<{ dx: number; dy: number } | null>(null);
+
+  const onWadePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
+    wadeDrag.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onWadePointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const d = wadeDrag.current;
+    if (!d) return;
+    const w = 420;
+    const h = 520;
+    setWadePos({
+      x: Math.min(Math.max(0, e.clientX - d.dx), window.innerWidth - w),
+      y: Math.min(Math.max(0, e.clientY - d.dy), window.innerHeight - 60),
+    });
+  };
+  const onWadePointerUp = () => {
+    wadeDrag.current = null;
+  };
+
+  const buildWadeContext = () => {
+    const plansCtx = plans.map((plan) => ({
+      name: plan.name,
+      summary: plan.summary,
+      totals: planTotals(plan),
+      controls: controlRows.map((row) => ({
+        control: row.name,
+        unit_cost: row.unitCost,
+        locations: countFor(plan, row.id),
+        by_space: spacesForControl(row.id).map((space) => ({
+          space,
+          locations: countForSpace(plan, row.id, space),
+        })),
+      })),
+    }));
+    return {
+      page: "water_mitigation_plan",
+      project: project?.name,
+      plans: plansCtx,
+      detections: detectionRows.map((d) => ({ class: d.name, space: d.space })),
+    };
   };
 
   const labelCell = "sticky left-0 z-10 bg-card border-r px-4 py-3 text-sm font-medium text-foreground w-[280px] min-w-[280px]";
