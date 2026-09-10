@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { DrawingViewer } from "@/components/viewer";
 import type { DocumentSourceDescriptor, OverlayInput } from "@/components/viewer";
 import type { RotationDeg } from "@/components/viewer/viewerGeometry";
-import { getAWPClassColor } from "@/lib/awpColor";
+import { awpClassColor } from "@/lib/awpColor";
 
 export interface ControlInstance {
   id: string;
@@ -63,7 +63,7 @@ export function ControlInstancesModal({
             coordSpace: "normalized" as const,
             page: 1,
             shape: "circle" as const,
-            color: off ? OFF_COLOR : getAWPClassColor(i.name),
+            color: off ? OFF_COLOR : awpClassColor(i.name),
             label: i.instanceLabel,
           };
         }),
