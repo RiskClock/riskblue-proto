@@ -924,7 +924,7 @@ export default function WaterMitigationPlan() {
                             </button>
                           </th>
                           {plans.map((plan) => {
-                            const n = plan.control_counts[row.id] ?? 0;
+                            const n = countFor(plan, row.id);
                             return (
                               <td key={plan.id} className="border-r px-4 py-2 text-right text-sm tabular-nums">
                                 {n} locations ({currency(n * row.unitCost)})
@@ -934,7 +934,7 @@ export default function WaterMitigationPlan() {
                           <td />
                         </tr>
                         {isOpen &&
-                          spaces.map(([space, count]) => (
+                          spaces.map((space) => (
                             <tr key={`${row.id}::${space}`} className="border-b bg-muted/30">
                               <th className={`${labelCell} text-left font-normal bg-muted/30`}>
                                 <span className="pl-6 text-muted-foreground">{space}</span>
@@ -946,11 +946,10 @@ export default function WaterMitigationPlan() {
                                 >
                                   <button
                                     type="button"
-                                    className="hover:underline text-primary disabled:text-muted-foreground disabled:no-underline"
-                                    disabled={!spaceBreakdown.get(row.id)?.get(space)?.sheets.size}
-                                    onClick={() => openSpace(row.id, space)}
+                                    className="hover:underline text-primary"
+                                    onClick={() => openSpace(plan.id, row.id, space)}
                                   >
-                                    {count} locations
+                                    {countForSpace(plan, row.id, space)} locations
                                   </button>
                                 </td>
                               ))}
@@ -961,6 +960,19 @@ export default function WaterMitigationPlan() {
                     );
                   })
                 )}
+
+                <tr>
+                  <td colSpan={plans.length + 2} className="px-4 py-3 text-center">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => setWadeOpen(true)}
+                    >
+                      <MessageSquare className="h-4 w-4 mr-1" /> Open Wade
+                    </Button>
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -968,30 +980,62 @@ export default function WaterMitigationPlan() {
       </main>
 
       {viewer && viewerData && (
-        <FileViewerModal
+        <ControlInstancesModal
           isOpen
           onClose={() => setViewer(null)}
-          fileId={viewerData.sheet.id}
-          fileName={`${viewerData.file?.name || "Drawing"} | Page ${viewerData.sheet.page_index}`}
-          mimeType="application/pdf"
-          accessToken=""
-          detections={[]}
-          sourceOverride={viewerData.source}
-          analysisRequestId={viewerData.request?.id}
-          parentFileId={viewerData.sheet.parent_file_id}
-          sheetId={viewerData.sheet.id}
+          source={viewerData.source}
+          fileName={viewerData.fileName}
           pageIndex={viewerData.sheet.page_index}
-          awpClasses={viewerData.classNames.map((name) => ({
-            name,
-            prefix: null,
-            label: name,
-            analysisCount: 0,
+          controlName={controlRows.find((c) => c.id === viewer.controlId)?.name || "Control"}
+          spaceName={viewer.space}
+          instances={viewerData.instances.map((i) => ({
+            id: i.id,
+            name: i.name,
+            nx: i.nx,
+            ny: i.ny,
+            instanceLabel: i.instanceLabel,
           }))}
-          fileNameById={viewerData.fileNameById}
-          preselectClass={viewer.className}
-          persistKey={projectId}
+          excludedIds={
+            excludedFor(
+              plans.find((p) => p.id === viewer.planId) ??
+                ({ excluded_instances: {} } as unknown as Plan),
+              viewer.controlId,
+            ) as Set<string>
+          }
+          onToggle={(instanceId) => toggleInstance(viewer.planId, viewer.controlId, instanceId)}
           readOnly={!canEdit}
         />
+      )}
+
+      {wadeOpen && (
+        <div
+          className="fixed z-50 w-[420px] h-[520px] rounded-lg border bg-card shadow-xl flex flex-col overflow-hidden"
+          style={{
+            left: wadePos ? wadePos.x : undefined,
+            top: wadePos ? wadePos.y : undefined,
+            right: wadePos ? undefined : 24,
+            bottom: wadePos ? undefined : 24,
+          }}
+        >
+          <div
+            className="h-6 shrink-0 cursor-move bg-muted/60 border-b"
+            onPointerDown={onWadePointerDown}
+            onPointerMove={onWadePointerMove}
+            onPointerUp={onWadePointerUp}
+          />
+          <div className="flex-1 min-h-0 flex">
+            <div className="flex-1 min-h-0 flex flex-col [&>div]:flex-1 [&>div]:border-0 [&>div]:rounded-none">
+              <AskWadePanel
+                projectId={projectId!}
+                onClose={() => setWadeOpen(false)}
+                buildContext={buildWadeContext}
+                persistHistory={false}
+                title="Ask Wade"
+                emptyHint="Ask about this project's mitigation plans, control counts, costs, or where detections sit."
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
