@@ -14,7 +14,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ArrowLeft, ChevronDown, ChevronRight, Loader2, Plus, Trash2, MoreVertical } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  MessageSquare,
+  Plus,
+  Trash2,
+  MoreVertical,
+} from "lucide-react";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import { FileViewerModal } from "@/components/wizard/FileViewerModal";
