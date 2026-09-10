@@ -26,7 +26,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errorHandling";
-import { FileViewerModal } from "@/components/wizard/FileViewerModal";
+import { ControlInstancesModal } from "@/components/wizard/ControlInstancesModal";
+import { AskWadePanel } from "@/components/workbench/AskWadePanel";
 import type { DocumentSourceDescriptor } from "@/components/viewer";
 import {
   parseSurveyFloorPlans,
