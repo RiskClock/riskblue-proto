@@ -1081,25 +1081,28 @@ actions and posts its own recap.`;
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <span className="truncate">{project?.name || "Project"} — Water Mitigation Plan</span>
+            <span className="truncate">{project?.name || "Project"}</span>
           </div>
         }
       />
 
       <main className="container mx-auto px-6 py-8 flex-1 min-h-0 flex flex-col overflow-hidden">
-        <div className="flex items-center justify-end gap-2 pb-3 shrink-0">
-          <Button variant="outline" onClick={() => setHistoryOpen(true)}>
-            <History className="h-4 w-4 mr-2" /> Change history
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setWadeOpen(true);
-              setWadeMinimized(false);
-            }}
-          >
-            <MessageSquare className="h-4 w-4 mr-2" /> Open Wade
-          </Button>
+        <div className="flex items-center justify-between gap-2 pb-3 shrink-0">
+          <h1 className="text-lg font-semibold truncate">Water Mitigation Plans</h1>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button variant="outline" onClick={() => setHistoryOpen(true)}>
+              <History className="h-4 w-4 mr-2" /> Change history
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setWadeOpen(true);
+                setWadeMinimized(false);
+              }}
+            >
+              <MessageSquare className="h-4 w-4 mr-2" /> Open Wade
+            </Button>
+          </div>
         </div>
         {plansLoading ? (
           <div className="flex items-center gap-2 text-muted-foreground py-12 justify-center">
@@ -1110,7 +1113,7 @@ actions and posts its own recap.`;
             <table className="w-full border-collapse">
               <tbody>
                 <tr className="border-b">
-                  <th className={`${labelCell} text-left bg-muted sticky top-0 z-30 shadow-[inset_-1px_0_0_hsl(var(--border)),inset_0_-1px_0_hsl(var(--border))]`}>Plan</th>
+                  <th className={`${labelCell} text-left bg-card sticky top-0 z-30 shadow-[inset_-1px_0_0_hsl(var(--border)),inset_0_-1px_0_hsl(var(--border))]`} aria-label="Plans" />
                   {plans.map((plan) => (
                     <td key={plan.id} className="border-r px-4 py-2 min-w-[220px] align-top sticky top-0 z-20 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))]">
                       <div className="flex items-center gap-1">
