@@ -1305,7 +1305,14 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
         </button>
       )}
 
-      <ActivityHistoryPanel open={historyOpen} onOpenChange={setHistoryOpen} projectId={projectId!} />
+      <ActivityHistoryPanel
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+        projectId={projectId!}
+        entityTypes={["mitigation_plan"]}
+        title="Change history"
+        description="Changes made to the water mitigation plans for this project."
+      />
     </div>
   );
 }
