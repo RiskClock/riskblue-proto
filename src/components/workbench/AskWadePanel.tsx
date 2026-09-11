@@ -271,6 +271,11 @@ export function AskWadePanel({
           >
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
+          {onMinimize && (
+            <Button variant="ghost" size="icon" className="h-7 w-7" title="Minimize" onClick={onMinimize}>
+              <Minus className="h-3.5 w-3.5" />
+            </Button>
+          )}
           <Button variant="ghost" size="icon" className="h-7 w-7" title="Close" onClick={onClose}>
             <X className="h-3.5 w-3.5" />
           </Button>
