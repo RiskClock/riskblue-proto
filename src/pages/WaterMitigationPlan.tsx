@@ -684,10 +684,11 @@ export default function WaterMitigationPlan() {
     const controlName = controlRows.find((c) => c.id === controlId)?.name || "control";
     const historySaved = await logPlanChange(
       turningOff ? "control_off" : "control_on",
-      `${turningOff ? "Switched off" : "Switched on"} ${controlName} at 1 location in "${plan.name}"`,
+      `${turningOff ? "Removed" : "Added"} ${controlName} at 1 location in "${plan.name}"`,
       planId,
       { control: controlName, instance_id: instanceId },
     );
+
     if (!historySaved) {
       toast.warning("The control was updated, but its change history could not be recorded.");
     }
@@ -836,16 +837,19 @@ with a fenced code block tagged wade-actions containing JSON: {"actions":[...]}.
 Supported actions (use the exact plan / control / space names from the context):
 - {"type":"set_control","plan":"Plan 3","control":"Automatic Shut Off Valve - 1\\"","enabled":false}
 - {"type":"set_control_space","plan":"Plan 3","control":"...","space":"Level 6","enabled":true}
-- {"type":"set_control_fraction_by_space","plan":"Plan 3","control":"Ultrasonic Flow Sensors","enabled_fraction":0.5}
+- {"type":"remove_fraction_by_space","plan":"Plan 2","control":"Ultrasonic Flow Sensors","remove_fraction":0.5}
 - {"type":"rename_plan","plan":"Plan 3","name":"New name"}
 - {"type":"set_summary","plan":"Plan 3","summary":"..."}
 - {"type":"duplicate_plan","plan":"Plan 1","name":"Plan 4"}
 - {"type":"delete_plan","plan":"Plan 4"}
-For set_control_fraction_by_space, enabled_fraction is the proportion to keep enabled in every space.
-The app randomly selects locations on each execution and rounds the kept count up for odd totals.
-Rules: keep the visible reply short (one or two sentences saying what you are doing); never show the
-JSON block contents in prose; only emit actions when the user actually asks for a change; if the
-request is ambiguous, ask instead of guessing. The app applies the actions and posts its own recap.`;
+Use remove_fraction_by_space for requests like "remove half of X in each floor": remove_fraction is
+the share of that control's remaining locations to remove in EVERY space (0.5 = half). The app picks
+the locations at random per space and keeps the rounded-up half.
+Rules: keep the visible reply short (one or two sentences saying what you are doing); NEVER print the
+JSON in prose - it must be inside the wade-actions fenced block; only emit actions when the user
+actually asks for a change; if the request is ambiguous, ask instead of guessing. The app applies the
+actions and posts its own recap.`;
+
 
   const applyWadeActions = async (actions: any[]): Promise<string | null> => {
     if (!canEdit) return "I can't change these plans — your access here is read-only.";
