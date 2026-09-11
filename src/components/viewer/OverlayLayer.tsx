@@ -1132,6 +1132,17 @@ export const OverlayLayer = ({
       ? (syncPlaced ?? [])
       : asyncPlaced;
 
+  // Placement results are intentionally cached without color so recoloring an
+  // annotation does not reshuffle its label. Always resolve the rendered color
+  // from the current overlays rather than the cached placement snapshot.
+  const currentColorById = useMemo(
+    () => new Map([
+      ...circles.map((c) => [c.id, c.color] as const),
+      ...rects.map((r) => [r.id, r.color] as const),
+    ]),
+    [circles, rects],
+  );
+
   /**
    * Hover driven from inside the overlay layer (anchor dot or label pill).
    * Merged with the `hoveredId` prop (driven by the side list) so both sources
@@ -1256,6 +1267,7 @@ export const OverlayLayer = ({
           const labelCy = p.y + p.h / 2;
           const c = circles.find((c) => c.id === p.id);
           if (!c) return null;
+          const currentColor = currentColorById.get(p.id) ?? p.color;
           const ax = c.cx;
           const ay = c.cy;
           const dx = labelCx - ax;
@@ -1286,13 +1298,13 @@ export const OverlayLayer = ({
               ref={(el) => { if (el) leaderRefMap.current.set(p.id, el); }}
               key={`leader-${p.id}-${idx}`}
               data-export-kind="leader"
-              data-color={p.color}
+              data-color={currentColor}
               data-opacity={LABEL_OPACITY}
               x1={x1}
               y1={y1}
               x2={x2}
               y2={y2}
-              stroke={isHovered ? HOVER_EMPHASIS_COLOR : p.color}
+              stroke={isHovered ? HOVER_EMPHASIS_COLOR : currentColor}
               strokeWidth={leaderStroke}
               vectorEffect="non-scaling-stroke"
               style={{
@@ -1371,13 +1383,14 @@ export const OverlayLayer = ({
         const interactive = !fullSizeLabels && !syncPlacement && p.kind === "circle";
         const isHovered = interactive && effectiveHoverId === p.id;
         const outlinePx = ((LABEL_BORDER_PX_SCREEN + 1) * exportScale) / s;
+        const currentColor = currentColorById.get(p.id) ?? p.color;
         return (
           <div
             ref={(el) => { if (el) labelRefMap.current.set(p.id, el); }}
             key={`label-${p.id}`}
             data-export-kind="label"
-            data-color={p.color}
-            data-text-color={readableTextOn(p.color)}
+            data-color={currentColor}
+            data-text-color={readableTextOn(currentColor)}
             data-x={p.x}
             data-y={p.y}
             data-w={p.w}
@@ -1415,14 +1428,14 @@ export const OverlayLayer = ({
                 : null),
               boxSizing: "border-box",
               borderRadius: 0,
-              backgroundColor: p.color,
-              color: readableTextOn(p.color),
+              backgroundColor: currentColor,
+              color: readableTextOn(currentColor),
               opacity: isHovered ? 1 : LABEL_OPACITY,
               whiteSpace: "pre",
               pointerEvents: interactive ? "auto" : "none",
               cursor: interactive && onOverlayClick ? "pointer" : undefined,
               ...(isHovered
-                ? { outline: `${outlinePx}px solid ${readableTextOn(p.color)}`, outlineOffset: 0 }
+                ? { outline: `${outlinePx}px solid ${readableTextOn(currentColor)}`, outlineOffset: 0 }
                 : null),
             }}
           >
