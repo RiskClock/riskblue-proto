@@ -1326,8 +1326,9 @@ actions and posts its own recap.`;
                   })
                 )}
 
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </main>
