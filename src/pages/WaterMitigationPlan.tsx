@@ -1121,9 +1121,10 @@ actions and posts its own recap.`;
             <Loader2 className="h-4 w-4 animate-spin" /> Loading plans…
           </div>
         ) : (
-          <div className="bg-card rounded-lg border overflow-auto min-h-0 max-h-full">
-            <table className="w-full border-collapse">
-              <tbody>
+          <div className="bg-card rounded-lg border overflow-hidden min-h-0 max-h-full flex flex-col">
+            <div ref={headerScrollRef} onScroll={syncScroll("header")} className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <tbody>
                 <tr className="border-b">
                   <th className={`${labelCell} text-left bg-card sticky top-0 z-30 [box-shadow:inset_-1px_0_0_hsl(var(--border)),inset_0_-1px_0_hsl(var(--border))]`} aria-label="Plans" />
                   {plans.map((plan) => (
