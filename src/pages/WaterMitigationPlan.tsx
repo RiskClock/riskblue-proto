@@ -1206,7 +1206,7 @@ actions and posts its own recap.`;
                 </tr>
 
                 <tr className="border-b">
-                  <th className={`${labelCell} text-left`}>Control Count</th>
+                  <th className={`${labelCell} text-left`}>Controls Applied</th>
                   {plans.map((plan) => (
                     <td key={plan.id} className="border-r px-4 py-3 text-right text-sm font-semibold tabular-nums">
                       {planTotals(plan).count}
