@@ -1194,7 +1194,9 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
 
       {wadeOpen && (
         <div
-          className="fixed z-50 w-[420px] h-[520px] rounded-lg border bg-card shadow-xl flex flex-col overflow-hidden"
+          className={`fixed z-50 w-[420px] h-[520px] rounded-lg border bg-card shadow-xl flex flex-col overflow-hidden ${
+            wadeMinimized ? "hidden" : ""
+          }`}
           style={{
             left: wadePos ? wadePos.x : undefined,
             top: wadePos ? wadePos.y : undefined,
@@ -1202,21 +1204,21 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
             bottom: wadePos ? undefined : 24,
           }}
         >
-          <div
-            className="h-6 shrink-0 cursor-move bg-muted/60 border-b"
-            onPointerDown={onWadePointerDown}
-            onPointerMove={onWadePointerMove}
-            onPointerUp={onWadePointerUp}
-          />
           <div className="flex-1 min-h-0 flex">
             <div className="flex-1 min-h-0 flex flex-col [&>div]:flex-1 [&>div]:border-0 [&>div]:rounded-none">
               <AskWadePanel
                 projectId={projectId!}
                 onClose={() => setWadeOpen(false)}
+                onMinimize={() => setWadeMinimized(true)}
+                dragHandleProps={{
+                  onPointerDown: onWadePointerDown,
+                  onPointerMove: onWadePointerMove,
+                  onPointerUp: onWadePointerUp,
+                }}
                 buildContext={buildWadeContext}
                 persistHistory={false}
-                title="Ask Wade"
-                emptyHint="Ask about this project's mitigation plans, or ask Wade to change one — e.g. “remove Automatic Shut Off Valve from Plan 3”."
+                title="Wade - Planning Assistant"
+                emptyHint='Ask about this project&apos;s mitigation plans, or ask Wade to change one. For example: "remove Automatic Shut Off Valve from Plan 3".'
                 actionSpec={canEdit ? WADE_ACTION_SPEC : undefined}
                 onActions={canEdit ? applyWadeActions : undefined}
               />
@@ -1224,6 +1226,18 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
           </div>
         </div>
       )}
+
+      {wadeOpen && wadeMinimized && (
+        <button
+          type="button"
+          className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm shadow-lg hover:bg-muted"
+          onClick={() => setWadeMinimized(false)}
+        >
+          <MessageSquare className="h-4 w-4" /> Wade - Planning Assistant
+        </button>
+      )}
+
+      <ActivityHistoryPanel open={historyOpen} onOpenChange={setHistoryOpen} projectId={projectId!} />
     </div>
   );
 }
