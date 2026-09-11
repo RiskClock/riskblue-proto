@@ -535,20 +535,59 @@ export default function WaterMitigationPlan() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, plansLoading, plans, derivedCounts, catalog, canEdit, backfilled]);
 
+  /** Records a mitigation-plan change in the project activity log. */
+  const logPlanChange = async (
+    action: string,
+    summary: string,
+    entityId: string | null,
+    details: Record<string, any> = {},
+  ) => {
+    try {
+      const name =
+        (user?.user_metadata as any)?.full_name || (user?.user_metadata as any)?.name || null;
+      await supabase.from("project_audit_events" as any).insert({
+        project_id: projectId!,
+        actor_user_id: user?.id ?? null,
+        actor_email: user?.email ?? null,
+        actor_name: name,
+        entity_type: "mitigation_plan",
+        entity_id: entityId,
+        action,
+        summary,
+        details,
+      } as any);
+    } catch (e) {
+      console.warn("Failed to log mitigation plan activity", e);
+    }
+  };
+
   const savePlan = async (planId: string, fields: { name?: string; summary?: string }) => {
+    const before = plans.find((p) => p.id === planId);
     const { error } = await supabase.from("project_mitigation_plans").update(fields).eq("id", planId);
     if (error) {
       toast.error(getUserFriendlyError(error));
       return;
+    }
+    if (fields.name !== undefined) {
+      void logPlanChange(
+        "rename",
+        `Renamed plan "${before?.name ?? ""}" to "${fields.name}"`,
+        planId,
+        fields,
+      );
+    }
+    if (fields.summary !== undefined) {
+      void logPlanChange("update", `Updated summary for "${before?.name ?? "plan"}"`, planId, fields);
     }
     queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
   };
 
   const addPlan = async (source?: Plan) => {
     const nextOrder = plans.length ? Math.max(...plans.map((p) => p.sort_order)) + 1 : 0;
+    const name = source ? `${source.name} (copy)` : `Plan ${plans.length + 1}`;
     const { error } = await supabase.from("project_mitigation_plans").insert({
       project_id: projectId!,
-      name: source ? `${source.name} (copy)` : `Plan ${plans.length + 1}`,
+      name,
       summary: source ? source.summary : "",
       control_counts: source ? source.control_counts : {},
       sort_order: nextOrder,
@@ -558,16 +597,24 @@ export default function WaterMitigationPlan() {
       toast.error(getUserFriendlyError(error));
       return;
     }
+    void logPlanChange(
+      source ? "duplicate" : "create",
+      source ? `Duplicated "${source.name}" as "${name}"` : `Created plan "${name}"`,
+      null,
+      { name },
+    );
     queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
   };
 
   const deletePlan = async (planId: string) => {
     if (!confirm("Delete this plan?")) return;
+    const before = plans.find((p) => p.id === planId);
     const { error } = await supabase.from("project_mitigation_plans").delete().eq("id", planId);
     if (error) {
       toast.error(getUserFriendlyError(error));
       return;
     }
+    void logPlanChange("delete", `Deleted plan "${before?.name ?? ""}"`, planId, {});
     queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
   };
 
@@ -609,6 +656,7 @@ export default function WaterMitigationPlan() {
     const plan = plans.find((p) => p.id === planId);
     if (!plan) return;
     const cur = new Set((plan.excluded_instances || {})[controlId] || []);
+    const turningOff = !cur.has(instanceId);
     cur.has(instanceId) ? cur.delete(instanceId) : cur.add(instanceId);
     const next: Record<string, string[]> = { ...(plan.excluded_instances || {}) };
     if (cur.size > 0) next[controlId] = [...cur];
@@ -624,7 +672,15 @@ export default function WaterMitigationPlan() {
     if (error) {
       toast.error(getUserFriendlyError(error));
       queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
+      return;
     }
+    const controlName = controlRows.find((c) => c.id === controlId)?.name || "control";
+    void logPlanChange(
+      turningOff ? "control_off" : "control_on",
+      `${turningOff ? "Switched off" : "Switched on"} ${controlName} at 1 location in "${plan.name}"`,
+      planId,
+      { control: controlName, instance_id: instanceId },
+    );
   };
 
   // --- inline editing -------------------------------------------------
@@ -662,30 +718,39 @@ export default function WaterMitigationPlan() {
     if (!viewer || !drawing) return null;
     const cell = spaceBreakdown.get(viewer.controlId)?.get(viewer.space);
     const instances = cell?.instances ?? [];
-    // Page with the most instances for this space; fall back to the first sheet.
+    // Page (file + page index) holding the most instances for this space.
     const counts = new Map<string, number>();
     instances.forEach((i) => {
-      if (i.sheetId) counts.set(i.sheetId, (counts.get(i.sheetId) || 0) + 1);
+      if (i.fileId) counts.set(`${i.fileId}::${i.pageIndex ?? 1}`, (counts.get(`${i.fileId}::${i.pageIndex ?? 1}`) || 0) + 1);
     });
-    const sheetId =
-      [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ??
-      ((drawing.sheets as any[])[0]?.id as string | undefined);
-    const sheet = (drawing.sheets as any[]).find((s) => s.id === sheetId);
-    if (!sheet || !sheet.storage_path) return null;
-    const file = (drawing.files as any[]).find((f) => f.id === sheet.parent_file_id);
-    const request = (drawing.requests as any[]).find((r) => r.id === file?.analysis_request_id);
+    const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    const files = drawing.files as any[];
+    let fileId: string | undefined;
+    let pageIndex = 1;
+    if (top) {
+      const [fid, pidx] = top.split("::");
+      fileId = fid;
+      pageIndex = Number(pidx) || 1;
+    } else {
+      fileId = files.find((f) => f.storage_path)?.id;
+    }
+    const file = files.find((f) => f.id === fileId);
+    if (!file || !file.storage_path) return null;
+    const request = (drawing.requests as any[]).find((r) => r.id === file.analysis_request_id);
     const source: DocumentSourceDescriptor = {
       kind: "supabase-storage",
       bucket: bucketForSource(request?.source_type),
-      path: sheet.storage_path,
-      mimeType: "application/pdf",
-      version: sheet.updated_at ?? undefined,
+      path: file.storage_path,
+      mimeType: file.mime_type || "application/pdf",
+      version: file.size_bytes ?? undefined,
     };
     return {
-      sheet,
+      pageIndex,
       source,
       fileName: file?.name || "Drawing",
-      instances: instances.filter((i) => i.sheetId === sheet.id),
+      instances: instances.filter(
+        (i) => i.fileId === file.id && (i.pageIndex ?? 1) === pageIndex,
+      ),
     };
   }, [viewer, drawing, spaceBreakdown]);
 
@@ -915,6 +980,9 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
     await queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
 
     if (lines.length === 0) return null;
+    for (const line of lines) {
+      void logPlanChange("wade", `Wade: ${line}`, null, {});
+    }
     return `**Applied to the plans:**\n${lines.map((l) => `- ${l}`).join("\n")}`;
   };
 
@@ -965,7 +1033,7 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
             <table className="w-full border-collapse">
               <tbody>
                 <tr className="border-b">
-                  <th className={`${labelCell} text-left bg-muted/50 sticky top-0 z-30`}>Plan</th>
+                  <th className={`${labelCell} text-left bg-muted sticky top-0 z-30`}>Plan</th>
                   {plans.map((plan) => (
                     <td key={plan.id} className="border-r px-4 py-2 min-w-[220px] align-top sticky top-0 z-20 bg-card">
                       <div className="flex items-center gap-1">
@@ -1080,8 +1148,8 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
                   <td />
                 </tr>
 
-                <tr className="border-b bg-muted/50">
-                  <th className={`${labelCell} text-left bg-muted/50`}>Breakdown by Control</th>
+                <tr className="border-b bg-muted">
+                  <th className={`${labelCell} text-left bg-muted`}>Breakdown by Control</th>
                   {plans.map((plan) => (
                     <td key={plan.id} className="border-r px-4 py-2" />
                   ))}
@@ -1132,8 +1200,8 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
                         </tr>
                         {isOpen &&
                           spaces.map((space) => (
-                            <tr key={`${row.id}::${space}`} className="border-b bg-muted/30">
-                              <th className={`${labelCell} text-left font-normal bg-muted/30`}>
+                            <tr key={`${row.id}::${space}`} className="border-b bg-muted">
+                              <th className={`${labelCell} text-left font-normal bg-muted`}>
                                 <span className="pl-6 text-muted-foreground">{space}</span>
                               </th>
                               {plans.map((plan) => (
@@ -1170,7 +1238,7 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
           onClose={() => setViewer(null)}
           source={viewerData.source}
           fileName={viewerData.fileName}
-          pageIndex={viewerData.sheet.page_index}
+          pageIndex={viewerData.pageIndex}
           controlName={controlRows.find((c) => c.id === viewer.controlId)?.name || "Control"}
           spaceName={viewer.space}
           instances={viewerData.instances.map((i) => ({
@@ -1237,7 +1305,14 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
         </button>
       )}
 
-      <ActivityHistoryPanel open={historyOpen} onOpenChange={setHistoryOpen} projectId={projectId!} />
+      <ActivityHistoryPanel
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+        projectId={projectId!}
+        entityTypes={["mitigation_plan"]}
+        title="Change history"
+        description="Changes made to the water mitigation plans for this project."
+      />
     </div>
   );
 }
