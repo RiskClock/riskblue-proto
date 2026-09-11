@@ -1106,7 +1106,7 @@ actions and posts its own recap.`;
             <Loader2 className="h-4 w-4 animate-spin" /> Loading plans…
           </div>
         ) : (
-          <div className="bg-card rounded-lg border overflow-auto flex-1 min-h-0">
+          <div className="bg-card rounded-lg border overflow-auto min-h-0 max-h-full">
             <table className="w-full border-collapse">
               <tbody>
                 <tr className="border-b">
@@ -1206,7 +1206,7 @@ actions and posts its own recap.`;
                 </tr>
 
                 <tr className="border-b">
-                  <th className={`${labelCell} text-left`}>Control Count</th>
+                  <th className={`${labelCell} text-left`}>Controls Applied</th>
                   {plans.map((plan) => (
                     <td key={plan.id} className="border-r px-4 py-3 text-right text-sm font-semibold tabular-nums">
                       {planTotals(plan).count}
@@ -1226,17 +1226,18 @@ actions and posts its own recap.`;
                 </tr>
 
                 <tr className="border-b bg-muted">
-                  <th className={`${labelCell} text-left bg-muted`}>Breakdown by Control</th>
-                  <td colSpan={plans.length + 1} className="px-4 py-2">
-                    {controlRows.length > 0 && (
-                      <div className="flex justify-start">
-                        <Button variant="ghost" size="sm" onClick={toggleAllExpanded}>
-                          {allControlsExpanded ? <ChevronDown className="h-4 w-4 mr-2" /> : <ChevronRight className="h-4 w-4 mr-2" />}
+                  <th className={`${labelCell} text-left bg-muted`}>
+                    <div className="flex items-center gap-2">
+                      <span>Breakdown by Control</span>
+                      {controlRows.length > 0 && (
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={toggleAllExpanded}>
+                          {allControlsExpanded ? <ChevronDown className="h-3.5 w-3.5 mr-1" /> : <ChevronRight className="h-3.5 w-3.5 mr-1" />}
                           {allControlsExpanded ? "Collapse all" : "Expand all"}
                         </Button>
-                      </div>
-                    )}
-                  </td>
+                      )}
+                    </div>
+                  </th>
+                  <td colSpan={plans.length + 1} className="px-4 py-2" />
                 </tr>
 
 
