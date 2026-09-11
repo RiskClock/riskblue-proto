@@ -1218,7 +1218,7 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
                 buildContext={buildWadeContext}
                 persistHistory={false}
                 title="Wade - Planning Assistant"
-                emptyHint='Ask about this project&apos;s mitigation plans, or ask Wade to change one. For example: "remove Automatic Shut Off Valve from Plan 3".'
+                emptyHint={`Ask about this project's mitigation plans, or ask Wade to change one. For example: "remove Automatic Shut Off Valve from Plan 3".`}
                 actionSpec={canEdit ? WADE_ACTION_SPEC : undefined}
                 onActions={canEdit ? applyWadeActions : undefined}
               />
