@@ -212,7 +212,7 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
                   User Management
                 </DropdownMenuItem>
               )}
-              {tenantId && (isInternalUser || tenant?.role === "admin" || tenant?.role === "member") && (
+              {tenantId && isInternalUser && (
                 <DropdownMenuItem
                   onClick={() => menuNavigate(tenantPath("/controls"))}
                   className="cursor-pointer"
