@@ -939,19 +939,35 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
         }
       />
 
-      <main className="container mx-auto px-6 py-8 flex-1 overflow-auto">
+      <main className="container mx-auto px-6 py-8 flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div className="flex items-center justify-end gap-2 pb-3 shrink-0">
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setHistoryOpen(true)}>
+            <History className="h-4 w-4 mr-1" /> Change history
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            onClick={() => {
+              setWadeOpen(true);
+              setWadeMinimized(false);
+            }}
+          >
+            <MessageSquare className="h-4 w-4 mr-1" /> Open Wade
+          </Button>
+        </div>
         {plansLoading ? (
           <div className="flex items-center gap-2 text-muted-foreground py-12 justify-center">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading plans…
           </div>
         ) : (
-          <div className="bg-card rounded-lg border overflow-auto">
+          <div className="bg-card rounded-lg border overflow-auto flex-1 min-h-0">
             <table className="w-full border-collapse">
               <tbody>
                 <tr className="border-b">
-                  <th className={`${labelCell} text-left bg-muted/50`}>Plan</th>
+                  <th className={`${labelCell} text-left bg-muted/50 sticky top-0 z-30`}>Plan</th>
                   {plans.map((plan) => (
-                    <td key={plan.id} className="border-r px-4 py-2 min-w-[220px] align-top">
+                    <td key={plan.id} className="border-r px-4 py-2 min-w-[220px] align-top sticky top-0 z-20 bg-card">
                       <div className="flex items-center gap-1">
                         {editing?.id === plan.id && editing.field === "name" ? (
                           <Input
