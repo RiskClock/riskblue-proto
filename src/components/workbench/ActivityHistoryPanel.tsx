@@ -67,9 +67,20 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
+  /** Restrict the log to specific entity types (e.g. mitigation plan changes only). */
+  entityTypes?: string[];
+  title?: string;
+  description?: string;
 }
 
-export function ActivityHistoryPanel({ open, onOpenChange, projectId }: Props) {
+export function ActivityHistoryPanel({
+  open,
+  onOpenChange,
+  projectId,
+  entityTypes,
+  title,
+  description,
+}: Props) {
   const [category, setCategory] = useState<Category>("all");
   const [search, setSearch] = useState("");
 
@@ -93,7 +104,8 @@ export function ActivityHistoryPanel({ open, onOpenChange, projectId }: Props) {
     const events = data ?? [];
     const q = search.trim().toLowerCase();
     return events.filter((ev) => {
-      if (category !== "all" && categorize(ev) !== category) return false;
+      if (entityTypes && !entityTypes.includes(ev.entity_type)) return false;
+      if (!entityTypes && category !== "all" && categorize(ev) !== category) return false;
       if (!q) return true;
       return (
         ev.summary.toLowerCase().includes(q) ||
@@ -102,7 +114,7 @@ export function ActivityHistoryPanel({ open, onOpenChange, projectId }: Props) {
         (ev.entity_id ?? "").toLowerCase().includes(q)
       );
     });
-  }, [data, category, search]);
+  }, [data, category, search, entityTypes]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -110,10 +122,10 @@ export function ActivityHistoryPanel({ open, onOpenChange, projectId }: Props) {
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <History className="h-4 w-4" />
-            Activity History
+            {title ?? "Activity History"}
           </SheetTitle>
           <SheetDescription>
-            Chronological audit trail of edits made to this project.
+            {description ?? "Chronological audit trail of edits made to this project."}
           </SheetDescription>
         </SheetHeader>
 
@@ -123,19 +135,22 @@ export function ActivityHistoryPanel({ open, onOpenChange, projectId }: Props) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <Select value={category} onValueChange={(v) => setCategory(v as Category)}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CATEGORIES.map((c) => (
-                <SelectItem key={c.value} value={c.value}>
-                  {c.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {!entityTypes && (
+            <Select value={category} onValueChange={(v) => setCategory(v as Category)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CATEGORIES.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>
+                    {c.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
+
 
         <div className="flex-1 overflow-y-auto mt-4 -mx-6 px-6">
           {isLoading ? (
