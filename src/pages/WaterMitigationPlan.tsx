@@ -1054,10 +1054,14 @@ actions and posts its own recap.`;
 
     if (lines.length === 0) return null;
     if (allPlanWritesSucceeded) {
-      for (const line of lines) {
-        await logPlanChange("wade", `Wade: ${line}`, null, {});
-      }
+      // One grouped change-history entry per Wade instruction.
+      const summary =
+        lines.length === 1
+          ? `Wade: ${lines[0]}`
+          : `Wade made ${lines.length} changes:\n${lines.map((l) => `• ${l}`).join("\n")}`;
+      await logPlanChange("wade", summary, null, { changes: lines });
     }
+
     return `**Applied to the plans:**\n${lines.map((l) => `- ${l}`).join("\n")}`;
   };
 

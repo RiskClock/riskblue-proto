@@ -180,7 +180,7 @@ export function ActivityHistoryPanel({
                         {formatDistanceToNow(new Date(ev.created_at), { addSuffix: true })}
                       </time>
                     </div>
-                    <p className="mt-1 text-sm text-foreground">{ev.summary}</p>
+                    <p className="mt-1 text-sm text-foreground whitespace-pre-wrap">{ev.summary}</p>
                     {(ev.actor_email || ev.actor_name) && (
                       <p className="text-xs text-muted-foreground">
                         {ev.actor_name || ev.actor_email}
