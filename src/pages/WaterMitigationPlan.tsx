@@ -1241,21 +1241,21 @@ actions and posts its own recap.`;
                   <td />
                 </tr>
 
-                <tr className="border-b">
-                  <td colSpan={plans.length + 2} className="px-4 py-2 bg-card">
-                    <div className="sticky left-0 w-[280px]">
-                      <div className="text-sm font-medium text-foreground">Breakdown by Control Type</div>
-                      {controlRows.length > 0 && (
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs mt-1 -ml-2" onClick={toggleAllExpanded}>
-                          {allControlsExpanded ? <ChevronDown className="h-3.5 w-3.5 mr-1" /> : <ChevronRight className="h-3.5 w-3.5 mr-1" />}
-                          {allControlsExpanded ? "Collapse all" : "Expand all"}
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-
-
+              </tbody>
+              </table>
+            </div>
+            <div className="border-t px-4 py-2 shrink-0">
+              <div className="text-sm font-medium text-foreground">Breakdown by Control Type</div>
+              {controlRows.length > 0 && (
+                <Button variant="ghost" size="sm" className="h-7 px-2 text-xs mt-1 -ml-2" onClick={toggleAllExpanded}>
+                  {allControlsExpanded ? <ChevronDown className="h-3.5 w-3.5 mr-1" /> : <ChevronRight className="h-3.5 w-3.5 mr-1" />}
+                  {allControlsExpanded ? "Collapse all" : "Expand all"}
+                </Button>
+              )}
+            </div>
+            <div ref={bodyScrollRef} onScroll={syncScroll("body")} className="overflow-auto min-h-0">
+              <table className="w-full border-collapse">
+                <tbody>
                 {controlRows.length === 0 ? (
                   <tr className="border-b">
                     <td className="px-4 py-6 text-sm text-muted-foreground" colSpan={plans.length + 2}>
