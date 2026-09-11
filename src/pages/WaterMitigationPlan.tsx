@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -1233,8 +1233,8 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
                     const spaces = spacesForControl(row.id);
                     const isOpen = expanded.has(row.id);
                     return (
-                      <>
-                        <tr key={row.id} className="border-b align-top">
+                      <Fragment key={row.id}>
+                        <tr className="border-b align-top">
                           <th className={`${labelCell} text-left font-normal`}>
                             <button
                               type="button"
@@ -1287,7 +1287,7 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
                               <td />
                             </tr>
                           ))}
-                      </>
+                      </Fragment>
                     );
                   })
                 )}
