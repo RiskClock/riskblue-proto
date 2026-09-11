@@ -535,20 +535,59 @@ export default function WaterMitigationPlan() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, plansLoading, plans, derivedCounts, catalog, canEdit, backfilled]);
 
+  /** Records a mitigation-plan change in the project activity log. */
+  const logPlanChange = async (
+    action: string,
+    summary: string,
+    entityId: string | null,
+    details: Record<string, any> = {},
+  ) => {
+    try {
+      const name =
+        (user?.user_metadata as any)?.full_name || (user?.user_metadata as any)?.name || null;
+      await supabase.from("project_audit_events" as any).insert({
+        project_id: projectId!,
+        actor_user_id: user?.id ?? null,
+        actor_email: user?.email ?? null,
+        actor_name: name,
+        entity_type: "mitigation_plan",
+        entity_id: entityId,
+        action,
+        summary,
+        details,
+      } as any);
+    } catch (e) {
+      console.warn("Failed to log mitigation plan activity", e);
+    }
+  };
+
   const savePlan = async (planId: string, fields: { name?: string; summary?: string }) => {
+    const before = plans.find((p) => p.id === planId);
     const { error } = await supabase.from("project_mitigation_plans").update(fields).eq("id", planId);
     if (error) {
       toast.error(getUserFriendlyError(error));
       return;
+    }
+    if (fields.name !== undefined) {
+      void logPlanChange(
+        "rename",
+        `Renamed plan "${before?.name ?? ""}" to "${fields.name}"`,
+        planId,
+        fields,
+      );
+    }
+    if (fields.summary !== undefined) {
+      void logPlanChange("update", `Updated summary for "${before?.name ?? "plan"}"`, planId, fields);
     }
     queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
   };
 
   const addPlan = async (source?: Plan) => {
     const nextOrder = plans.length ? Math.max(...plans.map((p) => p.sort_order)) + 1 : 0;
+    const name = source ? `${source.name} (copy)` : `Plan ${plans.length + 1}`;
     const { error } = await supabase.from("project_mitigation_plans").insert({
       project_id: projectId!,
-      name: source ? `${source.name} (copy)` : `Plan ${plans.length + 1}`,
+      name,
       summary: source ? source.summary : "",
       control_counts: source ? source.control_counts : {},
       sort_order: nextOrder,
@@ -558,16 +597,24 @@ export default function WaterMitigationPlan() {
       toast.error(getUserFriendlyError(error));
       return;
     }
+    void logPlanChange(
+      source ? "duplicate" : "create",
+      source ? `Duplicated "${source.name}" as "${name}"` : `Created plan "${name}"`,
+      null,
+      { name },
+    );
     queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
   };
 
   const deletePlan = async (planId: string) => {
     if (!confirm("Delete this plan?")) return;
+    const before = plans.find((p) => p.id === planId);
     const { error } = await supabase.from("project_mitigation_plans").delete().eq("id", planId);
     if (error) {
       toast.error(getUserFriendlyError(error));
       return;
     }
+    void logPlanChange("delete", `Deleted plan "${before?.name ?? ""}"`, planId, {});
     queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
   };
 
