@@ -3,7 +3,7 @@ import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { GripHorizontal, Loader2, Minus, Send, Trash2, X } from "lucide-react";
+import { GripVertical, Loader2, Minus, Send, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { normalizeFunctionError } from "@/lib/functionsError";
@@ -283,7 +283,7 @@ export function AskWadePanel({
             className="flex items-center self-stretch cursor-move text-muted-foreground shrink-0"
             title="Drag to move"
           >
-            <GripHorizontal className="h-4 w-4" />
+            <GripVertical className="h-4 w-4" />
           </div>
         ) : null}
         <div className="text-sm font-semibold shrink-0">{title}</div>
