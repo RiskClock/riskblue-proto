@@ -85,7 +85,7 @@ export function ActivityHistoryPanel({
   const [search, setSearch] = useState("");
 
   const { data, isLoading } = useQuery({
-    queryKey: ["project-audit-events", projectId],
+    queryKey: ["project-audit-events", projectId, entityTypes ?? []],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("project_audit_events")
@@ -97,7 +97,8 @@ export function ActivityHistoryPanel({
       return (data ?? []) as AuditEvent[];
     },
     enabled: open && !!projectId,
-    staleTime: 15_000,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const filtered = useMemo(() => {

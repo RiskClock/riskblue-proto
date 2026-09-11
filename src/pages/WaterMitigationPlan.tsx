@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -83,6 +83,7 @@ const CATEGORY_TABLE: Record<string, "critical_assets" | "water_systems" | "proc
 const UNASSIGNED = "Unassigned";
 
 const currency = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
+const locationLabel = (n: number) => `${n} ${n === 1 ? "location" : "locations"}`;
 
 const bucketForSource = (sourceType?: string | null) =>
   sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
@@ -541,11 +542,11 @@ export default function WaterMitigationPlan() {
     summary: string,
     entityId: string | null,
     details: Record<string, any> = {},
-  ) => {
+  ): Promise<boolean> => {
     try {
       const name =
         (user?.user_metadata as any)?.full_name || (user?.user_metadata as any)?.name || null;
-      await supabase.from("project_audit_events" as any).insert({
+      const { error } = await supabase.from("project_audit_events" as any).insert({
         project_id: projectId!,
         actor_user_id: user?.id ?? null,
         actor_email: user?.email ?? null,
@@ -556,8 +557,14 @@ export default function WaterMitigationPlan() {
         summary,
         details,
       } as any);
+      if (error) throw error;
+      await queryClient.invalidateQueries({
+        queryKey: ["project-audit-events", projectId, ["mitigation_plan"]],
+      });
+      return true;
     } catch (e) {
       console.warn("Failed to log mitigation plan activity", e);
+      return false;
     }
   };
 
@@ -597,7 +604,7 @@ export default function WaterMitigationPlan() {
       toast.error(getUserFriendlyError(error));
       return;
     }
-    void logPlanChange(
+    await logPlanChange(
       source ? "duplicate" : "create",
       source ? `Duplicated "${source.name}" as "${name}"` : `Created plan "${name}"`,
       null,
@@ -675,12 +682,15 @@ export default function WaterMitigationPlan() {
       return;
     }
     const controlName = controlRows.find((c) => c.id === controlId)?.name || "control";
-    void logPlanChange(
+    const historySaved = await logPlanChange(
       turningOff ? "control_off" : "control_on",
       `${turningOff ? "Switched off" : "Switched on"} ${controlName} at 1 location in "${plan.name}"`,
       planId,
       { control: controlName, instance_id: instanceId },
     );
+    if (!historySaved) {
+      toast.warning("The control was updated, but its change history could not be recorded.");
+    }
   };
 
   // --- inline editing -------------------------------------------------
@@ -707,6 +717,10 @@ export default function WaterMitigationPlan() {
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+  const allControlsExpanded = controlRows.length > 0 && controlRows.every((row) => expanded.has(row.id));
+  const toggleAllExpanded = () => {
+    setExpanded(allControlsExpanded ? new Set() : new Set(controlRows.map((row) => row.id)));
+  };
 
   const [viewer, setViewer] = useState<{
     planId: string;
@@ -822,10 +836,13 @@ with a fenced code block tagged wade-actions containing JSON: {"actions":[...]}.
 Supported actions (use the exact plan / control / space names from the context):
 - {"type":"set_control","plan":"Plan 3","control":"Automatic Shut Off Valve - 1\\"","enabled":false}
 - {"type":"set_control_space","plan":"Plan 3","control":"...","space":"Level 6","enabled":true}
+- {"type":"set_control_fraction_by_space","plan":"Plan 3","control":"Ultrasonic Flow Sensors","enabled_fraction":0.5}
 - {"type":"rename_plan","plan":"Plan 3","name":"New name"}
 - {"type":"set_summary","plan":"Plan 3","summary":"..."}
 - {"type":"duplicate_plan","plan":"Plan 1","name":"Plan 4"}
 - {"type":"delete_plan","plan":"Plan 4"}
+For set_control_fraction_by_space, enabled_fraction is the proportion to keep enabled in every space.
+The app randomly selects locations on each execution and rounds the kept count up for odd totals.
 Rules: keep the visible reply short (one or two sentences saying what you are doing); never show the
 JSON block contents in prose; only emit actions when the user actually asks for a change; if the
 request is ambiguous, ask instead of guessing. The app applies the actions and posts its own recap.`;
@@ -908,6 +925,45 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
           } else {
             lines.push(`${control.name}${space ? ` in ${space}` : ""} was already ${enabled ? "on" : "off"} in ${plan.name}.`);
           }
+        } else if (type === "set_control_fraction_by_space") {
+          const plan = findPlan(a.plan);
+          const control = findControl(a.control);
+          if (!plan || !control) {
+            lines.push(`Skipped ${type}: could not match ${!plan ? `plan "${a.plan}"` : `control "${a.control}"`}.`);
+            continue;
+          }
+          const fraction = Math.min(1, Math.max(0, Number(a.enabled_fraction)));
+          if (!Number.isFinite(fraction)) {
+            lines.push(`Skipped: enabled_fraction must be a number from 0 to 1.`);
+            continue;
+          }
+          const spaces = spaceBreakdown.get(control.id);
+          if (!spaces) {
+            lines.push(`Skipped: ${control.name} has no locations in this project.`);
+            continue;
+          }
+          const ex = exclusionsFor(plan);
+          const cur = new Set(ex[control.id] || []);
+          let switchedOff = 0;
+          spaces.forEach((cell) => {
+            const activeIds = cell.instances.map((instance) => instance.id).filter((id) => !cur.has(id));
+            for (let i = activeIds.length - 1; i > 0; i -= 1) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [activeIds[i], activeIds[j]] = [activeIds[j], activeIds[i]];
+            }
+            const keepCount = Math.ceil(activeIds.length * fraction);
+            activeIds.slice(keepCount).forEach((id) => {
+              cur.add(id);
+              switchedOff += 1;
+            });
+          });
+          if (cur.size > 0) ex[control.id] = [...cur];
+          else delete ex[control.id];
+          lines.push(
+            switchedOff > 0
+              ? `Switched off ${locationLabel(switchedOff)} for ${control.name} in ${plan.name}, reducing each space independently.`
+              : `${control.name} already meets the requested proportion in ${plan.name}.`,
+          );
         } else if (type === "rename_plan") {
           const plan = findPlan(a.plan);
           const name = String(a.name || "").trim();
@@ -969,24 +1025,30 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
       }
     }
 
+    let allPlanWritesSucceeded = true;
     for (const [planId, excluded] of pending) {
       const { error } = await supabase
         .from("project_mitigation_plans")
         .update({ excluded_instances: excluded } as any)
         .eq("id", planId);
-      if (error) lines.push(`Failed to save changes: ${getUserFriendlyError(error)}`);
+      if (error) {
+        allPlanWritesSucceeded = false;
+        lines.push(`Failed to save changes: ${getUserFriendlyError(error)}`);
+      }
     }
 
     await queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
 
     if (lines.length === 0) return null;
-    for (const line of lines) {
-      void logPlanChange("wade", `Wade: ${line}`, null, {});
+    if (allPlanWritesSucceeded) {
+      for (const line of lines) {
+        await logPlanChange("wade", `Wade: ${line}`, null, {});
+      }
     }
     return `**Applied to the plans:**\n${lines.map((l) => `- ${l}`).join("\n")}`;
   };
 
-  const labelCell = "sticky left-0 z-10 bg-card border-r px-4 py-3 text-sm font-medium text-foreground w-[280px] min-w-[280px]";
+  const labelCell = "sticky left-0 z-10 bg-card px-4 py-3 text-sm font-medium text-foreground w-[280px] min-w-[280px] shadow-[inset_-1px_0_0_hsl(var(--border))]";
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
@@ -1009,19 +1071,17 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
 
       <main className="container mx-auto px-6 py-8 flex-1 min-h-0 flex flex-col overflow-hidden">
         <div className="flex items-center justify-end gap-2 pb-3 shrink-0">
-          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setHistoryOpen(true)}>
-            <History className="h-4 w-4 mr-1" /> Change history
+          <Button variant="outline" onClick={() => setHistoryOpen(true)}>
+            <History className="h-4 w-4 mr-2" /> Change history
           </Button>
           <Button
             variant="outline"
-            size="sm"
-            className="h-8 text-xs"
             onClick={() => {
               setWadeOpen(true);
               setWadeMinimized(false);
             }}
           >
-            <MessageSquare className="h-4 w-4 mr-1" /> Open Wade
+            <MessageSquare className="h-4 w-4 mr-2" /> Open Wade
           </Button>
         </div>
         {plansLoading ? (
@@ -1033,9 +1093,9 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
             <table className="w-full border-collapse">
               <tbody>
                 <tr className="border-b">
-                  <th className={`${labelCell} text-left bg-muted sticky top-0 z-30`}>Plan</th>
+                  <th className={`${labelCell} text-left bg-muted sticky top-0 z-30 shadow-[inset_-1px_0_0_hsl(var(--border)),inset_0_-1px_0_hsl(var(--border))]`}>Plan</th>
                   {plans.map((plan) => (
-                    <td key={plan.id} className="border-r px-4 py-2 min-w-[220px] align-top sticky top-0 z-20 bg-card">
+                    <td key={plan.id} className="border-r px-4 py-2 min-w-[220px] align-top sticky top-0 z-20 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))]">
                       <div className="flex items-center gap-1">
                         {editing?.id === plan.id && editing.field === "name" ? (
                           <Input
@@ -1082,7 +1142,7 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
                       </div>
                     </td>
                   ))}
-                  <td className="px-4 py-2 align-top sticky top-0 z-20 bg-card">
+                  <td className="px-4 py-2 align-top sticky top-0 z-20 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))]">
                     {canEdit && (
                       <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => addPlan()}>
                         <Plus className="h-4 w-4 mr-1" /> New plan
@@ -1150,10 +1210,16 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
 
                 <tr className="border-b bg-muted">
                   <th className={`${labelCell} text-left bg-muted`}>Breakdown by Control</th>
-                  {plans.map((plan) => (
-                    <td key={plan.id} className="border-r px-4 py-2" />
-                  ))}
-                  <td />
+                  <td colSpan={plans.length + 1} className="px-4 py-2">
+                    {controlRows.length > 0 && (
+                      <div className="flex justify-end">
+                        <Button variant="ghost" size="sm" onClick={toggleAllExpanded}>
+                          {allControlsExpanded ? <ChevronDown className="h-4 w-4 mr-2" /> : <ChevronRight className="h-4 w-4 mr-2" />}
+                          {allControlsExpanded ? "Collapse all" : "Expand all"}
+                        </Button>
+                      </div>
+                    )}
+                  </td>
                 </tr>
 
                 {controlRows.length === 0 ? (
@@ -1167,8 +1233,8 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
                     const spaces = spacesForControl(row.id);
                     const isOpen = expanded.has(row.id);
                     return (
-                      <>
-                        <tr key={row.id} className="border-b align-top">
+                      <Fragment key={row.id}>
+                        <tr className="border-b align-top">
                           <th className={`${labelCell} text-left font-normal`}>
                             <button
                               type="button"
@@ -1192,7 +1258,7 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
                             const n = countFor(plan, row.id);
                             return (
                               <td key={plan.id} className="border-r px-4 py-2 text-right text-sm tabular-nums">
-                                {n} locations ({currency(n * row.unitCost)})
+                                {locationLabel(n)} ({currency(n * row.unitCost)})
                               </td>
                             );
                           })}
@@ -1200,8 +1266,8 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
                         </tr>
                         {isOpen &&
                           spaces.map((space) => (
-                            <tr key={`${row.id}::${space}`} className="border-b bg-muted">
-                              <th className={`${labelCell} text-left font-normal bg-muted`}>
+                            <tr key={`${row.id}::${space}`} className="border-b bg-card">
+                              <th className={`${labelCell} text-left font-normal bg-card`}>
                                 <span className="pl-6 text-muted-foreground">{space}</span>
                               </th>
                               {plans.map((plan) => (
@@ -1214,14 +1280,14 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
                                     className="hover:underline text-primary"
                                     onClick={() => openSpace(plan.id, row.id, space)}
                                   >
-                                    {countForSpace(plan, row.id, space)} locations
+                                    {locationLabel(countForSpace(plan, row.id, space))}
                                   </button>
                                 </td>
                               ))}
                               <td />
                             </tr>
                           ))}
-                      </>
+                      </Fragment>
                     );
                   })
                 )}

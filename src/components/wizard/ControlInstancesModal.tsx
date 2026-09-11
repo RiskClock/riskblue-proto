@@ -83,7 +83,7 @@ export function ControlInstancesModal({
             {controlName} — {spaceName}
           </DialogTitle>
           <p className="text-xs text-muted-foreground truncate">
-            {fileName} | Page {pageIndex} · {onCount} of {instances.length} locations included
+            {fileName} | Page {pageIndex} · {onCount} of {instances.length} {instances.length === 1 ? "location" : "locations"} included
             {readOnly ? "" : " · click an annotation to include or exclude it"}
           </p>
         </DialogHeader>
