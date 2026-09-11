@@ -1226,17 +1226,18 @@ actions and posts its own recap.`;
                 </tr>
 
                 <tr className="border-b bg-muted">
-                  <th className={`${labelCell} text-left bg-muted`}>Breakdown by Control</th>
-                  <td colSpan={plans.length + 1} className="px-4 py-2">
-                    {controlRows.length > 0 && (
-                      <div className="flex justify-start">
-                        <Button variant="ghost" size="sm" onClick={toggleAllExpanded}>
-                          {allControlsExpanded ? <ChevronDown className="h-4 w-4 mr-2" /> : <ChevronRight className="h-4 w-4 mr-2" />}
+                  <th className={`${labelCell} text-left bg-muted`}>
+                    <div className="flex items-center gap-2">
+                      <span>Breakdown by Control</span>
+                      {controlRows.length > 0 && (
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={toggleAllExpanded}>
+                          {allControlsExpanded ? <ChevronDown className="h-3.5 w-3.5 mr-1" /> : <ChevronRight className="h-3.5 w-3.5 mr-1" />}
                           {allControlsExpanded ? "Collapse all" : "Expand all"}
                         </Button>
-                      </div>
-                    )}
-                  </td>
+                      )}
+                    </div>
+                  </th>
+                  <td colSpan={plans.length + 1} className="px-4 py-2" />
                 </tr>
 
 
