@@ -1158,18 +1158,6 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
                   })
                 )}
 
-                <tr>
-                  <td colSpan={plans.length + 2} className="px-4 py-3 text-center">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs"
-                      onClick={() => setWadeOpen(true)}
-                    >
-                      <MessageSquare className="h-4 w-4 mr-1" /> Open Wade
-                    </Button>
-                  </td>
-                </tr>
               </tbody>
             </table>
           </div>
