@@ -980,6 +980,9 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
     await queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
 
     if (lines.length === 0) return null;
+    for (const line of lines) {
+      void logPlanChange("wade", `Wade: ${line}`, null, {});
+    }
     return `**Applied to the plans:**\n${lines.map((l) => `- ${l}`).join("\n")}`;
   };
 
