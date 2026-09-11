@@ -597,6 +597,7 @@ export default function WaterMitigationPlan() {
       name,
       summary: source ? source.summary : "",
       control_counts: source ? source.control_counts : {},
+      excluded_instances: source ? source.excluded_instances : {},
       sort_order: nextOrder,
       created_by: user?.id ?? null,
     });

@@ -41,6 +41,7 @@ const Projects = () => {
   const { toast } = useToast();
   const { isWMSV } = useAccountType();
   const { tenantId, tenantPath, hasPermission } = useTenant();
+  const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
   const canCreateProject = tenantId ? hasPermission("create_project") : true;
   const canDeleteProject = tenantId ? hasPermission("delete_project") : true;
   useHeapIdentify();
@@ -291,24 +292,26 @@ const Projects = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="h-9 flex items-center justify-end gap-1">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                aria-label="Water Mitigation Plan"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  navigate(tenantPath(`/project/${project.id}/mitigation-plan`));
-                                }}
-                              >
-                                <ClipboardList className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Water Mitigation Plan</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
+                        {isInternalUser && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label="Water Mitigation Plan"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(tenantPath(`/project/${project.id}/mitigation-plan`));
+                                  }}
+                                >
+                                  <ClipboardList className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Water Mitigation Plan</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
                         {userProjectRoles.get(project.id) === "admin" && canDeleteProject && (
                           <Button
                             variant="ghost"
