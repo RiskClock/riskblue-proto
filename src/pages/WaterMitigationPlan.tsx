@@ -604,7 +604,7 @@ export default function WaterMitigationPlan() {
       toast.error(getUserFriendlyError(error));
       return;
     }
-    const historySaved = await logPlanChange(
+    await logPlanChange(
       source ? "duplicate" : "create",
       source ? `Duplicated "${source.name}" as "${name}"` : `Created plan "${name}"`,
       null,
@@ -682,7 +682,7 @@ export default function WaterMitigationPlan() {
       return;
     }
     const controlName = controlRows.find((c) => c.id === controlId)?.name || "control";
-    void logPlanChange(
+    const historySaved = await logPlanChange(
       turningOff ? "control_off" : "control_on",
       `${turningOff ? "Switched off" : "Switched on"} ${controlName} at 1 location in "${plan.name}"`,
       planId,
@@ -841,6 +841,8 @@ Supported actions (use the exact plan / control / space names from the context):
 - {"type":"set_summary","plan":"Plan 3","summary":"..."}
 - {"type":"duplicate_plan","plan":"Plan 1","name":"Plan 4"}
 - {"type":"delete_plan","plan":"Plan 4"}
+For set_control_fraction_by_space, enabled_fraction is the proportion to keep enabled in every space.
+The app randomly selects locations on each execution and rounds the kept count up for odd totals.
 Rules: keep the visible reply short (one or two sentences saying what you are doing); never show the
 JSON block contents in prose; only emit actions when the user actually asks for a change; if the
 request is ambiguous, ask instead of guessing. The app applies the actions and posts its own recap.`;
