@@ -56,6 +56,9 @@ export function ControlInstancesModal({
   excludedIds,
   onToggle,
   readOnly = false,
+  planOptions = [],
+  activePlanId,
+  onSelectPlan,
 }: Props) {
   const [rotation, setRotation] = useState<RotationDeg>(0);
   const [hovered, setHovered] = useState<string | null>(null);
