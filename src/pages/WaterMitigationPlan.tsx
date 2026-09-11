@@ -1179,7 +1179,7 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
           onClose={() => setViewer(null)}
           source={viewerData.source}
           fileName={viewerData.fileName}
-          pageIndex={viewerData.sheet.page_index}
+          pageIndex={viewerData.pageIndex}
           controlName={controlRows.find((c) => c.id === viewer.controlId)?.name || "Control"}
           spaceName={viewer.space}
           instances={viewerData.instances.map((i) => ({
