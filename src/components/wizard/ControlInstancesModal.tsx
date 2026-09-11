@@ -13,6 +13,12 @@ export interface ControlInstance {
   instanceLabel: string;
 }
 
+export interface PlanOption {
+  id: string;
+  name: string;
+  count: number;
+}
+
 interface Props {
   isOpen: boolean;
   onClose: () => void;
@@ -25,6 +31,9 @@ interface Props {
   excludedIds: Set<string>;
   onToggle: (instanceId: string) => void;
   readOnly?: boolean;
+  planOptions?: PlanOption[];
+  activePlanId?: string;
+  onSelectPlan?: (planId: string) => void;
 }
 
 const OFF_COLOR = "#9CA3AF";
