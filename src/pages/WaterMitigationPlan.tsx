@@ -1211,7 +1211,7 @@ actions and posts its own recap.`;
                 <tr className="border-b">
                   <th className={`${labelCell} text-left`}>Controls Applied</th>
                   {plans.map((plan) => (
-                    <td key={plan.id} className="border-r px-4 py-3 text-right text-sm font-semibold tabular-nums">
+                    <td key={plan.id} className="border-r px-4 py-3 text-center text-sm font-semibold tabular-nums">
                       {planTotals(plan).count}
                     </td>
                   ))}
@@ -1221,26 +1221,23 @@ actions and posts its own recap.`;
                 <tr className="border-b">
                   <th className={`${labelCell} text-left`}>Total Cost Estimate</th>
                   {plans.map((plan) => (
-                    <td key={plan.id} className="border-r px-4 py-3 text-right text-sm font-semibold tabular-nums">
+                    <td key={plan.id} className="border-r px-4 py-3 text-center text-sm font-semibold tabular-nums">
                       {currency(planTotals(plan).cost)}
                     </td>
                   ))}
                   <td />
                 </tr>
 
-                <tr className="border-b bg-muted">
-                  <th className={`${labelCell} text-left bg-muted`}>
-                    <div className="flex items-center gap-2">
-                      <span>Breakdown by Control</span>
-                      {controlRows.length > 0 && (
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={toggleAllExpanded}>
-                          {allControlsExpanded ? <ChevronDown className="h-3.5 w-3.5 mr-1" /> : <ChevronRight className="h-3.5 w-3.5 mr-1" />}
-                          {allControlsExpanded ? "Collapse all" : "Expand all"}
-                        </Button>
-                      )}
-                    </div>
-                  </th>
-                  <td colSpan={plans.length + 1} className="px-4 py-2" />
+                <tr className="border-b">
+                  <td colSpan={plans.length + 2} className="px-4 py-2 bg-card">
+                    <div className="text-sm font-medium text-foreground">Breakdown by Control Type</div>
+                    {controlRows.length > 0 && (
+                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs mt-1 -ml-2" onClick={toggleAllExpanded}>
+                        {allControlsExpanded ? <ChevronDown className="h-3.5 w-3.5 mr-1" /> : <ChevronRight className="h-3.5 w-3.5 mr-1" />}
+                        {allControlsExpanded ? "Collapse all" : "Expand all"}
+                      </Button>
+                    )}
+                  </td>
                 </tr>
 
 
