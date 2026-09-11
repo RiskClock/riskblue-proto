@@ -3,7 +3,7 @@ import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Send, Trash2, X } from "lucide-react";
+import { GripHorizontal, Loader2, Minus, Send, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { normalizeFunctionError } from "@/lib/functionsError";
@@ -45,6 +45,8 @@ export function AskWadePanel({
   onAssistantMessage,
   actionSpec,
   onActions,
+  onMinimize,
+  dragHandleProps,
 }: {
   projectId: string;
   onClose: () => void;
@@ -59,6 +61,10 @@ export function AskWadePanel({
   actionSpec?: string;
   /** Executes actions Wade requested; returns a markdown summary of what changed. */
   onActions?: (actions: any[]) => Promise<string | null>;
+  /** When provided, a minimize button is shown in the header. */
+  onMinimize?: () => void;
+  /** Pointer handlers that make the header act as a drag handle. */
+  dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
 }) {
   const { toast } = useToast();
   const [messages, setMessages] = useState<WadeMessage[]>([]);
@@ -238,9 +244,23 @@ export function AskWadePanel({
 
   return (
     <div className="border rounded-md flex flex-col min-h-0 overflow-hidden">
-      <div className="flex items-center justify-between border-b px-3 py-2 bg-muted/20">
-        <div className="text-sm font-semibold">{title}</div>
-        <div className="flex items-center gap-1">
+      <div className="flex items-center gap-2 border-b px-3 py-2 bg-muted/20">
+        <div className="text-sm font-semibold shrink-0">{title}</div>
+        {dragHandleProps ? (
+          <div
+            {...dragHandleProps}
+            className="flex-1 flex items-center justify-center self-stretch cursor-move text-muted-foreground"
+            title="Drag to move"
+          >
+            <div className="flex flex-col -space-y-1">
+              <GripHorizontal className="h-3 w-3" />
+              <GripHorizontal className="h-3 w-3" />
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1" />
+        )}
+        <div className="flex items-center gap-1 shrink-0">
           <Button
             variant="ghost"
             size="icon"
@@ -251,6 +271,11 @@ export function AskWadePanel({
           >
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
+          {onMinimize && (
+            <Button variant="ghost" size="icon" className="h-7 w-7" title="Minimize" onClick={onMinimize}>
+              <Minus className="h-3.5 w-3.5" />
+            </Button>
+          )}
           <Button variant="ghost" size="icon" className="h-7 w-7" title="Close" onClick={onClose}>
             <X className="h-3.5 w-3.5" />
           </Button>

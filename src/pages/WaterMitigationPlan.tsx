@@ -18,12 +18,14 @@ import {
   ArrowLeft,
   ChevronDown,
   ChevronRight,
+  History,
   Loader2,
   MessageSquare,
   Plus,
   Trash2,
   MoreVertical,
 } from "lucide-react";
+import { ActivityHistoryPanel } from "@/components/workbench/ActivityHistoryPanel";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import { ControlInstancesModal } from "@/components/wizard/ControlInstancesModal";
@@ -702,6 +704,8 @@ export default function WaterMitigationPlan() {
 
   // --- Wade popover -----------------------------------------------------
   const [wadeOpen, setWadeOpen] = useState(false);
+  const [wadeMinimized, setWadeMinimized] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [wadePos, setWadePos] = useState<{ x: number; y: number } | null>(null);
   const wadeDrag = useRef<{ dx: number; dy: number } | null>(null);
 
@@ -935,19 +939,35 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
         }
       />
 
-      <main className="container mx-auto px-6 py-8 flex-1 overflow-auto">
+      <main className="container mx-auto px-6 py-8 flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div className="flex items-center justify-end gap-2 pb-3 shrink-0">
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setHistoryOpen(true)}>
+            <History className="h-4 w-4 mr-1" /> Change history
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            onClick={() => {
+              setWadeOpen(true);
+              setWadeMinimized(false);
+            }}
+          >
+            <MessageSquare className="h-4 w-4 mr-1" /> Open Wade
+          </Button>
+        </div>
         {plansLoading ? (
           <div className="flex items-center gap-2 text-muted-foreground py-12 justify-center">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading plans…
           </div>
         ) : (
-          <div className="bg-card rounded-lg border overflow-auto">
+          <div className="bg-card rounded-lg border overflow-auto flex-1 min-h-0">
             <table className="w-full border-collapse">
               <tbody>
                 <tr className="border-b">
-                  <th className={`${labelCell} text-left bg-muted/50`}>Plan</th>
+                  <th className={`${labelCell} text-left bg-muted/50 sticky top-0 z-30`}>Plan</th>
                   {plans.map((plan) => (
-                    <td key={plan.id} className="border-r px-4 py-2 min-w-[220px] align-top">
+                    <td key={plan.id} className="border-r px-4 py-2 min-w-[220px] align-top sticky top-0 z-20 bg-card">
                       <div className="flex items-center gap-1">
                         {editing?.id === plan.id && editing.field === "name" ? (
                           <Input
@@ -994,7 +1014,7 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
                       </div>
                     </td>
                   ))}
-                  <td className="px-4 py-2 align-top">
+                  <td className="px-4 py-2 align-top sticky top-0 z-20 bg-card">
                     {canEdit && (
                       <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => addPlan()}>
                         <Plus className="h-4 w-4 mr-1" /> New plan
@@ -1138,18 +1158,6 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
                   })
                 )}
 
-                <tr>
-                  <td colSpan={plans.length + 2} className="px-4 py-3 text-center">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs"
-                      onClick={() => setWadeOpen(true)}
-                    >
-                      <MessageSquare className="h-4 w-4 mr-1" /> Open Wade
-                    </Button>
-                  </td>
-                </tr>
               </tbody>
             </table>
           </div>
@@ -1186,7 +1194,9 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
 
       {wadeOpen && (
         <div
-          className="fixed z-50 w-[420px] h-[520px] rounded-lg border bg-card shadow-xl flex flex-col overflow-hidden"
+          className={`fixed z-50 w-[420px] h-[520px] rounded-lg border bg-card shadow-xl flex flex-col overflow-hidden ${
+            wadeMinimized ? "hidden" : ""
+          }`}
           style={{
             left: wadePos ? wadePos.x : undefined,
             top: wadePos ? wadePos.y : undefined,
@@ -1194,21 +1204,21 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
             bottom: wadePos ? undefined : 24,
           }}
         >
-          <div
-            className="h-6 shrink-0 cursor-move bg-muted/60 border-b"
-            onPointerDown={onWadePointerDown}
-            onPointerMove={onWadePointerMove}
-            onPointerUp={onWadePointerUp}
-          />
           <div className="flex-1 min-h-0 flex">
             <div className="flex-1 min-h-0 flex flex-col [&>div]:flex-1 [&>div]:border-0 [&>div]:rounded-none">
               <AskWadePanel
                 projectId={projectId!}
                 onClose={() => setWadeOpen(false)}
+                onMinimize={() => setWadeMinimized(true)}
+                dragHandleProps={{
+                  onPointerDown: onWadePointerDown,
+                  onPointerMove: onWadePointerMove,
+                  onPointerUp: onWadePointerUp,
+                }}
                 buildContext={buildWadeContext}
                 persistHistory={false}
-                title="Ask Wade"
-                emptyHint="Ask about this project's mitigation plans, or ask Wade to change one — e.g. “remove Automatic Shut Off Valve from Plan 3”."
+                title="Wade - Planning Assistant"
+                emptyHint={`Ask about this project's mitigation plans, or ask Wade to change one. For example: "remove Automatic Shut Off Valve from Plan 3".`}
                 actionSpec={canEdit ? WADE_ACTION_SPEC : undefined}
                 onActions={canEdit ? applyWadeActions : undefined}
               />
@@ -1216,6 +1226,18 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
           </div>
         </div>
       )}
+
+      {wadeOpen && wadeMinimized && (
+        <button
+          type="button"
+          className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm shadow-lg hover:bg-muted"
+          onClick={() => setWadeMinimized(false)}
+        >
+          <MessageSquare className="h-4 w-4" /> Wade - Planning Assistant
+        </button>
+      )}
+
+      <ActivityHistoryPanel open={historyOpen} onOpenChange={setHistoryOpen} projectId={projectId!} />
     </div>
   );
 }
