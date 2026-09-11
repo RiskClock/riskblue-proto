@@ -662,30 +662,39 @@ export default function WaterMitigationPlan() {
     if (!viewer || !drawing) return null;
     const cell = spaceBreakdown.get(viewer.controlId)?.get(viewer.space);
     const instances = cell?.instances ?? [];
-    // Page with the most instances for this space; fall back to the first sheet.
+    // Page (file + page index) holding the most instances for this space.
     const counts = new Map<string, number>();
     instances.forEach((i) => {
-      if (i.sheetId) counts.set(i.sheetId, (counts.get(i.sheetId) || 0) + 1);
+      if (i.fileId) counts.set(`${i.fileId}::${i.pageIndex ?? 1}`, (counts.get(`${i.fileId}::${i.pageIndex ?? 1}`) || 0) + 1);
     });
-    const sheetId =
-      [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ??
-      ((drawing.sheets as any[])[0]?.id as string | undefined);
-    const sheet = (drawing.sheets as any[]).find((s) => s.id === sheetId);
-    if (!sheet || !sheet.storage_path) return null;
-    const file = (drawing.files as any[]).find((f) => f.id === sheet.parent_file_id);
-    const request = (drawing.requests as any[]).find((r) => r.id === file?.analysis_request_id);
+    const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    const files = drawing.files as any[];
+    let fileId: string | undefined;
+    let pageIndex = 1;
+    if (top) {
+      const [fid, pidx] = top.split("::");
+      fileId = fid;
+      pageIndex = Number(pidx) || 1;
+    } else {
+      fileId = files.find((f) => f.storage_path)?.id;
+    }
+    const file = files.find((f) => f.id === fileId);
+    if (!file || !file.storage_path) return null;
+    const request = (drawing.requests as any[]).find((r) => r.id === file.analysis_request_id);
     const source: DocumentSourceDescriptor = {
       kind: "supabase-storage",
       bucket: bucketForSource(request?.source_type),
-      path: sheet.storage_path,
-      mimeType: "application/pdf",
-      version: sheet.updated_at ?? undefined,
+      path: file.storage_path,
+      mimeType: file.mime_type || "application/pdf",
+      version: file.size_bytes ?? undefined,
     };
     return {
-      sheet,
+      pageIndex,
       source,
       fileName: file?.name || "Drawing",
-      instances: instances.filter((i) => i.sheetId === sheet.id),
+      instances: instances.filter(
+        (i) => i.fileId === file.id && (i.pageIndex ?? 1) === pageIndex,
+      ),
     };
   }, [viewer, drawing, spaceBreakdown]);
 
