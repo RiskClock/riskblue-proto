@@ -788,6 +788,18 @@ export default function WaterMitigationPlan() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [wadePos, setWadePos] = useState<{ x: number; y: number } | null>(null);
   const wadeDrag = useRef<{ dx: number; dy: number } | null>(null);
+  const headerScrollRef = useRef<HTMLDivElement>(null);
+  const bodyScrollRef = useRef<HTMLDivElement>(null);
+  const scrollSyncing = useRef(false);
+  const syncScroll = (source: "header" | "body") => (e: React.UIEvent<HTMLDivElement>) => {
+    if (scrollSyncing.current) return;
+    scrollSyncing.current = true;
+    const target = source === "header" ? bodyScrollRef.current : headerScrollRef.current;
+    if (target && target.scrollLeft !== e.currentTarget.scrollLeft) {
+      target.scrollLeft = e.currentTarget.scrollLeft;
+    }
+    scrollSyncing.current = false;
+  };
 
   const onWadePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
