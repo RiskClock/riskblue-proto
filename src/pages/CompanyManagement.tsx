@@ -271,9 +271,9 @@ const CompanyManagement = () => {
       case "logo": {
         const url = logoByCompany?.[t.name.trim().toLowerCase()];
         return (
-          <TableCell key={colId} className="w-20">
+          <TableCell key={colId} className="w-20 text-center align-middle">
             {url ? (
-              <img src={url} alt={`${t.name} logo`} className="h-6 max-w-[72px] object-contain" />
+              <img src={url} alt={`${t.name} logo`} className="h-6 max-w-[72px] object-contain mx-auto" />
             ) : (
               <span className="text-muted-foreground text-xs">-</span>
             )}
