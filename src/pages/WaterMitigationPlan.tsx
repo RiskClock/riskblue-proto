@@ -924,23 +924,29 @@ actions and posts its own recap.`;
           else delete ex[control.id];
           if (cur.size !== before) {
             lines.push(
-              `${enabled ? "Switched on" : "Switched off"} ${control.name}${space ? ` in ${space}` : ""} for ${plan.name} (${Math.abs(cur.size - before)} location${Math.abs(cur.size - before) === 1 ? "" : "s"}).`,
+              `${enabled ? "Added" : "Removed"} ${control.name}${space ? ` in ${space}` : ""} for ${plan.name} (${locationLabel(Math.abs(cur.size - before))}).`,
             );
           } else {
             lines.push(`${control.name}${space ? ` in ${space}` : ""} was already ${enabled ? "on" : "off"} in ${plan.name}.`);
           }
-        } else if (type === "set_control_fraction_by_space") {
+        } else if (type === "remove_fraction_by_space" || type === "set_control_fraction_by_space") {
           const plan = findPlan(a.plan);
           const control = findControl(a.control);
           if (!plan || !control) {
             lines.push(`Skipped ${type}: could not match ${!plan ? `plan "${a.plan}"` : `control "${a.control}"`}.`);
             continue;
           }
-          const fraction = Math.min(1, Math.max(0, Number(a.enabled_fraction)));
-          if (!Number.isFinite(fraction)) {
-            lines.push(`Skipped: enabled_fraction must be a number from 0 to 1.`);
+          // Preferred parameter is the share to remove; the older action used
+          // the share to keep, so translate it.
+          const rawRemove =
+            a.remove_fraction !== undefined
+              ? Number(a.remove_fraction)
+              : 1 - Number(a.enabled_fraction);
+          if (!Number.isFinite(rawRemove)) {
+            lines.push(`Skipped: the share to remove must be a number from 0 to 1.`);
             continue;
           }
+          const removeFraction = Math.min(1, Math.max(0, rawRemove));
           const spaces = spaceBreakdown.get(control.id);
           if (!spaces) {
             lines.push(`Skipped: ${control.name} has no locations in this project.`);
@@ -948,26 +954,29 @@ actions and posts its own recap.`;
           }
           const ex = exclusionsFor(plan);
           const cur = new Set(ex[control.id] || []);
-          let switchedOff = 0;
-          spaces.forEach((cell) => {
+          let removed = 0;
+          const perSpace: string[] = [];
+          spaces.forEach((cell, spaceName) => {
             const activeIds = cell.instances.map((instance) => instance.id).filter((id) => !cur.has(id));
             for (let i = activeIds.length - 1; i > 0; i -= 1) {
               const j = Math.floor(Math.random() * (i + 1));
               [activeIds[i], activeIds[j]] = [activeIds[j], activeIds[i]];
             }
-            const keepCount = Math.ceil(activeIds.length * fraction);
-            activeIds.slice(keepCount).forEach((id) => {
-              cur.add(id);
-              switchedOff += 1;
-            });
+            // Keep the rounded-up remainder, remove the rest.
+            const keepCount = Math.ceil(activeIds.length * (1 - removeFraction));
+            const toRemove = activeIds.slice(keepCount);
+            toRemove.forEach((id) => cur.add(id));
+            removed += toRemove.length;
+            if (toRemove.length > 0) perSpace.push(`${spaceName}: ${locationLabel(toRemove.length)}`);
           });
           if (cur.size > 0) ex[control.id] = [...cur];
           else delete ex[control.id];
           lines.push(
-            switchedOff > 0
-              ? `Switched off ${locationLabel(switchedOff)} for ${control.name} in ${plan.name}, reducing each space independently.`
-              : `${control.name} already meets the requested proportion in ${plan.name}.`,
+            removed > 0
+              ? `Removed ${locationLabel(removed)} of ${control.name} in ${plan.name} (${perSpace.join(", ")}).`
+              : `${control.name} already meets the requested amount in ${plan.name}.`,
           );
+
         } else if (type === "rename_plan") {
           const plan = findPlan(a.plan);
           const name = String(a.name || "").trim();
