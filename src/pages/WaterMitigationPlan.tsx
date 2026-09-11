@@ -704,6 +704,8 @@ export default function WaterMitigationPlan() {
 
   // --- Wade popover -----------------------------------------------------
   const [wadeOpen, setWadeOpen] = useState(false);
+  const [wadeMinimized, setWadeMinimized] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [wadePos, setWadePos] = useState<{ x: number; y: number } | null>(null);
   const wadeDrag = useRef<{ dx: number; dy: number } | null>(null);
 
