@@ -18,12 +18,14 @@ import {
   ArrowLeft,
   ChevronDown,
   ChevronRight,
+  History,
   Loader2,
   MessageSquare,
   Plus,
   Trash2,
   MoreVertical,
 } from "lucide-react";
+import { ActivityHistoryPanel } from "@/components/workbench/ActivityHistoryPanel";
 import { toast } from "sonner";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import { ControlInstancesModal } from "@/components/wizard/ControlInstancesModal";
