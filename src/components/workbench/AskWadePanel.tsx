@@ -252,10 +252,7 @@ export function AskWadePanel({
             className="flex-1 flex items-center justify-center self-stretch cursor-move text-muted-foreground"
             title="Drag to move"
           >
-            <div className="flex flex-col -space-y-1">
-              <GripHorizontal className="h-3 w-3" />
-              <GripHorizontal className="h-3 w-3" />
-            </div>
+            <GripHorizontal className="h-4 w-4" />
           </div>
         ) : (
           <div className="flex-1" />
