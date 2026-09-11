@@ -1106,7 +1106,7 @@ actions and posts its own recap.`;
             <Loader2 className="h-4 w-4 animate-spin" /> Loading plans…
           </div>
         ) : (
-          <div className="bg-card rounded-lg border overflow-auto flex-1 min-h-0">
+          <div className="bg-card rounded-lg border overflow-auto min-h-0 max-h-full">
             <table className="w-full border-collapse">
               <tbody>
                 <tr className="border-b">
