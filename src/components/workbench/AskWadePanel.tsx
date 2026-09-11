@@ -18,22 +18,54 @@ interface WadeMessage {
 // is still rendered and persisted.
 const MAX_HISTORY_TURNS = 10;
 
-/** Pulls a ```wade-actions fenced JSON block out of an assistant reply. */
+/**
+ * Pulls an action payload out of an assistant reply. Accepts a ```wade-actions
+ * block, any other fenced block whose body is an actions payload, or a bare
+ * {"actions":[...]} object the model wrote inline.
+ */
 function extractActions(text: string): { visible: string; actions: any[] } {
-  const re = /```wade-actions\s*([\s\S]*?)```/gi;
   const actions: any[] = [];
-  const visible = text.replace(re, (_m, body) => {
+  const take = (raw: string) => {
     try {
-      const parsed = JSON.parse(String(body).trim());
+      const parsed = JSON.parse(String(raw).trim());
       const list = Array.isArray(parsed) ? parsed : parsed?.actions;
-      if (Array.isArray(list)) actions.push(...list);
-    } catch (e) {
-      console.warn("Wade action block was not valid JSON", e);
+      if (Array.isArray(list) && list.length > 0) {
+        actions.push(...list);
+        return true;
+      }
+    } catch {
+      /* not an action payload */
     }
-    return "";
-  });
+    return false;
+  };
+
+  let visible = text.replace(/```[a-zA-Z-]*\s*([\s\S]*?)```/g, (m, body) =>
+    take(body) ? "" : m,
+  );
+
+  if (actions.length === 0) {
+    const start = visible.search(/\{\s*"actions"/);
+    if (start >= 0) {
+      let depth = 0;
+      for (let i = start; i < visible.length; i += 1) {
+        const ch = visible[i];
+        if (ch === "{") depth += 1;
+        else if (ch === "}") {
+          depth -= 1;
+          if (depth === 0) {
+            if (take(visible.slice(start, i + 1))) {
+              visible = visible.slice(0, start) + visible.slice(i + 1);
+            }
+            break;
+          }
+        }
+      }
+    }
+  }
+
   return { visible: visible.trim(), actions };
 }
+
 
 export function AskWadePanel({
   projectId,
@@ -245,18 +277,22 @@ export function AskWadePanel({
   return (
     <div className="border rounded-md flex flex-col min-h-0 overflow-hidden">
       <div className="flex items-center gap-2 border-b px-3 py-2 bg-muted/20">
-        <div className="text-sm font-semibold shrink-0">{title}</div>
         {dragHandleProps ? (
           <div
             {...dragHandleProps}
-            className="flex-1 flex items-center justify-center self-stretch cursor-move text-muted-foreground"
+            className="flex items-center self-stretch cursor-move text-muted-foreground shrink-0"
             title="Drag to move"
           >
             <GripHorizontal className="h-4 w-4" />
           </div>
+        ) : null}
+        <div className="text-sm font-semibold shrink-0">{title}</div>
+        {dragHandleProps ? (
+          <div {...dragHandleProps} className="flex-1 self-stretch cursor-move" title="Drag to move" />
         ) : (
           <div className="flex-1" />
         )}
+
         <div className="flex items-center gap-1 shrink-0">
           <Button
             variant="ghost"

@@ -684,10 +684,11 @@ export default function WaterMitigationPlan() {
     const controlName = controlRows.find((c) => c.id === controlId)?.name || "control";
     const historySaved = await logPlanChange(
       turningOff ? "control_off" : "control_on",
-      `${turningOff ? "Switched off" : "Switched on"} ${controlName} at 1 location in "${plan.name}"`,
+      `${turningOff ? "Removed" : "Added"} ${controlName} at 1 location in "${plan.name}"`,
       planId,
       { control: controlName, instance_id: instanceId },
     );
+
     if (!historySaved) {
       toast.warning("The control was updated, but its change history could not be recorded.");
     }
@@ -836,16 +837,19 @@ with a fenced code block tagged wade-actions containing JSON: {"actions":[...]}.
 Supported actions (use the exact plan / control / space names from the context):
 - {"type":"set_control","plan":"Plan 3","control":"Automatic Shut Off Valve - 1\\"","enabled":false}
 - {"type":"set_control_space","plan":"Plan 3","control":"...","space":"Level 6","enabled":true}
-- {"type":"set_control_fraction_by_space","plan":"Plan 3","control":"Ultrasonic Flow Sensors","enabled_fraction":0.5}
+- {"type":"remove_fraction_by_space","plan":"Plan 2","control":"Ultrasonic Flow Sensors","remove_fraction":0.5}
 - {"type":"rename_plan","plan":"Plan 3","name":"New name"}
 - {"type":"set_summary","plan":"Plan 3","summary":"..."}
 - {"type":"duplicate_plan","plan":"Plan 1","name":"Plan 4"}
 - {"type":"delete_plan","plan":"Plan 4"}
-For set_control_fraction_by_space, enabled_fraction is the proportion to keep enabled in every space.
-The app randomly selects locations on each execution and rounds the kept count up for odd totals.
-Rules: keep the visible reply short (one or two sentences saying what you are doing); never show the
-JSON block contents in prose; only emit actions when the user actually asks for a change; if the
-request is ambiguous, ask instead of guessing. The app applies the actions and posts its own recap.`;
+Use remove_fraction_by_space for requests like "remove half of X in each floor": remove_fraction is
+the share of that control's remaining locations to remove in EVERY space (0.5 = half). The app picks
+the locations at random per space and keeps the rounded-up half.
+Rules: keep the visible reply short (one or two sentences saying what you are doing); NEVER print the
+JSON in prose - it must be inside the wade-actions fenced block; only emit actions when the user
+actually asks for a change; if the request is ambiguous, ask instead of guessing. The app applies the
+actions and posts its own recap.`;
+
 
   const applyWadeActions = async (actions: any[]): Promise<string | null> => {
     if (!canEdit) return "I can't change these plans — your access here is read-only.";
@@ -920,23 +924,29 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
           else delete ex[control.id];
           if (cur.size !== before) {
             lines.push(
-              `${enabled ? "Switched on" : "Switched off"} ${control.name}${space ? ` in ${space}` : ""} for ${plan.name} (${Math.abs(cur.size - before)} location${Math.abs(cur.size - before) === 1 ? "" : "s"}).`,
+              `${enabled ? "Added" : "Removed"} ${control.name}${space ? ` in ${space}` : ""} for ${plan.name} (${locationLabel(Math.abs(cur.size - before))}).`,
             );
           } else {
             lines.push(`${control.name}${space ? ` in ${space}` : ""} was already ${enabled ? "on" : "off"} in ${plan.name}.`);
           }
-        } else if (type === "set_control_fraction_by_space") {
+        } else if (type === "remove_fraction_by_space" || type === "set_control_fraction_by_space") {
           const plan = findPlan(a.plan);
           const control = findControl(a.control);
           if (!plan || !control) {
             lines.push(`Skipped ${type}: could not match ${!plan ? `plan "${a.plan}"` : `control "${a.control}"`}.`);
             continue;
           }
-          const fraction = Math.min(1, Math.max(0, Number(a.enabled_fraction)));
-          if (!Number.isFinite(fraction)) {
-            lines.push(`Skipped: enabled_fraction must be a number from 0 to 1.`);
+          // Preferred parameter is the share to remove; the older action used
+          // the share to keep, so translate it.
+          const rawRemove =
+            a.remove_fraction !== undefined
+              ? Number(a.remove_fraction)
+              : 1 - Number(a.enabled_fraction);
+          if (!Number.isFinite(rawRemove)) {
+            lines.push(`Skipped: the share to remove must be a number from 0 to 1.`);
             continue;
           }
+          const removeFraction = Math.min(1, Math.max(0, rawRemove));
           const spaces = spaceBreakdown.get(control.id);
           if (!spaces) {
             lines.push(`Skipped: ${control.name} has no locations in this project.`);
@@ -944,26 +954,29 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
           }
           const ex = exclusionsFor(plan);
           const cur = new Set(ex[control.id] || []);
-          let switchedOff = 0;
-          spaces.forEach((cell) => {
+          let removed = 0;
+          const perSpace: string[] = [];
+          spaces.forEach((cell, spaceName) => {
             const activeIds = cell.instances.map((instance) => instance.id).filter((id) => !cur.has(id));
             for (let i = activeIds.length - 1; i > 0; i -= 1) {
               const j = Math.floor(Math.random() * (i + 1));
               [activeIds[i], activeIds[j]] = [activeIds[j], activeIds[i]];
             }
-            const keepCount = Math.ceil(activeIds.length * fraction);
-            activeIds.slice(keepCount).forEach((id) => {
-              cur.add(id);
-              switchedOff += 1;
-            });
+            // Keep the rounded-up remainder, remove the rest.
+            const keepCount = Math.ceil(activeIds.length * (1 - removeFraction));
+            const toRemove = activeIds.slice(keepCount);
+            toRemove.forEach((id) => cur.add(id));
+            removed += toRemove.length;
+            if (toRemove.length > 0) perSpace.push(`${spaceName}: ${locationLabel(toRemove.length)}`);
           });
           if (cur.size > 0) ex[control.id] = [...cur];
           else delete ex[control.id];
           lines.push(
-            switchedOff > 0
-              ? `Switched off ${locationLabel(switchedOff)} for ${control.name} in ${plan.name}, reducing each space independently.`
-              : `${control.name} already meets the requested proportion in ${plan.name}.`,
+            removed > 0
+              ? `Removed ${locationLabel(removed)} of ${control.name} in ${plan.name} (${perSpace.join(", ")}).`
+              : `${control.name} already meets the requested amount in ${plan.name}.`,
           );
+
         } else if (type === "rename_plan") {
           const plan = findPlan(a.plan);
           const name = String(a.name || "").trim();
@@ -1041,10 +1054,14 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
 
     if (lines.length === 0) return null;
     if (allPlanWritesSucceeded) {
-      for (const line of lines) {
-        await logPlanChange("wade", `Wade: ${line}`, null, {});
-      }
+      // One grouped change-history entry per Wade instruction.
+      const summary =
+        lines.length === 1
+          ? `Wade: ${lines[0]}`
+          : `Wade made ${lines.length} changes:\n${lines.map((l) => `• ${l}`).join("\n")}`;
+      await logPlanChange("wade", summary, null, { changes: lines });
     }
+
     return `**Applied to the plans:**\n${lines.map((l) => `- ${l}`).join("\n")}`;
   };
 
@@ -1212,7 +1229,7 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
                   <th className={`${labelCell} text-left bg-muted`}>Breakdown by Control</th>
                   <td colSpan={plans.length + 1} className="px-4 py-2">
                     {controlRows.length > 0 && (
-                      <div className="flex justify-end">
+                      <div className="flex justify-start">
                         <Button variant="ghost" size="sm" onClick={toggleAllExpanded}>
                           {allControlsExpanded ? <ChevronDown className="h-4 w-4 mr-2" /> : <ChevronRight className="h-4 w-4 mr-2" />}
                           {allControlsExpanded ? "Collapse all" : "Expand all"}
@@ -1221,6 +1238,7 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
                     )}
                   </td>
                 </tr>
+
 
                 {controlRows.length === 0 ? (
                   <tr className="border-b">
