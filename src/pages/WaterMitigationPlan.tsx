@@ -656,6 +656,7 @@ export default function WaterMitigationPlan() {
     const plan = plans.find((p) => p.id === planId);
     if (!plan) return;
     const cur = new Set((plan.excluded_instances || {})[controlId] || []);
+    const turningOff = !cur.has(instanceId);
     cur.has(instanceId) ? cur.delete(instanceId) : cur.add(instanceId);
     const next: Record<string, string[]> = { ...(plan.excluded_instances || {}) };
     if (cur.size > 0) next[controlId] = [...cur];
@@ -671,7 +672,15 @@ export default function WaterMitigationPlan() {
     if (error) {
       toast.error(getUserFriendlyError(error));
       queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
+      return;
     }
+    const controlName = controlRows.find((c) => c.id === controlId)?.name || "control";
+    void logPlanChange(
+      turningOff ? "control_off" : "control_on",
+      `${turningOff ? "Switched off" : "Switched on"} ${controlName} at 1 location in "${plan.name}"`,
+      planId,
+      { control: controlName, instance_id: instanceId },
+    );
   };
 
   // --- inline editing -------------------------------------------------
