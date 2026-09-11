@@ -3,7 +3,7 @@ import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Send, Trash2, X } from "lucide-react";
+import { GripHorizontal, Loader2, Minus, Send, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { normalizeFunctionError } from "@/lib/functionsError";
@@ -45,6 +45,8 @@ export function AskWadePanel({
   onAssistantMessage,
   actionSpec,
   onActions,
+  onMinimize,
+  dragHandleProps,
 }: {
   projectId: string;
   onClose: () => void;
@@ -59,6 +61,10 @@ export function AskWadePanel({
   actionSpec?: string;
   /** Executes actions Wade requested; returns a markdown summary of what changed. */
   onActions?: (actions: any[]) => Promise<string | null>;
+  /** When provided, a minimize button is shown in the header. */
+  onMinimize?: () => void;
+  /** Pointer handlers that make the header act as a drag handle. */
+  dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
 }) {
   const { toast } = useToast();
   const [messages, setMessages] = useState<WadeMessage[]>([]);
