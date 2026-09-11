@@ -1113,7 +1113,7 @@ actions and posts its own recap.`;
             <table className="w-full border-collapse">
               <tbody>
                 <tr className="border-b">
-                  <th className={`${labelCell} text-left bg-card sticky top-0 z-30 shadow-[inset_-1px_0_0_hsl(var(--border)),inset_0_-1px_0_hsl(var(--border))]`} aria-label="Plans" />
+                  <th className={`${labelCell} text-left bg-card sticky top-0 z-30 [box-shadow:inset_-1px_0_0_hsl(var(--border)),inset_0_-1px_0_hsl(var(--border))]`} aria-label="Plans" />
                   {plans.map((plan) => (
                     <td key={plan.id} className="border-r px-4 py-2 min-w-[220px] align-top sticky top-0 z-20 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))]">
                       <div className="flex items-center gap-1">
@@ -1230,13 +1230,15 @@ actions and posts its own recap.`;
 
                 <tr className="border-b">
                   <td colSpan={plans.length + 2} className="px-4 py-2 bg-card">
-                    <div className="text-sm font-medium text-foreground">Breakdown by Control Type</div>
-                    {controlRows.length > 0 && (
-                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs mt-1 -ml-2" onClick={toggleAllExpanded}>
-                        {allControlsExpanded ? <ChevronDown className="h-3.5 w-3.5 mr-1" /> : <ChevronRight className="h-3.5 w-3.5 mr-1" />}
-                        {allControlsExpanded ? "Collapse all" : "Expand all"}
-                      </Button>
-                    )}
+                    <div className="sticky left-0 w-[280px]">
+                      <div className="text-sm font-medium text-foreground">Breakdown by Control Type</div>
+                      {controlRows.length > 0 && (
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs mt-1 -ml-2" onClick={toggleAllExpanded}>
+                          {allControlsExpanded ? <ChevronDown className="h-3.5 w-3.5 mr-1" /> : <ChevronRight className="h-3.5 w-3.5 mr-1" />}
+                          {allControlsExpanded ? "Collapse all" : "Expand all"}
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 </tr>
 
