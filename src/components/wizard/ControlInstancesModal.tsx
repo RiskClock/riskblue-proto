@@ -13,6 +13,12 @@ export interface ControlInstance {
   instanceLabel: string;
 }
 
+export interface PlanOption {
+  id: string;
+  name: string;
+  count: number;
+}
+
 interface Props {
   isOpen: boolean;
   onClose: () => void;
@@ -25,6 +31,9 @@ interface Props {
   excludedIds: Set<string>;
   onToggle: (instanceId: string) => void;
   readOnly?: boolean;
+  planOptions?: PlanOption[];
+  activePlanId?: string;
+  onSelectPlan?: (planId: string) => void;
 }
 
 const OFF_COLOR = "#9CA3AF";
@@ -47,6 +56,9 @@ export function ControlInstancesModal({
   excludedIds,
   onToggle,
   readOnly = false,
+  planOptions = [],
+  activePlanId,
+  onSelectPlan,
 }: Props) {
   const [rotation, setRotation] = useState<RotationDeg>(0);
   const [hovered, setHovered] = useState<string | null>(null);
@@ -88,7 +100,28 @@ export function ControlInstancesModal({
           </p>
         </DialogHeader>
 
-        <div className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 relative">
+          {planOptions.length > 0 && (
+            <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-20 flex max-w-[80%] flex-wrap justify-center gap-1 rounded-md border bg-background/95 p-1 shadow-md">
+              {planOptions.map((p) => {
+                const active = p.id === activePlanId;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => onSelectPlan?.(p.id)}
+                    className={`pointer-events-auto rounded px-3 py-1 text-xs font-medium transition-colors ${
+                      active
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {p.name} ({p.count})
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <DrawingViewer
             source={source}
             layout="single-page"
