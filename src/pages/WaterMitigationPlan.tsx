@@ -1014,7 +1014,7 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
                       </div>
                     </td>
                   ))}
-                  <td className="px-4 py-2 align-top">
+                  <td className="px-4 py-2 align-top sticky top-0 z-20 bg-card">
                     {canEdit && (
                       <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => addPlan()}>
                         <Plus className="h-4 w-4 mr-1" /> New plan
