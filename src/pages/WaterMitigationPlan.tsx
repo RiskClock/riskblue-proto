@@ -1212,7 +1212,7 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
                   <th className={`${labelCell} text-left bg-muted`}>Breakdown by Control</th>
                   <td colSpan={plans.length + 1} className="px-4 py-2">
                     {controlRows.length > 0 && (
-                      <div className="flex justify-end">
+                      <div className="flex justify-start">
                         <Button variant="ghost" size="sm" onClick={toggleAllExpanded}>
                           {allControlsExpanded ? <ChevronDown className="h-4 w-4 mr-2" /> : <ChevronRight className="h-4 w-4 mr-2" />}
                           {allControlsExpanded ? "Collapse all" : "Expand all"}
@@ -1221,6 +1221,7 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
                     )}
                   </td>
                 </tr>
+
 
                 {controlRows.length === 0 ? (
                   <tr className="border-b">
