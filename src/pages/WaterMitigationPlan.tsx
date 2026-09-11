@@ -788,6 +788,18 @@ export default function WaterMitigationPlan() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [wadePos, setWadePos] = useState<{ x: number; y: number } | null>(null);
   const wadeDrag = useRef<{ dx: number; dy: number } | null>(null);
+  const headerScrollRef = useRef<HTMLDivElement>(null);
+  const bodyScrollRef = useRef<HTMLDivElement>(null);
+  const scrollSyncing = useRef(false);
+  const syncScroll = (source: "header" | "body") => (e: React.UIEvent<HTMLDivElement>) => {
+    if (scrollSyncing.current) return;
+    scrollSyncing.current = true;
+    const target = source === "header" ? bodyScrollRef.current : headerScrollRef.current;
+    if (target && target.scrollLeft !== e.currentTarget.scrollLeft) {
+      target.scrollLeft = e.currentTarget.scrollLeft;
+    }
+    scrollSyncing.current = false;
+  };
 
   const onWadePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
@@ -1109,9 +1121,10 @@ actions and posts its own recap.`;
             <Loader2 className="h-4 w-4 animate-spin" /> Loading plans…
           </div>
         ) : (
-          <div className="bg-card rounded-lg border overflow-auto min-h-0 max-h-full">
-            <table className="w-full border-collapse">
-              <tbody>
+          <div className="bg-card rounded-lg border overflow-hidden min-h-0 max-h-full flex flex-col">
+            <div ref={headerScrollRef} onScroll={syncScroll("header")} className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <tbody>
                 <tr className="border-b">
                   <th className={`${labelCell} text-left bg-card sticky top-0 z-30 [box-shadow:inset_-1px_0_0_hsl(var(--border)),inset_0_-1px_0_hsl(var(--border))]`} aria-label="Plans" />
                   {plans.map((plan) => (
@@ -1228,21 +1241,21 @@ actions and posts its own recap.`;
                   <td />
                 </tr>
 
-                <tr className="border-b">
-                  <td colSpan={plans.length + 2} className="px-4 py-2 bg-card">
-                    <div className="sticky left-0 w-[280px]">
-                      <div className="text-sm font-medium text-foreground">Breakdown by Control Type</div>
-                      {controlRows.length > 0 && (
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs mt-1 -ml-2" onClick={toggleAllExpanded}>
-                          {allControlsExpanded ? <ChevronDown className="h-3.5 w-3.5 mr-1" /> : <ChevronRight className="h-3.5 w-3.5 mr-1" />}
-                          {allControlsExpanded ? "Collapse all" : "Expand all"}
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-
-
+              </tbody>
+              </table>
+            </div>
+            <div className="border-t px-4 py-2 shrink-0">
+              <div className="text-sm font-medium text-foreground">Breakdown by Control Type</div>
+              {controlRows.length > 0 && (
+                <Button variant="ghost" size="sm" className="h-7 px-2 text-xs mt-1 -ml-2" onClick={toggleAllExpanded}>
+                  {allControlsExpanded ? <ChevronDown className="h-3.5 w-3.5 mr-1" /> : <ChevronRight className="h-3.5 w-3.5 mr-1" />}
+                  {allControlsExpanded ? "Collapse all" : "Expand all"}
+                </Button>
+              )}
+            </div>
+            <div ref={bodyScrollRef} onScroll={syncScroll("body")} className="overflow-auto min-h-0">
+              <table className="w-full border-collapse">
+                <tbody>
                 {controlRows.length === 0 ? (
                   <tr className="border-b">
                     <td className="px-4 py-6 text-sm text-muted-foreground" colSpan={plans.length + 2}>
@@ -1313,8 +1326,9 @@ actions and posts its own recap.`;
                   })
                 )}
 
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </main>
