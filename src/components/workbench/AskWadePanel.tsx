@@ -244,9 +244,23 @@ export function AskWadePanel({
 
   return (
     <div className="border rounded-md flex flex-col min-h-0 overflow-hidden">
-      <div className="flex items-center justify-between border-b px-3 py-2 bg-muted/20">
-        <div className="text-sm font-semibold">{title}</div>
-        <div className="flex items-center gap-1">
+      <div className="flex items-center gap-2 border-b px-3 py-2 bg-muted/20">
+        <div className="text-sm font-semibold shrink-0">{title}</div>
+        {dragHandleProps ? (
+          <div
+            {...dragHandleProps}
+            className="flex-1 flex items-center justify-center self-stretch cursor-move text-muted-foreground"
+            title="Drag to move"
+          >
+            <div className="flex flex-col -space-y-1">
+              <GripHorizontal className="h-3 w-3" />
+              <GripHorizontal className="h-3 w-3" />
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1" />
+        )}
+        <div className="flex items-center gap-1 shrink-0">
           <Button
             variant="ghost"
             size="icon"
