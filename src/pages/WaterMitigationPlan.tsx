@@ -1345,6 +1345,13 @@ actions and posts its own recap.`;
           }
           onToggle={(instanceId) => toggleInstance(viewer.planId, viewer.controlId, instanceId)}
           readOnly={!canEdit}
+          planOptions={plans.map((p) => ({
+            id: p.id,
+            name: p.name,
+            count: countForSpace(p, viewer.controlId, viewer.space),
+          }))}
+          activePlanId={viewer.planId}
+          onSelectPlan={(planId) => setViewer((v) => (v ? { ...v, planId } : v))}
         />
       )}
 
