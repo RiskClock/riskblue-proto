@@ -974,7 +974,7 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
             <table className="w-full border-collapse">
               <tbody>
                 <tr className="border-b">
-                  <th className={`${labelCell} text-left bg-muted/50 sticky top-0 z-30`}>Plan</th>
+                  <th className={`${labelCell} text-left bg-muted sticky top-0 z-30`}>Plan</th>
                   {plans.map((plan) => (
                     <td key={plan.id} className="border-r px-4 py-2 min-w-[220px] align-top sticky top-0 z-20 bg-card">
                       <div className="flex items-center gap-1">
@@ -1089,8 +1089,8 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
                   <td />
                 </tr>
 
-                <tr className="border-b bg-muted/50">
-                  <th className={`${labelCell} text-left bg-muted/50`}>Breakdown by Control</th>
+                <tr className="border-b bg-muted">
+                  <th className={`${labelCell} text-left bg-muted`}>Breakdown by Control</th>
                   {plans.map((plan) => (
                     <td key={plan.id} className="border-r px-4 py-2" />
                   ))}
@@ -1141,8 +1141,8 @@ request is ambiguous, ask instead of guessing. The app applies the actions and p
                         </tr>
                         {isOpen &&
                           spaces.map((space) => (
-                            <tr key={`${row.id}::${space}`} className="border-b bg-muted/30">
-                              <th className={`${labelCell} text-left font-normal bg-muted/30`}>
+                            <tr key={`${row.id}::${space}`} className="border-b bg-muted">
+                              <th className={`${labelCell} text-left font-normal bg-muted`}>
                                 <span className="pl-6 text-muted-foreground">{space}</span>
                               </th>
                               {plans.map((plan) => (
