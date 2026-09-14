@@ -1,8 +1,9 @@
 // Bulk-download modal for the Workbench project detail page.
 //
 // Lets the user pick which source PDF files to include, whether to include
-// annotations & Detail-N bounding boxes, and produces a single merged vector
-// PDF via `buildAnnotatedPdf`.
+// annotations & Detail-N bounding boxes, and produces one annotated vector
+// PDF per selected file via `buildAnnotatedPdf`, delivered as a ZIP
+// (or a single PDF when only one file is selected).
 //
 // Non-PDF files are shown but the checkbox is disabled (PDFs only for
 // vector export). All PDFs are checked by default.
@@ -450,8 +451,8 @@ export function BulkDrawingDownloadModal({
         <DialogHeader>
           <DialogTitle>Download drawings</DialogTitle>
           <DialogDescription>
-            Select the source PDFs to include. Every page of each selected file
-            will be merged into a single PDF.
+            Select the source PDFs to include. Each file is downloaded as its
+            own PDF, bundled together in a single ZIP.
           </DialogDescription>
         </DialogHeader>
 
