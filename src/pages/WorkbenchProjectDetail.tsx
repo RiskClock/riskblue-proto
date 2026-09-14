@@ -6243,11 +6243,13 @@ const isChildPlanType = (t: string) =>
             bucket: bucketForSource(g.file.source_type),
             mimeType: g.file.mime_type,
             sizeBytes: g.file.size_bytes ?? null,
-            // Intentionally omit knownPageCount: g.sheets.length only counts
-            // analyzed (triaged) pages, which caps the export short of the
-            // full source PDF. The modal computes the true page count via
-            // readPdfPageCount(bytes) so every source page is included.
-
+            // True source page count from analysis_request_files
+            // .expected_page_count (surfaced via pageInfoRows), NOT
+            // g.sheets.length - the latter only counts analyzed (triaged)
+            // pages and would cap the export short of the full PDF. When it
+            // is missing the modal still falls back to readPdfPageCount().
+            knownPageCount:
+              pageInfoRows.find((r) => r.id === g.file.id)?.page_count ?? undefined,
           }))}
           enabledClassNames={enabledCols}
           initialSelectedFileIds={bulkPreselect}
