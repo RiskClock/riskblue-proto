@@ -1289,7 +1289,7 @@ actions and posts its own recap.`;
                 <tr className="border-b">
                   <th className={`${labelCell} text-left`}>Total Cost Estimate</th>
                   {plans.map((plan) => (
-                    <td key={plan.id} className="border-r px-4 py-3 text-center text-lg font-semibold tabular-nums">
+                    <td key={plan.id} className="border-r px-4 py-3 text-center text-lg font-bold tabular-nums">
                       {currency(planTotalsById.get(plan.id)?.cost ?? 0)}
                     </td>
                   ))}
@@ -1351,7 +1351,7 @@ actions and posts its own recap.`;
                             return (
                               <td key={plan.id} className="border-r px-4 py-2 text-right text-sm tabular-nums">
                                 <div>{locationLabel(n)}</div>
-                                <div className="font-semibold text-foreground">{currency(n * row.unitCost)}</div>
+                                <div className="font-bold text-foreground">{currency(n * row.unitCost)}</div>
                               </td>
                             );
                           })}
