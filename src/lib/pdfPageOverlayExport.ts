@@ -208,9 +208,12 @@ export async function buildAnnotatedPdf(
       done += 1;
       opts.onProgress?.(done, totalPages);
 
-      // Yield to the browser between pages so the UI stays responsive on
+      // Yield to the browser periodically so the UI stays responsive on
       // large multi-page exports (prevents the "page unresponsive" prompt).
-      await new Promise<void>((r) => setTimeout(r, 0));
+      // Every page was unnecessarily slow; every 5 pages is enough.
+      if (done % 5 === 0) {
+        await new Promise<void>((r) => setTimeout(r, 0));
+      }
     }
   }
 
