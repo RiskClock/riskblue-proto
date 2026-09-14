@@ -521,13 +521,13 @@ export default function InternalWorkbench() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
+    <div className="flex flex-col bg-background">
       <AppHeader
         title="Risk Identification Workbench"
         infoTitle="About the Workbench"
         infoContent={<p>All projects across every user. Internal access only.</p>}
       />
-      <main className="flex-1 min-h-0 overflow-hidden flex flex-col">
+      <main className="flex-1 min-h-0 flex flex-col">
         <div className="shrink-0 bg-background">
         <div className="container mx-auto px-6 py-4 flex flex-wrap items-center justify-end gap-3">
           <div className="relative flex-1 min-w-[220px] max-w-sm">
@@ -619,7 +619,7 @@ export default function InternalWorkbench() {
         </div>
         </div>
 
-        <div className="container mx-auto px-6 pt-0 pb-0 flex-1 min-h-0 overflow-hidden flex flex-col">
+        <div className="container mx-auto px-6 pt-0 pb-0 flex flex-col">
         {isLoading ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading projects…
@@ -627,7 +627,7 @@ export default function InternalWorkbench() {
         ) : !projects || projects.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">No projects yet.</div>
         ) : (
-          <div className="bg-card rounded-t-lg border-x border-t border-b-0 min-h-0 max-h-full overflow-auto [&>div]:overflow-visible">
+          <div className="bg-card rounded-lg border [&>div]:overflow-visible">
             <Table className="mb-4 [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-20 [&_thead_th]:bg-card [&_thead_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
               <TableHeader>
                 <TableRow>
