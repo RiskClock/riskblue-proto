@@ -6161,14 +6161,28 @@ const isChildPlanType = (t: string) =>
           onOpenChange={setScoutRunOpen}
           requestId={requestId}
           projectId={projectId ?? null}
-          files={(rows?.files ?? []).map((f) => ({
-            id: f.id,
-            name: f.name,
-            pages: (rows?.sheets ?? [])
+          files={(rows?.files ?? []).map((f) => {
+            const sheetPages = (rows?.sheets ?? [])
               .filter((s) => s.parent_file_id === f.id)
               .map((s) => ({ page_index: s.page_index, sheet_number: s.sheet_number ?? null }))
-              .sort((a, b) => a.page_index - b.page_index),
-          }))}
+              .sort((a, b) => a.page_index - b.page_index);
+            // Fallback: before the pipeline has split a file into per-page sheet
+            // rows, use the file's known page count so pages can still be picked.
+            if (sheetPages.length === 0) {
+              const known = pageInfoRows.find((r) => r.id === f.id)?.page_count ?? null;
+              if (known && known > 0) {
+                return {
+                  id: f.id,
+                  name: f.name,
+                  pages: Array.from({ length: known }, (_, i) => ({
+                    page_index: i + 1,
+                    sheet_number: null,
+                  })),
+                };
+              }
+            }
+            return { id: f.id, name: f.name, pages: sheetPages };
+          })}
           onApplied={() => {
             queryClient.invalidateQueries({ queryKey: ["workbench-analysis-request", projectId] });
           }}
