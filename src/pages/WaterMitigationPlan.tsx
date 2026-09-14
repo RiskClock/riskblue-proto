@@ -114,18 +114,18 @@ const PlanProgressDonut = ({ value, maximum }: { value: number; maximum: number 
   return (
     <svg
       viewBox="0 0 36 36"
-      className="h-5 w-5 shrink-0 -rotate-90"
+      className="h-5 w-5 shrink-0 -rotate-90 scale-x-[-1]"
       role="img"
       aria-label={`${percentage}% of the highest controls applied count`}
     >
-      <circle cx="18" cy="18" r="14" pathLength="100" fill="none" strokeWidth="5" className="stroke-muted" />
+      <circle cx="18" cy="18" r="14" pathLength="100" fill="none" strokeWidth="6" className="stroke-muted" />
       <circle
         cx="18"
         cy="18"
         r="14"
         pathLength="100"
         fill="none"
-        strokeWidth="5"
+        strokeWidth="6"
         strokeLinecap="round"
         strokeDasharray={`${percentage} 100`}
         className="stroke-primary"
@@ -1168,7 +1168,8 @@ actions and posts its own recap.`;
             <Loader2 className="h-4 w-4 animate-spin" /> Loading plans…
           </div>
         ) : (
-          <div className="bg-card rounded-lg border overflow-auto min-h-0 max-h-full">
+          <div className="overflow-auto min-h-0 max-h-full">
+            <div className="w-max min-w-full overflow-hidden rounded-lg border bg-card">
             <table className="w-full border-collapse">
               {sharedColumns}
               <tbody>
@@ -1297,12 +1298,13 @@ actions and posts its own recap.`;
                 </tr>
               </tbody>
             </table>
+            </div>
 
-            <div className="border-b px-4 py-2 bg-card min-w-max">
-              <div className="sticky left-4 w-[248px]">
-                <div className="text-sm font-medium text-foreground">Breakdown by Control Type</div>
+            <div className="w-max min-w-full bg-background py-3">
+              <div className="sticky left-0 inline-flex items-center gap-2 px-1">
+                <div className="text-sm font-medium text-foreground whitespace-nowrap">Breakdown by Control Type</div>
                 {controlRows.length > 0 && (
-                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs mt-1 -ml-2" onClick={toggleAllExpanded}>
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={toggleAllExpanded}>
                     {allControlsExpanded ? <ChevronDown className="h-3.5 w-3.5 mr-1" /> : <ChevronRight className="h-3.5 w-3.5 mr-1" />}
                     {allControlsExpanded ? "Collapse all" : "Expand all"}
                   </Button>
@@ -1310,6 +1312,7 @@ actions and posts its own recap.`;
               </div>
             </div>
 
+            <div className="w-max min-w-full overflow-hidden rounded-lg border bg-card">
             <table className="w-full border-collapse">
               {sharedColumns}
               <tbody>
@@ -1333,23 +1336,21 @@ actions and posts its own recap.`;
                               onClick={() => toggleExpanded(row.id)}
                               disabled={spaces.length === 0}
                             >
-                              {spaces.length > 0 ? (
-                                isOpen ? (
-                                  <ChevronDown className="h-4 w-4 shrink-0" />
-                                ) : (
-                                  <ChevronRight className="h-4 w-4 shrink-0" />
-                                )
-                              ) : (
-                                <span className="w-4 shrink-0" />
-                              )}
                               <ControlTypeIcon name={row.name} />
                               <span>{row.name}</span>
+                              {spaces.length > 0 ? (
+                                isOpen ? (
+                                  <ChevronDown className="ml-auto h-4 w-4 shrink-0" />
+                                ) : (
+                                  <ChevronRight className="ml-auto h-4 w-4 shrink-0" />
+                                )
+                              ) : null}
                             </button>
                           </th>
                           {plans.map((plan) => {
                             const n = countFor(plan, row.id);
                             return (
-                              <td key={plan.id} className="border-r px-4 py-2 text-right text-sm tabular-nums">
+                              <td key={plan.id} className="border-r px-4 py-2 text-center text-sm tabular-nums">
                                 <div>{locationLabel(n)}</div>
                                 <div className="font-bold text-foreground">{currency(n * row.unitCost)}</div>
                               </td>
@@ -1366,7 +1367,7 @@ actions and posts its own recap.`;
                               {plans.map((plan) => (
                                 <td
                                   key={plan.id}
-                                  className="border-r px-4 py-2 text-right text-sm tabular-nums"
+                                  className="border-r px-4 py-2 text-center text-sm tabular-nums"
                                 >
                                   <button
                                     type="button"
@@ -1387,6 +1388,7 @@ actions and posts its own recap.`;
 
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </main>
