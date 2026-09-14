@@ -68,7 +68,20 @@ function normalizeOverlays(overlays: any[]): NormalizedOverlay[] {
   return out;
 }
 
-export async function captureOverlayOnly(
+// Captures mount a hidden DOM surface and rasterize it. Running two at once
+// (bulk download processes several files in parallel) can interleave layout
+// and measurement, so serialize them behind a simple promise chain.
+let captureChain: Promise<unknown> = Promise.resolve();
+
+export function captureOverlayOnly(
+  input: OverlayOnlyCaptureInput,
+): Promise<RasterizedPage | null> {
+  const run = captureChain.then(() => captureOverlayOnlyInner(input));
+  captureChain = run.catch(() => undefined);
+  return run;
+}
+
+async function captureOverlayOnlyInner(
   input: OverlayOnlyCaptureInput,
 ): Promise<RasterizedPage | null> {
   const outScale = input.outScale ?? 2;

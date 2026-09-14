@@ -220,6 +220,94 @@ export async function buildAnnotatedPdf(
   return await out.save();
 }
 
+/**
+ * Stamp overlays onto a single source PDF *in place*.
+ *
+ * Unlike `buildAnnotatedPdf`, this does not copy pages into a new document —
+ * it loads the original, draws overlays only on the pages that need them, and
+ * re-saves the same document. Pages with no overlays and no user rotation are
+ * never touched, so a 60-page file with 2 annotated pages costs ~2 pages of
+ * work instead of 60.
+ */
+export async function stampAnnotationsInPlace(
+  sourceBytes: ArrayBuffer | Uint8Array,
+  pages: PageOverlaySpec[],
+  opts: { onProgress?: (done: number, total: number) => void } = {},
+): Promise<Uint8Array> {
+  const u8 =
+    sourceBytes instanceof Uint8Array ? sourceBytes : new Uint8Array(sourceBytes);
+  const doc = await PDFDocument.load(u8, { ignoreEncryption: true });
+  const pageCount = doc.getPageCount();
+
+  // Only pages that actually need work.
+  const work = pages.filter(
+    (p) => (p.overlays?.length ?? 0) > 0 || (p.userRotation ?? 0) !== 0,
+  );
+  let done = 0;
+
+  for (const spec of work) {
+    const idx = spec.page - 1;
+    if (idx < 0 || idx >= pageCount) continue;
+
+    const page = doc.getPage(idx);
+    const rotation = normalizedRotation(page.getRotation().angle);
+    const cropBox = page.getCropBox();
+    const cropWidth = cropBox.width;
+    const cropHeight = cropBox.height;
+    const userRot = spec.userRotation ?? 0;
+    const totalRot = ((((rotation + userRot) % 360) + 360) % 360) as
+      | 0
+      | 90
+      | 180
+      | 270;
+    const totalDisplayWidth = totalRot % 180 === 0 ? cropWidth : cropHeight;
+    const totalDisplayHeight = totalRot % 180 === 0 ? cropHeight : cropWidth;
+
+    if ((spec.overlays?.length ?? 0) > 0) {
+      const capture = await captureOverlayOnly({
+        pageSize: {
+          width: rotation % 180 === 0 ? cropWidth : cropHeight,
+          height: rotation % 180 === 0 ? cropHeight : cropWidth,
+        },
+        overlays: spec.overlays,
+        outScale: 3,
+        userRotationDeg: userRot,
+      });
+      if (capture) {
+        const overlayBytes = await capture.blob.arrayBuffer();
+        const png = await doc.embedPng(new Uint8Array(overlayBytes));
+        page.drawImage(
+          png,
+          overlayDrawOptionsForCopiedPage({
+            cropX: cropBox.x,
+            cropY: cropBox.y,
+            cropWidth,
+            cropHeight,
+            displayWidth: totalDisplayWidth,
+            displayHeight: totalDisplayHeight,
+            rotation: totalRot,
+          }),
+        );
+      }
+    }
+
+    if (userRot) {
+      page.setRotation(degrees(totalRot));
+    }
+
+    done += 1;
+    opts.onProgress?.(done, work.length);
+    // Yield based on processed pages, not total pages.
+    if (done % 5 === 0) {
+      await new Promise<void>((r) => setTimeout(r, 0));
+    }
+  }
+
+  // Object streams cost extra CPU on large drawing files; plain xref tables
+  // save faster and are universally readable.
+  return await doc.save({ useObjectStreams: false });
+}
+
 /** Convenience: build + trigger a browser download. */
 export function triggerPdfDownload(bytes: Uint8Array, filename: string) {
   const blob = new Blob([bytes as unknown as BlobPart], {

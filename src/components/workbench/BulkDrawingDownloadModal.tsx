@@ -27,10 +27,10 @@ import { useActivityLogger } from "@/hooks/useActivityLogger";
 import { supabase } from "@/integrations/supabase/client";
 import { awpClassColor, awpClassColorForType } from "@/lib/awpColor";
 import {
-  buildAnnotatedPdf,
+  stampAnnotationsInPlace,
   readPdfPageCount,
   triggerPdfDownload,
-  type PdfExportEntry,
+  
   type PageOverlaySpec,
 } from "@/lib/pdfPageOverlayExport";
 
@@ -394,18 +394,21 @@ export function BulkDrawingDownloadModal({
           }
         }
 
+        // Only collect pages that actually need work — pages with no
+        // annotations and no rotation are never handed to the stamper.
         const pages: PageOverlaySpec[] = [];
-        let hasOverlays = false;
-        let hasRotation = false;
         for (let p = 1; p <= count; p++) {
           const key = `${f.fileId}::${p - 1}`;
-          const circleOverlays = overlaysByFilePage.get(key) ?? [];
+          const circleOverlays = includeOverlays
+            ? (overlaysByFilePage.get(key) ?? [])
+            : [];
           const extraOverlays = includeOverlays
             ? (extraOverlaysByFilePage?.get(key) ?? [])
             : [];
           const rot = rotationFor(f.fileId, p);
-          if (circleOverlays.length > 0 || extraOverlays.length > 0) hasOverlays = true;
-          if (rot) hasRotation = true;
+          if (circleOverlays.length === 0 && extraOverlays.length === 0 && !rot) {
+            continue;
+          }
           pages.push({
             page: p,
             overlays: [...circleOverlays, ...extraOverlays],
@@ -416,14 +419,13 @@ export function BulkDrawingDownloadModal({
         const base = f.fileName.replace(/\.pdf$/i, "").replace(/[\\/:*?"<>|]/g, "_");
 
         // Fast path: nothing to stamp and no baked rotation -> ship the
-        // original bytes untouched. Avoids a full pdf-lib load/copy/save.
-        if (!includeOverlays || (!hasOverlays && !hasRotation)) {
+        // original bytes untouched. Avoids a full pdf-lib load/save.
+        if (pages.length === 0) {
           built.push({ name: `${base}.pdf`, bytes });
         } else {
-          const outBytes = await buildAnnotatedPdf(
-            [{ fileName: f.fileName, sourceBytes: bytes, source: descriptor, pages }],
-            { includeOverlays },
-          );
+          // In-place stamping: keeps the original document and only touches
+          // the pages listed above.
+          const outBytes = await stampAnnotationsInPlace(bytes, pages);
           built.push({ name: `${base}.pdf`, bytes: outBytes });
         }
         totalPages += count;
