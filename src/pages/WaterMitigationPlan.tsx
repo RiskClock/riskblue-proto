@@ -114,18 +114,18 @@ const PlanProgressDonut = ({ value, maximum }: { value: number; maximum: number 
   return (
     <svg
       viewBox="0 0 36 36"
-      className="h-5 w-5 shrink-0 -rotate-90 scale-x-[-1]"
+      className="h-5 w-5 shrink-0 rotate-90 scale-x-[-1]"
       role="img"
       aria-label={`${percentage}% of the highest controls applied count`}
     >
-      <circle cx="18" cy="18" r="14" pathLength="100" fill="none" strokeWidth="6" className="stroke-muted" />
+      <circle cx="18" cy="18" r="13" pathLength="100" fill="none" strokeWidth="9" className="stroke-muted" />
       <circle
         cx="18"
         cy="18"
-        r="14"
+        r="13"
         pathLength="100"
         fill="none"
-        strokeWidth="6"
+        strokeWidth="9"
         strokeLinecap="round"
         strokeDasharray={`${percentage} 100`}
         className="stroke-primary"
@@ -1169,7 +1169,7 @@ actions and posts its own recap.`;
           </div>
         ) : (
           <div className="overflow-auto min-h-0 max-h-full">
-            <div className="w-max min-w-full overflow-hidden rounded-lg border bg-card">
+            <div className="w-max min-w-full rounded-lg border bg-card">
             <table className="w-full border-collapse">
               {sharedColumns}
               <tbody>
@@ -1312,7 +1312,7 @@ actions and posts its own recap.`;
               </div>
             </div>
 
-            <div className="w-max min-w-full overflow-hidden rounded-lg border bg-card">
+            <div className="w-max min-w-full rounded-lg border bg-card">
             <table className="w-full border-collapse">
               {sharedColumns}
               <tbody>
@@ -1351,8 +1351,8 @@ actions and posts its own recap.`;
                             const n = countFor(plan, row.id);
                             return (
                               <td key={plan.id} className="border-r px-4 py-2 text-center text-sm tabular-nums">
-                                <div>{locationLabel(n)}</div>
                                 <div className="font-bold text-foreground">{currency(n * row.unitCost)}</div>
+                                <div>{locationLabel(n)}</div>
                               </td>
                             );
                           })}
