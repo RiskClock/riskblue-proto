@@ -826,6 +826,12 @@ export default function WaterMitigationPlan() {
 
   // --- expansion + drawing review modal --------------------------------
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [hoveredControl, setHoveredControl] = useState<string | null>(null);
+  const controlRowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
+  const focusControlRow = (controlId: string) => {
+    setHoveredControl(controlId);
+    controlRowRefs.current[controlId]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  };
   const toggleExpanded = (id: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
