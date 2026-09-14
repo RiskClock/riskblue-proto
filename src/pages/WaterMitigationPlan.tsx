@@ -1393,12 +1393,40 @@ actions and posts its own recap.`;
                     </td>
                   </tr>
                 ) : (
-                  controlRows.map((row) => {
+                  <>
+                  <tr className="border-b">
+                    <th className={`${labelCell} text-left`}>Cost Split</th>
+                    {plans.map((plan) => (
+                      <td key={plan.id} className="border-r px-4 py-3">
+                        <div className="flex justify-center">
+                          <CostPie
+                            slices={controlRows.map((row) => ({
+                              id: row.id,
+                              name: row.name,
+                              value: countFor(plan, row.id) * row.unitCost,
+                            }))}
+                            hovered={hoveredControl}
+                            onHover={setHoveredControl}
+                            onSelect={focusControlRow}
+                          />
+                        </div>
+                      </td>
+                    ))}
+                    <td />
+                  </tr>
+                  {controlRows.map((row) => {
                     const spaces = spacesForControl(row.id);
                     const isOpen = expanded.has(row.id);
                     return (
                       <Fragment key={row.id}>
-                        <tr className="border-b align-top">
+                        <tr
+                          ref={(el) => {
+                            controlRowRefs.current[row.id] = el;
+                          }}
+                          className={`border-b align-top ${hoveredControl === row.id ? "bg-muted" : ""}`}
+                          onMouseEnter={() => setHoveredControl(row.id)}
+                          onMouseLeave={() => setHoveredControl(null)}
+                        >
                           <th className={`${labelCell} text-left font-normal`}>
                             <button
                               type="button"
