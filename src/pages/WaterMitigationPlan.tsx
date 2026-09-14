@@ -189,15 +189,33 @@ const CostPie = ({
             stroke="hsl(var(--card))"
             strokeWidth="1"
             className="cursor-pointer transition-all"
-            onMouseEnter={() => onHover(slice.id)}
-            onMouseLeave={() => onHover(null)}
+            onMouseEnter={(e) => {
+              onHover(slice.id);
+              const rect = (e.currentTarget.ownerSVGElement as SVGSVGElement)?.getBoundingClientRect();
+              if (rect) setTip({ id: slice.id, x: e.clientX - rect.left, y: e.clientY - rect.top });
+            }}
+            onMouseMove={(e) => {
+              const rect = (e.currentTarget.ownerSVGElement as SVGSVGElement)?.getBoundingClientRect();
+              if (rect) setTip({ id: slice.id, x: e.clientX - rect.left, y: e.clientY - rect.top });
+            }}
+            onMouseLeave={() => {
+              onHover(null);
+              setTip(null);
+            }}
             onClick={() => onSelect(slice.id)}
-          >
-            <title>{`${slice.name}: ${currency(slice.value)}`}</title>
-          </path>
+          />
         );
       })}
     </svg>
+    {tipSlice && tip && (
+      <div
+        className="pointer-events-none absolute z-50 -translate-x-1/2 whitespace-nowrap rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md"
+        style={{ left: tip.x, top: tip.y - 34 }}
+      >
+        {tipSlice.name}: {currency(tipSlice.value)}
+      </div>
+    )}
+    </div>
   );
 };
 
