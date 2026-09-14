@@ -101,7 +101,7 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
             src={logoUrl}
             alt={isCompanyLogo ? `${companyName ?? "Company"} logo` : "RiskBlue"}
             className="h-10 w-auto max-w-none cursor-pointer shrink-0 object-contain object-left"
-            onClick={() => navigate("/projects")}
+            onClick={() => navigate(tenantPath("/projects"))}
           />
           {title && (
             <div className="flex items-center gap-2 min-w-0">
