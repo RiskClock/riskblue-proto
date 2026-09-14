@@ -312,14 +312,26 @@ export function BulkDrawingDownloadModal({
         return (v === 90 || v === 180 || v === 270 ? v : 0) as 0 | 90 | 180 | 270;
       };
 
-      // Download source PDFs and determine page counts. Uses the same
-      // shared source resolver as the single-page download in the drawing
-      // modal, so private buckets / drive-hosted files behave identically.
+      // Download source PDFs. Uses the same shared source resolver as the
+      // single-page download in the drawing modal, so private buckets /
+      // drive-hosted files behave identically.
+      //
+      // Files are processed with bounded concurrency (rather than strictly
+      // one at a time) because network fetch dominates the wall-clock time
+      // on large projects. Files with nothing to stamp skip the pdf-lib
+      // rebuild entirely and go into the ZIP as their original bytes.
       const { resolveDocumentSource } = await import(
         "@/components/viewer/hooks/useDocumentSource"
       );
-      const entries: PdfExportEntry[] = [];
-      for (const f of chosen) {
+
+      const totalFiles = chosen.length;
+      setProgress({ done: 0, total: totalFiles });
+      let filesDone = 0;
+      let totalPages = 0;
+      const built: { name: string; bytes: Uint8Array }[] = [];
+      const CONCURRENCY = 6;
+
+      const processOne = async (f: BulkFileEntry) => {
         const descriptor = {
           kind: "supabase-storage" as const,
           bucket: f.bucket,
@@ -336,7 +348,7 @@ export function BulkDrawingDownloadModal({
               description: `${f.fileName} is not a PDF.`,
               variant: "destructive",
             });
-            continue;
+            return;
           }
           bytes = new Uint8Array(await blob.arrayBuffer());
         } catch (err: any) {
@@ -345,60 +357,78 @@ export function BulkDrawingDownloadModal({
             description: `Could not fetch ${f.fileName}: ${err?.message || "unknown error"}`,
             variant: "destructive",
           });
-          continue;
+          return;
         }
+
         let count = pageCounts.get(f.fileId);
         if (!count) {
           try {
             count = await readPdfPageCount(bytes);
-            setPageCounts((prev) => new Map(prev).set(f.fileId, count!));
           } catch {
             count = 1;
           }
         }
+
         const pages: PageOverlaySpec[] = [];
+        let hasOverlays = false;
+        let hasRotation = false;
         for (let p = 1; p <= count; p++) {
           const key = `${f.fileId}::${p - 1}`;
           const circleOverlays = overlaysByFilePage.get(key) ?? [];
           const extraOverlays = includeOverlays
             ? (extraOverlaysByFilePage?.get(key) ?? [])
             : [];
+          const rot = rotationFor(f.fileId, p);
+          if (circleOverlays.length > 0 || extraOverlays.length > 0) hasOverlays = true;
+          if (rot) hasRotation = true;
           pages.push({
             page: p,
             overlays: [...circleOverlays, ...extraOverlays],
-            userRotation: rotationFor(f.fileId, p),
+            userRotation: rot,
           });
         }
-        entries.push({
-          fileName: f.fileName,
-          sourceBytes: bytes,
-          source: descriptor,
-          pages,
-        });
-      }
 
+        const base = f.fileName.replace(/\.pdf$/i, "").replace(/[\\/:*?"<>|]/g, "_");
 
-      if (entries.length === 0) {
+        // Fast path: nothing to stamp and no baked rotation -> ship the
+        // original bytes untouched. Avoids a full pdf-lib load/copy/save.
+        if (!includeOverlays || (!hasOverlays && !hasRotation)) {
+          built.push({ name: `${base}.pdf`, bytes });
+        } else {
+          const outBytes = await buildAnnotatedPdf(
+            [{ fileName: f.fileName, sourceBytes: bytes, source: descriptor, pages }],
+            { includeOverlays },
+          );
+          built.push({ name: `${base}.pdf`, bytes: outBytes });
+        }
+        totalPages += count;
+        filesDone += 1;
+        setProgress({ done: filesDone, total: totalFiles });
+      };
+
+      const queue = [...chosen];
+      await Promise.all(
+        Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+          for (;;) {
+            const next = queue.shift();
+            if (!next) return;
+            await processOne(next);
+          }
+        }),
+      );
+
+      if (built.length === 0) {
         toast({ title: "Nothing to export", variant: "destructive" });
         return;
       }
 
-      const totalPages = entries.reduce((s, e) => s + e.pages.length, 0);
-      setProgress({ done: 0, total: totalPages });
-
-      // Build one PDF per source file (files stay separate).
-      let done = 0;
-      const built: { name: string; bytes: Uint8Array }[] = [];
-      for (const entry of entries) {
-        const bytes = await buildAnnotatedPdf([entry], {
-          includeOverlays,
-          onProgress: (d) => setProgress({ done: done + d, total: totalPages }),
-        });
-        done += entry.pages.length;
-        setProgress({ done, total: totalPages });
-        const base = entry.fileName.replace(/\.pdf$/i, "").replace(/[\\/:*?"<>|]/g, "_");
-        built.push({ name: `${base}.pdf`, bytes });
-      }
+      // Keep output order stable (matches the on-screen file list).
+      const orderByName = new Map(chosen.map((f, i) => [f.fileName, i]));
+      built.sort(
+        (a, b) =>
+          (orderByName.get(a.name.replace(/\.pdf$/i, "")) ?? 0) -
+          (orderByName.get(b.name.replace(/\.pdf$/i, "")) ?? 0),
+      );
 
       if (built.length === 1) {
         triggerPdfDownload(built[0].bytes, built[0].name);
@@ -413,7 +443,9 @@ export function BulkDrawingDownloadModal({
           used.add(name);
           zip.file(name, b.bytes as unknown as Uint8Array);
         }
-        const blob = await zip.generateAsync({ type: "blob" });
+        // PDFs are already compressed - STORE is much faster and roughly the
+        // same size as DEFLATE here.
+        const blob = await zip.generateAsync({ type: "blob", compression: "STORE" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -425,13 +457,13 @@ export function BulkDrawingDownloadModal({
       }
       void logActivity("workbench_download_annotated_pdf", projectId ?? undefined, {
         project_name: projectName,
-        files_included: entries.length,
+        files_included: built.length,
         pages: totalPages,
         include_overlays: includeOverlays,
       });
       toast({
         title: "Download ready",
-        description: `${entries.length} file${entries.length === 1 ? "" : "s"}, ${totalPages} page${totalPages === 1 ? "" : "s"}.`,
+        description: `${built.length} file${built.length === 1 ? "" : "s"}, ${totalPages} page${totalPages === 1 ? "" : "s"}.`,
       });
       onOpenChange(false);
     } catch (e: any) {
