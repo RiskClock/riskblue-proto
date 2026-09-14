@@ -1206,7 +1206,8 @@ actions and posts its own recap.`;
     return `**Applied to the plans:**\n${lines.map((l) => `- ${l}`).join("\n")}`;
   };
 
-  const labelCell = "sticky left-0 z-10 bg-card px-4 py-3 text-sm font-medium text-foreground w-[280px] min-w-[280px] shadow-[inset_-1px_0_0_hsl(var(--border))]";
+  const labelCellBase = "sticky left-0 z-10 px-4 py-3 text-sm font-medium text-foreground w-[280px] min-w-[280px] shadow-[inset_-1px_0_0_hsl(var(--border))]";
+  const labelCell = `${labelCellBase} bg-card`;
   const planTotalsById = new Map(plans.map((plan) => [plan.id, planTotals(plan)]));
   const highestControlsApplied = Math.max(0, ...plans.map((plan) => planTotalsById.get(plan.id)?.count ?? 0));
   const sharedColumns = (
@@ -1265,7 +1266,7 @@ actions and posts its own recap.`;
               {sharedColumns}
               <tbody>
                 <tr className="border-b">
-                  <th className={`${labelCell} text-left bg-card sticky top-0 z-30 [box-shadow:inset_-1px_0_0_hsl(var(--border)),inset_0_-1px_0_hsl(var(--border))]`} aria-label="Plans" />
+                  <th className={`${labelCell} text-left sticky top-0 z-30 [box-shadow:inset_-1px_0_0_hsl(var(--border)),inset_0_-1px_0_hsl(var(--border))]`}>Plan Name</th>
                   {plans.map((plan) => (
                     <td key={plan.id} className="border-r px-4 py-2 min-w-[220px] align-top sticky top-0 z-20 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))]">
                       <div className="flex items-center gap-1">
@@ -1288,7 +1289,7 @@ actions and posts its own recap.`;
                         ) : (
                           <button
                             type="button"
-                            className={`flex-1 text-left text-lg font-semibold px-2 py-1 rounded ${
+                            className={`flex-1 text-left text-lg font-semibold rounded ${
                               canEdit ? "hover:bg-muted cursor-text" : "cursor-default"
                             }`}
                             onClick={() => beginEdit(plan, "name")}
@@ -1323,8 +1324,8 @@ actions and posts its own recap.`;
                   </td>
                 </tr>
 
-                <tr className="border-b">
-                  <th className={`${labelCell} text-left`}>Summary</th>
+                <tr className="border-b group hover:bg-muted">
+                  <th className={`${labelCellBase} bg-card group-hover:bg-muted text-left`}>Plan Summary</th>
                   {plans.map((plan) => (
                     <td key={plan.id} className="border-r px-4 py-2 align-top">
                       {editing?.id === plan.id && editing.field === "summary" ? (
@@ -1347,7 +1348,7 @@ actions and posts its own recap.`;
                       ) : (
                         <button
                           type="button"
-                          className={`w-full text-left text-sm px-2 py-1 rounded whitespace-pre-wrap ${
+                          className={`w-full text-left text-sm rounded whitespace-pre-wrap ${
                             canEdit ? "hover:bg-muted cursor-text" : "cursor-default"
                           } ${plan.summary ? "" : "text-muted-foreground"}`}
                           onClick={() => beginEdit(plan, "summary")}
@@ -1360,8 +1361,8 @@ actions and posts its own recap.`;
                   <td />
                 </tr>
 
-                <tr className="border-b">
-                  <th className={`${labelCell} text-left`}>Controls Applied</th>
+                <tr className="border-b group hover:bg-muted">
+                  <th className={`${labelCellBase} bg-card group-hover:bg-muted text-left`}>Controls Applied</th>
                   {plans.map((plan) => (
                     <td key={plan.id} className="border-r px-4 py-3 text-sm font-semibold tabular-nums">
                       <div className="flex items-center justify-center gap-2">
@@ -1378,8 +1379,8 @@ actions and posts its own recap.`;
                   <td />
                 </tr>
 
-                <tr className="border-b">
-                  <th className={`${labelCell} text-left`}>Total Cost Estimate</th>
+                <tr className="border-b group hover:bg-muted">
+                  <th className={`${labelCellBase} bg-card group-hover:bg-muted text-left`}>Total Cost Estimate</th>
                   {plans.map((plan) => (
                     <td key={plan.id} className="border-r px-4 py-3 text-center text-lg font-bold tabular-nums">
                       {currency(planTotalsById.get(plan.id)?.cost ?? 0)}
@@ -1448,7 +1449,7 @@ actions and posts its own recap.`;
                           onMouseEnter={() => setHoveredControl(row.id)}
                           onMouseLeave={() => setHoveredControl(null)}
                         >
-                          <th className={`${labelCell} text-left font-normal`}>
+                          <th className={`${labelCellBase} ${hoveredControl === row.id ? "bg-muted" : "bg-card"} text-left font-normal`}>
                             <button
                               type="button"
                               className="flex items-center gap-1.5 text-left w-full hover:text-primary disabled:hover:text-foreground"
@@ -1479,8 +1480,8 @@ actions and posts its own recap.`;
                         </tr>
                         {isOpen &&
                           spaces.map((space) => (
-                            <tr key={`${row.id}::${space}`} className="border-b bg-card">
-                              <th className={`${labelCell} text-left font-normal bg-card`}>
+                            <tr key={`${row.id}::${space}`} className={`border-b group hover:bg-muted ${hoveredControl === row.id ? "bg-muted" : "bg-card"}`}>
+                              <th className={`${labelCellBase} text-left font-normal group-hover:bg-muted ${hoveredControl === row.id ? "bg-muted" : "bg-card"}`}>
                                 <span className="pl-6 text-muted-foreground">{space}</span>
                               </th>
                               {plans.map((plan) => (
