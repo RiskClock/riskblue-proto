@@ -158,11 +158,14 @@ const CostPie = ({
 }) => {
   const positive = slices.filter((s) => s.value > 0);
   const total = positive.reduce((sum, s) => sum + s.value, 0);
+  const [tip, setTip] = useState<{ id: string; x: number; y: number } | null>(null);
   if (total <= 0) return <span className="text-xs text-muted-foreground">No cost</span>;
+  const tipSlice = tip ? positive.find((s) => s.id === tip.id) : null;
 
   let angle = 0;
   return (
-    <svg viewBox="0 0 100 100" className="h-24 w-24" role="img" aria-label="Cost split by control type">
+    <div className="relative inline-block" onMouseLeave={() => setTip(null)}>
+    <svg viewBox="0 0 100 100" className="h-32 w-32" role="img" aria-label="Cost split by control type">
       {positive.map((slice, index) => {
         const sweep = (slice.value / total) * Math.PI * 2;
         const start = angle;
