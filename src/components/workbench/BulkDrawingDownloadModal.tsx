@@ -84,6 +84,13 @@ function isPdfFile(f: BulkFileEntry): boolean {
   return /\.pdf$/i.test(f.fileName);
 }
 
+function formatBytes(n: number): string {
+  if (n >= 1024 * 1024 * 1024) return `${(n / 1024 / 1024 / 1024).toFixed(1)} GB`;
+  if (n >= 1024 * 1024) return `${Math.round(n / 1024 / 1024)} MB`;
+  if (n >= 1024) return `${Math.round(n / 1024)} KB`;
+  return `${n} B`;
+}
+
 export function BulkDrawingDownloadModal({
   open,
   onOpenChange,
