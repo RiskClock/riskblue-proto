@@ -151,10 +151,10 @@ export function BulkDrawingDownloadModal({
     }
   };
 
-  const outputFilename = useMemo(() => {
-    const safe = (projectName || "Project").replace(/[\\/:*?"<>|]/g, "_").trim();
-    return `${safe} - Drawings.pdf`;
-  }, [projectName]);
+  const safeProjectName = useMemo(
+    () => (projectName || "Project").replace(/[\\/:*?"<>|]/g, "_").trim(),
+    [projectName],
+  );
 
   const handleDownload = async () => {
     if (busy) return;
