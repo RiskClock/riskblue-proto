@@ -134,7 +134,7 @@ const PlanProgressDonut = ({ value, maximum }: { value: number; maximum: number 
   );
 };
 
-type PieSlice = { id: string; name: string; value: number };
+type PieSlice = { id: string; name: string; value: number; colorIndex: number };
 
 const sliceOpacity = (index: number, count: number) =>
   count <= 1 ? 1 : Math.max(0.3, 1 - (index / Math.max(1, count - 1)) * 0.7);
@@ -166,7 +166,7 @@ const CostPie = ({
   return (
     <div className="relative inline-block" onMouseLeave={() => setTip(null)}>
     <svg viewBox="0 0 100 100" className="h-32 w-32" role="img" aria-label="Cost split by control type">
-      {positive.map((slice, index) => {
+      {positive.map((slice) => {
         const sweep = (slice.value / total) * Math.PI * 2;
         const start = angle;
         const end = angle + sweep;
@@ -185,7 +185,7 @@ const CostPie = ({
             key={slice.id}
             d={d}
             fill="hsl(var(--primary))"
-            fillOpacity={sliceOpacity(index, positive.length)}
+            fillOpacity={sliceOpacity(slice.colorIndex, slices.length)}
             stroke="hsl(var(--card))"
             strokeWidth="1"
             className="cursor-pointer transition-all"
@@ -1422,10 +1422,11 @@ actions and posts its own recap.`;
                       <td key={plan.id} className="border-r px-4 py-3">
                         <div className="flex justify-center">
                           <CostPie
-                            slices={controlRows.map((row) => ({
+                            slices={controlRows.map((row, colorIndex) => ({
                               id: row.id,
                               name: row.name,
                               value: countFor(plan, row.id) * row.unitCost,
+                              colorIndex,
                             }))}
                             hovered={hoveredControl}
                             onHover={setHoveredControl}
