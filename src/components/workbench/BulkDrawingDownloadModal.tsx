@@ -30,7 +30,7 @@ import {
   stampAnnotationsInPlace,
   readPdfPageCount,
   triggerPdfDownload,
-  type PdfExportEntry,
+  
   type PageOverlaySpec,
 } from "@/lib/pdfPageOverlayExport";
 
