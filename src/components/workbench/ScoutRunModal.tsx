@@ -378,40 +378,76 @@ export const ScoutRunModal = ({
           )}
 
           {stage === "select" && (
-            <div className="space-y-3">
+            <div className="space-y-2">
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setSelected(new Set(files.flatMap((f) => f.pages.map((p) => keyOf(f.id, p.page_index)))))
+                  }
+                  disabled={totalSelected === files.flatMap((f) => f.pages).length}
+                >
+                  Select all
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelected(new Set())}
+                  disabled={totalSelected === 0}
+                >
+                  Deselect all
+                </Button>
+              </div>
+
               {files.map((f) => {
                 const all = f.pages.every((p) => selected.has(keyOf(f.id, p.page_index)));
                 const some = f.pages.some((p) => selected.has(keyOf(f.id, p.page_index)));
                 const isOpen = expanded.has(f.id);
+                const singlePage = f.pages.length === 1;
+                const onlyPage = singlePage ? f.pages[0] : null;
                 return (
                   <div key={f.id} className="rounded-md border">
-                    <div className="flex items-center gap-2 px-3 py-2">
+                    <div className="flex items-center gap-2 px-2 py-1.5">
                       <Checkbox
                         checked={all ? true : some ? "indeterminate" : false}
                         onCheckedChange={(v) => toggleFile(f, v === true || v === "indeterminate")}
                       />
-                      <button
-                        type="button"
-                        className="flex items-center gap-1 text-sm font-medium min-w-0"
-                        onClick={() => toggleExpanded(f.id)}
-                      >
-                        {isOpen ? (
-                          <ChevronDown className="h-4 w-4 shrink-0" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 shrink-0" />
-                        )}
-                        <span className="truncate">{f.name}</span>
-                      </button>
-                      <span className="ml-auto text-xs text-muted-foreground">
+                      {!singlePage && (
+                        <button
+                          type="button"
+                          className="flex items-center gap-1 text-sm font-medium min-w-0"
+                          onClick={() => toggleExpanded(f.id)}
+                        >
+                          {isOpen ? (
+                            <ChevronDown className="h-4 w-4 shrink-0" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 shrink-0" />
+                          )}
+                          <span className="truncate">{f.name}</span>
+                        </button>
+                      )}
+                      {singlePage && (
+                        <span className="text-sm font-medium min-w-0 truncate">
+                          {f.name}
+                          {onlyPage?.sheet_number ? (
+                            <span className="text-muted-foreground font-normal">
+                              {" "}
+                              · {onlyPage.sheet_number}
+                            </span>
+                          ) : null}
+                        </span>
+                      )}
+                      <span className="ml-auto text-xs text-muted-foreground shrink-0">
                         {f.pages.length} page{f.pages.length === 1 ? "" : "s"}
                       </span>
                     </div>
-                    {isOpen && (
-                      <div className="border-t px-3 py-2 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1">
+                    {isOpen && !singlePage && (
+                      <div className="border-t px-2 py-1.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-3 gap-y-1">
                         {f.pages.map((p) => (
                           <label
                             key={p.page_index}
-                            className="flex items-center gap-2 text-sm cursor-pointer min-w-0"
+                            className="flex items-center gap-1.5 text-sm cursor-pointer min-w-0"
                           >
                             <Checkbox
                               checked={selected.has(keyOf(f.id, p.page_index))}
