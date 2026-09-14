@@ -157,6 +157,24 @@ export function BulkDrawingDownloadModal({
     [projectName],
   );
 
+  // Up-front totals for the current selection. Page counts come from stored
+  // `expected_page_count` values, so they render immediately.
+  const selectionSummary = useMemo(() => {
+    let files = 0;
+    let pages = 0;
+    let bytes = 0;
+    for (const f of pdfFiles) {
+      if (!selected.has(f.fileId)) continue;
+      files += 1;
+      pages += pageCounts.get(f.fileId) ?? 0;
+      bytes += f.sizeBytes ?? 0;
+    }
+    return { files, pages, bytes };
+  }, [pdfFiles, selected, pageCounts]);
+
+  const isLargeSelection =
+    selectionSummary.files > 25 || selectionSummary.bytes > 25 * 1024 * 1024;
+
   const handleDownload = async () => {
     if (busy) return;
     const chosen = pdfFiles.filter((f) => selected.has(f.fileId) && f.storagePath);
