@@ -1481,7 +1481,8 @@ actions and posts its own recap.`;
                           ))}
                       </Fragment>
                     );
-                  })
+                  })}
+                  </>
                 )}
 
               </tbody>
