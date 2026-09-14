@@ -1,8 +1,9 @@
 // Bulk-download modal for the Workbench project detail page.
 //
 // Lets the user pick which source PDF files to include, whether to include
-// annotations & Detail-N bounding boxes, and produces a single merged vector
-// PDF via `buildAnnotatedPdf`.
+// annotations & Detail-N bounding boxes, and produces one annotated vector
+// PDF per selected file via `buildAnnotatedPdf`, delivered as a ZIP
+// (or a single PDF when only one file is selected).
 //
 // Non-PDF files are shown but the checkbox is disabled (PDFs only for
 // vector export). All PDFs are checked by default.
@@ -151,10 +152,10 @@ export function BulkDrawingDownloadModal({
     }
   };
 
-  const outputFilename = useMemo(() => {
-    const safe = (projectName || "Project").replace(/[\\/:*?"<>|]/g, "_").trim();
-    return `${safe} - Drawings.pdf`;
-  }, [projectName]);
+  const safeProjectName = useMemo(
+    () => (projectName || "Project").replace(/[\\/:*?"<>|]/g, "_").trim(),
+    [projectName],
+  );
 
   const handleDownload = async () => {
     if (busy) return;
@@ -385,12 +386,43 @@ export function BulkDrawingDownloadModal({
       const totalPages = entries.reduce((s, e) => s + e.pages.length, 0);
       setProgress({ done: 0, total: totalPages });
 
-      const merged = await buildAnnotatedPdf(entries, {
-        includeOverlays,
-        onProgress: (done, total) => setProgress({ done, total }),
-      });
+      // Build one PDF per source file (files stay separate).
+      let done = 0;
+      const built: { name: string; bytes: Uint8Array }[] = [];
+      for (const entry of entries) {
+        const bytes = await buildAnnotatedPdf([entry], {
+          includeOverlays,
+          onProgress: (d) => setProgress({ done: done + d, total: totalPages }),
+        });
+        done += entry.pages.length;
+        setProgress({ done, total: totalPages });
+        const base = entry.fileName.replace(/\.pdf$/i, "").replace(/[\\/:*?"<>|]/g, "_");
+        built.push({ name: `${base}.pdf`, bytes });
+      }
 
-      triggerPdfDownload(merged, outputFilename);
+      if (built.length === 1) {
+        triggerPdfDownload(built[0].bytes, built[0].name);
+      } else {
+        const { default: JSZip } = await import("jszip");
+        const zip = new JSZip();
+        const used = new Set<string>();
+        for (const b of built) {
+          let name = b.name;
+          let i = 2;
+          while (used.has(name)) name = b.name.replace(/\.pdf$/i, ` (${i++}).pdf`);
+          used.add(name);
+          zip.file(name, b.bytes as unknown as Uint8Array);
+        }
+        const blob = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${safeProjectName} - Drawings.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
       void logActivity("workbench_download_annotated_pdf", projectId ?? undefined, {
         project_name: projectName,
         files_included: entries.length,
@@ -419,8 +451,8 @@ export function BulkDrawingDownloadModal({
         <DialogHeader>
           <DialogTitle>Download drawings</DialogTitle>
           <DialogDescription>
-            Select the source PDFs to include. Every page of each selected file
-            will be merged into a single PDF.
+            Select the source PDFs to include. Each file is downloaded as its
+            own PDF, bundled together in a single ZIP.
           </DialogDescription>
         </DialogHeader>
 
