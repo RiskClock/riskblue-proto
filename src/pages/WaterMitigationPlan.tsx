@@ -134,6 +134,70 @@ const PlanProgressDonut = ({ value, maximum }: { value: number; maximum: number 
   );
 };
 
+type PieSlice = { id: string; name: string; value: number };
+
+const sliceOpacity = (index: number, count: number) =>
+  count <= 1 ? 1 : Math.max(0.3, 1 - (index / Math.max(1, count - 1)) * 0.7);
+
+const polar = (cx: number, cy: number, r: number, angle: number) => [
+  cx + r * Math.cos(angle - Math.PI / 2),
+  cy + r * Math.sin(angle - Math.PI / 2),
+];
+
+/** Cost split pie for one plan; hovering or clicking a slice targets a control row. */
+const CostPie = ({
+  slices,
+  hovered,
+  onHover,
+  onSelect,
+}: {
+  slices: PieSlice[];
+  hovered: string | null;
+  onHover: (id: string | null) => void;
+  onSelect: (id: string) => void;
+}) => {
+  const positive = slices.filter((s) => s.value > 0);
+  const total = positive.reduce((sum, s) => sum + s.value, 0);
+  if (total <= 0) return <span className="text-xs text-muted-foreground">No cost</span>;
+
+  let angle = 0;
+  return (
+    <svg viewBox="0 0 100 100" className="h-24 w-24" role="img" aria-label="Cost split by control type">
+      {positive.map((slice, index) => {
+        const sweep = (slice.value / total) * Math.PI * 2;
+        const start = angle;
+        const end = angle + sweep;
+        angle = end;
+        const isHovered = hovered === slice.id;
+        const r = isHovered ? 48 : 44;
+        const [sx, sy] = polar(50, 50, r, start);
+        const [ex, ey] = polar(50, 50, r, end);
+        const largeArc = sweep > Math.PI ? 1 : 0;
+        const d =
+          positive.length === 1
+            ? `M 50 ${50 - r} A ${r} ${r} 0 1 1 49.99 ${50 - r} Z`
+            : `M 50 50 L ${sx} ${sy} A ${r} ${r} 0 ${largeArc} 1 ${ex} ${ey} Z`;
+        return (
+          <path
+            key={slice.id}
+            d={d}
+            fill="hsl(var(--primary))"
+            fillOpacity={sliceOpacity(index, positive.length)}
+            stroke="hsl(var(--card))"
+            strokeWidth="1"
+            className="cursor-pointer transition-all"
+            onMouseEnter={() => onHover(slice.id)}
+            onMouseLeave={() => onHover(null)}
+            onClick={() => onSelect(slice.id)}
+          >
+            <title>{`${slice.name}: ${currency(slice.value)}`}</title>
+          </path>
+        );
+      })}
+    </svg>
+  );
+};
+
 const bucketForSource = (sourceType?: string | null) =>
   sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
 
