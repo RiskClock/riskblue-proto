@@ -27,7 +27,7 @@ import { useActivityLogger } from "@/hooks/useActivityLogger";
 import { supabase } from "@/integrations/supabase/client";
 import { awpClassColor, awpClassColorForType } from "@/lib/awpColor";
 import {
-  buildAnnotatedPdf,
+  stampAnnotationsInPlace,
   readPdfPageCount,
   triggerPdfDownload,
   type PdfExportEntry,
