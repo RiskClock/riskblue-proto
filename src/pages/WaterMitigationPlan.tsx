@@ -166,7 +166,7 @@ const CostPie = ({
   return (
     <div className="relative inline-block" onMouseLeave={() => setTip(null)}>
     <svg viewBox="0 0 100 100" className="h-32 w-32" role="img" aria-label="Cost split by control type">
-      {positive.map((slice, index) => {
+      {positive.map((slice) => {
         const sweep = (slice.value / total) * Math.PI * 2;
         const start = angle;
         const end = angle + sweep;
