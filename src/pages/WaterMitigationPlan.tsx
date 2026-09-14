@@ -16,14 +16,22 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   ArrowLeft,
+  BellRing,
+  ClipboardCheck,
   ChevronDown,
   ChevronRight,
+  Droplets,
+  Gauge,
   History,
   Loader2,
   MessageSquare,
   Plus,
+  Radio,
+  ShieldCheck,
+  SlidersHorizontal,
   Trash2,
   MoreVertical,
+  Wrench,
 } from "lucide-react";
 import { ActivityHistoryPanel } from "@/components/workbench/ActivityHistoryPanel";
 import { toast } from "sonner";
@@ -84,6 +92,47 @@ const UNASSIGNED = "Unassigned";
 
 const currency = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 const locationLabel = (n: number) => `${n} ${n === 1 ? "location" : "locations"}`;
+
+const ControlTypeIcon = ({ name }: { name: string }) => {
+  const normalized = name.toLowerCase();
+  const className = "h-4 w-4 shrink-0 text-muted-foreground";
+
+  if (normalized.includes("water") || normalized.includes("leak")) return <Droplets className={className} />;
+  if (normalized.includes("flow") || normalized.includes("pressure")) return <Gauge className={className} />;
+  if (normalized.includes("sensor") || normalized.includes("monitor")) return <Radio className={className} />;
+  if (normalized.includes("alarm") || normalized.includes("alert")) return <BellRing className={className} />;
+  if (normalized.includes("valve") || normalized.includes("shut off")) return <SlidersHorizontal className={className} />;
+  if (normalized.includes("plan") || normalized.includes("procedure") || normalized.includes("inspection")) {
+    return <ClipboardCheck className={className} />;
+  }
+  if (normalized.includes("maintenance") || normalized.includes("repair")) return <Wrench className={className} />;
+  return <ShieldCheck className={className} />;
+};
+
+const PlanProgressDonut = ({ value, maximum }: { value: number; maximum: number }) => {
+  const percentage = maximum > 0 ? Math.min(100, Math.round((value / maximum) * 100)) : 0;
+  return (
+    <svg
+      viewBox="0 0 36 36"
+      className="h-5 w-5 shrink-0 -rotate-90"
+      role="img"
+      aria-label={`${percentage}% of the highest controls applied count`}
+    >
+      <circle cx="18" cy="18" r="14" pathLength="100" fill="none" strokeWidth="5" className="stroke-muted" />
+      <circle
+        cx="18"
+        cy="18"
+        r="14"
+        pathLength="100"
+        fill="none"
+        strokeWidth="5"
+        strokeLinecap="round"
+        strokeDasharray={`${percentage} 100`}
+        className="stroke-primary"
+      />
+    </svg>
+  );
+};
 
 const bucketForSource = (sourceType?: string | null) =>
   sourceType === "manual_upload" ? "uploaded-drawings" : "drive-analysis-files";
@@ -1067,6 +1116,15 @@ actions and posts its own recap.`;
   };
 
   const labelCell = "sticky left-0 z-10 bg-card px-4 py-3 text-sm font-medium text-foreground w-[280px] min-w-[280px] shadow-[inset_-1px_0_0_hsl(var(--border))]";
+  const planTotalsById = new Map(plans.map((plan) => [plan.id, planTotals(plan)]));
+  const highestControlsApplied = Math.max(0, ...plans.map((plan) => planTotalsById.get(plan.id)?.count ?? 0));
+  const sharedColumns = (
+    <colgroup>
+      <col className="w-[280px] min-w-[280px]" />
+      {plans.map((plan) => <col key={plan.id} className="w-[220px] min-w-[220px]" />)}
+      <col className="w-[140px] min-w-[140px]" />
+    </colgroup>
+  );
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
@@ -1112,6 +1170,7 @@ actions and posts its own recap.`;
         ) : (
           <div className="bg-card rounded-lg border overflow-auto min-h-0 max-h-full">
             <table className="w-full border-collapse">
+              {sharedColumns}
               <tbody>
                 <tr className="border-b">
                   <th className={`${labelCell} text-left bg-card sticky top-0 z-30 [box-shadow:inset_-1px_0_0_hsl(var(--border)),inset_0_-1px_0_hsl(var(--border))]`} aria-label="Plans" />
@@ -1137,7 +1196,7 @@ actions and posts its own recap.`;
                         ) : (
                           <button
                             type="button"
-                            className={`flex-1 text-left text-sm px-2 py-1 rounded ${
+                            className={`flex-1 text-left text-lg font-semibold px-2 py-1 rounded ${
                               canEdit ? "hover:bg-muted cursor-text" : "cursor-default"
                             }`}
                             onClick={() => beginEdit(plan, "name")}
@@ -1212,8 +1271,16 @@ actions and posts its own recap.`;
                 <tr className="border-b">
                   <th className={`${labelCell} text-left`}>Controls Applied</th>
                   {plans.map((plan) => (
-                    <td key={plan.id} className="border-r px-4 py-3 text-center text-sm font-semibold tabular-nums">
-                      {planTotals(plan).count}
+                    <td key={plan.id} className="border-r px-4 py-3 text-sm font-semibold tabular-nums">
+                      <div className="flex items-center justify-center gap-2">
+                        <span>{planTotalsById.get(plan.id)?.count ?? 0}</span>
+                        {plans.length > 1 && (
+                          <PlanProgressDonut
+                            value={planTotalsById.get(plan.id)?.count ?? 0}
+                            maximum={highestControlsApplied}
+                          />
+                        )}
+                      </div>
                     </td>
                   ))}
                   <td />
@@ -1222,28 +1289,30 @@ actions and posts its own recap.`;
                 <tr className="border-b">
                   <th className={`${labelCell} text-left`}>Total Cost Estimate</th>
                   {plans.map((plan) => (
-                    <td key={plan.id} className="border-r px-4 py-3 text-center text-sm font-semibold tabular-nums">
-                      {currency(planTotals(plan).cost)}
+                    <td key={plan.id} className="border-r px-4 py-3 text-center text-lg font-bold tabular-nums">
+                      {currency(planTotalsById.get(plan.id)?.cost ?? 0)}
                     </td>
                   ))}
                   <td />
                 </tr>
+              </tbody>
+            </table>
 
-                <tr className="border-b">
-                  <td colSpan={plans.length + 2} className="px-4 py-2 bg-card">
-                    <div className="sticky left-0 w-[280px]">
-                      <div className="text-sm font-medium text-foreground">Breakdown by Control Type</div>
-                      {controlRows.length > 0 && (
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs mt-1 -ml-2" onClick={toggleAllExpanded}>
-                          {allControlsExpanded ? <ChevronDown className="h-3.5 w-3.5 mr-1" /> : <ChevronRight className="h-3.5 w-3.5 mr-1" />}
-                          {allControlsExpanded ? "Collapse all" : "Expand all"}
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
+            <div className="border-b px-4 py-2 bg-card min-w-max">
+              <div className="sticky left-4 w-[248px]">
+                <div className="text-sm font-medium text-foreground">Breakdown by Control Type</div>
+                {controlRows.length > 0 && (
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs mt-1 -ml-2" onClick={toggleAllExpanded}>
+                    {allControlsExpanded ? <ChevronDown className="h-3.5 w-3.5 mr-1" /> : <ChevronRight className="h-3.5 w-3.5 mr-1" />}
+                    {allControlsExpanded ? "Collapse all" : "Expand all"}
+                  </Button>
+                )}
+              </div>
+            </div>
 
-
+            <table className="w-full border-collapse">
+              {sharedColumns}
+              <tbody>
                 {controlRows.length === 0 ? (
                   <tr className="border-b">
                     <td className="px-4 py-6 text-sm text-muted-foreground" colSpan={plans.length + 2}>
@@ -1273,6 +1342,7 @@ actions and posts its own recap.`;
                               ) : (
                                 <span className="w-4 shrink-0" />
                               )}
+                              <ControlTypeIcon name={row.name} />
                               <span>{row.name}</span>
                             </button>
                           </th>
@@ -1280,7 +1350,8 @@ actions and posts its own recap.`;
                             const n = countFor(plan, row.id);
                             return (
                               <td key={plan.id} className="border-r px-4 py-2 text-right text-sm tabular-nums">
-                                {locationLabel(n)} ({currency(n * row.unitCost)})
+                                <div>{locationLabel(n)}</div>
+                                <div className="font-bold text-foreground">{currency(n * row.unitCost)}</div>
                               </td>
                             );
                           })}
