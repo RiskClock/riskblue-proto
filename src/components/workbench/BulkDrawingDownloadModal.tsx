@@ -559,9 +559,29 @@ export function BulkDrawingDownloadModal({
           </Label>
         </div>
 
-        {progress && progress.total > 0 && (
-          <div className="text-xs text-muted-foreground">
-            Rendering page {progress.done} of {progress.total}…
+        <div className="text-xs text-muted-foreground">
+          {progress && progress.total > 0 ? (
+            <span>
+              Preparing file {progress.done} of {progress.total}…
+            </span>
+          ) : (
+            <span>
+              {selectionSummary.files} file
+              {selectionSummary.files === 1 ? "" : "s"} selected
+              {selectionSummary.pages > 0
+                ? ` · ${selectionSummary.pages} page${selectionSummary.pages === 1 ? "" : "s"}`
+                : ""}
+              {selectionSummary.bytes > 0
+                ? ` · ${formatBytes(selectionSummary.bytes)}`
+                : ""}
+            </span>
+          )}
+        </div>
+
+        {!busy && isLargeSelection && (
+          <div className="text-xs text-amber-600">
+            This is a large download and may take a few minutes. Keep this tab
+            open until it finishes.
           </div>
         )}
 
