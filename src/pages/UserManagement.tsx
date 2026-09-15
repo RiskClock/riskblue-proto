@@ -122,6 +122,7 @@ interface UserRow {
   email_confirmed_at: string | null;
   banned_until: string | null;
   has_profile: boolean;
+  is_system_admin?: boolean;
   tags: TagOption[];
   projects: ProjectAssignment[];
   projects_created_count: number;
@@ -1591,12 +1592,14 @@ function EditUserDialog({
     password: string | null;
     projects: { project_id: string; role: "admin" | "contributor" }[];
     tenants: TenantAssignment[];
+    is_system_admin?: boolean;
   }) => void;
   loading: boolean;
 }) {
   const [name, setName] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [password, setPassword] = useState("");
+  const [isSystemAdmin, setIsSystemAdmin] = useState(false);
   const [projects, setProjects] = useState<{ project_id: string; role: "admin" | "contributor" }[]>([]);
   const [tenantAssignments, setTenantAssignments] = useState<TenantAssignment[]>([]);
   const [scopedRole, setScopedRole] = useState<TenantRoleValue>("member");
