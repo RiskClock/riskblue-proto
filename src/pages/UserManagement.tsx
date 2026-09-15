@@ -1611,6 +1611,7 @@ function EditUserDialog({
       setName(user.display_name || "");
       setTags(user.tags.map((t) => t.name));
       setPassword("");
+      setIsSystemAdmin(!!user.is_system_admin);
       setProjects(
         user.projects.map((p) => ({
           project_id: p.id,
