@@ -1677,7 +1677,23 @@ function EditUserDialog({
                   <TagPicker selected={tags} onChange={setTags} available={availableTags} />
                 </div>
               </div>
-              
+              <div className="rounded-md border px-3 py-2.5">
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="edit-system-admin"
+                    checked={isSystemAdmin}
+                    onCheckedChange={(v) => setIsSystemAdmin(!!v)}
+                  />
+                  <div>
+                    <Label htmlFor="edit-system-admin" className="cursor-pointer">
+                      System admin (RiskClock staff)
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Full internal access. Hidden from company-facing user, collaborator and history lists.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </>
           )}
         </div>
@@ -1698,6 +1714,7 @@ function EditUserDialog({
                       { tenant_id: scopedTenant.id, role: scopedRole },
                     ]
                   : tenantAssignments,
+                ...(scopedTenant ? {} : { is_system_admin: isSystemAdmin }),
               })
             }
             disabled={loading || !name.trim() || !pwdValid}
