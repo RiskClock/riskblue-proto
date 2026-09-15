@@ -246,6 +246,10 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
     const projectName = name.trim();
 
     try {
+      // Generate the project id up-front so the credit transaction can be
+      // linked to the project it paid for (audit trail).
+      const projectId = crypto.randomUUID();
+
       // 1) Consume credits up-front (skip if free, e.g. Enterprise).
       //    Inside a company workspace credits come from the shared tenant pool.
       if (cost > 0) {
@@ -253,6 +257,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
           ? await supabase.rpc("consume_tenant_credits", {
               p_tenant_id: tenantId,
               p_amount: cost,
+              p_project_id: projectId,
             } as any)
           : await supabase.rpc("consume_credits", {
               p_user_id: user.id,
@@ -276,6 +281,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
       const { data: project, error: pErr } = await supabase
         .from("projects")
         .insert({
+          id: projectId,
           user_id: user.id,
           name: projectName,
           status: "draft",
