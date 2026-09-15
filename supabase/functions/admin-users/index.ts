@@ -292,6 +292,12 @@ async function actionList(scopeTenantId: string | null) {
     tagsByUser.set(a.user_id, arr);
   });
 
+  const { data: sysRoles } = await adminClient
+    .from("user_roles")
+    .select("user_id")
+    .eq("role", "system_admin");
+  const systemAdminIds = new Set((sysRoles || []).map((r: any) => r.user_id as string));
+
   const users = authUsers.map((u) => {
     const p: any = profileMap.get(u.id) || {};
     const banned = !!u.banned_until && new Date(u.banned_until).getTime() > Date.now();
@@ -316,6 +322,7 @@ async function actionList(scopeTenantId: string | null) {
       deactivated_at: p.deactivated_at || null,
       credits_balance: typeof p.credits_balance === "number" ? p.credits_balance : 0,
       has_profile: !!profileMap.get(u.id),
+      is_system_admin: systemAdminIds.has(u.id),
       tags,
       projects,
       projects_created_count: createdCountByUser.get(u.id) || 0,
@@ -657,6 +664,22 @@ async function actionUpdate(body: any, actor: { id: string | null; email: string
     if (Number.isFinite(c)) newCreditsBalance = Math.max(0, Math.floor(c));
   }
 
+  // System admin (staff) role. Only staff can reach actionUpdate unscoped, and
+  // company admins have `is_system_admin` stripped before this point.
+  if (typeof body.is_system_admin === "boolean") {
+    if (body.is_system_admin) {
+      await adminClient
+        .from("user_roles")
+        .upsert({ user_id: userId, role: "system_admin" }, { onConflict: "user_id,role" });
+    } else {
+      await adminClient
+        .from("user_roles")
+        .delete()
+        .eq("user_id", userId)
+        .eq("role", "system_admin");
+    }
+  }
+
   if (Object.keys(updates).length > 0) {
     const { error } = await adminClient.from("profiles").update(updates).eq("user_id", userId);
     if (error) return json({ success: false, error: error.message }, 500);
@@ -889,6 +912,7 @@ Deno.serve(async (req) => {
       delete body.credits;
       delete body.company;
       delete body.is_wmsv;
+      delete body.is_system_admin;
       delete body.tags;
       delete body.projects;
       delete body.password;

@@ -122,6 +122,7 @@ interface UserRow {
   email_confirmed_at: string | null;
   banned_until: string | null;
   has_profile: boolean;
+  is_system_admin?: boolean;
   tags: TagOption[];
   projects: ProjectAssignment[];
   projects_created_count: number;
@@ -1591,12 +1592,14 @@ function EditUserDialog({
     password: string | null;
     projects: { project_id: string; role: "admin" | "contributor" }[];
     tenants: TenantAssignment[];
+    is_system_admin?: boolean;
   }) => void;
   loading: boolean;
 }) {
   const [name, setName] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [password, setPassword] = useState("");
+  const [isSystemAdmin, setIsSystemAdmin] = useState(false);
   const [projects, setProjects] = useState<{ project_id: string; role: "admin" | "contributor" }[]>([]);
   const [tenantAssignments, setTenantAssignments] = useState<TenantAssignment[]>([]);
   const [scopedRole, setScopedRole] = useState<TenantRoleValue>("member");
@@ -1608,6 +1611,7 @@ function EditUserDialog({
       setName(user.display_name || "");
       setTags(user.tags.map((t) => t.name));
       setPassword("");
+      setIsSystemAdmin(!!user.is_system_admin);
       setProjects(
         user.projects.map((p) => ({
           project_id: p.id,
@@ -1673,7 +1677,23 @@ function EditUserDialog({
                   <TagPicker selected={tags} onChange={setTags} available={availableTags} />
                 </div>
               </div>
-              
+              <div className="rounded-md border px-3 py-2.5">
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="edit-system-admin"
+                    checked={isSystemAdmin}
+                    onCheckedChange={(v) => setIsSystemAdmin(!!v)}
+                  />
+                  <div>
+                    <Label htmlFor="edit-system-admin" className="cursor-pointer">
+                      System admin (RiskClock staff)
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Full internal access. Hidden from company-facing user, collaborator and history lists.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </>
           )}
         </div>
@@ -1694,6 +1714,7 @@ function EditUserDialog({
                       { tenant_id: scopedTenant.id, role: scopedRole },
                     ]
                   : tenantAssignments,
+                ...(scopedTenant ? {} : { is_system_admin: isSystemAdmin }),
               })
             }
             disabled={loading || !name.trim() || !pwdValid}
