@@ -657,6 +657,22 @@ async function actionUpdate(body: any, actor: { id: string | null; email: string
     if (Number.isFinite(c)) newCreditsBalance = Math.max(0, Math.floor(c));
   }
 
+  // System admin (staff) role. Only staff can reach actionUpdate unscoped, and
+  // company admins have `is_system_admin` stripped before this point.
+  if (typeof body.is_system_admin === "boolean") {
+    if (body.is_system_admin) {
+      await adminClient
+        .from("user_roles")
+        .upsert({ user_id: userId, role: "system_admin" }, { onConflict: "user_id,role" });
+    } else {
+      await adminClient
+        .from("user_roles")
+        .delete()
+        .eq("user_id", userId)
+        .eq("role", "system_admin");
+    }
+  }
+
   if (Object.keys(updates).length > 0) {
     const { error } = await adminClient.from("profiles").update(updates).eq("user_id", userId);
     if (error) return json({ success: false, error: error.message }, 500);
