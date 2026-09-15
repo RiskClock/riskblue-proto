@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getStaffUserIds, isStaffUser } from "../_shared/systemAdmin.ts";
 import {
   renderEmail,
   renderGreeting,
@@ -232,7 +233,10 @@ async function tenantMemberIds(tenantId: string): Promise<Set<string>> {
 async function actionList(scopeTenantId: string | null) {
   const memberIds = scopeTenantId ? await tenantMemberIds(scopeTenantId) : null;
   const allAuthUsers = await listAllAuthUsers();
-  const authUsers = memberIds ? allAuthUsers.filter((u) => memberIds.has(u.id)) : allAuthUsers;
+  // Company views never surface RiskClock staff accounts.
+  const staffIds = scopeTenantId ? await getStaffUserIds(adminClient) : new Set<string>();
+  const authUsers = (memberIds ? allAuthUsers.filter((u) => memberIds.has(u.id)) : allAuthUsers)
+    .filter((u) => !staffIds.has(u.id));
   const { data: profiles, error: pErr } = await adminClient
     .from("profiles")
     .select("user_id, display_name, account_type, company, credits_balance, is_active, deactivated_at, created_at");
@@ -339,7 +343,11 @@ async function actionList(scopeTenantId: string | null) {
     const memberEmails = new Set(
       authUsers.map((u) => (u.email || "").toLowerCase()),
     );
-    invitations = (invs || []).filter((i: any) => !memberEmails.has(String(i.email).toLowerCase()));
+    invitations = (invs || []).filter(
+      (i: any) =>
+        !memberEmails.has(String(i.email).toLowerCase()) &&
+        !String(i.email || "").toLowerCase().endsWith("@riskclock.com"),
+    );
   }
 
   return { users, companies, tags: allTags, all_projects: allProjects, invitations };
@@ -845,7 +853,7 @@ Deno.serve(async (req) => {
     // Internal staff have unrestricted access. Everyone else must be an active
     // admin of the company they claim, and is limited to that company's users.
     let scopeTenantId: string | null = null;
-    if (!isInternal(user.email)) {
+    if (!(await isStaffUser(adminClient, user))) {
       const tenantId = String(body.tenant_id || "");
       if (!tenantId) return json({ success: false, error: "Forbidden" }, 403);
       const { data: membership } = await adminClient
@@ -866,7 +874,8 @@ Deno.serve(async (req) => {
       if (!["list", "create", "resend_invite", "cancel_invite"].includes(action)) {
         const targetId = String(body.user_id || "");
         const members = await tenantMemberIds(scopeTenantId);
-        if (!targetId || !members.has(targetId)) {
+        const staffIds = await getStaffUserIds(adminClient);
+        if (!targetId || !members.has(targetId) || staffIds.has(targetId)) {
           return json({ success: false, error: "Forbidden" }, 403);
         }
       }

@@ -19,6 +19,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { useIsSystemAdmin, useStaffUserIds } from "@/hooks/useIsSystemAdmin";
+import { useAccountType } from "@/hooks/useAccountType";
 
 export type AuditEvent = {
   id: string;
@@ -83,6 +85,20 @@ export function ActivityHistoryPanel({
 }: Props) {
   const [category, setCategory] = useState<Category>("all");
   const [search, setSearch] = useState("");
+  const isStaffViewer = useIsSystemAdmin();
+  const staffIds = useStaffUserIds();
+  const { company } = useAccountType();
+
+  /** Company users see the company name instead of a RiskClock staff member. */
+  const displayActor = (ev: AuditEvent) => {
+    const isStaffActor =
+      (ev.actor_user_id ? staffIds.has(ev.actor_user_id) : false) ||
+      (ev.actor_email ?? "").toLowerCase().endsWith("@riskclock.com");
+    if (!isStaffViewer && isStaffActor) {
+      return { name: company || "RiskClock", email: "" };
+    }
+    return { name: ev.actor_name ?? "", email: ev.actor_email ?? "" };
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["project-audit-events", projectId, entityTypes ?? []],
@@ -181,12 +197,16 @@ export function ActivityHistoryPanel({
                       </time>
                     </div>
                     <p className="mt-1 text-sm text-foreground whitespace-pre-wrap">{ev.summary}</p>
-                    {(ev.actor_email || ev.actor_name) && (
-                      <p className="text-xs text-muted-foreground">
-                        {ev.actor_name || ev.actor_email}
-                        {ev.actor_name && ev.actor_email ? ` · ${ev.actor_email}` : ""}
-                      </p>
-                    )}
+                    {(() => {
+                      const actor = displayActor(ev);
+                      if (!actor.name && !actor.email) return null;
+                      return (
+                        <p className="text-xs text-muted-foreground">
+                          {actor.name || actor.email}
+                          {actor.name && actor.email ? ` · ${actor.email}` : ""}
+                        </p>
+                      );
+                    })()}
                   </li>
                 );
               })}

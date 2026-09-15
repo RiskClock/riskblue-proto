@@ -15,6 +15,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { CreateProjectModal } from "@/components/CreateProjectModal";
 import { useAccountType } from "@/hooks/useAccountType";
 import { useTenant } from "@/contexts/TenantContext";
+import { useIsSystemAdmin, useStaffUserIds } from "@/hooks/useIsSystemAdmin";
 
 interface Project {
   id: string;
@@ -39,7 +40,19 @@ const Projects = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { isWMSV } = useAccountType();
+  const { isWMSV, company } = useAccountType();
+  const isStaffViewer = useIsSystemAdmin();
+  const staffIds = useStaffUserIds();
+  /** Staff accounts are never named to company users. */
+  const displayCreator = (p: { user_id: string; creator_name: string; creator_email: string }) => {
+    const isStaffCreator =
+      staffIds.has(p.user_id) ||
+      (p.creator_email || "").toLowerCase().endsWith("@riskclock.com");
+    if (!isStaffViewer && isStaffCreator) {
+      return { name: company || "RiskClock", email: "" };
+    }
+    return { name: p.creator_name, email: p.creator_email };
+  };
   const { tenantId, tenantPath, hasPermission } = useTenant();
   const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
   const canCreateProject = tenantId ? hasPermission("create_project") : true;
@@ -269,20 +282,23 @@ const Projects = () => {
                       })()}
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">
-                      {project.creator_email ? (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="cursor-default">{project.creator_name}</span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>{project.creator_email}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      ) : (
-                        <span>{project.creator_name}</span>
-                      )}
+                      {(() => {
+                        const creator = displayCreator(project);
+                        return creator.email ? (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="cursor-default">{creator.name}</span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{creator.email}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        ) : (
+                          <span>{creator.name}</span>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">
                       {formatDateShort(project.created_at)}
