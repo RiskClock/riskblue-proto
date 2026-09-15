@@ -853,7 +853,13 @@ Deno.serve(async (req) => {
     // Internal staff have unrestricted access. Everyone else must be an active
     // admin of the company they claim, and is limited to that company's users.
     let scopeTenantId: string | null = null;
-    if (!(await isStaffUser(adminClient, user))) {
+    const staff = await isStaffUser(adminClient, user);
+    if (staff) {
+      // Staff keep full privileges, but when they operate inside a company
+      // context the data they see must stay scoped to that company.
+      const tenantId = String(body.tenant_id || "");
+      if (tenantId) scopeTenantId = tenantId;
+    } else {
       const tenantId = String(body.tenant_id || "");
       if (!tenantId) return json({ success: false, error: "Forbidden" }, 403);
       const { data: membership } = await adminClient
