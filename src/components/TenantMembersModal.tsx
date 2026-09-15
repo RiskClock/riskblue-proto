@@ -173,7 +173,12 @@ export const TenantMembersModal = ({
         .select("id, user_id, role, status")
         .eq("tenant_id", tenantId);
       if (error) throw error;
-      const rows = data ?? [];
+      // RiskClock staff memberships stay hidden from company admins.
+      const { data: staff } = await supabase.rpc("staff_user_ids");
+      const staffIds = new Set(
+        ((staff as any[]) || []).map((r: any) => (typeof r === "string" ? r : r.user_id)),
+      );
+      const rows = (data ?? []).filter((r: any) => !staffIds.has(r.user_id));
       if (rows.length === 0) return [];
       const { data: profiles } = await supabase
         .from("profiles")

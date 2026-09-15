@@ -3728,6 +3728,7 @@ export type Database = {
         Args: { _project_id: string; _user_id: string }
         Returns: boolean
       }
+      is_system_admin: { Args: { _user_id: string }; Returns: boolean }
       is_tenant_member: {
         Args: { _tenant_id: string; _user_id: string }
         Returns: boolean
@@ -3736,6 +3737,12 @@ export type Database = {
       seed_analysis_worker_secret: {
         Args: { p_secret: string }
         Returns: boolean
+      }
+      staff_user_ids: {
+        Args: never
+        Returns: {
+          user_id: string
+        }[]
       }
       tenant_has_permission: {
         Args: { _flag: string; _tenant_id: string; _user_id: string }
@@ -3757,7 +3764,7 @@ export type Database = {
       watchdog_stalled_pipelines: { Args: never; Returns: number }
     }
     Enums: {
-      app_role: "admin" | "moderator" | "user"
+      app_role: "admin" | "moderator" | "user" | "system_admin"
       project_role: "admin" | "contributor"
       tenant_role: "admin" | "member" | "guest"
     }
@@ -3887,7 +3894,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "moderator", "user"],
+      app_role: ["admin", "moderator", "user", "system_admin"],
       project_role: ["admin", "contributor"],
       tenant_role: ["admin", "member", "guest"],
     },

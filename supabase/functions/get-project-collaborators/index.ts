@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
+import { getStaffUserIds, isStaffUser } from "../_shared/systemAdmin.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -62,7 +63,7 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     // Verify user has access to this project (is a member or internal user)
-    const isInternal = user.email?.toLowerCase().includes("@riskclock.com");
+    const isInternal = await isStaffUser(supabaseAdmin, user);
     const { data: userRole } = await supabaseAdmin
       .from("project_user_roles")
       .select("id")
@@ -96,8 +97,11 @@ const handler = async (req: Request): Promise<Response> => {
       .select("user_id, display_name")
       .in("user_id", userIds);
 
+    // Staff accounts stay invisible to company users.
+    const staffIds = isInternal ? new Set<string>() : await getStaffUserIds(supabaseAdmin);
+
     // Build collaborators list
-    const collaborators: CollaboratorInfo[] = (roles || []).map(role => {
+    const collaborators: CollaboratorInfo[] = (roles || []).filter(role => !staffIds.has(role.user_id)).map(role => {
       const authUser = users?.find(u => u.id === role.user_id);
       const profile = profiles?.find(p => p.user_id === role.user_id);
       
@@ -124,6 +128,7 @@ const handler = async (req: Request): Promise<Response> => {
     const now = new Date();
     const pendingInvites: CollaboratorInfo[] = (invitations || [])
       .filter(inv => new Date(inv.expires_at) > now)
+      .filter(inv => isInternal || !String(inv.email || "").toLowerCase().endsWith("@riskclock.com"))
       .map(inv => ({
         id: `pending-${inv.id}`,
         userId: "",

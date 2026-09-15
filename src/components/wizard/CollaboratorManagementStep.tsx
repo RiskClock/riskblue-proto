@@ -15,6 +15,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { z } from "zod";
 // SolutionProviderPortal import removed - using route navigation instead
 import { normalizeControlName } from "@/lib/utils";
+import { useStaffUserIds } from "@/hooks/useIsSystemAdmin";
 
 interface CollaboratorManagementStepProps {
   projectId: string;
@@ -77,6 +78,7 @@ const PREDEFINED_PARTNERS: Partner[] = [
 
 export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagementStepProps) => {
   const { toast } = useToast();
+  const staffIds = useStaffUserIds();
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [companyProposals, setCompanyProposals] = useState<CompanyProposal[]>([]);
   const [allControlNames, setAllControlNames] = useState<string[]>([]);
@@ -113,9 +115,11 @@ export const CollaboratorManagementStep = ({ projectId }: CollaboratorManagement
 
       if (error) throw error;
       
-      // Phase 4: Filter out @riskclock.com users unless explicitly added
+      // RiskClock staff accounts are never listed to company users.
       const filteredData = (data || []).filter(
-        collab => !collab.email.toLowerCase().endsWith("@riskclock.com")
+        collab =>
+          !collab.email.toLowerCase().endsWith("@riskclock.com") &&
+          !staffIds.has((collab as any).user_id),
       );
       setCollaborators(filteredData);
     } catch (error: any) {
