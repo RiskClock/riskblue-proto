@@ -7,7 +7,6 @@ import { normalizeFunctionError } from "@/lib/functionsError";
 import { Conversation, ConversationContent, ConversationScrollButton } from "@/components/ai-elements/conversation";
 import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
 import { PromptInput, PromptInputFooter, PromptInputSubmit, PromptInputTextarea } from "@/components/ai-elements/prompt-input";
-import { Shimmer } from "@/components/ai-elements/shimmer";
 
 interface WadeMessage {
   id?: string;
@@ -327,7 +326,7 @@ export function AskWadePanel({
           ) : (
             messages.map((m, i) => (
               <Message key={m.id ?? i} from={m.role}>
-                <MessageContent className={m.role === "user" ? "bg-primary text-primary-foreground px-3 py-2" : "px-0 py-0"}>
+                <MessageContent className={m.role === "user" ? "!bg-primary !text-primary-foreground px-3 py-2" : "px-0 py-0"}>
                   {m.role === "user" ? m.content : <MessageResponse>{m.content}</MessageResponse>}
                 </MessageContent>
               </Message>
@@ -335,7 +334,10 @@ export function AskWadePanel({
           )}
           {sending && (
             <Message from="assistant">
-              <MessageContent className="px-0 py-0"><Shimmer className="text-sm">Thinking...</Shimmer></MessageContent>
+              <MessageContent className="flex-row items-center gap-2 px-0 py-0">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Working...</span>
+              </MessageContent>
             </Message>
           )}
           <div ref={bottomRef} />
@@ -344,16 +346,23 @@ export function AskWadePanel({
       </Conversation>
 
       <div className="border-t p-2">
-        <PromptInput onSubmit={() => void send()}>
+        <PromptInput
+          className="[&_[data-slot=input-group]]:relative [&_[data-slot=input-group]]:!flex-row"
+          onSubmit={() => void send()}
+        >
           <PromptInputTextarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask a question..."
-          rows={2}
-          className="min-h-[44px] text-sm"
-        />
-          <PromptInputFooter className="justify-end">
-            <PromptInputSubmit status={sending ? "submitted" : "ready"} disabled={!input.trim() || sending} />
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Ask a question..."
+            rows={1}
+            className="min-h-9 max-h-24 py-2 pl-3 pr-11 text-sm"
+          />
+          <PromptInputFooter className="absolute bottom-1 right-1 w-auto justify-end p-0">
+            <PromptInputSubmit
+              className="h-7 w-7"
+              status={sending ? "submitted" : "ready"}
+              disabled={!input.trim() || sending}
+            />
           </PromptInputFooter>
         </PromptInput>
       </div>
