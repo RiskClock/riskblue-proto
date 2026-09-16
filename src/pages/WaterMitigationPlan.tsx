@@ -1539,7 +1539,7 @@ actions and posts its own recap.`;
                                 )
                               ) : null}
                             </button>
-                            <div className="mt-0.5 flex items-center gap-1 pl-4 text-xs text-muted-foreground">
+                            <div className="mt-0.5 flex items-center gap-1 pl-[26px] text-xs text-muted-foreground">
                               {editingCostId === row.id ? (
                                 <Input
                                   autoFocus
