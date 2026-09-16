@@ -295,7 +295,7 @@ export default function WaterMitigationPlan() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("projects")
-        .select("id, name, tenant_id")
+        .select("id, name, tenant_id, project_data")
         .eq("id", projectId!)
         .single();
       if (error) throw error;
