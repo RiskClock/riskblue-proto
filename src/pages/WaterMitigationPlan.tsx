@@ -68,7 +68,11 @@ interface Plan {
 interface ControlRow {
   id: string;
   name: string;
+  /** Effective per-unit cost used for this project (override when set). */
   unitCost: number;
+  /** Per-unit cost as defined in the control library. */
+  libraryUnitCost: number;
+  isOverridden: boolean;
 }
 
 interface DetectionRow {
