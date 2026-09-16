@@ -452,17 +452,62 @@ export default function WaterMitigationPlan() {
     return m;
   }, [overrides]);
 
+  // Project-scoped per-unit cost overrides (scenario planning only; never written to the library).
+  const costOverrides = useMemo(
+    () => (((project as any)?.project_data?.wmp_control_unit_costs || {}) as Record<string, number>),
+    [project]
+  );
+
   // Rows: controls the company has selected in the Mitigation Control Library.
   const controlRows: ControlRow[] = useMemo(() => {
     const selected = new Set(selections.map((s: any) => s.control_id));
     return (controls as any[])
       .filter((c) => selected.has(c.id))
-      .map((c) => ({
-        id: c.id,
-        name: c.name,
-        unitCost: overrideMap.get(c.id)?.one_time_cost ?? c.one_time_cost ?? 0,
-      }));
-  }, [controls, selections, overrideMap]);
+      .map((c) => {
+        const libraryUnitCost = overrideMap.get(c.id)?.one_time_cost ?? c.one_time_cost ?? 0;
+        const scenario = costOverrides[c.id];
+        const isOverridden = typeof scenario === "number" && Number.isFinite(scenario);
+        return {
+          id: c.id,
+          name: c.name,
+          libraryUnitCost,
+          unitCost: isOverridden ? scenario : libraryUnitCost,
+          isOverridden,
+        };
+      });
+  }, [controls, selections, overrideMap, costOverrides]);
+
+  // --- Per-unit cost editing (project scenario only) ---
+  const [editingCostId, setEditingCostId] = useState<string | null>(null);
+  const [costDraft, setCostDraft] = useState("");
+
+  const persistCostOverrides = async (next: Record<string, number>) => {
+    if (!projectId) return;
+    const existing = ((project as any)?.project_data || {}) as Record<string, any>;
+    const { error } = await supabase
+      .from("projects")
+      .update({ project_data: { ...existing, wmp_control_unit_costs: next } })
+      .eq("id", projectId);
+    if (error) {
+      toast.error(getUserFriendlyError(error));
+      return;
+    }
+    await queryClient.invalidateQueries({ queryKey: ["wmp-project", projectId] });
+  };
+
+  const commitCostEdit = async (row: ControlRow) => {
+    setEditingCostId(null);
+    const parsed = Number(costDraft.replace(/[^0-9.]/g, ""));
+    if (!Number.isFinite(parsed) || parsed < 0) return;
+    if (parsed === row.unitCost) return;
+    await persistCostOverrides({ ...costOverrides, [row.id]: parsed });
+  };
+
+  const resetCost = async (row: ControlRow) => {
+    const next = { ...costOverrides };
+    delete next[row.id];
+    await persistCostOverrides(next);
+  };
 
   // sheetId -> materialized floor plans + overrides (used for space attribution)
   const sheetPlans = useMemo(() => {
