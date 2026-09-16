@@ -93,20 +93,32 @@ const UNASSIGNED = "Unassigned";
 const currency = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 const locationLabel = (n: number) => `${n} ${n === 1 ? "location" : "locations"}`;
 
-const ControlTypeIcon = ({ name }: { name: string }) => {
-  const normalized = name.toLowerCase();
-  const className = "h-4 w-4 shrink-0 text-muted-foreground";
+const CONTROL_COLORS = [
+  { fill: "fill-control-blue", box: "bg-control-blue", icon: "text-primary-foreground" },
+  { fill: "fill-control-green", box: "bg-control-green", icon: "text-primary-foreground" },
+  { fill: "fill-control-amber", box: "bg-control-amber", icon: "text-foreground" },
+  { fill: "fill-control-red", box: "bg-control-red", icon: "text-primary-foreground" },
+  { fill: "fill-control-violet", box: "bg-control-violet", icon: "text-primary-foreground" },
+  { fill: "fill-control-cyan", box: "bg-control-cyan", icon: "text-primary-foreground" },
+  { fill: "fill-control-orange", box: "bg-control-orange", icon: "text-foreground" },
+  { fill: "fill-control-pink", box: "bg-control-pink", icon: "text-primary-foreground" },
+] as const;
 
-  if (normalized.includes("water") || normalized.includes("leak")) return <Droplets className={className} />;
-  if (normalized.includes("flow") || normalized.includes("pressure")) return <Gauge className={className} />;
-  if (normalized.includes("sensor") || normalized.includes("monitor")) return <Radio className={className} />;
-  if (normalized.includes("alarm") || normalized.includes("alert")) return <BellRing className={className} />;
-  if (normalized.includes("valve") || normalized.includes("shut off")) return <SlidersHorizontal className={className} />;
-  if (normalized.includes("plan") || normalized.includes("procedure") || normalized.includes("inspection")) {
-    return <ClipboardCheck className={className} />;
-  }
-  if (normalized.includes("maintenance") || normalized.includes("repair")) return <Wrench className={className} />;
-  return <ShieldCheck className={className} />;
+const ControlTypeIcon = ({ name, colorIndex }: { name: string; colorIndex: number }) => {
+  const normalized = name.toLowerCase();
+  const color = CONTROL_COLORS[colorIndex % CONTROL_COLORS.length];
+  const className = `h-3.5 w-3.5 shrink-0 ${color.icon}`;
+  let icon = <ShieldCheck className={className} />;
+
+  if (normalized.includes("water") || normalized.includes("leak")) icon = <Droplets className={className} />;
+  else if (normalized.includes("flow") || normalized.includes("pressure")) icon = <Gauge className={className} />;
+  else if (normalized.includes("sensor") || normalized.includes("monitor")) icon = <Radio className={className} />;
+  else if (normalized.includes("alarm") || normalized.includes("alert")) icon = <BellRing className={className} />;
+  else if (normalized.includes("valve") || normalized.includes("shut off")) icon = <SlidersHorizontal className={className} />;
+  else if (normalized.includes("plan") || normalized.includes("procedure") || normalized.includes("inspection")) icon = <ClipboardCheck className={className} />;
+  else if (normalized.includes("maintenance") || normalized.includes("repair")) icon = <Wrench className={className} />;
+
+  return <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${color.box}`}>{icon}</span>;
 };
 
 const PlanProgressDonut = ({ value, maximum }: { value: number; maximum: number }) => {
@@ -135,9 +147,6 @@ const PlanProgressDonut = ({ value, maximum }: { value: number; maximum: number 
 };
 
 type PieSlice = { id: string; name: string; value: number; colorIndex: number };
-
-const sliceOpacity = (index: number, count: number) =>
-  count <= 1 ? 1 : Math.max(0.3, 1 - (index / Math.max(1, count - 1)) * 0.7);
 
 const polar = (cx: number, cy: number, r: number, angle: number) => [
   cx + r * Math.cos(angle - Math.PI / 2),
@@ -184,11 +193,9 @@ const CostPie = ({
           <path
             key={slice.id}
             d={d}
-            fill="hsl(var(--primary))"
-            fillOpacity={sliceOpacity(slice.colorIndex, slices.length)}
+            className={`${CONTROL_COLORS[slice.colorIndex % CONTROL_COLORS.length].fill} cursor-pointer transition-all`}
             stroke="hsl(var(--card))"
             strokeWidth="1"
-            className="cursor-pointer transition-all"
             onMouseEnter={(e) => {
               onHover(slice.id);
               const rect = (e.currentTarget.ownerSVGElement as SVGSVGElement)?.getBoundingClientRect();
@@ -1452,7 +1459,7 @@ actions and posts its own recap.`;
                     ))}
                     <td />
                   </tr>
-                  {controlRows.map((row) => {
+                  {controlRows.map((row, colorIndex) => {
                     const spaces = spacesForControl(row.id);
                     const isOpen = expanded.has(row.id);
                     return (
@@ -1472,7 +1479,7 @@ actions and posts its own recap.`;
                               onClick={() => toggleExpanded(row.id)}
                               disabled={spaces.length === 0}
                             >
-                              <ControlTypeIcon name={row.name} />
+                               <ControlTypeIcon name={row.name} colorIndex={colorIndex} />
                               <span>{row.name}</span>
                               {spaces.length > 0 ? (
                                 isOpen ? (
