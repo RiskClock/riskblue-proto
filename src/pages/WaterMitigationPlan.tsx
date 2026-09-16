@@ -1134,6 +1134,7 @@ actions and posts its own recap.`;
             .eq("id", plan.id);
           if (error) throw error;
           lines.push(`Renamed "${plan.name}" to "${name}".`);
+          plan.name = name;
         } else if (type === "set_summary") {
           const plan = findPlan(a.plan);
           if (!plan) {
