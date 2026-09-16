@@ -7,7 +7,6 @@ import { normalizeFunctionError } from "@/lib/functionsError";
 import { Conversation, ConversationContent, ConversationScrollButton } from "@/components/ai-elements/conversation";
 import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
 import { PromptInput, PromptInputFooter, PromptInputSubmit, PromptInputTextarea } from "@/components/ai-elements/prompt-input";
-import { Shimmer } from "@/components/ai-elements/shimmer";
 
 interface WadeMessage {
   id?: string;
@@ -337,7 +336,7 @@ export function AskWadePanel({
             <Message from="assistant">
               <MessageContent className="flex-row items-center gap-2 px-0 py-0">
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                <Shimmer className="text-sm">Working...</Shimmer>
+                <span className="text-sm text-muted-foreground">Working...</span>
               </MessageContent>
             </Message>
           )}
