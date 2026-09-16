@@ -996,11 +996,14 @@ actions and posts its own recap.`;
     if (!canEdit) return "I can't change these plans — your access here is read-only.";
 
     const norm = (s: unknown) => String(s ?? "").toLowerCase().trim();
+    // Plans created/renamed/deleted earlier in this same instruction must be
+    // visible to later actions, so work off a local mutable copy.
+    const workingPlans: Plan[] = [...plans];
     const findPlan = (name: unknown) => {
       const n = norm(name);
       return (
-        plans.find((p) => norm(p.name) === n) ||
-        plans.find((p) => norm(p.name).includes(n) && n.length > 0) ||
+        workingPlans.find((p) => norm(p.name) === n) ||
+        workingPlans.find((p) => norm(p.name).includes(n) && n.length > 0) ||
         null
       );
     };
@@ -1131,6 +1134,7 @@ actions and posts its own recap.`;
             .eq("id", plan.id);
           if (error) throw error;
           lines.push(`Renamed "${plan.name}" to "${name}".`);
+          plan.name = name;
         } else if (type === "set_summary") {
           const plan = findPlan(a.plan);
           if (!plan) {
@@ -1149,18 +1153,26 @@ actions and posts its own recap.`;
             lines.push(`Skipped duplicate: could not match plan "${a.plan}".`);
             continue;
           }
-          const nextOrder = plans.length ? Math.max(...plans.map((p) => p.sort_order)) + 1 : 0;
+          const nextOrder = workingPlans.length
+            ? Math.max(...workingPlans.map((p) => p.sort_order)) + 1
+            : 0;
           const name = String(a.name || "").trim() || `${source.name} (copy)`;
-          const { error } = await supabase.from("project_mitigation_plans").insert({
-            project_id: projectId!,
-            name,
-            summary: source.summary,
-            control_counts: source.control_counts,
-            excluded_instances: source.excluded_instances,
-            sort_order: nextOrder,
-            created_by: user?.id ?? null,
-          } as any);
+          const { data: created, error } = await supabase
+            .from("project_mitigation_plans")
+            .insert({
+              project_id: projectId!,
+              name,
+              summary: source.summary,
+              control_counts: source.control_counts,
+              excluded_instances: source.excluded_instances,
+              sort_order: nextOrder,
+              created_by: user?.id ?? null,
+            } as any)
+            .select()
+            .single();
           if (error) throw error;
+          // Make the new plan available to later actions in this instruction.
+          if (created) workingPlans.push(created as unknown as Plan);
           lines.push(`Created "${name}" from ${source.name}.`);
         } else if (type === "delete_plan") {
           const plan = findPlan(a.plan);
@@ -1171,6 +1183,9 @@ actions and posts its own recap.`;
           const { error } = await supabase.from("project_mitigation_plans").delete().eq("id", plan.id);
           if (error) throw error;
           lines.push(`Deleted ${plan.name}.`);
+          const removedIdx = workingPlans.findIndex((p) => p.id === plan.id);
+          if (removedIdx >= 0) workingPlans.splice(removedIdx, 1);
+          pending.delete(plan.id);
         } else {
           lines.push(`Skipped unknown action "${type}".`);
         }
