@@ -94,14 +94,14 @@ const currency = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 const locationLabel = (n: number) => `${n} ${n === 1 ? "location" : "locations"}`;
 
 const CONTROL_COLORS = [
-  { fill: "fill-control-blue", box: "bg-control-blue", icon: "text-primary-foreground" },
-  { fill: "fill-control-green", box: "bg-control-green", icon: "text-primary-foreground" },
+  { fill: "fill-control-blue", box: "bg-control-blue", icon: "text-foreground" },
+  { fill: "fill-control-green", box: "bg-control-green", icon: "text-foreground" },
   { fill: "fill-control-amber", box: "bg-control-amber", icon: "text-foreground" },
-  { fill: "fill-control-red", box: "bg-control-red", icon: "text-primary-foreground" },
-  { fill: "fill-control-violet", box: "bg-control-violet", icon: "text-primary-foreground" },
-  { fill: "fill-control-cyan", box: "bg-control-cyan", icon: "text-primary-foreground" },
+  { fill: "fill-control-red", box: "bg-control-red", icon: "text-foreground" },
+  { fill: "fill-control-violet", box: "bg-control-violet", icon: "text-foreground" },
+  { fill: "fill-control-cyan", box: "bg-control-cyan", icon: "text-foreground" },
   { fill: "fill-control-orange", box: "bg-control-orange", icon: "text-foreground" },
-  { fill: "fill-control-pink", box: "bg-control-pink", icon: "text-primary-foreground" },
+  { fill: "fill-control-pink", box: "bg-control-pink", icon: "text-foreground" },
 ] as const;
 
 const ControlTypeIcon = ({ name, colorIndex }: { name: string; colorIndex: number }) => {
