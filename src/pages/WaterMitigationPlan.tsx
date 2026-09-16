@@ -996,11 +996,14 @@ actions and posts its own recap.`;
     if (!canEdit) return "I can't change these plans — your access here is read-only.";
 
     const norm = (s: unknown) => String(s ?? "").toLowerCase().trim();
+    // Plans created/renamed/deleted earlier in this same instruction must be
+    // visible to later actions, so work off a local mutable copy.
+    const workingPlans: Plan[] = [...plans];
     const findPlan = (name: unknown) => {
       const n = norm(name);
       return (
-        plans.find((p) => norm(p.name) === n) ||
-        plans.find((p) => norm(p.name).includes(n) && n.length > 0) ||
+        workingPlans.find((p) => norm(p.name) === n) ||
+        workingPlans.find((p) => norm(p.name).includes(n) && n.length > 0) ||
         null
       );
     };
