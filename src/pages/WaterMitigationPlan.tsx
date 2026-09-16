@@ -1539,6 +1539,51 @@ actions and posts its own recap.`;
                                 )
                               ) : null}
                             </button>
+                            <div className="mt-0.5 flex items-center gap-1 pl-[22px] text-xs text-muted-foreground">
+                              {editingCostId === row.id ? (
+                                <Input
+                                  autoFocus
+                                  value={costDraft}
+                                  onChange={(e) => setCostDraft(e.target.value)}
+                                  onBlur={() => commitCostEdit(row)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                                    if (e.key === "Escape") setEditingCostId(null);
+                                  }}
+                                  className="h-6 w-24 px-1 py-0 text-xs tabular-nums"
+                                />
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={!canEdit}
+                                  onClick={() => {
+                                    setCostDraft(String(row.unitCost));
+                                    setEditingCostId(row.id);
+                                  }}
+                                  className={`rounded px-1 tabular-nums ${
+                                    canEdit ? "hover:bg-muted cursor-text" : "cursor-default"
+                                  } ${row.isOverridden ? "text-foreground font-medium" : ""}`}
+                                  title={
+                                    row.isOverridden
+                                      ? `Library cost: ${currency(row.libraryUnitCost)} per unit`
+                                      : "Cost per unit from the control library"
+                                  }
+                                >
+                                  {currency(row.unitCost)} / unit
+                                </button>
+                              )}
+                              {row.isOverridden && canEdit && editingCostId !== row.id && (
+                                <button
+                                  type="button"
+                                  onClick={() => resetCost(row)}
+                                  className="rounded p-0.5 hover:bg-muted hover:text-foreground"
+                                  title={`Reset to library cost (${currency(row.libraryUnitCost)})`}
+                                  aria-label="Reset to library cost"
+                                >
+                                  <RotateCcw className="h-3 w-3" />
+                                </button>
+                              )}
+                            </div>
                           </th>
                           {plans.map((plan) => {
                             const n = countFor(plan, row.id);
