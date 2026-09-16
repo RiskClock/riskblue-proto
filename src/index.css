@@ -40,14 +40,14 @@ All colors MUST be HSL.
     --warning: 38 92% 50%;
     --danger: 0 84% 60%;
 
-    --control-blue: 217 91% 55%;
-    --control-green: 160 84% 32%;
-    --control-amber: 43 96% 50%;
-    --control-red: 350 89% 55%;
-    --control-violet: 262 83% 58%;
-    --control-cyan: 190 90% 38%;
-    --control-orange: 25 95% 53%;
-    --control-pink: 330 81% 58%;
+    --control-blue: 217 70% 80%;
+    --control-green: 160 50% 74%;
+    --control-amber: 43 80% 72%;
+    --control-red: 350 65% 80%;
+    --control-violet: 262 55% 80%;
+    --control-cyan: 190 55% 76%;
+    --control-orange: 25 80% 76%;
+    --control-pink: 330 60% 80%;
     
     --radius: 0.5rem;
 
@@ -102,14 +102,14 @@ All colors MUST be HSL.
     --success: 142 76% 36%;
     --warning: 38 92% 50%;
     --danger: 0 63% 31%;
-    --control-blue: 217 91% 60%;
-    --control-green: 160 72% 44%;
-    --control-amber: 43 96% 56%;
-    --control-red: 350 89% 62%;
-    --control-violet: 262 83% 68%;
-    --control-cyan: 190 82% 52%;
-    --control-orange: 25 95% 60%;
-    --control-pink: 330 81% 66%;
+    --control-blue: 217 70% 80%;
+    --control-green: 160 50% 74%;
+    --control-amber: 43 80% 72%;
+    --control-red: 350 65% 80%;
+    --control-violet: 262 55% 80%;
+    --control-cyan: 190 55% 76%;
+    --control-orange: 25 80% 76%;
+    --control-pink: 330 60% 80%;
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
