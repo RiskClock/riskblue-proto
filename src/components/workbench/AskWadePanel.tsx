@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { GripVertical, Loader2, Minus, Send, Trash2, X } from "lucide-react";
+import { GripVertical, Loader2, Minus, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { normalizeFunctionError } from "@/lib/functionsError";
+import { Conversation, ConversationContent, ConversationScrollButton } from "@/components/ai-elements/conversation";
+import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
+import { PromptInput, PromptInputFooter, PromptInputSubmit, PromptInputTextarea } from "@/components/ai-elements/prompt-input";
+import { Shimmer } from "@/components/ai-elements/shimmer";
 
 interface WadeMessage {
   id?: string;
@@ -104,7 +105,6 @@ export function AskWadePanel({
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(persistHistory);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (!persistHistory) {
@@ -131,10 +131,6 @@ export function AskWadePanel({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [messages, sending]);
-
-  useEffect(() => {
-    if (!loading) inputRef.current?.focus();
-  }, [loading]);
 
   // Log the whole Wade conversation as a single project activity when the
   // panel closes / unmounts (not one entry per message).
@@ -186,8 +182,11 @@ export function AskWadePanel({
   const send = async () => {
     const text = input.trim();
     if (!text || sending) return;
+    const pendingId = crypto.randomUUID();
+    const pendingMessage: WadeMessage = { id: pendingId, role: "user", content: text };
     setSending(true);
     setInput("");
+    setMessages((prev) => [...prev, pendingMessage]);
 
     try {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
@@ -205,7 +204,7 @@ export function AskWadePanel({
         throw new Error("Your session expired - please sign in again.");
       }
 
-      const next: WadeMessage[] = [...messages, { role: "user", content: text }];
+      const next: WadeMessage[] = [...messages, pendingMessage];
       // Sliding window: only the most recent turns are sent to the model. The
       // full transcript stays in the UI and in wade_chat_messages.
       const windowed = next.slice(-MAX_HISTORY_TURNS);
@@ -225,7 +224,7 @@ export function AskWadePanel({
       const { visible, actions } = onActions ? extractActions(raw) : { visible: raw, actions: [] };
       const answer = visible || (actions.length > 0 ? "Applying the requested changes…" : raw);
 
-      setMessages((prev) => [...prev, { role: "user", content: text }, { role: "assistant", content: answer }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: answer }]);
       onAssistantMessage?.(answer);
       await persist("user", text);
       await persist("assistant", answer);
@@ -244,6 +243,7 @@ export function AskWadePanel({
         }
       }
     } catch (e: any) {
+      setMessages((prev) => prev.filter((message) => message.id !== pendingId));
       setInput((cur) => (cur.trim() ? cur : text));
       toast({
         title: "Wade could not answer",
@@ -252,14 +252,12 @@ export function AskWadePanel({
       });
     } finally {
       setSending(false);
-      inputRef.current?.focus();
     }
   };
 
   const clearChat = async () => {
     if (!persistHistory) {
       setMessages([]);
-      inputRef.current?.focus();
       return;
     }
     const { error } = await supabase
@@ -271,7 +269,6 @@ export function AskWadePanel({
       return;
     }
     setMessages([]);
-    inputRef.current?.focus();
   };
 
   return (
@@ -315,8 +312,8 @@ export function AskWadePanel({
         </div>
       </div>
 
-      <ScrollArea className="flex-1 min-h-0">
-        <div className="p-3 space-y-3">
+      <Conversation className="min-h-0">
+        <ConversationContent className="gap-3 p-3">
           {loading ? (
             <div className="flex justify-center py-6">
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -329,47 +326,36 @@ export function AskWadePanel({
             </p>
           ) : (
             messages.map((m, i) => (
-              <div key={m.id ?? i} className={m.role === "user" ? "flex justify-end" : ""}>
-                {m.role === "user" ? (
-                  <div className="max-w-[90%] rounded-lg bg-primary text-primary-foreground px-3 py-2 text-sm whitespace-pre-wrap">
-                    {m.content}
-                  </div>
-                ) : (
-                  <div className="text-sm leading-relaxed [&_p]:mb-2 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_table]:text-xs [&_code]:text-xs">
-                    <ReactMarkdown>{m.content}</ReactMarkdown>
-                  </div>
-                )}
-              </div>
+              <Message key={m.id ?? i} from={m.role}>
+                <MessageContent className={m.role === "user" ? "bg-primary text-primary-foreground px-3 py-2" : "px-0 py-0"}>
+                  {m.role === "user" ? m.content : <MessageResponse>{m.content}</MessageResponse>}
+                </MessageContent>
+              </Message>
             ))
           )}
           {sending && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Thinking...
-            </div>
+            <Message from="assistant">
+              <MessageContent className="px-0 py-0"><Shimmer className="text-sm">Thinking...</Shimmer></MessageContent>
+            </Message>
           )}
           <div ref={bottomRef} />
-        </div>
-      </ScrollArea>
+        </ConversationContent>
+        <ConversationScrollButton />
+      </Conversation>
 
-      <div className="border-t p-2 flex items-end gap-2">
-        <Textarea
-          ref={inputRef}
+      <div className="border-t p-2">
+        <PromptInput onSubmit={() => void send()}>
+          <PromptInputTextarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask a question..."
           rows={2}
-          className="min-h-[44px] resize-none text-sm"
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              void send();
-            }
-          }}
+          className="min-h-[44px] text-sm"
         />
-        <Button size="icon" onClick={() => void send()} disabled={!input.trim() || sending}>
-          <Send className="h-4 w-4" />
-        </Button>
+          <PromptInputFooter className="justify-end">
+            <PromptInputSubmit status={sending ? "submitted" : "ready"} disabled={!input.trim() || sending} />
+          </PromptInputFooter>
+        </PromptInput>
       </div>
     </div>
   );

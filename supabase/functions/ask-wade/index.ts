@@ -30,6 +30,9 @@ schematic bounding boxes, and the Spatial Architect level/unit hierarchy.
 Rules:
 - Answer ONLY from the PROJECT CONTEXT JSON provided. If something is not in
   the context, say so plainly instead of guessing.
+- Ask one concise clarifying question before acting only when ambiguity could
+  materially change plan cost, control counts, affected plans, or many locations.
+  For low-impact ambiguity, use the most conservative interpretation and state it.
 - Be concise and technical. Use short markdown lists or tables when helpful.
 - Quote concrete identifiers (e.g. CW-MCE-003, Level 6, sheet A0.04) when
   referring to detections so the user can find them.
@@ -121,9 +124,11 @@ Deno.serve(async (req) => {
       .eq("key", "ask_wade_prompt")
       .maybeSingle();
     const configuredPrompt = (promptRow as any)?.value;
-    const systemPrompt = typeof configuredPrompt === "string" && configuredPrompt.trim().length > 0
+    const basePrompt = typeof configuredPrompt === "string" && configuredPrompt.trim().length > 0
       ? configuredPrompt
       : DEFAULT_PROMPT;
+    const clarificationRule = `\n\nCLARIFICATION RULE:\n- Ask one concise clarifying question before acting only when ambiguity could materially change plan cost, control counts, affected plans, or many locations.\n- For low-impact ambiguity, use the most conservative interpretation and state it.\n- Never emit plan actions while waiting for that clarification.`;
+    const systemPrompt = `${basePrompt}${clarificationRule}`;
 
     const contextText = typeof context === "string"
       ? context
