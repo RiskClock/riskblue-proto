@@ -105,7 +105,6 @@ export function AskWadePanel({
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(persistHistory);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (!persistHistory) {
@@ -132,10 +131,6 @@ export function AskWadePanel({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [messages, sending]);
-
-  useEffect(() => {
-    if (!loading) inputRef.current?.focus();
-  }, [loading]);
 
   // Log the whole Wade conversation as a single project activity when the
   // panel closes / unmounts (not one entry per message).
@@ -257,14 +252,12 @@ export function AskWadePanel({
       });
     } finally {
       setSending(false);
-      inputRef.current?.focus();
     }
   };
 
   const clearChat = async () => {
     if (!persistHistory) {
       setMessages([]);
-      inputRef.current?.focus();
       return;
     }
     const { error } = await supabase
@@ -276,7 +269,6 @@ export function AskWadePanel({
       return;
     }
     setMessages([]);
-    inputRef.current?.focus();
   };
 
   return (
@@ -354,7 +346,6 @@ export function AskWadePanel({
       <div className="border-t p-2">
         <PromptInput onSubmit={() => void send()}>
           <PromptInputTextarea
-          ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask a question..."
