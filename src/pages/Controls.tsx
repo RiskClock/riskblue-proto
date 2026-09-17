@@ -600,14 +600,7 @@ export default function Controls() {
 
                   {/* Pricing */}
                   <section className="rounded-md border bg-card p-4 shrink-0">
-                    <div className="flex items-start justify-between gap-2 mb-3">
-                      <h3 className="text-sm font-semibold text-foreground">Pricing</h3>
-                      {canEdit && pricingOverridden && (
-                        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={resetPricing}>
-                          Reset
-                        </Button>
-                      )}
-                    </div>
+                    <h3 className="text-sm font-semibold text-foreground mb-3">Pricing</h3>
                     <div className="grid grid-cols-3 gap-4">
                       <div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">One-time</p>
