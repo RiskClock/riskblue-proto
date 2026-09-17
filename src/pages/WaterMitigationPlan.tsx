@@ -502,12 +502,22 @@ export default function WaterMitigationPlan() {
     if ((products as any[]).length > 0) {
       const controlById = new Map((controls as any[]).map((c) => [c.id, c]));
       return (products as any[])
-        .filter((p) => !!p.control_id)
+        .filter((p) => !!p.control_id || p.applied_in_any_plan)
         .map((p) => {
-          const control = controlById.get(p.control_id);
-          const base =
-            p.one_time_cost ?? overrideMap.get(p.control_id)?.one_time_cost ?? control?.one_time_cost ?? 0;
-          const row = withCost(p.id, p.control_id, p.name || control?.name || "Product", base);
+          const control = p.control_id ? controlById.get(p.control_id) : undefined;
+          const ov = p.control_id ? overrideMap.get(p.control_id) : undefined;
+          // Per-unit cost = upfront + installation + one year of maintenance.
+          const oneTime = Number(p.one_time_cost ?? ov?.one_time_cost ?? control?.one_time_cost ?? 0) || 0;
+          const install = Number(p.installation_cost ?? 0) || 0;
+          const maint = Number(p.monthly_maint_cost ?? control?.monthly_maint_cost ?? 0) || 0;
+          const annualMaint = p.maint_interval === "yearly" ? maint : maint * 12;
+          const base = oneTime + install + annualMaint;
+          const row = withCost(
+            p.id,
+            p.control_id || p.id,
+            p.name || p.product_code || control?.name || "Product",
+            base,
+          );
           row.scopeIds = p.scope_customized
             ? [
                 ...((p.critical_asset_ids as string[]) || []),
@@ -515,6 +525,9 @@ export default function WaterMitigationPlan() {
                 ...((p.process_ids as string[]) || []),
               ]
             : null;
+          if (p.applied_in_any_plan) {
+            row.fixedQuantity = Math.max(0, Number(p.fixed_quantity ?? 1) || 0);
+          }
           return row;
         });
     }
