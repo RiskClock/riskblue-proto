@@ -454,7 +454,7 @@ export default function Controls() {
                   <Input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search products by name"
+                    placeholder="Search products by name or ID"
                     className="pl-9"
                   />
                 </div>
@@ -469,7 +469,10 @@ export default function Controls() {
                     onClick={() => setSelectedId(p.id)}
                   >
                     <Package className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="text-sm flex-1 truncate">{p.name}</span>
+                    <span className="text-sm flex-1 truncate">
+                      {p.product_code ? `(${p.product_code}) ` : ""}
+                      {p.name}
+                    </span>
                     {p.control_id && (
                       <span className="text-xs text-muted-foreground truncate max-w-[45%]">
                         {controlMap.get(p.control_id)?.name}
