@@ -48,8 +48,6 @@ const CATEGORY_LABELS: Record<AWPItem["category"], string> = {
   processes: "Processes",
 };
 
-const MAX_INLINE_CONTROLS = 5;
-
 export default function Configuration() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
@@ -353,8 +351,6 @@ interface RiskRowProps {
 
 function RiskRow({ awp, controls, currentIds, hasPrompt, onEdit }: RiskRowProps) {
   const names = currentIds.map((id) => getControlNameById(controls, id) || id);
-  const shown = names.slice(0, MAX_INLINE_CONTROLS);
-  const remaining = names.length - shown.length;
 
   return (
     <TableRow
@@ -384,7 +380,7 @@ function RiskRow({ awp, controls, currentIds, hasPrompt, onEdit }: RiskRowProps)
           <span className="text-sm text-muted-foreground">No controls</span>
         ) : (
           <div className="flex flex-wrap gap-1.5">
-            {shown.map((name) => {
+            {names.map((name) => {
               const style = tagStyle(name);
               return (
                 <span
@@ -396,7 +392,6 @@ function RiskRow({ awp, controls, currentIds, hasPrompt, onEdit }: RiskRowProps)
                 </span>
               );
             })}
-            {remaining > 0 && <span className="self-center text-xs text-muted-foreground">+{remaining} more</span>}
           </div>
         )}
       </TableCell>
