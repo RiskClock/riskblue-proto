@@ -8,7 +8,6 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { Loader2 } from "lucide-react";
 import { ExportProvider } from "./contexts/ExportContext";
 import { ExportProgressPanel } from "./components/export/ExportProgressPanel";
-import { PaymentTestModeBanner } from "./components/PaymentTestModeBanner";
 import { useVersionCheck } from "./hooks/useVersionCheck";
 import { TenantLayout, RootRedirect } from "./components/TenantLayout";
 import { routeLoaders } from "./lib/routePreload";
@@ -82,7 +81,6 @@ const App = () => (
 
 
             <ExportProgressPanel />
-            <PaymentTestModeBanner />
             <Suspense fallback={<FullScreenLoader />}>
             <Routes>
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />

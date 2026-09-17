@@ -17,11 +17,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AppHeader } from "@/components/AppHeader";
-import { Plus, X, ShieldAlert, Loader2, Pencil } from "lucide-react";
+import { Plus, X, ShieldAlert, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { useMitigationControls, getControlNameById } from "@/hooks/useMitigationControls";
 import { format } from "date-fns";
+import { tagStyle } from "@/lib/tagColor";
 
 interface AWPItem {
   id: string;
@@ -46,8 +47,6 @@ const CATEGORY_LABELS: Record<AWPItem["category"], string> = {
   water_systems: "Water Systems",
   processes: "Processes",
 };
-
-const MAX_INLINE_CONTROLS = 5;
 
 export default function Configuration() {
   const { user, signOut } = useAuth();
@@ -261,14 +260,13 @@ export default function Configuration() {
                       <TableHead className="w-[220px]">Risk</TableHead>
                       <TableHead>Controls</TableHead>
                       <TableHead className="w-[180px] text-center">Can Span Multiple Spaces</TableHead>
-                      <TableHead className="w-[90px]" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {(["critical_assets", "water_systems", "processes"] as const).map((cat) => (
                       <Fragment key={cat}>
                         <TableRow className="bg-muted/50 hover:bg-muted/50">
-                          <TableCell colSpan={4} className="font-semibold text-sm py-2">{CATEGORY_LABELS[cat]}</TableCell>
+                          <TableCell colSpan={3} className="font-semibold text-sm py-2">{CATEGORY_LABELS[cat]}</TableCell>
                         </TableRow>
                         {riskRows(groupedAWPs[cat])}
                       </Fragment>
@@ -281,14 +279,21 @@ export default function Configuration() {
                     <TableRow>
                       <TableHead className="w-[260px]">Control</TableHead>
                       <TableHead>Risks</TableHead>
-                      <TableHead className="w-[90px]" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {controls.map((control) => {
                       const mapped = awpItems.filter((a) => a.default_control_ids.includes(control.id));
                       return (
-                        <TableRow key={control.id}>
+                        <TableRow
+                          key={control.id}
+                          className="cursor-pointer"
+                          tabIndex={0}
+                          onClick={() => setEditingControlId(control.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") setEditingControlId(control.id);
+                          }}
+                        >
                           <TableCell className="font-medium py-2">{control.name}</TableCell>
                           <TableCell className="py-2">
                             <span className="text-sm text-muted-foreground block truncate max-w-[640px]">
@@ -296,11 +301,6 @@ export default function Configuration() {
                                 ? mapped.map((m) => m.name).join(", ")
                                 : "No risks mapped"}
                             </span>
-                          </TableCell>
-                          <TableCell className="py-2 text-right">
-                            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setEditingControlId(control.id)}>
-                              <Pencil className="h-3 w-3 mr-1" />Edit
-                            </Button>
                           </TableCell>
                         </TableRow>
                       );
@@ -351,28 +351,52 @@ interface RiskRowProps {
 
 function RiskRow({ awp, controls, currentIds, hasPrompt, onEdit }: RiskRowProps) {
   const names = currentIds.map((id) => getControlNameById(controls, id) || id);
-  const shown = names.slice(0, MAX_INLINE_CONTROLS);
-  const remaining = names.length - shown.length;
 
   return (
-    <TableRow>
+    <TableRow
+      className="cursor-pointer"
+      tabIndex={0}
+      onClick={onEdit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") onEdit();
+      }}
+    >
       <TableCell className="font-medium py-2">
         <div className="flex items-center gap-2">
           <span>{awp.name}</span>
-          {!hasPrompt && <span className="text-xs font-normal text-muted-foreground">(missing prompt)</span>}
+          {!hasPrompt && (
+            <span
+              className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-warning/20 text-xs font-bold text-warning-foreground"
+              title="Missing prompt"
+              aria-label="Missing prompt"
+            >
+              !
+            </span>
+          )}
         </div>
       </TableCell>
       <TableCell className="py-2">
-        <span className="text-sm text-muted-foreground block truncate max-w-[520px]">
-          {names.length === 0 ? "No controls" : shown.join(", ")}
-          {remaining > 0 && <span className="text-foreground"> +{remaining} more</span>}
-        </span>
+        {names.length === 0 ? (
+          <span className="text-sm text-muted-foreground">No controls</span>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {names.map((name) => {
+              const style = tagStyle(name);
+              return (
+                <span
+                  key={name}
+                  className="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium"
+                  style={{ backgroundColor: style.background, borderColor: style.border, color: style.color }}
+                >
+                  {name}
+                </span>
+              );
+            })}
+          </div>
+        )}
       </TableCell>
-      <TableCell className="py-2 text-center text-sm">{awp.can_span_multiple_spaces ? "Yes" : "No"}</TableCell>
-      <TableCell className="py-2 text-right">
-        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onEdit}>
-          <Pencil className="h-3 w-3 mr-1" />Edit
-        </Button>
+      <TableCell className={`py-2 text-center text-sm ${awp.can_span_multiple_spaces ? "" : "text-muted-foreground"}`}>
+        {awp.can_span_multiple_spaces ? "Yes" : "No"}
       </TableCell>
     </TableRow>
   );

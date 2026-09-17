@@ -25,6 +25,8 @@ import { BuyCreditsModal } from "@/components/BuyCreditsModal";
 import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 import { EditProfileModal } from "@/components/EditProfileModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { isPaymentsTestMode } from "@/lib/stripe";
 
 interface AppHeaderProps {
   leftContent?: React.ReactNode;
@@ -103,6 +105,16 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
             className="h-10 w-auto max-w-none cursor-pointer shrink-0 object-contain object-left"
             onClick={() => navigate(tenantPath("/projects"))}
           />
+          {isPaymentsTestMode() && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="cursor-help text-xs font-semibold text-muted-foreground">Debug</span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-sm">
+                All payments in this preview are simulated. Use card 4242 4242 4242 4242 with any future expiry &amp; any CVC.
+              </TooltipContent>
+            </Tooltip>
+          )}
           {title && (
             <div className="flex items-center gap-2 min-w-0">
               <div className="h-6 w-px bg-border shrink-0" aria-hidden />
