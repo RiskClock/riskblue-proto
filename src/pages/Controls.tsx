@@ -306,34 +306,52 @@ export default function Controls() {
   // ---------- local drafts ----------
   const [nameDraft, setNameDraft] = useState("");
   const [codeDraft, setCodeDraft] = useState("");
-  const [costDraft, setCostDraft] = useState({ one: "", monthly: "" });
+  const [descDraft, setDescDraft] = useState("");
+  const [costDraft, setCostDraft] = useState({ one: "", install: "", maint: "" });
 
   useEffect(() => {
     if (!selected) return;
     setNameDraft(selected.name);
     setCodeDraft(selected.product_code ?? "");
+    setDescDraft(selected.description ?? "");
     const control = selected.control_id ? controlMap.get(selected.control_id) : undefined;
     setCostDraft({
       one: String(selected.one_time_cost ?? control?.one_time_cost ?? 0),
-      monthly: String(selected.monthly_maint_cost ?? control?.monthly_maint_cost ?? 0),
+      install: String(selected.installation_cost ?? 0),
+      maint: String(selected.monthly_maint_cost ?? control?.monthly_maint_cost ?? 0),
     });
     setScopeSearch("");
-  }, [selected?.id, selected?.one_time_cost, selected?.monthly_maint_cost, selected?.control_id, controlMap]);
+  }, [
+    selected?.id,
+    selected?.one_time_cost,
+    selected?.installation_cost,
+    selected?.monthly_maint_cost,
+    selected?.control_id,
+    controlMap,
+  ]);
 
-  const commitCost = (field: "one" | "monthly") => {
+  const commitCost = (field: "one" | "install" | "maint") => {
     if (!canEdit || !selected) return;
-    const raw = field === "one" ? costDraft.one : costDraft.monthly;
+    const raw = costDraft[field];
     const parsed = raw.trim() === "" ? 0 : Number(raw.replace(/[^0-9.]/g, ""));
     if (Number.isNaN(parsed)) return;
-    void patchProduct(
-      selected.id,
-      field === "one" ? { one_time_cost: parsed } : { monthly_maint_cost: parsed },
-    );
+    const patch: Partial<TenantProduct> =
+      field === "one"
+        ? { one_time_cost: parsed }
+        : field === "install"
+        ? { installation_cost: parsed }
+        : { monthly_maint_cost: parsed };
+    void patchProduct(selected.id, patch);
   };
 
   const resetPricing = () => {
     if (!selected) return;
-    void patchProduct(selected.id, { one_time_cost: null, monthly_maint_cost: null });
+    void patchProduct(selected.id, {
+      one_time_cost: null,
+      installation_cost: null,
+      monthly_maint_cost: null,
+      maint_interval: "monthly",
+    });
   };
 
   const resetScope = () => {
