@@ -129,11 +129,14 @@ export default function Configuration() {
   /** Saves the whole risk row: name, mapped controls and both prompts. */
   const saveRisk = async (
     awp: AWPItem,
-    values: { name: string; controlIds: string[]; prompt: string; triagePrompt: string },
+    values: { name: string; controlIds: string[]; prompt: string; triagePrompt: string; canSpan: boolean },
   ) => {
     const newName = values.name.trim() || awp.name;
     try {
-      const payload: any = { default_control_ids: values.controlIds };
+      const payload: any = {
+        default_control_ids: values.controlIds,
+        can_span_multiple_spaces: values.canSpan,
+      };
       if (newName !== awp.name) payload.name = newName;
       const { data, error } = await supabase
         .from(awp.category)
@@ -420,7 +423,7 @@ interface RiskEditModalProps {
   prompt: PromptInfo | null;
   controls: { id: string; name: string; category: string }[];
   currentIds: string[];
-  onSave: (values: { name: string; controlIds: string[]; prompt: string; triagePrompt: string }) => void | Promise<void>;
+  onSave: (values: { name: string; controlIds: string[]; prompt: string; triagePrompt: string; canSpan: boolean }) => void | Promise<void>;
   onClose: () => void;
 }
 
@@ -429,12 +432,13 @@ function RiskEditModal({ awp, prompt, controls, currentIds, onSave, onClose }: R
   const [ids, setIds] = useState<string[]>(currentIds);
   const [detection, setDetection] = useState(prompt?.prompt_content ?? "");
   const [triage, setTriage] = useState(prompt?.triage_prompt_content ?? "");
+  const [canSpan, setCanSpan] = useState(!!awp.can_span_multiple_spaces);
   const [saving, setSaving] = useState(false);
 
   const submit = async () => {
     setSaving(true);
     try {
-      await onSave({ name, controlIds: ids, prompt: detection, triagePrompt: triage });
+      await onSave({ name, controlIds: ids, prompt: detection, triagePrompt: triage, canSpan });
     } finally {
       setSaving(false);
     }
@@ -458,8 +462,15 @@ function RiskEditModal({ awp, prompt, controls, currentIds, onSave, onClose }: R
             </div>
             <div className="space-y-1.5">
               <Label>Can span multiple spaces</Label>
-              <div className="h-10 flex items-center text-sm text-muted-foreground">
-                {awp.can_span_multiple_spaces ? "Yes" : "No"}
+              <div className="h-10 flex items-center gap-2">
+                <Checkbox
+                  id="can-span"
+                  checked={canSpan}
+                  onCheckedChange={(v) => setCanSpan(v === true)}
+                />
+                <Label htmlFor="can-span" className="text-sm font-normal cursor-pointer">
+                  {canSpan ? "Yes" : "No"}
+                </Label>
               </div>
             </div>
           </div>
