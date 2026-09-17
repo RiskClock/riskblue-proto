@@ -480,24 +480,55 @@ export default function WaterMitigationPlan() {
     [project]
   );
 
-  // Rows: controls the company has selected in the Mitigation Control Library.
+  // Rows come from the company's Product Catalog; older companies without any
+  // products keep using their saved control selections.
   const controlRows: ControlRow[] = useMemo(() => {
+    const withCost = (id: string, controlId: string, name: string, base: number): ControlRow => {
+      const scenario = costOverrides[id];
+      const isOverridden = typeof scenario === "number" && Number.isFinite(scenario);
+      return {
+        id,
+        name,
+        controlId,
+        scopeIds: null,
+        libraryUnitCost: base,
+        unitCost: isOverridden ? scenario : base,
+        isOverridden,
+      };
+    };
+
+    if ((products as any[]).length > 0) {
+      const controlById = new Map((controls as any[]).map((c) => [c.id, c]));
+      return (products as any[])
+        .filter((p) => !!p.control_id)
+        .map((p) => {
+          const control = controlById.get(p.control_id);
+          const base =
+            p.one_time_cost ?? overrideMap.get(p.control_id)?.one_time_cost ?? control?.one_time_cost ?? 0;
+          const row = withCost(p.id, p.control_id, p.name || control?.name || "Product", base);
+          row.scopeIds = p.scope_customized
+            ? [
+                ...((p.critical_asset_ids as string[]) || []),
+                ...((p.water_system_ids as string[]) || []),
+                ...((p.process_ids as string[]) || []),
+              ]
+            : null;
+          return row;
+        });
+    }
+
     const selected = new Set(selections.map((s: any) => s.control_id));
     return (controls as any[])
       .filter((c) => selected.has(c.id))
       .map((c) => {
-        const libraryUnitCost = overrideMap.get(c.id)?.one_time_cost ?? c.one_time_cost ?? 0;
-        const scenario = costOverrides[c.id];
-        const isOverridden = typeof scenario === "number" && Number.isFinite(scenario);
-        return {
-          id: c.id,
-          name: c.name,
-          libraryUnitCost,
-          unitCost: isOverridden ? scenario : libraryUnitCost,
-          isOverridden,
-        };
+        const ov = overrideMap.get(c.id);
+        const row = withCost(c.id, c.id, c.name, ov?.one_time_cost ?? c.one_time_cost ?? 0);
+        row.scopeIds = ov?.assets_customized
+          ? [...(ov.critical_asset_ids || []), ...(ov.water_system_ids || []), ...(ov.process_ids || [])]
+          : null;
+        return row;
       });
-  }, [controls, selections, overrideMap, costOverrides]);
+  }, [controls, products, selections, overrideMap, costOverrides]);
 
   // --- Per-unit cost editing (project scenario only) ---
   const [editingCostId, setEditingCostId] = useState<string | null>(null);
