@@ -68,6 +68,10 @@ interface Plan {
 interface ControlRow {
   id: string;
   name: string;
+  /** Linked mitigation control (equals `id` for legacy selection-based rows). */
+  controlId: string;
+  /** Explicit protected-item ids when the row overrides the Risk-Control Map defaults. */
+  scopeIds: string[] | null;
   /** Effective per-unit cost used for this project (override when set). */
   unitCost: number;
   /** Per-unit cost as defined in the control library. */
