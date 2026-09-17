@@ -3006,6 +3006,78 @@ export type Database = {
           },
         ]
       }
+      tenant_products: {
+        Row: {
+          control_id: string | null
+          created_at: string
+          created_by: string | null
+          critical_asset_ids: string[]
+          id: string
+          image_path: string | null
+          monthly_maint_cost: number | null
+          name: string
+          one_time_cost: number | null
+          process_ids: string[]
+          product_code: string | null
+          scope_customized: boolean
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+          water_system_ids: string[]
+        }
+        Insert: {
+          control_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          critical_asset_ids?: string[]
+          id?: string
+          image_path?: string | null
+          monthly_maint_cost?: number | null
+          name: string
+          one_time_cost?: number | null
+          process_ids?: string[]
+          product_code?: string | null
+          scope_customized?: boolean
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+          water_system_ids?: string[]
+        }
+        Update: {
+          control_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          critical_asset_ids?: string[]
+          id?: string
+          image_path?: string | null
+          monthly_maint_cost?: number | null
+          name?: string
+          one_time_cost?: number | null
+          process_ids?: string[]
+          product_code?: string | null
+          scope_customized?: boolean
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+          water_system_ids?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_products_control_id_fkey"
+            columns: ["control_id"]
+            isOneToOne: false
+            referencedRelation: "mitigation_controls"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_products_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenants: {
         Row: {
           created_at: string

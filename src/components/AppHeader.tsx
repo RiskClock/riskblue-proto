@@ -1,3 +1,4 @@
+import { productCatalogLabel } from "@/lib/catalogLabel";
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -231,7 +232,7 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
                   {...menuItemProps("controls")}
                 >
                   <ShieldCheck className="h-4 w-4 mr-2" />
-                  Mitigation Control Library
+                  {productCatalogLabel()}
                 </DropdownMenuItem>
               )}
               {(myTenants.length > 0 || isInternalUser) && (
