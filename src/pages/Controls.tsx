@@ -805,21 +805,29 @@ function AddProductModal({
 }: {
   controls: MitigationControl[];
   onClose: () => void;
-  onSave: (name: string, controlId: string | null) => Promise<void>;
+  onSave: (input: NewProductInput) => Promise<void>;
 }) {
   const [name, setName] = useState("");
+  const [productCode, setProductCode] = useState("");
+  const [description, setDescription] = useState("");
   const [controlId, setControlId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
 
   const term = query.trim().toLowerCase();
   const filtered = term ? controls.filter((c) => c.name.toLowerCase().includes(term)) : controls;
+  const canSave = !!name.trim() || !!productCode.trim();
 
   const submit = async () => {
-    if (!name.trim()) return;
+    if (!canSave) return;
     setSaving(true);
     try {
-      await onSave(name.trim(), controlId);
+      await onSave({
+        name: name.trim(),
+        productCode: productCode.trim(),
+        description: description.trim(),
+        controlId,
+      });
     } finally {
       setSaving(false);
     }
@@ -830,15 +838,35 @@ function AddProductModal({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Add Product</DialogTitle>
-          <DialogDescription>Give the product a name and the control it delivers.</DialogDescription>
+          <DialogDescription>Enter a name or product ID, then pick the product type.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label>Name</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder="Product name" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Name</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder="Product name" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Product ID</Label>
+              <Input
+                value={productCode}
+                onChange={(e) => setProductCode(e.target.value)}
+                placeholder="e.g. SKU-1024"
+              />
+            </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Control</Label>
+            <Label>Product description</Label>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              placeholder="What this product does"
+              className="text-sm"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Product Type</Label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -869,7 +897,7 @@ function AddProductModal({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button onClick={submit} disabled={saving || !name.trim()}>
+          <Button onClick={submit} disabled={saving || !canSave}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
           </Button>
         </DialogFooter>
