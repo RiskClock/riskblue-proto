@@ -3014,6 +3014,7 @@ export type Database = {
           created_by: string | null
           critical_asset_ids: string[]
           description: string | null
+          fixed_quantity: number
           id: string
           image_path: string | null
           installation_cost: number | null
@@ -3036,6 +3037,7 @@ export type Database = {
           created_by?: string | null
           critical_asset_ids?: string[]
           description?: string | null
+          fixed_quantity?: number
           id?: string
           image_path?: string | null
           installation_cost?: number | null
@@ -3058,6 +3060,7 @@ export type Database = {
           created_by?: string | null
           critical_asset_ids?: string[]
           description?: string | null
+          fixed_quantity?: number
           id?: string
           image_path?: string | null
           installation_cost?: number | null

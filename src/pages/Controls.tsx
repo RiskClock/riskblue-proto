@@ -735,11 +735,30 @@ export default function Controls() {
                         checked={!!selected.applied_in_any_plan}
                         disabled={!canEdit}
                         onCheckedChange={(v) =>
-                          void patchProduct(selected.id, { applied_in_any_plan: v === true })
+                          void patchProduct(selected.id, { applied_in_any_plan: v === true } as any)
                         }
                       />
                       <span className="text-sm">Applied in any plan</span>
                     </label>
+                    {selected.applied_in_any_plan && (
+                      <div className="mt-3 flex items-center gap-2">
+                        <Label className="text-sm text-muted-foreground">Quantity per plan</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          disabled={!canEdit}
+                          defaultValue={String((selected as any).fixed_quantity ?? 1)}
+                          key={`${selected.id}-qty`}
+                          onBlur={(e) => {
+                            const n = Math.max(0, parseInt(e.target.value, 10) || 0);
+                            if (n !== ((selected as any).fixed_quantity ?? 1)) {
+                              void patchProduct(selected.id, { fixed_quantity: n } as any);
+                            }
+                          }}
+                          className="h-8 w-24"
+                        />
+                      </div>
+                    )}
                   </section>
 
                   {canEdit && (
