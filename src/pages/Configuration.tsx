@@ -264,12 +264,12 @@ export default function Configuration() {
                   </TableHeader>
                   <TableBody>
                     {(["critical_assets", "water_systems", "processes"] as const).map((cat) => (
-                      <>
-                        <TableRow key={cat} className="bg-muted/50 hover:bg-muted/50">
+                      <Fragment key={cat}>
+                        <TableRow className="bg-muted/50 hover:bg-muted/50">
                           <TableCell colSpan={4} className="font-semibold text-sm py-2">{CATEGORY_LABELS[cat]}</TableCell>
                         </TableRow>
                         {riskRows(groupedAWPs[cat])}
-                      </>
+                      </Fragment>
                     ))}
                   </TableBody>
                 </Table>
