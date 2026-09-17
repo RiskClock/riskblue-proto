@@ -400,7 +400,11 @@ export default function Controls() {
 
   const searchTerm = search.trim().toLowerCase();
   const visibleProducts = searchTerm
-    ? products.filter((p) => p.name.toLowerCase().includes(searchTerm))
+    ? products.filter(
+        (p) =>
+          p.name.toLowerCase().includes(searchTerm) ||
+          (p.product_code || "").toLowerCase().includes(searchTerm),
+      )
     : products;
 
   const scopeTerm = scopeSearch.trim().toLowerCase();
@@ -413,7 +417,11 @@ export default function Controls() {
   const scopeCount = scope.critical_assets.length + scope.water_systems.length + scope.processes.length;
   const selectedControl = selected?.control_id ? controlMap.get(selected.control_id) : undefined;
   const pricingOverridden =
-    !!selected && (selected.one_time_cost !== null || selected.monthly_maint_cost !== null);
+    !!selected &&
+    (selected.one_time_cost !== null ||
+      selected.installation_cost !== null ||
+      selected.monthly_maint_cost !== null ||
+      selected.maint_interval !== "monthly");
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
