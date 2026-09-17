@@ -1498,7 +1498,7 @@ async function fireAndForgetAnalyze(
     const { data: allPrompts } = await admin
       .from("awp_class_prompts")
       .select("awp_class_name, detection_method")
-      .not("drive_file_id", "is", null);
+      .not("prompt_content", "is", null);
     const disabled = new Set<string>(reqRow?.disabled_awp_classes || []);
     const enabled = ((allPrompts as any[]) || [])
       .filter((p) => p.detection_method !== "always" && !disabled.has(p.awp_class_name))
