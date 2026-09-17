@@ -15,6 +15,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useTenant } from "@/contexts/TenantContext";
 import { Loader2, Search, Package, Plus, Trash2, ImagePlus } from "lucide-react";
 import { toast } from "sonner";
