@@ -344,16 +344,6 @@ export default function Controls() {
     void patchProduct(selected.id, patch);
   };
 
-  const resetPricing = () => {
-    if (!selected) return;
-    void patchProduct(selected.id, {
-      one_time_cost: null,
-      installation_cost: null,
-      monthly_maint_cost: null,
-      maint_interval: "monthly",
-    });
-  };
-
   const resetScope = () => {
     if (!selected) return;
     void patchProduct(selected.id, {
@@ -416,12 +406,7 @@ export default function Controls() {
 
   const scopeCount = scope.critical_assets.length + scope.water_systems.length + scope.processes.length;
   const selectedControl = selected?.control_id ? controlMap.get(selected.control_id) : undefined;
-  const pricingOverridden =
-    !!selected &&
-    (selected.one_time_cost !== null ||
-      selected.installation_cost !== null ||
-      selected.monthly_maint_cost !== null ||
-      selected.maint_interval !== "monthly");
+
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
@@ -600,14 +585,7 @@ export default function Controls() {
 
                   {/* Pricing */}
                   <section className="rounded-md border bg-card p-4 shrink-0">
-                    <div className="flex items-start justify-between gap-2 mb-3">
-                      <h3 className="text-sm font-semibold text-foreground">Pricing</h3>
-                      {canEdit && pricingOverridden && (
-                        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={resetPricing}>
-                          Reset
-                        </Button>
-                      )}
-                    </div>
+                    <h3 className="text-sm font-semibold text-foreground mb-3">Pricing</h3>
                     <div className="grid grid-cols-3 gap-4">
                       <div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">One-time</p>
