@@ -575,19 +575,124 @@ export default function Controls() {
                           />
                         </div>
                       </div>
-                    </div>
 
-                    {canEdit && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-muted-foreground hover:text-destructive"
-                        onClick={() => void deleteProduct(selected.id)}
-                        aria-label="Delete product"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground uppercase tracking-wide">
+                          Product description
+                        </Label>
+                        <Textarea
+                          value={descDraft}
+                          disabled={!canEdit}
+                          rows={3}
+                          placeholder="What this product does"
+                          onChange={(e) => setDescDraft(e.target.value)}
+                          onBlur={() => {
+                            const v = descDraft.trim();
+                            if (v !== (selected.description ?? "")) {
+                              void patchProduct(selected.id, { description: v || null });
+                            }
+                          }}
+                          className="text-sm"
+                        />
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* Pricing */}
+                  <section className="rounded-md border bg-card p-4 shrink-0">
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <h3 className="text-sm font-semibold text-foreground">Pricing</h3>
+                      {canEdit && pricingOverridden && (
+                        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={resetPricing}>
+                          Reset
+                        </Button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">One-time</p>
+                        {canEdit ? (
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                            <Input
+                              value={costDraft.one}
+                              onChange={(e) => setCostDraft((d) => ({ ...d, one: e.target.value }))}
+                              onBlur={() => commitCost("one")}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                              }}
+                              inputMode="decimal"
+                              className="pl-6 h-9"
+                            />
+                          </div>
+                        ) : (
+                          <p className="text-lg font-semibold">
+                            {formatCost(selected.one_time_cost ?? selectedControl?.one_time_cost)}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Installation</p>
+                        {canEdit ? (
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                            <Input
+                              value={costDraft.install}
+                              onChange={(e) => setCostDraft((d) => ({ ...d, install: e.target.value }))}
+                              onBlur={() => commitCost("install")}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                              }}
+                              inputMode="decimal"
+                              className="pl-6 h-9"
+                            />
+                          </div>
+                        ) : (
+                          <p className="text-lg font-semibold">{formatCost(selected.installation_cost)}</p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Maintenance</p>
+                        {canEdit ? (
+                          <div className="flex gap-2">
+                            <div className="relative flex-1">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                              <Input
+                                value={costDraft.maint}
+                                onChange={(e) => setCostDraft((d) => ({ ...d, maint: e.target.value }))}
+                                onBlur={() => commitCost("maint")}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                                }}
+                                inputMode="decimal"
+                                className="pl-6 h-9"
+                              />
+                            </div>
+                            <Select
+                              value={selected.maint_interval ?? "monthly"}
+                              onValueChange={(v) =>
+                                void patchProduct(selected.id, { maint_interval: v as "monthly" | "yearly" })
+                              }
+                            >
+                              <SelectTrigger className="h-9 w-[104px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="monthly">Monthly</SelectItem>
+                                <SelectItem value="yearly">Yearly</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ) : (
+                          <p className="text-lg font-semibold">
+                            {formatCost(selected.monthly_maint_cost ?? selectedControl?.monthly_maint_cost)}
+                            <span className="text-xs font-normal text-muted-foreground">
+                              {selected.maint_interval === "yearly" ? "/yr" : "/mo"}
+                            </span>
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </section>
 
                   {/* Mitigation Scope */}
@@ -634,62 +739,34 @@ export default function Controls() {
                     </div>
                   </section>
 
-                  {/* Pricing */}
+                  {/* Special Conditions */}
                   <section className="rounded-md border bg-card p-4 shrink-0">
-                    <h3 className="text-sm font-semibold text-foreground mb-3">Pricing</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">One-time</p>
-                        {canEdit ? (
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-                            <Input
-                              value={costDraft.one}
-                              onChange={(e) => setCostDraft((d) => ({ ...d, one: e.target.value }))}
-                              onBlur={() => commitCost("one")}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                              }}
-                              inputMode="decimal"
-                              className="pl-6 h-9"
-                            />
-                          </div>
-                        ) : (
-                          <p className="text-lg font-semibold">
-                            {formatCost(selected.one_time_cost ?? selectedControl?.one_time_cost)}
-                          </p>
-                        )}
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Monthly</p>
-                        {canEdit ? (
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-                            <Input
-                              value={costDraft.monthly}
-                              onChange={(e) => setCostDraft((d) => ({ ...d, monthly: e.target.value }))}
-                              onBlur={() => commitCost("monthly")}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                              }}
-                              inputMode="decimal"
-                              className="pl-6 h-9"
-                            />
-                          </div>
-                        ) : (
-                          <p className="text-lg font-semibold">
-                            {formatCost(selected.monthly_maint_cost ?? selectedControl?.monthly_maint_cost)}
-                            <span className="text-xs font-normal text-muted-foreground">/mo</span>
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    {canEdit && pricingOverridden && (
-                      <Button variant="ghost" size="sm" className="mt-3 h-7 text-xs" onClick={resetPricing}>
-                        Reset
-                      </Button>
-                    )}
+                    <h3 className="text-sm font-semibold text-foreground mb-3">Special Conditions</h3>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={!!selected.applied_in_any_plan}
+                        disabled={!canEdit}
+                        onCheckedChange={(v) =>
+                          void patchProduct(selected.id, { applied_in_any_plan: v === true })
+                        }
+                      />
+                      <span className="text-sm">Applied in any plan</span>
+                    </label>
                   </section>
+
+                  {canEdit && (
+                    <div className="pb-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => void deleteProduct(selected.id)}
+                      >
+                        <Trash2 className="h-4 w-4 mr-1.5" />
+                        Delete product
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
