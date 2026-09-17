@@ -225,7 +225,12 @@ export default function Controls() {
       .update({ ...(patch as any), updated_by: user?.id })
       .eq("id", id);
     if (error) {
-      toast.error((error as any)?.message || "Could not save changes");
+      const msg = (error as any)?.message || "";
+      toast.error(
+        (error as any)?.code === "23505" || msg.includes("tenant_products_tenant_code_unique")
+          ? "That Product ID is already used by another product."
+          : msg || "Could not save changes",
+      );
       return;
     }
     queryClient.invalidateQueries({ queryKey: ["tenant-products", tenantId] });
