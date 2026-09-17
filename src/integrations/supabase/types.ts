@@ -3008,12 +3008,16 @@ export type Database = {
       }
       tenant_products: {
         Row: {
+          applied_in_any_plan: boolean
           control_id: string | null
           created_at: string
           created_by: string | null
           critical_asset_ids: string[]
+          description: string | null
           id: string
           image_path: string | null
+          installation_cost: number | null
+          maint_interval: string
           monthly_maint_cost: number | null
           name: string
           one_time_cost: number | null
@@ -3026,12 +3030,16 @@ export type Database = {
           water_system_ids: string[]
         }
         Insert: {
+          applied_in_any_plan?: boolean
           control_id?: string | null
           created_at?: string
           created_by?: string | null
           critical_asset_ids?: string[]
+          description?: string | null
           id?: string
           image_path?: string | null
+          installation_cost?: number | null
+          maint_interval?: string
           monthly_maint_cost?: number | null
           name: string
           one_time_cost?: number | null
@@ -3044,12 +3052,16 @@ export type Database = {
           water_system_ids?: string[]
         }
         Update: {
+          applied_in_any_plan?: boolean
           control_id?: string | null
           created_at?: string
           created_by?: string | null
           critical_asset_ids?: string[]
+          description?: string | null
           id?: string
           image_path?: string | null
+          installation_cost?: number | null
+          maint_interval?: string
           monthly_maint_cost?: number | null
           name?: string
           one_time_cost?: number | null

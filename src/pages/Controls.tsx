@@ -15,6 +15,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useTenant } from "@/contexts/TenantContext";
 import { Loader2, Search, Package, Plus, Trash2, ImagePlus } from "lucide-react";
 import { toast } from "sonner";
@@ -42,14 +50,25 @@ interface TenantProduct {
   tenant_id: string;
   name: string;
   product_code: string | null;
+  description: string | null;
   control_id: string | null;
   image_path: string | null;
   one_time_cost: number | null;
+  installation_cost: number | null;
   monthly_maint_cost: number | null;
+  maint_interval: "monthly" | "yearly";
+  applied_in_any_plan: boolean;
   scope_customized: boolean;
   critical_asset_ids: string[];
   water_system_ids: string[];
   process_ids: string[];
+}
+
+export interface NewProductInput {
+  name: string;
+  productCode: string;
+  description: string;
+  controlId: string | null;
 }
 
 const formatCost = (cost?: number | null) => {
@@ -212,15 +231,17 @@ export default function Controls() {
     queryClient.invalidateQueries({ queryKey: ["tenant-products", tenantId] });
   };
 
-  const addProduct = async (name: string, controlId: string | null) => {
+  const addProduct = async (input: NewProductInput) => {
     if (!tenantId || !user) return;
-    const control = controlId ? controlMap.get(controlId) : undefined;
+    const control = input.controlId ? controlMap.get(input.controlId) : undefined;
     const { data, error } = await supabase
       .from("tenant_products")
       .insert({
         tenant_id: tenantId,
-        name,
-        control_id: controlId,
+        name: input.name || input.productCode,
+        product_code: input.productCode || null,
+        description: input.description || null,
+        control_id: input.controlId,
         one_time_cost: control?.one_time_cost ?? null,
         monthly_maint_cost: control?.monthly_maint_cost ?? null,
         created_by: user.id,
@@ -285,34 +306,52 @@ export default function Controls() {
   // ---------- local drafts ----------
   const [nameDraft, setNameDraft] = useState("");
   const [codeDraft, setCodeDraft] = useState("");
-  const [costDraft, setCostDraft] = useState({ one: "", monthly: "" });
+  const [descDraft, setDescDraft] = useState("");
+  const [costDraft, setCostDraft] = useState({ one: "", install: "", maint: "" });
 
   useEffect(() => {
     if (!selected) return;
     setNameDraft(selected.name);
     setCodeDraft(selected.product_code ?? "");
+    setDescDraft(selected.description ?? "");
     const control = selected.control_id ? controlMap.get(selected.control_id) : undefined;
     setCostDraft({
       one: String(selected.one_time_cost ?? control?.one_time_cost ?? 0),
-      monthly: String(selected.monthly_maint_cost ?? control?.monthly_maint_cost ?? 0),
+      install: String(selected.installation_cost ?? 0),
+      maint: String(selected.monthly_maint_cost ?? control?.monthly_maint_cost ?? 0),
     });
     setScopeSearch("");
-  }, [selected?.id, selected?.one_time_cost, selected?.monthly_maint_cost, selected?.control_id, controlMap]);
+  }, [
+    selected?.id,
+    selected?.one_time_cost,
+    selected?.installation_cost,
+    selected?.monthly_maint_cost,
+    selected?.control_id,
+    controlMap,
+  ]);
 
-  const commitCost = (field: "one" | "monthly") => {
+  const commitCost = (field: "one" | "install" | "maint") => {
     if (!canEdit || !selected) return;
-    const raw = field === "one" ? costDraft.one : costDraft.monthly;
+    const raw = costDraft[field];
     const parsed = raw.trim() === "" ? 0 : Number(raw.replace(/[^0-9.]/g, ""));
     if (Number.isNaN(parsed)) return;
-    void patchProduct(
-      selected.id,
-      field === "one" ? { one_time_cost: parsed } : { monthly_maint_cost: parsed },
-    );
+    const patch: Partial<TenantProduct> =
+      field === "one"
+        ? { one_time_cost: parsed }
+        : field === "install"
+        ? { installation_cost: parsed }
+        : { monthly_maint_cost: parsed };
+    void patchProduct(selected.id, patch);
   };
 
   const resetPricing = () => {
     if (!selected) return;
-    void patchProduct(selected.id, { one_time_cost: null, monthly_maint_cost: null });
+    void patchProduct(selected.id, {
+      one_time_cost: null,
+      installation_cost: null,
+      monthly_maint_cost: null,
+      maint_interval: "monthly",
+    });
   };
 
   const resetScope = () => {
@@ -361,7 +400,11 @@ export default function Controls() {
 
   const searchTerm = search.trim().toLowerCase();
   const visibleProducts = searchTerm
-    ? products.filter((p) => p.name.toLowerCase().includes(searchTerm))
+    ? products.filter(
+        (p) =>
+          p.name.toLowerCase().includes(searchTerm) ||
+          (p.product_code || "").toLowerCase().includes(searchTerm),
+      )
     : products;
 
   const scopeTerm = scopeSearch.trim().toLowerCase();
@@ -374,7 +417,11 @@ export default function Controls() {
   const scopeCount = scope.critical_assets.length + scope.water_systems.length + scope.processes.length;
   const selectedControl = selected?.control_id ? controlMap.get(selected.control_id) : undefined;
   const pricingOverridden =
-    !!selected && (selected.one_time_cost !== null || selected.monthly_maint_cost !== null);
+    !!selected &&
+    (selected.one_time_cost !== null ||
+      selected.installation_cost !== null ||
+      selected.monthly_maint_cost !== null ||
+      selected.maint_interval !== "monthly");
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
@@ -407,7 +454,7 @@ export default function Controls() {
                   <Input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search products by name"
+                    placeholder="Search products by name or ID"
                     className="pl-9"
                   />
                 </div>
@@ -422,7 +469,10 @@ export default function Controls() {
                     onClick={() => setSelectedId(p.id)}
                   >
                     <Package className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="text-sm flex-1 truncate">{p.name}</span>
+                    <span className="text-sm flex-1 truncate">
+                      {p.product_code ? `(${p.product_code}) ` : ""}
+                      {p.name}
+                    </span>
                     {p.control_id && (
                       <span className="text-xs text-muted-foreground truncate max-w-[45%]">
                         {controlMap.get(p.control_id)?.name}
@@ -525,19 +575,124 @@ export default function Controls() {
                           />
                         </div>
                       </div>
-                    </div>
 
-                    {canEdit && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-muted-foreground hover:text-destructive"
-                        onClick={() => void deleteProduct(selected.id)}
-                        aria-label="Delete product"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground uppercase tracking-wide">
+                          Product description
+                        </Label>
+                        <Textarea
+                          value={descDraft}
+                          disabled={!canEdit}
+                          rows={3}
+                          placeholder="What this product does"
+                          onChange={(e) => setDescDraft(e.target.value)}
+                          onBlur={() => {
+                            const v = descDraft.trim();
+                            if (v !== (selected.description ?? "")) {
+                              void patchProduct(selected.id, { description: v || null });
+                            }
+                          }}
+                          className="text-sm"
+                        />
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* Pricing */}
+                  <section className="rounded-md border bg-card p-4 shrink-0">
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <h3 className="text-sm font-semibold text-foreground">Pricing</h3>
+                      {canEdit && pricingOverridden && (
+                        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={resetPricing}>
+                          Reset
+                        </Button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">One-time</p>
+                        {canEdit ? (
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                            <Input
+                              value={costDraft.one}
+                              onChange={(e) => setCostDraft((d) => ({ ...d, one: e.target.value }))}
+                              onBlur={() => commitCost("one")}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                              }}
+                              inputMode="decimal"
+                              className="pl-6 h-9"
+                            />
+                          </div>
+                        ) : (
+                          <p className="text-lg font-semibold">
+                            {formatCost(selected.one_time_cost ?? selectedControl?.one_time_cost)}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Installation</p>
+                        {canEdit ? (
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                            <Input
+                              value={costDraft.install}
+                              onChange={(e) => setCostDraft((d) => ({ ...d, install: e.target.value }))}
+                              onBlur={() => commitCost("install")}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                              }}
+                              inputMode="decimal"
+                              className="pl-6 h-9"
+                            />
+                          </div>
+                        ) : (
+                          <p className="text-lg font-semibold">{formatCost(selected.installation_cost)}</p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Maintenance</p>
+                        {canEdit ? (
+                          <div className="flex gap-2">
+                            <div className="relative flex-1">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                              <Input
+                                value={costDraft.maint}
+                                onChange={(e) => setCostDraft((d) => ({ ...d, maint: e.target.value }))}
+                                onBlur={() => commitCost("maint")}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                                }}
+                                inputMode="decimal"
+                                className="pl-6 h-9"
+                              />
+                            </div>
+                            <Select
+                              value={selected.maint_interval ?? "monthly"}
+                              onValueChange={(v) =>
+                                void patchProduct(selected.id, { maint_interval: v as "monthly" | "yearly" })
+                              }
+                            >
+                              <SelectTrigger className="h-9 w-[104px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="monthly">Monthly</SelectItem>
+                                <SelectItem value="yearly">Yearly</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ) : (
+                          <p className="text-lg font-semibold">
+                            {formatCost(selected.monthly_maint_cost ?? selectedControl?.monthly_maint_cost)}
+                            <span className="text-xs font-normal text-muted-foreground">
+                              {selected.maint_interval === "yearly" ? "/yr" : "/mo"}
+                            </span>
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </section>
 
                   {/* Mitigation Scope */}
@@ -584,62 +739,34 @@ export default function Controls() {
                     </div>
                   </section>
 
-                  {/* Pricing */}
+                  {/* Special Conditions */}
                   <section className="rounded-md border bg-card p-4 shrink-0">
-                    <h3 className="text-sm font-semibold text-foreground mb-3">Pricing</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">One-time</p>
-                        {canEdit ? (
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-                            <Input
-                              value={costDraft.one}
-                              onChange={(e) => setCostDraft((d) => ({ ...d, one: e.target.value }))}
-                              onBlur={() => commitCost("one")}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                              }}
-                              inputMode="decimal"
-                              className="pl-6 h-9"
-                            />
-                          </div>
-                        ) : (
-                          <p className="text-lg font-semibold">
-                            {formatCost(selected.one_time_cost ?? selectedControl?.one_time_cost)}
-                          </p>
-                        )}
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Monthly</p>
-                        {canEdit ? (
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-                            <Input
-                              value={costDraft.monthly}
-                              onChange={(e) => setCostDraft((d) => ({ ...d, monthly: e.target.value }))}
-                              onBlur={() => commitCost("monthly")}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                              }}
-                              inputMode="decimal"
-                              className="pl-6 h-9"
-                            />
-                          </div>
-                        ) : (
-                          <p className="text-lg font-semibold">
-                            {formatCost(selected.monthly_maint_cost ?? selectedControl?.monthly_maint_cost)}
-                            <span className="text-xs font-normal text-muted-foreground">/mo</span>
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    {canEdit && pricingOverridden && (
-                      <Button variant="ghost" size="sm" className="mt-3 h-7 text-xs" onClick={resetPricing}>
-                        Reset
-                      </Button>
-                    )}
+                    <h3 className="text-sm font-semibold text-foreground mb-3">Special Conditions</h3>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={!!selected.applied_in_any_plan}
+                        disabled={!canEdit}
+                        onCheckedChange={(v) =>
+                          void patchProduct(selected.id, { applied_in_any_plan: v === true })
+                        }
+                      />
+                      <span className="text-sm">Applied in any plan</span>
+                    </label>
                   </section>
+
+                  {canEdit && (
+                    <div className="pb-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => void deleteProduct(selected.id)}
+                      >
+                        <Trash2 className="h-4 w-4 mr-1.5" />
+                        Delete product
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -678,21 +805,29 @@ function AddProductModal({
 }: {
   controls: MitigationControl[];
   onClose: () => void;
-  onSave: (name: string, controlId: string | null) => Promise<void>;
+  onSave: (input: NewProductInput) => Promise<void>;
 }) {
   const [name, setName] = useState("");
+  const [productCode, setProductCode] = useState("");
+  const [description, setDescription] = useState("");
   const [controlId, setControlId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
 
   const term = query.trim().toLowerCase();
   const filtered = term ? controls.filter((c) => c.name.toLowerCase().includes(term)) : controls;
+  const canSave = !!name.trim() || !!productCode.trim();
 
   const submit = async () => {
-    if (!name.trim()) return;
+    if (!canSave) return;
     setSaving(true);
     try {
-      await onSave(name.trim(), controlId);
+      await onSave({
+        name: name.trim(),
+        productCode: productCode.trim(),
+        description: description.trim(),
+        controlId,
+      });
     } finally {
       setSaving(false);
     }
@@ -703,15 +838,35 @@ function AddProductModal({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Add Product</DialogTitle>
-          <DialogDescription>Give the product a name and the control it delivers.</DialogDescription>
+          <DialogDescription>Enter a name or product ID, then pick the product type.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label>Name</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder="Product name" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Name</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder="Product name" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Product ID</Label>
+              <Input
+                value={productCode}
+                onChange={(e) => setProductCode(e.target.value)}
+                placeholder="e.g. SKU-1024"
+              />
+            </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Control</Label>
+            <Label>Product description</Label>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              placeholder="What this product does"
+              className="text-sm"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Product Type</Label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -742,7 +897,7 @@ function AddProductModal({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button onClick={submit} disabled={saving || !name.trim()}>
+          <Button onClick={submit} disabled={saving || !canSave}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
           </Button>
         </DialogFooter>
