@@ -344,16 +344,6 @@ export default function Controls() {
     void patchProduct(selected.id, patch);
   };
 
-  const resetPricing = () => {
-    if (!selected) return;
-    void patchProduct(selected.id, {
-      one_time_cost: null,
-      installation_cost: null,
-      monthly_maint_cost: null,
-      maint_interval: "monthly",
-    });
-  };
-
   const resetScope = () => {
     if (!selected) return;
     void patchProduct(selected.id, {
