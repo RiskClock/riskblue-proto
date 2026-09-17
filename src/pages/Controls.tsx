@@ -231,15 +231,17 @@ export default function Controls() {
     queryClient.invalidateQueries({ queryKey: ["tenant-products", tenantId] });
   };
 
-  const addProduct = async (name: string, controlId: string | null) => {
+  const addProduct = async (input: NewProductInput) => {
     if (!tenantId || !user) return;
-    const control = controlId ? controlMap.get(controlId) : undefined;
+    const control = input.controlId ? controlMap.get(input.controlId) : undefined;
     const { data, error } = await supabase
       .from("tenant_products")
       .insert({
         tenant_id: tenantId,
-        name,
-        control_id: controlId,
+        name: input.name || input.productCode,
+        product_code: input.productCode || null,
+        description: input.description || null,
+        control_id: input.controlId,
         one_time_cost: control?.one_time_cost ?? null,
         monthly_maint_cost: control?.monthly_maint_cost ?? null,
         created_by: user.id,
