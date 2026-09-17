@@ -251,9 +251,11 @@ export default function Configuration() {
                 <ToggleGroupItem value="control" className="text-xs px-3">Control-centric</ToggleGroupItem>
               </ToggleGroup>
             </div>
-            <div className="bg-card rounded-lg border">
+            {/* overflow-visible on the table wrapper so the sticky header tracks
+                page scroll instead of the table's own (non-scrolling) viewport */}
+            <div className="bg-card rounded-lg border [&>div]:overflow-visible">
               {viewMode === "risk" ? (
-                <Table className="[&_td]:py-2 [&_th]:py-2 [&_thead_th]:sticky [&_thead_th]:top-[73px] [&_thead_th]:z-10 [&_thead_th]:bg-card [&_thead_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
+                <Table className="[&_td]:py-2 [&_th]:py-2 [&_thead_th]:sticky [&_thead_th]:top-[72px] [&_thead_th]:z-10 [&_thead_th]:bg-card [&_thead_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-[220px]">Risk</TableHead>
