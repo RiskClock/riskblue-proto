@@ -23,6 +23,7 @@ import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { useMitigationControls, getControlNameById } from "@/hooks/useMitigationControls";
 import { format } from "date-fns";
 import { tagStyle } from "@/lib/tagColor";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface AWPItem {
   id: string;
@@ -351,6 +352,8 @@ interface RiskRowProps {
 
 function RiskRow({ awp, controls, currentIds, hasPrompt, onEdit }: RiskRowProps) {
   const names = currentIds.map((id) => getControlNameById(controls, id) || id);
+  const visibleNames = names.slice(0, 5);
+  const remaining = names.length - visibleNames.length;
 
   return (
     <TableRow
@@ -362,16 +365,22 @@ function RiskRow({ awp, controls, currentIds, hasPrompt, onEdit }: RiskRowProps)
       }}
     >
       <TableCell className="font-medium py-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2">
           <span>{awp.name}</span>
           {!hasPrompt && (
-            <span
-              className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-warning/20 text-xs font-bold text-warning-foreground"
-              title="Missing prompt"
-              aria-label="Missing prompt"
-            >
-              !
-            </span>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-warning/20 text-xs font-bold text-warning-foreground"
+                    aria-label="Missing prompt"
+                  >
+                    !
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Missing prompt</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
         </div>
       </TableCell>
@@ -379,8 +388,8 @@ function RiskRow({ awp, controls, currentIds, hasPrompt, onEdit }: RiskRowProps)
         {names.length === 0 ? (
           <span className="text-sm text-muted-foreground">No controls</span>
         ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {names.map((name) => {
+          <div className="flex flex-wrap items-center gap-1.5">
+            {visibleNames.map((name) => {
               const style = tagStyle(name);
               return (
                 <span
@@ -392,10 +401,13 @@ function RiskRow({ awp, controls, currentIds, hasPrompt, onEdit }: RiskRowProps)
                 </span>
               );
             })}
+            {remaining > 0 && (
+              <span className="text-xs text-muted-foreground">+{remaining} more</span>
+            )}
           </div>
         )}
       </TableCell>
-      <TableCell className={`py-2 text-center text-sm ${awp.can_span_multiple_spaces ? "" : "text-muted-foreground"}`}>
+      <TableCell className={`py-2 text-center text-sm ${awp.can_span_multiple_spaces ? "" : "text-muted-foreground/50"}`}>
         {awp.can_span_multiple_spaces ? "Yes" : "No"}
       </TableCell>
     </TableRow>
