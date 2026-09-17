@@ -276,7 +276,7 @@ export default function Configuration() {
                   </TableBody>
                 </Table>
               ) : (
-                <Table className="[&_td]:py-2 [&_th]:py-2 [&_thead_th]:sticky [&_thead_th]:top-[73px] [&_thead_th]:z-10 [&_thead_th]:bg-card [&_thead_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
+                <Table className="[&_td]:py-2 [&_th]:py-2 [&_thead_th]:sticky [&_thead_th]:top-[72px] [&_thead_th]:z-10 [&_thead_th]:bg-card [&_thead_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-[260px]">Control</TableHead>
