@@ -23,6 +23,7 @@ import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { useMitigationControls, getControlNameById } from "@/hooks/useMitigationControls";
 import { format } from "date-fns";
 import { tagStyle } from "@/lib/tagColor";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface AWPItem {
   id: string;
@@ -128,11 +129,14 @@ export default function Configuration() {
   /** Saves the whole risk row: name, mapped controls and both prompts. */
   const saveRisk = async (
     awp: AWPItem,
-    values: { name: string; controlIds: string[]; prompt: string; triagePrompt: string },
+    values: { name: string; controlIds: string[]; prompt: string; triagePrompt: string; canSpan: boolean },
   ) => {
     const newName = values.name.trim() || awp.name;
     try {
-      const payload: any = { default_control_ids: values.controlIds };
+      const payload: any = {
+        default_control_ids: values.controlIds,
+        can_span_multiple_spaces: values.canSpan,
+      };
       if (newName !== awp.name) payload.name = newName;
       const { data, error } = await supabase
         .from(awp.category)
@@ -351,6 +355,8 @@ interface RiskRowProps {
 
 function RiskRow({ awp, controls, currentIds, hasPrompt, onEdit }: RiskRowProps) {
   const names = currentIds.map((id) => getControlNameById(controls, id) || id);
+  const visibleNames = names.slice(0, 5);
+  const remaining = names.length - visibleNames.length;
 
   return (
     <TableRow
@@ -362,16 +368,22 @@ function RiskRow({ awp, controls, currentIds, hasPrompt, onEdit }: RiskRowProps)
       }}
     >
       <TableCell className="font-medium py-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2">
           <span>{awp.name}</span>
           {!hasPrompt && (
-            <span
-              className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-warning/20 text-xs font-bold text-warning-foreground"
-              title="Missing prompt"
-              aria-label="Missing prompt"
-            >
-              !
-            </span>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-warning/20 text-xs font-bold text-warning-foreground"
+                    aria-label="Missing prompt"
+                  >
+                    !
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Missing prompt</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
         </div>
       </TableCell>
@@ -379,8 +391,8 @@ function RiskRow({ awp, controls, currentIds, hasPrompt, onEdit }: RiskRowProps)
         {names.length === 0 ? (
           <span className="text-sm text-muted-foreground">No controls</span>
         ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {names.map((name) => {
+          <div className="flex flex-wrap items-center gap-1.5">
+            {visibleNames.map((name) => {
               const style = tagStyle(name);
               return (
                 <span
@@ -392,10 +404,13 @@ function RiskRow({ awp, controls, currentIds, hasPrompt, onEdit }: RiskRowProps)
                 </span>
               );
             })}
+            {remaining > 0 && (
+              <span className="text-xs text-muted-foreground">+{remaining} more</span>
+            )}
           </div>
         )}
       </TableCell>
-      <TableCell className={`py-2 text-center text-sm ${awp.can_span_multiple_spaces ? "" : "text-muted-foreground"}`}>
+      <TableCell className={`py-2 text-center text-sm ${awp.can_span_multiple_spaces ? "" : "text-muted-foreground/50"}`}>
         {awp.can_span_multiple_spaces ? "Yes" : "No"}
       </TableCell>
     </TableRow>
@@ -408,7 +423,7 @@ interface RiskEditModalProps {
   prompt: PromptInfo | null;
   controls: { id: string; name: string; category: string }[];
   currentIds: string[];
-  onSave: (values: { name: string; controlIds: string[]; prompt: string; triagePrompt: string }) => void | Promise<void>;
+  onSave: (values: { name: string; controlIds: string[]; prompt: string; triagePrompt: string; canSpan: boolean }) => void | Promise<void>;
   onClose: () => void;
 }
 
@@ -417,12 +432,13 @@ function RiskEditModal({ awp, prompt, controls, currentIds, onSave, onClose }: R
   const [ids, setIds] = useState<string[]>(currentIds);
   const [detection, setDetection] = useState(prompt?.prompt_content ?? "");
   const [triage, setTriage] = useState(prompt?.triage_prompt_content ?? "");
+  const [canSpan, setCanSpan] = useState(!!awp.can_span_multiple_spaces);
   const [saving, setSaving] = useState(false);
 
   const submit = async () => {
     setSaving(true);
     try {
-      await onSave({ name, controlIds: ids, prompt: detection, triagePrompt: triage });
+      await onSave({ name, controlIds: ids, prompt: detection, triagePrompt: triage, canSpan });
     } finally {
       setSaving(false);
     }
@@ -446,8 +462,15 @@ function RiskEditModal({ awp, prompt, controls, currentIds, onSave, onClose }: R
             </div>
             <div className="space-y-1.5">
               <Label>Can span multiple spaces</Label>
-              <div className="h-10 flex items-center text-sm text-muted-foreground">
-                {awp.can_span_multiple_spaces ? "Yes" : "No"}
+              <div className="h-10 flex items-center gap-2">
+                <Checkbox
+                  id="can-span"
+                  checked={canSpan}
+                  onCheckedChange={(v) => setCanSpan(v === true)}
+                />
+                <Label htmlFor="can-span" className="text-sm font-normal cursor-pointer">
+                  {canSpan ? "Yes" : "No"}
+                </Label>
               </div>
             </div>
           </div>
