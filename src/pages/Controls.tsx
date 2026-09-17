@@ -578,13 +578,13 @@ export default function Controls() {
 
                       <div className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground uppercase tracking-wide">
-                          Product description
+                          Description
                         </Label>
                         <Textarea
                           value={descDraft}
                           disabled={!canEdit}
                           rows={3}
-                          placeholder="What this product does"
+                          placeholder="Product Description"
                           onChange={(e) => setDescDraft(e.target.value)}
                           onBlur={() => {
                             const v = descDraft.trim();
@@ -856,12 +856,12 @@ function AddProductModal({
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Product description</Label>
+            <Label>Description</Label>
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              placeholder="What this product does"
+              placeholder="Product Description"
               className="text-sm"
             />
           </div>
