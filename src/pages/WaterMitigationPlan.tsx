@@ -352,6 +352,24 @@ export default function WaterMitigationPlan() {
     enabled: !!planTenantId,
   });
 
+  // Products defined in the company's Product Catalog. When present they drive
+  // the plan rows; otherwise we fall back to the legacy control selections.
+  const { data: products = [] } = useQuery({
+    queryKey: ["wmp-products", planTenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenant_products")
+        .select(
+          "id, name, control_id, one_time_cost, scope_customized, critical_asset_ids, water_system_ids, process_ids",
+        )
+        .eq("tenant_id", planTenantId!)
+        .order("created_at");
+      if (error) throw error;
+      return (data || []) as any[];
+    },
+    enabled: !!planTenantId,
+  });
+
   const { data: overrides = [] } = useQuery({
     queryKey: ["wmp-overrides", planTenantId],
     queryFn: async () => {
