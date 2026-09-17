@@ -68,6 +68,10 @@ interface Plan {
 interface ControlRow {
   id: string;
   name: string;
+  /** Linked mitigation control (equals `id` for legacy selection-based rows). */
+  controlId: string;
+  /** Explicit protected-item ids when the row overrides the Risk-Control Map defaults. */
+  scopeIds: string[] | null;
   /** Effective per-unit cost used for this project (override when set). */
   unitCost: number;
   /** Per-unit cost as defined in the control library. */
@@ -348,6 +352,24 @@ export default function WaterMitigationPlan() {
     enabled: !!planTenantId,
   });
 
+  // Products defined in the company's Product Catalog. When present they drive
+  // the plan rows; otherwise we fall back to the legacy control selections.
+  const { data: products = [] } = useQuery({
+    queryKey: ["wmp-products", planTenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenant_products")
+        .select(
+          "id, name, control_id, one_time_cost, scope_customized, critical_asset_ids, water_system_ids, process_ids",
+        )
+        .eq("tenant_id", planTenantId!)
+        .order("created_at");
+      if (error) throw error;
+      return (data || []) as any[];
+    },
+    enabled: !!planTenantId,
+  });
+
   const { data: overrides = [] } = useQuery({
     queryKey: ["wmp-overrides", planTenantId],
     queryFn: async () => {
@@ -458,24 +480,55 @@ export default function WaterMitigationPlan() {
     [project]
   );
 
-  // Rows: controls the company has selected in the Mitigation Control Library.
+  // Rows come from the company's Product Catalog; older companies without any
+  // products keep using their saved control selections.
   const controlRows: ControlRow[] = useMemo(() => {
+    const withCost = (id: string, controlId: string, name: string, base: number): ControlRow => {
+      const scenario = costOverrides[id];
+      const isOverridden = typeof scenario === "number" && Number.isFinite(scenario);
+      return {
+        id,
+        name,
+        controlId,
+        scopeIds: null,
+        libraryUnitCost: base,
+        unitCost: isOverridden ? scenario : base,
+        isOverridden,
+      };
+    };
+
+    if ((products as any[]).length > 0) {
+      const controlById = new Map((controls as any[]).map((c) => [c.id, c]));
+      return (products as any[])
+        .filter((p) => !!p.control_id)
+        .map((p) => {
+          const control = controlById.get(p.control_id);
+          const base =
+            p.one_time_cost ?? overrideMap.get(p.control_id)?.one_time_cost ?? control?.one_time_cost ?? 0;
+          const row = withCost(p.id, p.control_id, p.name || control?.name || "Product", base);
+          row.scopeIds = p.scope_customized
+            ? [
+                ...((p.critical_asset_ids as string[]) || []),
+                ...((p.water_system_ids as string[]) || []),
+                ...((p.process_ids as string[]) || []),
+              ]
+            : null;
+          return row;
+        });
+    }
+
     const selected = new Set(selections.map((s: any) => s.control_id));
     return (controls as any[])
       .filter((c) => selected.has(c.id))
       .map((c) => {
-        const libraryUnitCost = overrideMap.get(c.id)?.one_time_cost ?? c.one_time_cost ?? 0;
-        const scenario = costOverrides[c.id];
-        const isOverridden = typeof scenario === "number" && Number.isFinite(scenario);
-        return {
-          id: c.id,
-          name: c.name,
-          libraryUnitCost,
-          unitCost: isOverridden ? scenario : libraryUnitCost,
-          isOverridden,
-        };
+        const ov = overrideMap.get(c.id);
+        const row = withCost(c.id, c.id, c.name, ov?.one_time_cost ?? c.one_time_cost ?? 0);
+        row.scopeIds = ov?.assets_customized
+          ? [...(ov.critical_asset_ids || []), ...(ov.water_system_ids || []), ...(ov.process_ids || [])]
+          : null;
+        return row;
       });
-  }, [controls, selections, overrideMap, costOverrides]);
+  }, [controls, products, selections, overrideMap, costOverrides]);
 
   // --- Per-unit cost editing (project scenario only) ---
   const [editingCostId, setEditingCostId] = useState<string | null>(null);
@@ -609,16 +662,13 @@ export default function WaterMitigationPlan() {
 
     const protectedByControl = new Map<string, Set<string>>();
     controlRows.forEach((row) => {
-      const ov = overrideMap.get(row.id);
       const set = new Set<string>();
-      if (ov?.assets_customized) {
-        [...(ov.critical_asset_ids || []), ...(ov.water_system_ids || []), ...(ov.process_ids || [])].forEach(
-          (id: string) => set.add(id),
-        );
+      if (row.scopeIds) {
+        row.scopeIds.forEach((id) => set.add(id));
       } else {
         (["critical_assets", "water_systems", "processes"] as const).forEach((key) => {
           (catalog[key] || []).forEach((entry: any) => {
-            if ((entry.default_control_ids || []).includes(row.id)) set.add(entry.id);
+            if ((entry.default_control_ids || []).includes(row.controlId)) set.add(entry.id);
           });
         });
       }
