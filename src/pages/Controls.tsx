@@ -238,7 +238,7 @@ export default function Controls() {
       .from("tenant_products")
       .insert({
         tenant_id: tenantId,
-        name: input.name || input.productCode,
+        name: input.name || "",
         product_code: input.productCode || null,
         description: input.description || null,
         control_id: input.controlId,
@@ -250,7 +250,12 @@ export default function Controls() {
       .select("id")
       .single();
     if (error) {
-      toast.error((error as any)?.message || "Could not add product");
+      const msg = (error as any)?.message || "";
+      toast.error(
+        (error as any)?.code === "23505" || msg.includes("tenant_products_tenant_code_unique")
+          ? "That Product ID is already used by another product."
+          : msg || "Could not add product",
+      );
       return;
     }
     await queryClient.invalidateQueries({ queryKey: ["tenant-products", tenantId] });
@@ -456,7 +461,7 @@ export default function Controls() {
                     <Package className="h-4 w-4 text-muted-foreground shrink-0" />
                     <span className="text-sm flex-1 truncate">
                       {p.product_code ? `(${p.product_code}) ` : ""}
-                      {p.name}
+                      {p.name || (p.product_code ? "" : "Untitled product")}
                     </span>
                     {p.control_id && (
                       <span className="text-xs text-muted-foreground truncate max-w-[45%]">
