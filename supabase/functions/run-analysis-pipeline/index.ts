@@ -1108,7 +1108,7 @@ async function runPipeline(params: PipelineParams) {
     const { data: allPrompts } = await admin
       .from("awp_class_prompts")
       .select("*")
-      .not("drive_file_id", "is", null);
+      .not("prompt_content", "is", null);
 
     if (!allPrompts || allPrompts.length === 0) {
       await markNoEligibleDrawings(admin, analysisRequestId, activeRunId);

@@ -1,8 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, Fragment } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { normalizeFunctionError } from "@/lib/functionsError";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Label } from "@/components/ui/label";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AppHeader } from "@/components/AppHeader";
-import { Plus, X, ShieldAlert, ExternalLink, AlertTriangle, Loader2, Link2 } from "lucide-react";
+import { Plus, X, ShieldAlert, Loader2, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { useMitigationControls, getControlNameById } from "@/hooks/useMitigationControls";
@@ -34,21 +35,19 @@ interface PromptInfo {
   id: string;
   awp_class_name: string;
   category: string;
-  drive_file_id: string | null;
-  drive_file_name: string | null;
-  drive_file_url: string | null;
-  drive_file_modified_at: string | null;
-  is_stale: boolean;
   prompt_content: string | null;
   content_updated_at: string | null;
-  triage_drive_file_id: string | null;
-  triage_drive_file_name: string | null;
-  triage_drive_file_url: string | null;
-  triage_drive_file_modified_at: string | null;
-  triage_is_stale: boolean;
   triage_prompt_content: string | null;
   triage_content_updated_at: string | null;
 }
+
+const CATEGORY_LABELS: Record<AWPItem["category"], string> = {
+  critical_assets: "Critical Assets",
+  water_systems: "Water Systems",
+  processes: "Processes",
+};
+
+const MAX_INLINE_CONTROLS = 5;
 
 export default function Configuration() {
   const { user, signOut } = useAuth();
@@ -56,19 +55,10 @@ export default function Configuration() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   useHeapIdentify();
-  const [linkingPrompt, setLinkingPrompt] = useState<string | null>(null);
-  const [promptUrls, setPromptUrls] = useState<Map<string, string>>(new Map());
-  const [resolvingPrompt, setResolvingPrompt] = useState<string | null>(null);
-  const [pullingLatest, setPullingLatest] = useState<string | null>(null);
 
-  // Triage prompt state
-  const [linkingTriagePrompt, setLinkingTriagePrompt] = useState<string | null>(null);
-  const [triagePromptUrls, setTriagePromptUrls] = useState<Map<string, string>>(new Map());
-  const [resolvingTriagePrompt, setResolvingTriagePrompt] = useState<string | null>(null);
-  const [pullingTriageLatest, setPullingTriageLatest] = useState<string | null>(null);
-
-  // Control edit modal state
-  const [editingControlsAwp, setEditingControlsAwp] = useState<AWPItem | null>(null);
+  const [viewMode, setViewMode] = useState<"risk" | "control">("risk");
+  const [editingAwp, setEditingAwp] = useState<AWPItem | null>(null);
+  const [editingControlId, setEditingControlId] = useState<string | null>(null);
 
   const isInternalUser = user?.email?.endsWith("@riskclock.com");
 
@@ -103,7 +93,7 @@ export default function Configuration() {
         .from("awp_class_prompts")
         .select("*");
       if (error) throw error;
-      return (data || []) as PromptInfo[];
+      return (data || []) as unknown as PromptInfo[];
     },
   });
 
@@ -119,213 +109,89 @@ export default function Configuration() {
     processes: awpItems.filter(a => a.category === "processes"),
   }), [awpItems]);
 
-  const getCurrentControlIds = (awp: AWPItem): string[] => {
-    const live = awpItems.find(a => a.id === awp.id) ?? awp;
-    return [...live.default_control_ids].sort((a, b) => {
+  const sortedControlIds = (ids: string[]): string[] =>
+    [...ids].sort((a, b) => {
       const nameA = getControlNameById(controls, a) || a;
       const nameB = getControlNameById(controls, b) || b;
       return nameA.localeCompare(nameB);
     });
+
+  const getCurrentControlIds = (awp: AWPItem): string[] => {
+    const live = awpItems.find(a => a.id === awp.id) ?? awp;
+    return sortedControlIds(live.default_control_ids);
   };
 
-  const persistControlIds = async (awp: AWPItem, nextIds: string[]) => {
+  const afterSave = async () => {
+    await Promise.all([refetchAWPs(), refetchPrompts()]);
+    queryClient.invalidateQueries({ queryKey: ["awp-options"] });
+  };
+
+  /** Saves the whole risk row: name, mapped controls and both prompts. */
+  const saveRisk = async (
+    awp: AWPItem,
+    values: { name: string; controlIds: string[]; prompt: string; triagePrompt: string },
+  ) => {
+    const newName = values.name.trim() || awp.name;
     try {
+      const payload: any = { default_control_ids: values.controlIds };
+      if (newName !== awp.name) payload.name = newName;
       const { data, error } = await supabase
         .from(awp.category)
-        .update({ default_control_ids: nextIds })
+        .update(payload)
         .eq("id", awp.id)
         .select("id");
       if (error) throw error;
-      if (!data || data.length === 0) throw new Error("Not authorized to update AWP configuration.");
-      await refetchAWPs();
-      queryClient.invalidateQueries({ queryKey: ["awp-options"] });
-    } catch (error: any) {
-      toast({ title: "Could not save change", description: error?.message, variant: "destructive" });
-    }
-  };
+      if (!data || data.length === 0) throw new Error("Not authorized to update this configuration.");
 
-  const handleAddControl = async (awp: AWPItem, controlId: string) => {
-    const current = (awpItems.find(a => a.id === awp.id) ?? awp).default_control_ids;
-    if (current.includes(controlId)) return;
-    await persistControlIds(awp, [...current, controlId]);
-  };
-
-  const handleRemoveControl = async (awp: AWPItem, controlId: string) => {
-    const current = (awpItems.find(a => a.id === awp.id) ?? awp).default_control_ids;
-    await persistControlIds(awp, current.filter(id => id !== controlId));
-  };
-
-
-  const handleToggleSpan = async (awp: AWPItem, next: boolean) => {
-    try {
-      const { error } = await supabase
-        .from(awp.category)
-        .update({ can_span_multiple_spaces: next } as any)
-        .eq("id", awp.id);
-      if (error) throw error;
-      toast({ title: next ? "Enabled multi-space" : "Disabled multi-space", description: awp.name });
-      await refetchAWPs();
-      queryClient.invalidateQueries({ queryKey: ["awp-options"] });
-    } catch (error: any) {
-      toast({ title: "Could not update", description: (error as any)?.message, variant: "destructive" });
-    }
-  };
-
-  // Link a Google Drive doc prompt (default)
-  const handleLinkPrompt = async (awpName: string, category: string) => {
-    const url = promptUrls.get(awpName);
-    if (!url?.trim()) return;
-    setResolvingPrompt(awpName);
-    try {
-      const { data, error } = await supabase.functions.invoke("resolve-drive-doc", {
-        body: { fileUrl: url, exportContent: true },
-      });
-      if (error) throw await normalizeFunctionError(error);
-      if (data?.error) throw new Error(data.error);
-
-      const existing = promptsByName.get(awpName);
+      const existing = promptsByName.get(awp.name);
+      const now = new Date().toISOString();
+      const promptPayload: any = {
+        awp_class_name: newName,
+        category: awp.category,
+        prompt_content: values.prompt.trim() || null,
+        content_updated_at: now,
+        triage_prompt_content: values.triagePrompt.trim() || null,
+        triage_content_updated_at: now,
+      };
       if (existing) {
-        await supabase.from("awp_class_prompts").update({
-          drive_file_id: data.fileId,
-          drive_file_name: data.fileName,
-          drive_file_url: url,
-          drive_file_modified_at: data.modifiedTime,
-          is_stale: false,
-          prompt_content: data.content || null,
-          content_updated_at: new Date().toISOString(),
-        } as any).eq("id", existing.id);
+        const { error: pErr } = await supabase.from("awp_class_prompts").update(promptPayload).eq("id", existing.id);
+        if (pErr) throw pErr;
       } else {
-        await supabase.from("awp_class_prompts").insert({
-          awp_class_name: awpName,
-          category,
-          drive_file_id: data.fileId,
-          drive_file_name: data.fileName,
-          drive_file_url: url,
-          drive_file_modified_at: data.modifiedTime,
-          prompt_content: data.content || null,
-          content_updated_at: new Date().toISOString(),
-        } as any);
+        const { error: pErr } = await supabase.from("awp_class_prompts").insert(promptPayload);
+        if (pErr) throw pErr;
       }
 
-      try {
-        await supabase.functions.invoke("watch-drive-doc", { body: { fileId: data.fileId } });
-      } catch (e) {
-        console.warn("Watch setup failed (non-critical):", e);
-      }
-
-      toast({ title: "Prompt linked", description: `"${data.fileName}" linked to ${awpName}` });
-      setLinkingPrompt(null);
-      setPromptUrls(prev => { const next = new Map(prev); next.delete(awpName); return next; });
-      refetchPrompts();
+      toast({ title: "Saved", description: `${newName} updated. New projects will use these settings.` });
+      setEditingAwp(null);
+      await afterSave();
     } catch (error: any) {
-      toast({ title: "Failed to link prompt", description: error.message, variant: "destructive" });
-    } finally {
-      setResolvingPrompt(null);
+      toast({ title: "Could not save", description: (error as any)?.message, variant: "destructive" });
     }
   };
 
-  const handlePullLatest = async (prompt: PromptInfo) => {
-    setPullingLatest(prompt.awp_class_name);
+  /** Saves which risks a control is mapped to (control-centric view). */
+  const saveControlRisks = async (controlId: string, selectedAwpIds: string[]) => {
     try {
-      const { data, error } = await supabase.functions.invoke("resolve-drive-doc", {
-        body: { fileUrl: prompt.drive_file_id, exportContent: true },
-      });
-      if (error) throw await normalizeFunctionError(error);
-      if (data?.error) throw new Error(data.error);
-
-      await supabase.from("awp_class_prompts").update({
-        drive_file_modified_at: data.modifiedTime,
-        drive_file_name: data.fileName,
-        is_stale: false,
-        content_updated_at: new Date().toISOString(),
-        prompt_content: data.content || null,
-      } as any).eq("id", prompt.id);
-
-      toast({ title: "Prompt updated", description: `Latest metadata pulled for "${data.fileName}"` });
-      refetchPrompts();
+      const selected = new Set(selectedAwpIds);
+      const updates = awpItems
+        .map((awp) => {
+          const has = awp.default_control_ids.includes(controlId);
+          const should = selected.has(awp.id);
+          if (has === should) return null;
+          const next = should
+            ? [...awp.default_control_ids, controlId]
+            : awp.default_control_ids.filter((id) => id !== controlId);
+          return supabase.from(awp.category).update({ default_control_ids: next } as any).eq("id", awp.id);
+        })
+        .filter(Boolean) as unknown as Promise<any>[];
+      const results = await Promise.all(updates);
+      const failed = results.find((r) => r?.error);
+      if (failed?.error) throw failed.error;
+      toast({ title: "Saved", description: "Risk mapping updated for this control." });
+      setEditingControlId(null);
+      await afterSave();
     } catch (error: any) {
-      toast({ title: "Pull failed", description: error.message, variant: "destructive" });
-    } finally {
-      setPullingLatest(null);
-    }
-  };
-
-  // Link a Google Drive doc for triaging prompt
-  const handleLinkTriagePrompt = async (awpName: string, category: string) => {
-    const url = triagePromptUrls.get(awpName);
-    if (!url?.trim()) return;
-    setResolvingTriagePrompt(awpName);
-    try {
-      const { data, error } = await supabase.functions.invoke("resolve-drive-doc", {
-        body: { fileUrl: url, exportContent: true },
-      });
-      if (error) throw await normalizeFunctionError(error);
-      if (data?.error) throw new Error(data.error);
-
-      const existing = promptsByName.get(awpName);
-      if (existing) {
-        await supabase.from("awp_class_prompts").update({
-          triage_drive_file_id: data.fileId,
-          triage_drive_file_name: data.fileName,
-          triage_drive_file_url: url,
-          triage_drive_file_modified_at: data.modifiedTime,
-          triage_is_stale: false,
-          triage_prompt_content: data.content || null,
-          triage_content_updated_at: new Date().toISOString(),
-        } as any).eq("id", existing.id);
-      } else {
-        await supabase.from("awp_class_prompts").insert({
-          awp_class_name: awpName,
-          category,
-          triage_drive_file_id: data.fileId,
-          triage_drive_file_name: data.fileName,
-          triage_drive_file_url: url,
-          triage_drive_file_modified_at: data.modifiedTime,
-          triage_prompt_content: data.content || null,
-          triage_content_updated_at: new Date().toISOString(),
-        } as any);
-      }
-
-      try {
-        await supabase.functions.invoke("watch-drive-doc", { body: { fileId: data.fileId } });
-      } catch (e) {
-        console.warn("Watch setup failed (non-critical):", e);
-      }
-
-      toast({ title: "Triage prompt linked", description: `"${data.fileName}" linked to ${awpName}` });
-      setLinkingTriagePrompt(null);
-      setTriagePromptUrls(prev => { const next = new Map(prev); next.delete(awpName); return next; });
-      refetchPrompts();
-    } catch (error: any) {
-      toast({ title: "Failed to link triage prompt", description: error.message, variant: "destructive" });
-    } finally {
-      setResolvingTriagePrompt(null);
-    }
-  };
-
-  const handlePullTriageLatest = async (prompt: PromptInfo) => {
-    setPullingTriageLatest(prompt.awp_class_name);
-    try {
-      const { data, error } = await supabase.functions.invoke("resolve-drive-doc", {
-        body: { fileUrl: prompt.triage_drive_file_id, exportContent: true },
-      });
-      if (error) throw await normalizeFunctionError(error);
-      if (data?.error) throw new Error(data.error);
-
-      await supabase.from("awp_class_prompts").update({
-        triage_drive_file_modified_at: data.modifiedTime,
-        triage_drive_file_name: data.fileName,
-        triage_is_stale: false,
-        triage_content_updated_at: new Date().toISOString(),
-        triage_prompt_content: data.content || null,
-      } as any).eq("id", prompt.id);
-
-      toast({ title: "Triage prompt updated", description: `Latest metadata pulled for "${data.fileName}"` });
-      refetchPrompts();
-    } catch (error: any) {
-      toast({ title: "Pull failed", description: error.message, variant: "destructive" });
-    } finally {
-      setPullingTriageLatest(null);
+      toast({ title: "Could not save", description: (error as any)?.message, variant: "destructive" });
     }
   };
 
@@ -344,83 +210,20 @@ export default function Configuration() {
 
   const loading = awpLoading || controlsLoading;
 
-  const renderPromptCell = (awp: AWPItem) => {
-    const prompt = promptsByName.get(awp.name);
-    const isEditing = linkingPrompt === awp.name;
-    const isResolving = resolvingPrompt === awp.name;
-    const isPulling = pullingLatest === awp.name;
+  const editingPrompt = editingAwp ? promptsByName.get(editingAwp.name) ?? null : null;
+  const editingControl = controls.find((c) => c.id === editingControlId) ?? null;
 
-    if (prompt?.drive_file_id && !isEditing) {
-      return (
-        <div className="flex items-center gap-2 flex-wrap">
-          <a href={prompt.drive_file_url || `https://docs.google.com/document/d/${prompt.drive_file_id}`} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1">
-            {prompt.drive_file_name || "Linked Doc"}<ExternalLink className="w-3 h-3" />
-          </a>
-          {prompt.drive_file_modified_at && (
-            <span className="text-xs text-muted-foreground">{format(new Date(prompt.drive_file_modified_at), "MMM d, yyyy")}</span>
-          )}
-          {prompt.is_stale && (
-            <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-300">
-              <AlertTriangle className="w-3 h-3 mr-1" />Updated
-            </Badge>
-          )}
-          <Button variant="outline" size="sm" className="h-6 text-xs" onClick={() => handlePullLatest(prompt)} disabled={isPulling}>
-            {isPulling ? <Loader2 className="w-3 h-3 animate-spin" /> : "Pull Latest"}
-          </Button>
-          <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setLinkingPrompt(awp.name)}>Change</Button>
-        </div>
-      );
-    }
-
-    return (
-      <div className="flex items-center gap-2">
-        <Input placeholder="Paste Google Drive doc URL..." className="h-7 text-xs max-w-[280px]" value={promptUrls.get(awp.name) || ""} onChange={(e) => setPromptUrls(prev => { const next = new Map(prev); next.set(awp.name, e.target.value); return next; })} />
-        <Button variant="outline" size="sm" className="h-7 text-xs" disabled={!promptUrls.get(awp.name)?.trim() || isResolving} onClick={() => handleLinkPrompt(awp.name, awp.category)}>
-          {isResolving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Link2 className="w-3 h-3 mr-1" />}Link
-        </Button>
-        {isEditing && <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setLinkingPrompt(null)}>Cancel</Button>}
-      </div>
-    );
-  };
-
-  const renderTriagePromptCell = (awp: AWPItem) => {
-    const prompt = promptsByName.get(awp.name);
-    const isEditing = linkingTriagePrompt === awp.name;
-    const isResolving = resolvingTriagePrompt === awp.name;
-    const isPulling = pullingTriageLatest === awp.name;
-
-    if (prompt?.triage_drive_file_id && !isEditing) {
-      return (
-        <div className="flex items-center gap-2 flex-wrap">
-          <a href={prompt.triage_drive_file_url || `https://docs.google.com/document/d/${prompt.triage_drive_file_id}`} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1">
-            {prompt.triage_drive_file_name || "Linked Doc"}<ExternalLink className="w-3 h-3" />
-          </a>
-          {prompt.triage_drive_file_modified_at && (
-            <span className="text-xs text-muted-foreground">{format(new Date(prompt.triage_drive_file_modified_at), "MMM d, yyyy")}</span>
-          )}
-          {prompt.triage_is_stale && (
-            <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-300">
-              <AlertTriangle className="w-3 h-3 mr-1" />Updated
-            </Badge>
-          )}
-          <Button variant="outline" size="sm" className="h-6 text-xs" onClick={() => handlePullTriageLatest(prompt)} disabled={isPulling}>
-            {isPulling ? <Loader2 className="w-3 h-3 animate-spin" /> : "Pull Latest"}
-          </Button>
-          <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setLinkingTriagePrompt(awp.name)}>Change</Button>
-        </div>
-      );
-    }
-
-    return (
-      <div className="flex items-center gap-2">
-        <Input placeholder="Paste Google Drive doc URL..." className="h-7 text-xs max-w-[280px]" value={triagePromptUrls.get(awp.name) || ""} onChange={(e) => setTriagePromptUrls(prev => { const next = new Map(prev); next.set(awp.name, e.target.value); return next; })} />
-        <Button variant="outline" size="sm" className="h-7 text-xs" disabled={!triagePromptUrls.get(awp.name)?.trim() || isResolving} onClick={() => handleLinkTriagePrompt(awp.name, awp.category)}>
-          {isResolving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Link2 className="w-3 h-3 mr-1" />}Link
-        </Button>
-        {isEditing && <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setLinkingTriagePrompt(null)}>Cancel</Button>}
-      </div>
-    );
-  };
+  const riskRows = (items: AWPItem[]) =>
+    items.map((awp) => (
+      <RiskRow
+        key={awp.id}
+        awp={awp}
+        controls={controls}
+        currentIds={getCurrentControlIds(awp)}
+        hasPrompt={!!promptsByName.get(awp.name)?.prompt_content}
+        onEdit={() => setEditingAwp(awp)}
+      />
+    ));
 
   return (
     <div className="min-h-screen bg-background">
@@ -435,38 +238,74 @@ export default function Configuration() {
           <div className="text-center py-12 text-muted-foreground">Loading...</div>
         ) : (
           <div>
-            <h2 className="text-lg font-semibold mb-3">Risk Mitigation Classes</h2>
+            <div className="flex items-center justify-between mb-3 gap-4">
+              <h2 className="text-lg font-semibold">Risk-Control Map</h2>
+              <ToggleGroup
+                type="single"
+                size="sm"
+                value={viewMode}
+                onValueChange={(v) => v && setViewMode(v as "risk" | "control")}
+                className="border rounded-md bg-card"
+              >
+                <ToggleGroupItem value="risk" className="text-xs px-3">Risk-centric</ToggleGroupItem>
+                <ToggleGroupItem value="control" className="text-xs px-3">Control-centric</ToggleGroupItem>
+              </ToggleGroup>
+            </div>
             <div className="bg-card rounded-lg border">
-              <Table className="[&_td]:py-2 [&_th]:py-2 [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-card [&_thead_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[180px]">AWP Class</TableHead>
-                    <TableHead className="w-[180px]">Default Controls</TableHead>
-                    <TableHead className="w-[160px]">Can Span Multiple Spaces</TableHead>
-                    <TableHead className="w-[350px]">Individual Detection Prompt</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow className="bg-muted/50 hover:bg-muted/50">
-                    <TableCell colSpan={4} className="font-semibold text-sm py-2">Critical Assets</TableCell>
-                  </TableRow>
-                  {groupedAWPs.critical_assets.map((awp) => (
-                    <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} promptCell={renderPromptCell(awp)} />
-                  ))}
-                  <TableRow className="bg-muted/50 hover:bg-muted/50">
-                    <TableCell colSpan={4} className="font-semibold text-sm py-2">Water Systems</TableCell>
-                  </TableRow>
-                  {groupedAWPs.water_systems.map((awp) => (
-                    <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} promptCell={renderPromptCell(awp)} />
-                  ))}
-                  <TableRow className="bg-muted/50 hover:bg-muted/50">
-                    <TableCell colSpan={4} className="font-semibold text-sm py-2">Processes</TableCell>
-                  </TableRow>
-                  {groupedAWPs.processes.map((awp) => (
-                    <AWPRow key={awp.id} awp={awp} controls={controls} currentIds={getCurrentControlIds(awp)} onEditControls={() => setEditingControlsAwp(awp)} onToggleSpan={(v) => handleToggleSpan(awp, v)} promptCell={renderPromptCell(awp)} />
-                  ))}
-                </TableBody>
-              </Table>
+              {viewMode === "risk" ? (
+                <Table className="[&_td]:py-2 [&_th]:py-2 [&_thead_th]:sticky [&_thead_th]:top-[73px] [&_thead_th]:z-10 [&_thead_th]:bg-card [&_thead_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[220px]">Risk</TableHead>
+                      <TableHead>Controls</TableHead>
+                      <TableHead className="w-[180px] text-center">Can Span Multiple Spaces</TableHead>
+                      <TableHead className="w-[90px]" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(["critical_assets", "water_systems", "processes"] as const).map((cat) => (
+                      <Fragment key={cat}>
+                        <TableRow className="bg-muted/50 hover:bg-muted/50">
+                          <TableCell colSpan={4} className="font-semibold text-sm py-2">{CATEGORY_LABELS[cat]}</TableCell>
+                        </TableRow>
+                        {riskRows(groupedAWPs[cat])}
+                      </Fragment>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <Table className="[&_td]:py-2 [&_th]:py-2 [&_thead_th]:sticky [&_thead_th]:top-[73px] [&_thead_th]:z-10 [&_thead_th]:bg-card [&_thead_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[260px]">Control</TableHead>
+                      <TableHead>Risks</TableHead>
+                      <TableHead className="w-[90px]" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {controls.map((control) => {
+                      const mapped = awpItems.filter((a) => a.default_control_ids.includes(control.id));
+                      return (
+                        <TableRow key={control.id}>
+                          <TableCell className="font-medium py-2">{control.name}</TableCell>
+                          <TableCell className="py-2">
+                            <span className="text-sm text-muted-foreground block truncate max-w-[640px]">
+                              {mapped.length > 0
+                                ? mapped.map((m) => m.name).join(", ")
+                                : "No risks mapped"}
+                            </span>
+                          </TableCell>
+                          <TableCell className="py-2 text-right">
+                            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setEditingControlId(control.id)}>
+                              <Pencil className="h-3 w-3 mr-1" />Edit
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
             </div>
           </div>
         )}
@@ -474,99 +313,250 @@ export default function Configuration() {
         <AIAgentsSection />
       </main>
 
-      {/* Control Edit Modal */}
-      {editingControlsAwp && (
-        <ControlEditModal
-          awp={editingControlsAwp}
+      {editingAwp && (
+        <RiskEditModal
+          key={editingAwp.id}
+          awp={editingAwp}
+          prompt={editingPrompt}
           controls={controls}
-          currentIds={getCurrentControlIds(editingControlsAwp)}
-          onAddControl={handleAddControl}
-          onRemoveControl={handleRemoveControl}
-          onClose={() => setEditingControlsAwp(null)}
+          currentIds={getCurrentControlIds(editingAwp)}
+          onSave={(values) => saveRisk(editingAwp, values)}
+          onClose={() => setEditingAwp(null)}
+        />
+      )}
+
+      {editingControl && (
+        <ControlRiskEditModal
+          key={editingControl.id}
+          control={editingControl}
+          awpItems={awpItems}
+          onSave={(ids) => saveControlRisks(editingControl.id, ids)}
+          onClose={() => setEditingControlId(null)}
         />
       )}
     </div>
   );
 }
 
-// AWP Row Component
-interface AWPRowProps {
+// ---------------- Risk Row ----------------
+interface RiskRowProps {
   awp: AWPItem;
   controls: { id: string; name: string; category: string }[];
   currentIds: string[];
-  onEditControls: () => void;
-  onToggleSpan: (next: boolean) => void;
-  promptCell: React.ReactNode;
+  hasPrompt: boolean;
+  onEdit: () => void;
 }
 
-function AWPRow({ awp, controls, currentIds, onEditControls, onToggleSpan, promptCell }: AWPRowProps) {
-  const count = currentIds.length;
+function RiskRow({ awp, controls, currentIds, hasPrompt, onEdit }: RiskRowProps) {
+  const names = currentIds.map((id) => getControlNameById(controls, id) || id);
+  const shown = names.slice(0, MAX_INLINE_CONTROLS);
+  const remaining = names.length - shown.length;
+
   return (
     <TableRow>
-      <TableCell className="font-medium py-2">{awp.name}</TableCell>
-      <TableCell className="py-2">
+      <TableCell className="font-medium py-2">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">{count} control{count !== 1 ? "s" : ""}</span>
-          <Button variant="outline" size="sm" className="h-6 text-xs" onClick={onEditControls}>Edit</Button>
+          <span>{awp.name}</span>
+          {!hasPrompt && <span className="text-xs font-normal text-muted-foreground">(missing prompt)</span>}
         </div>
       </TableCell>
       <TableCell className="py-2">
-        <Checkbox
-          checked={!!awp.can_span_multiple_spaces}
-          onCheckedChange={(v) => onToggleSpan(v === true)}
-          aria-label="Can span multiple spaces"
-        />
+        <span className="text-sm text-muted-foreground block truncate max-w-[520px]">
+          {names.length === 0 ? "No controls" : shown.join(", ")}
+          {remaining > 0 && <span className="text-foreground"> +{remaining} more</span>}
+        </span>
       </TableCell>
-      <TableCell className="py-2">{promptCell}</TableCell>
+      <TableCell className="py-2 text-center text-sm">{awp.can_span_multiple_spaces ? "Yes" : "No"}</TableCell>
+      <TableCell className="py-2 text-right">
+        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onEdit}>
+          <Pencil className="h-3 w-3 mr-1" />Edit
+        </Button>
+      </TableCell>
     </TableRow>
   );
 }
 
-// Control Edit Modal
-interface ControlEditModalProps {
+// ---------------- Risk Edit Modal ----------------
+interface RiskEditModalProps {
   awp: AWPItem;
+  prompt: PromptInfo | null;
   controls: { id: string; name: string; category: string }[];
   currentIds: string[];
-  onAddControl: (awp: AWPItem, controlId: string) => void;
-  onRemoveControl: (awp: AWPItem, controlId: string) => void;
+  onSave: (values: { name: string; controlIds: string[]; prompt: string; triagePrompt: string }) => void | Promise<void>;
   onClose: () => void;
 }
 
-function ControlEditModal({ awp, controls, currentIds, onAddControl, onRemoveControl, onClose }: ControlEditModalProps) {
+function RiskEditModal({ awp, prompt, controls, currentIds, onSave, onClose }: RiskEditModalProps) {
+  const [name, setName] = useState(awp.name);
+  const [ids, setIds] = useState<string[]>(currentIds);
+  const [detection, setDetection] = useState(prompt?.prompt_content ?? "");
+  const [triage, setTriage] = useState(prompt?.triage_prompt_content ?? "");
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    setSaving(true);
+    try {
+      await onSave({ name, controlIds: ids, prompt: detection, triagePrompt: triage });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-3xl max-h-[88vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Edit Controls - {awp.name}</DialogTitle>
+          <DialogTitle>Edit Risk - {awp.name}</DialogTitle>
+          <DialogDescription>
+            Changes apply to new projects only. Existing projects keep the settings they were created with.
+          </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
-          <div className="flex flex-wrap gap-1.5">
-            {currentIds.map((controlId) => {
-              const controlName = getControlNameById(controls, controlId);
-              return (
-                <Badge key={controlId} variant="secondary" className="flex items-center gap-1 text-xs">
-                  {controlName || controlId}
-                  <button onClick={() => onRemoveControl(awp, controlId)} className="ml-0.5 hover:text-destructive"><X className="h-3 w-3" /></button>
-                </Badge>
-              );
-            })}
+
+        <div className="space-y-4 overflow-y-auto pr-1">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Name</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Can span multiple spaces</Label>
+              <div className="h-10 flex items-center text-sm text-muted-foreground">
+                {awp.can_span_multiple_spaces ? "Yes" : "No"}
+              </div>
+            </div>
           </div>
-          <AddControlPopover awp={awp} controls={controls} currentIds={currentIds} onAdd={onAddControl} />
+
+          <div className="space-y-2">
+            <Label>Controls</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {ids.map((controlId) => (
+                <Badge key={controlId} variant="secondary" className="flex items-center gap-1 text-xs">
+                  {getControlNameById(controls, controlId) || controlId}
+                  <button onClick={() => setIds((prev) => prev.filter((id) => id !== controlId))} className="ml-0.5 hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+              {ids.length === 0 && <span className="text-sm text-muted-foreground">No controls</span>}
+            </div>
+            <AddControlPopover
+              controls={controls}
+              currentIds={ids}
+              onAdd={(controlId) => setIds((prev) => [...prev, controlId])}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Detection prompt</Label>
+            <Textarea
+              value={detection}
+              onChange={(e) => setDetection(e.target.value)}
+              placeholder="Write the detection prompt for this risk..."
+              className="font-mono text-xs min-h-[180px]"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Triage prompt</Label>
+            <Textarea
+              value={triage}
+              onChange={(e) => setTriage(e.target.value)}
+              placeholder="Write the triage prompt for this risk..."
+              className="font-mono text-xs min-h-[140px]"
+            />
+          </div>
         </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button onClick={submit} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------- Control Edit Modal (control-centric view) ----------------
+function ControlRiskEditModal({
+  control,
+  awpItems,
+  onSave,
+  onClose,
+}: {
+  control: { id: string; name: string };
+  awpItems: AWPItem[];
+  onSave: (awpIds: string[]) => void | Promise<void>;
+  onClose: () => void;
+}) {
+  const [selected, setSelected] = useState<string[]>(
+    awpItems.filter((a) => a.default_control_ids.includes(control.id)).map((a) => a.id),
+  );
+  const [saving, setSaving] = useState(false);
+
+  const toggle = (id: string, on: boolean) =>
+    setSelected((prev) => (on ? [...prev, id] : prev.filter((x) => x !== id)));
+
+  const submit = async () => {
+    setSaving(true);
+    try {
+      await onSave(selected);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Edit Risks - {control.name}</DialogTitle>
+          <DialogDescription>
+            Changes apply to new projects only. Existing projects are unaffected.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 overflow-y-auto pr-1">
+          {(["critical_assets", "water_systems", "processes"] as const).map((cat) => {
+            const items = awpItems.filter((a) => a.category === cat);
+            if (items.length === 0) return null;
+            return (
+              <div key={cat} className="space-y-1.5">
+                <p className="text-sm font-semibold">{CATEGORY_LABELS[cat]}</p>
+                {items.map((awp) => (
+                  <label key={awp.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <Checkbox
+                      checked={selected.includes(awp.id)}
+                      onCheckedChange={(v) => toggle(awp.id, v === true)}
+                    />
+                    {awp.name}
+                  </label>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button onClick={submit} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
 // Add Control Popover
-interface AddControlPopoverProps {
-  awp: AWPItem;
+function AddControlPopover({
+  controls,
+  currentIds,
+  onAdd,
+}: {
   controls: { id: string; name: string; category: string }[];
   currentIds: string[];
-  onAdd: (awp: AWPItem, controlId: string) => void;
-}
-
-function AddControlPopover({ awp, controls, currentIds, onAdd }: AddControlPopoverProps) {
+  onAdd: (controlId: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   const availableControls = controls.filter(c => !currentIds.includes(c.id));
   return (
@@ -581,7 +571,7 @@ function AddControlPopover({ awp, controls, currentIds, onAdd }: AddControlPopov
             <CommandEmpty>No controls found.</CommandEmpty>
             <CommandGroup>
               {availableControls.map((control) => (
-                <CommandItem key={control.id} value={control.name} onSelect={() => { onAdd(awp, control.id); setOpen(false); }}>{control.name}</CommandItem>
+                <CommandItem key={control.id} value={control.name} onSelect={() => { onAdd(control.id); setOpen(false); }}>{control.name}</CommandItem>
               ))}
             </CommandGroup>
           </CommandList>
