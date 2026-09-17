@@ -79,9 +79,12 @@ export const RootRedirect = ({ fallback }: { fallback?: React.ReactNode } = {}) 
 
   // Never auto-drop a user into a company they aren't a member of (internal
   // staff can see all companies but must choose one explicitly).
-  const list = (tenants ?? []).filter((t) => t.isMember);
+  const all = tenants ?? [];
+  const list = all.filter((t) => t.isMember);
+  // An explicitly visited company is restored even for internal staff (who are
+  // not members), so leaving the workbench keeps the selected company.
   const target =
-    (lastTenantId && list.some((t) => t.id === lastTenantId) && lastTenantId) ||
+    (lastTenantId && all.some((t) => t.id === lastTenantId) && lastTenantId) ||
     list[0]?.id ||
     null;
 
