@@ -662,16 +662,13 @@ export default function WaterMitigationPlan() {
 
     const protectedByControl = new Map<string, Set<string>>();
     controlRows.forEach((row) => {
-      const ov = overrideMap.get(row.id);
       const set = new Set<string>();
-      if (ov?.assets_customized) {
-        [...(ov.critical_asset_ids || []), ...(ov.water_system_ids || []), ...(ov.process_ids || [])].forEach(
-          (id: string) => set.add(id),
-        );
+      if (row.scopeIds) {
+        row.scopeIds.forEach((id) => set.add(id));
       } else {
         (["critical_assets", "water_systems", "processes"] as const).forEach((key) => {
           (catalog[key] || []).forEach((entry: any) => {
-            if ((entry.default_control_ids || []).includes(row.id)) set.add(entry.id);
+            if ((entry.default_control_ids || []).includes(row.controlId)) set.add(entry.id);
           });
         });
       }
