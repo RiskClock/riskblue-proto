@@ -231,7 +231,7 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
                   {...menuItemProps("controls")}
                 >
                   <ShieldCheck className="h-4 w-4 mr-2" />
-                  Mitigation Control Library
+                  {productCatalogLabel()}
                 </DropdownMenuItem>
               )}
               {(myTenants.length > 0 || isInternalUser) && (
