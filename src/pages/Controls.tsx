@@ -42,14 +42,25 @@ interface TenantProduct {
   tenant_id: string;
   name: string;
   product_code: string | null;
+  description: string | null;
   control_id: string | null;
   image_path: string | null;
   one_time_cost: number | null;
+  installation_cost: number | null;
   monthly_maint_cost: number | null;
+  maint_interval: "monthly" | "yearly";
+  applied_in_any_plan: boolean;
   scope_customized: boolean;
   critical_asset_ids: string[];
   water_system_ids: string[];
   process_ids: string[];
+}
+
+export interface NewProductInput {
+  name: string;
+  productCode: string;
+  description: string;
+  controlId: string | null;
 }
 
 const formatCost = (cost?: number | null) => {
