@@ -17,7 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AppHeader } from "@/components/AppHeader";
-import { Plus, X, ShieldAlert, Loader2, Pencil } from "lucide-react";
+import { Plus, X, ShieldAlert, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { useMitigationControls, getControlNameById } from "@/hooks/useMitigationControls";
