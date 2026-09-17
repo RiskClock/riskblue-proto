@@ -183,7 +183,7 @@ export default function Configuration() {
             : awp.default_control_ids.filter((id) => id !== controlId);
           return supabase.from(awp.category).update({ default_control_ids: next } as any).eq("id", awp.id);
         })
-        .filter(Boolean) as Promise<any>[];
+        .filter(Boolean) as unknown as Promise<any>[];
       const results = await Promise.all(updates);
       const failed = results.find((r) => r?.error);
       if (failed?.error) throw failed.error;
