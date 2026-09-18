@@ -8387,6 +8387,21 @@ function InstancesReportModal({
     return renderSpaceDetail(selected);
   };
 
+  // Remember each tab's scroll position so switching tabs doesn't carry the
+  // previous tab's offset over.
+  const contentScrollRef = useRef<HTMLDivElement | null>(null);
+  const tabScrollRef = useRef<Record<string, number>>({});
+  const prevSelectedRef = useRef<string>(selected);
+  useLayoutEffect(() => {
+    const el = contentScrollRef.current;
+    if (!el) return;
+    if (prevSelectedRef.current !== selected) {
+      prevSelectedRef.current = selected;
+      el.scrollTop = tabScrollRef.current[selected] ?? 0;
+      el.scrollLeft = 0;
+    }
+  }, [selected]);
+
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
