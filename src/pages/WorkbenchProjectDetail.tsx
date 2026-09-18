@@ -8452,7 +8452,15 @@ function InstancesReportModal({
               );
             })}
           </div>
-          <div className="overflow-auto pr-1">{renderRight()}</div>
+          <div
+            ref={contentScrollRef}
+            onScroll={(e) => {
+              tabScrollRef.current[selected] = e.currentTarget.scrollTop;
+            }}
+            className="overflow-auto pr-1"
+          >
+            {renderRight()}
+          </div>
           {wadeOpen && (
             <AskWadePanel
               projectId={projectId}
