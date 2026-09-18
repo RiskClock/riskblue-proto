@@ -2668,11 +2668,13 @@ const isChildPlanType = (t: string) =>
             : [];
           let effectiveLevels = explicit.filter((l) => canonicalSet.has(l));
           if (effectiveLevels.length === 0) {
-            // Derive from the bbox's own label, then (single-bbox pages only)
-            // from the legacy page → levels mapping.
+            // Derive from the bbox's own label, then fall back to the page →
+            // levels mapping from the spatial model. The page fallback used to
+            // be limited to single-bbox pages, which silently dropped every
+            // level on pages holding more than one plan area.
             const fromLabel = canonicalizeLevels(name).filter((l) => canonicalSet.has(l));
             if (fromLabel.length > 0) effectiveLevels = fromLabel;
-            else if (levelish.length === 1) {
+            else {
               effectiveLevels = (pageSpaceMap.get(`${f.name}::${page}`) ?? []).filter((l) =>
                 canonicalSet.has(l),
               );
