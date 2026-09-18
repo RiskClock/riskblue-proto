@@ -2360,10 +2360,44 @@ const isChildPlanType = (t: string) =>
   // Returns multiple names when the raw text refers to a shared physical
   // space (e.g. "Parking Garage" maps to both Level P1 and Level P2 Sub-Slab
   // when both exist in the project's canonical level list).
+  // "Levels 10 - 12", "Levels 13 - 57", "Levels 31, 58" name several physical
+  // levels at once. Expand them to every canonical level they cover instead of
+  // matching only the first number.
+  const expandLevelRangeLabel = (raw: string): string[] => {
+    if (!/levels\b|lvls\b|\bl\d+\s*[-–]\s*l?\d+/i.test(raw)) return [];
+    const body = raw.replace(/\b(levels?|lvls?|floors?)\b/gi, " ");
+    const numbers = new Set<number>();
+    for (const part of body.split(/[,&]|\band\b/i)) {
+      const range = part.match(/^\s*l?\s*(\d+)\s*(?:-|–|—|to)\s*l?\s*(\d+)\s*$/i);
+      if (range) {
+        const a = Number(range[1]);
+        const b = Number(range[2]);
+        if (Number.isFinite(a) && Number.isFinite(b) && b >= a && b - a <= 200) {
+          for (let n = a; n <= b; n++) numbers.add(n);
+        }
+        continue;
+      }
+      const single = part.match(/^\s*l?\s*(\d+)\s*$/i);
+      if (single) numbers.add(Number(single[1]));
+    }
+    if (numbers.size < 2) return [];
+    const byToken = new Map<string, string>();
+    for (const p of canonicalLevelNames) byToken.set(normalizeLevelToken(p), p);
+    const out: string[] = [];
+    for (const n of Array.from(numbers).sort((a, b) => a - b)) {
+      const hit = byToken.get(String(n));
+      if (hit && !out.includes(hit)) out.push(hit);
+    }
+    return out;
+  };
+
   const canonicalizeLevels = (raw: string): string[] => {
     if (!raw) return [];
+    const ranged = expandLevelRangeLabel(raw);
+    if (ranged.length > 0) return ranged;
     const target = normalizeLevelToken(raw);
     if (!target) return [raw];
+
 
     // Parking / garage expansion: a generic parking page applies to every
     // canonical parking level (P1, P2 Sub-Slab, etc.) unless the raw text
@@ -2634,11 +2668,13 @@ const isChildPlanType = (t: string) =>
             : [];
           let effectiveLevels = explicit.filter((l) => canonicalSet.has(l));
           if (effectiveLevels.length === 0) {
-            // Derive from the bbox's own label, then (single-bbox pages only)
-            // from the legacy page → levels mapping.
+            // Derive from the bbox's own label, then fall back to the page →
+            // levels mapping from the spatial model. The page fallback used to
+            // be limited to single-bbox pages, which silently dropped every
+            // level on pages holding more than one plan area.
             const fromLabel = canonicalizeLevels(name).filter((l) => canonicalSet.has(l));
             if (fromLabel.length > 0) effectiveLevels = fromLabel;
-            else if (levelish.length === 1) {
+            else {
               effectiveLevels = (pageSpaceMap.get(`${f.name}::${page}`) ?? []).filter((l) =>
                 canonicalSet.has(l),
               );
