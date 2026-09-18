@@ -109,7 +109,7 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
           {isPaymentsTestMode() && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="cursor-help text-xs font-semibold text-muted-foreground">Debug</span>
+                <span className="cursor-help text-xs font-semibold text-muted-foreground">Dev</span>
               </TooltipTrigger>
               <TooltipContent className="max-w-sm">
                 All payments in this preview are simulated. Use card 4242 4242 4242 4242 with any future expiry &amp; any CVC.
