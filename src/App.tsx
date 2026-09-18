@@ -32,6 +32,7 @@ const SetupAccount = lazyWithRetry(() => import("./pages/SetupAccount"));
 const InternalWorkbench = lazyWithRetry(routeLoaders.workbench);
 const WorkbenchProjectDetail = lazyWithRetry(() => import("./pages/WorkbenchProjectDetail"));
 const WaterMitigationPlan = lazyWithRetry(() => import("./pages/WaterMitigationPlan"));
+const ProposalEditor = lazyWithRetry(() => import("./pages/ProposalEditor"));
 const PromptRefinery = lazyWithRetry(routeLoaders.promptRefinery);
 const PromptRefineryDetail = lazyWithRetry(() => import("./pages/PromptRefineryDetail"));
 const UserManagement = lazyWithRetry(routeLoaders.userManagement);
@@ -93,6 +94,7 @@ const App = () => (
             <Route path="/workbench" element={<ProtectedRoute><InternalWorkbench /></ProtectedRoute>} />
             <Route path="/workbench/project/:projectId" element={<ProtectedRoute><WorkbenchProjectDetail /></ProtectedRoute>} />
             <Route path="/project/:projectId/mitigation-plan" element={<ProtectedRoute><WaterMitigationPlan /></ProtectedRoute>} />
+            <Route path="/project/:projectId/proposal-editor" element={<ProtectedRoute><ProposalEditor /></ProtectedRoute>} />
 
             <Route path="/prompt-refinery" element={<ProtectedRoute><PromptRefinery /></ProtectedRoute>} />
             <Route path="/prompt-refinery/:promptId" element={<ProtectedRoute><PromptRefineryDetail /></ProtectedRoute>} />
@@ -110,6 +112,7 @@ const App = () => (
               <Route path="project/:id" element={<ProjectWizard />} />
               <Route path="workbench/project/:projectId" element={<WorkbenchProjectDetail />} />
               <Route path="project/:projectId/mitigation-plan" element={<WaterMitigationPlan />} />
+              <Route path="project/:projectId/proposal-editor" element={<ProposalEditor />} />
             </Route>
 
             <Route path="/accept-invite" element={<AcceptInvite />} />
