@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -7350,17 +7350,17 @@ function InstancesReportModal({
   };
 
   const renderSummary = () => (
-    <div>
-      <h3 className="text-sm font-semibold mb-2">Summary (Counts per Space by Class)</h3>
-      <div className="overflow-auto">
+    <div className="h-full flex flex-col min-h-0">
+      <h3 className="text-sm font-semibold mb-2 shrink-0">Summary (Counts per Space by Class)</h3>
+      <div className="flex-1 min-h-0 overflow-auto [&>div]:overflow-visible">
         <Table>
           <TableHeader>
             <TableRow className={compactRow}>
-              <TableHead className={`${compactHead} sticky left-0 bg-background`}>Space</TableHead>
+              <TableHead className={`${compactHead} sticky left-0 top-0 z-30 bg-background`}>Space</TableHead>
               {overviewEntries.map((e) => (
                 <TableHead
                   key={e.key}
-                  className={`${compactHead} text-center whitespace-nowrap`}
+                  className={`${compactHead} text-center whitespace-nowrap sticky top-0 z-20 bg-background`}
                 >
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -7381,7 +7381,7 @@ function InstancesReportModal({
               return (
                 <TableRow key={space} className={compactRow}>
                   <TableCell
-                    className={`${compactCell} sticky left-0 bg-background font-medium`}
+                    className={`${compactCell} sticky left-0 z-10 bg-background font-medium`}
                   >
                     {label}
                   </TableCell>
@@ -8387,6 +8387,21 @@ function InstancesReportModal({
     return renderSpaceDetail(selected);
   };
 
+  // Remember each tab's scroll position so switching tabs doesn't carry the
+  // previous tab's offset over.
+  const contentScrollRef = useRef<HTMLDivElement | null>(null);
+  const tabScrollRef = useRef<Record<string, number>>({});
+  const prevSelectedRef = useRef<string>(selected);
+  useLayoutEffect(() => {
+    const el = contentScrollRef.current;
+    if (!el) return;
+    if (prevSelectedRef.current !== selected) {
+      prevSelectedRef.current = selected;
+      el.scrollTop = tabScrollRef.current[selected] ?? 0;
+      el.scrollLeft = 0;
+    }
+  }, [selected]);
+
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -8437,7 +8452,15 @@ function InstancesReportModal({
               );
             })}
           </div>
-          <div className="overflow-auto pr-1">{renderRight()}</div>
+          <div
+            ref={contentScrollRef}
+            onScroll={(e) => {
+              tabScrollRef.current[selected] = e.currentTarget.scrollTop;
+            }}
+            className="overflow-auto pr-1"
+          >
+            {renderRight()}
+          </div>
           {wadeOpen && (
             <AskWadePanel
               projectId={projectId}
