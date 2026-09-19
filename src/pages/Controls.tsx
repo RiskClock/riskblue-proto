@@ -446,7 +446,7 @@ export default function Controls() {
                   >
                     <Package className="h-4 w-4 text-muted-foreground shrink-0" />
                     <span className="text-sm flex-1 truncate">
-                      {p.product_code ? `(${p.product_code}) ` : ""}
+                      {p.product_code && <strong>{p.product_code} </strong>}
                       {p.name || (p.product_code ? "" : "Untitled product")}
                     </span>
                     {p.control_id && (
