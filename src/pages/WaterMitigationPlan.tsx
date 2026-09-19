@@ -781,12 +781,23 @@ export default function WaterMitigationPlan() {
     return counts;
   }, [spaceBreakdown]);
 
-  // Seed the first plan from the detected instances.
+  // Seed the first plan from the detected instances — only once ever per
+  // project, so deleting the last plan doesn't immediately recreate one.
+  const seededFlag = Boolean((project as any)?.project_data?.wmp_seeded);
+  const markSeeded = () => {
+    const existing = ((project as any)?.project_data || {}) as Record<string, any>;
+    void supabase
+      .from("projects")
+      .update({ project_data: { ...existing, wmp_seeded: true } } as any)
+      .eq("id", projectId);
+  };
   const [seeding, setSeeding] = useState(false);
   useEffect(() => {
     if (!projectId || plansLoading || plans.length > 0 || seeding || !canEdit) return;
     if (!catalog || controlRows.length === 0) return;
+    if (seededFlag) return;
     setSeeding(true);
+    markSeeded();
     supabase
       .from("project_mitigation_plans")
       .insert({
