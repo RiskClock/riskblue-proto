@@ -275,7 +275,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button type="button" disabled={saving || !name.trim()} onClick={() => onSave({ name: name.trim(), description, assignments })}>
+          <Button type="button" disabled={saving || !name.trim()} onClick={() => onSave({ name: name.trim(), description, assignments, baseQuantities })}>
             {saving ? "Saving…" : mode === "create" ? "Create plan" : "Save changes"}
           </Button>
         </DialogFooter>
