@@ -981,11 +981,43 @@ export default function WaterMitigationPlan() {
     return n;
   };
 
+  /** Base Requirements: manual quantities per product, stored under `__base`. */
+  const baseQuantitiesFor = (plan: Plan): Record<string, number> => {
+    const raw = (plan.product_assignments || {})["__base"];
+    if (!raw || Array.isArray(raw) || typeof raw !== "object") return {};
+    return raw as Record<string, number>;
+  };
+
+  const baseCountFor = (plan: Plan, productId: string) => Math.max(0, Number(baseQuantitiesFor(plan)[productId] || 0));
+
+  /** Only controls picked in at least one plan appear in the breakdown. */
+  const visibleControlRows = useMemo(
+    () =>
+      controlRows.filter((row) =>
+        plans.some((plan) =>
+          Object.entries(plan.product_assignments || {}).some(
+            ([key, value]) => key !== "__base" && Array.isArray(value) && value.includes(row.id),
+          ),
+        ),
+      ),
+    [controlRows, plans],
+  );
+
+  const visibleBaseRows = useMemo(
+    () => baseRows.filter((row) => plans.some((plan) => baseCountFor(plan, row.id) > 0)),
+    [baseRows, plans],
+  );
+
   const planTotals = (plan: Plan) => {
     let count = 0;
     let cost = 0;
     controlRows.forEach((row) => {
       const n = countFor(plan, row.id);
+      count += n;
+      cost += n * row.unitCost;
+    });
+    baseRows.forEach((row) => {
+      const n = baseCountFor(plan, row.id);
       count += n;
       cost += n * row.unitCost;
     });
