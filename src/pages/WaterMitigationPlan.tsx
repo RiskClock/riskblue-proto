@@ -65,7 +65,8 @@ interface Plan {
   control_counts: Record<string, number>;
   /** controlId -> detection ids this plan has switched the control off for. */
   excluded_instances: Record<string, string[]>;
-  product_assignments: Record<string, string[] | boolean>;
+  /** classId -> product ids, plus `__base` (productId -> quantity) and `__configured`. */
+  product_assignments: Record<string, string[] | boolean | Record<string, number>>;
   sort_order: number;
 }
 
