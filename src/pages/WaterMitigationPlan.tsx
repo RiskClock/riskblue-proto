@@ -1903,6 +1903,9 @@ actions and posts its own recap.`;
                                 {row.code ? <strong>{row.code}</strong> : null}
                                 {row.code && row.name ? " " : ""}
                                 {row.name}
+                                {formatPipeDiameter(row.pipeDiameterInches) ? (
+                                  <span className="ml-1 text-xs text-muted-foreground">{formatPipeDiameter(row.pipeDiameterInches)}</span>
+                                ) : null}
                               </span>
                               {spaces.length > 0 ? (
                                 isOpen ? (
@@ -2025,6 +2028,9 @@ actions and posts its own recap.`;
                               {row.code ? <strong>{row.code}</strong> : null}
                               {row.code && row.name ? " " : ""}
                               {row.name}
+                              {formatPipeDiameter(row.pipeDiameterInches) ? (
+                                <span className="ml-1 text-xs text-muted-foreground">{formatPipeDiameter(row.pipeDiameterInches)}</span>
+                              ) : null}
                             </span>
                           </div>
                           <div className="mt-0.5 pl-[26px] text-xs text-muted-foreground tabular-nums">
