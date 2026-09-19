@@ -1482,9 +1482,10 @@ actions and posts its own recap.`;
             lines.push(`Skipped delete: could not match plan "${a.plan}".`);
             continue;
           }
-          const { error } = await supabase.from("project_mitigation_plans").delete().eq("id", plan.id);
-          if (error) throw error;
-          lines.push(`Deleted ${plan.name}.`);
+           const { error } = await supabase.from("project_mitigation_plans").delete().eq("id", plan.id);
+           if (error) throw error;
+           markSeeded();
+           lines.push(`Deleted ${plan.name}.`);
           const removedIdx = workingPlans.findIndex((p) => p.id === plan.id);
           if (removedIdx >= 0) workingPlans.splice(removedIdx, 1);
           pending.delete(plan.id);
