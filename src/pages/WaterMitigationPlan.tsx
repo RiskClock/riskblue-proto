@@ -1845,7 +1845,11 @@ actions and posts its own recap.`;
                               disabled={spaces.length === 0}
                             >
                                <ControlTypeIcon name={row.name} colorIndex={colorIndex} />
-                              <span>{row.name}</span>
+                              <span>
+                                {row.code ? <strong>{row.code}</strong> : null}
+                                {row.code && row.name ? " " : ""}
+                                {row.name}
+                              </span>
                               {spaces.length > 0 ? (
                                 isOpen ? (
                                   <ChevronDown className="ml-auto h-4 w-4 shrink-0" />
