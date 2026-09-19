@@ -1102,11 +1102,26 @@ export default function WaterMitigationPlan() {
       });
   }, [plans, planEditor, editorClasses]);
 
+  /** Catalog products with no control type, selectable under Base Requirements. */
+  const editorBaseProducts = useMemo(
+    () => baseRows.map((row) => ({ id: row.id, name: row.name, code: row.code ?? null })),
+    [baseRows],
+  );
 
-  const savePlanEditor = async (value: { name: string; description: string; assignments: Record<string, string[]> }) => {
+  const editorBaseQuantities = useMemo(
+    () => (planEditor?.plan ? baseQuantitiesFor(planEditor.plan) : {}),
+    [planEditor],
+  );
+
+  const savePlanEditor = async (value: {
+    name: string;
+    description: string;
+    assignments: Record<string, string[]>;
+    baseQuantities: Record<string, number>;
+  }) => {
     if (!projectId || !planEditor) return;
     setSavingPlan(true);
-    const productAssignments = { ...value.assignments, __configured: true };
+    const productAssignments = { ...value.assignments, __base: value.baseQuantities, __configured: true };
     if (planEditor.mode === "create") {
       const nextOrder = plans.length ? Math.max(...plans.map((plan) => plan.sort_order)) + 1 : 0;
       const { data: created, error } = await supabase.from("project_mitigation_plans").insert({
