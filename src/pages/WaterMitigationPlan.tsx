@@ -936,8 +936,7 @@ export default function WaterMitigationPlan() {
   const countFor = (plan: Plan, controlId: string) => {
     const fixed = controlRows.find((r) => r.id === controlId)?.fixedQuantity;
     if (typeof fixed === "number") {
-      if (!plan.product_assignments?.__configured) return fixed;
-      return Object.values(plan.product_assignments).some((value) => Array.isArray(value) && value.includes(controlId)) ? fixed : 0;
+      return Object.values(plan.product_assignments || {}).some((value) => Array.isArray(value) && value.includes(controlId)) ? fixed : 0;
     }
     const spaces = spaceBreakdown.get(controlId);
     if (!spaces) return 0;
