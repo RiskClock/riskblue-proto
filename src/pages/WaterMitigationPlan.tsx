@@ -1061,11 +1061,17 @@ export default function WaterMitigationPlan() {
 
   const editorClasses = useMemo<PlanEditorClass[]>(() => {
     if (!catalog) return [];
-    const detected = new Map<string, { catalogId: string; count: number; code: string | null; name: string | null }>();
+    const detected = new Map<string, { catalogId: string; count: number; code: string | null; name: string | null; pipeSizeMm: number | null }>();
     detectionRows.forEach((row) => {
       if (!row.catalogId || !row.assignmentId) return;
       const current = detected.get(row.assignmentId);
-      detected.set(row.assignmentId, { catalogId: row.catalogId, count: (current?.count || 0) + 1, code: row.subtypeCode, name: row.subtypeName });
+      detected.set(row.assignmentId, {
+        catalogId: row.catalogId,
+        count: (current?.count || 0) + 1,
+        code: row.subtypeCode,
+        name: row.subtypeName,
+        pipeSizeMm: current?.pipeSizeMm ?? row.pipeSizeMm,
+      });
     });
     (items as any[]).forEach((item) => {
       const table = CATEGORY_TABLE[item.category];
@@ -1073,7 +1079,7 @@ export default function WaterMitigationPlan() {
       const entry = (catalog[table] || []).find((candidate: any) =>
         (candidate.name || "").toLowerCase().trim() === (item.name || "").toLowerCase().trim(),
       );
-      if (entry && !detected.has(entry.id)) detected.set(entry.id, { catalogId: entry.id, count: 1, code: null, name: null });
+      if (entry && !detected.has(entry.id)) detected.set(entry.id, { catalogId: entry.id, count: 1, code: null, name: null, pipeSizeMm: null });
     });
 
     const productChoices = (catalogId: string, defaultControlIds: string[]) =>
@@ -1087,7 +1093,15 @@ export default function WaterMitigationPlan() {
           }
           return !!product.control_id && defaultControlIds.includes(product.control_id);
         })
-        .map((product) => ({ id: product.id, name: product.name || "", code: product.product_code }));
+        .map((product) => ({
+          id: product.id,
+          name: product.name || "",
+          code: product.product_code,
+          pipeDiameterInches:
+            product.pipe_diameter_inches === null || product.pipe_diameter_inches === undefined
+              ? null
+              : Number(product.pipe_diameter_inches),
+        }));
 
     const rows: PlanEditorClass[] = [];
     (["critical_assets", "water_systems"] as const).forEach((key) => {
@@ -1099,6 +1113,7 @@ export default function WaterMitigationPlan() {
           code: value.code ? `${entry.id_prefix || entry.name}-${value.code}` : entry.id_prefix || entry.name,
           kind: key === "critical_assets" ? "Asset" : "Water System",
           count: value.count,
+          pipeSizeMm: value.pipeSizeMm,
           products: productChoices(entry.id, entry.default_control_ids || []),
         }));
       });
@@ -1129,13 +1144,13 @@ export default function WaterMitigationPlan() {
           const assigned = plan.product_assignments?.[item.id] ?? plan.product_assignments?.[catalogId];
           assignments[item.id] = Array.isArray(assigned) ? assigned : [];
         });
-        return { id: plan.id, name: plan.name, assignments };
+        return { id: plan.id, name: plan.name, assignments, baseQuantities: baseQuantitiesFor(plan) };
       });
   }, [plans, planEditor, editorClasses]);
 
   /** Catalog products with no control type, selectable under Base Requirements. */
   const editorBaseProducts = useMemo(
-    () => baseRows.map((row) => ({ id: row.id, name: row.name, code: row.code ?? null })),
+    () => baseRows.map((row) => ({ id: row.id, name: row.name, code: row.code ?? null, pipeDiameterInches: row.pipeDiameterInches ?? null })),
     [baseRows],
   );
 
