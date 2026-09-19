@@ -242,7 +242,10 @@ Deno.serve(async (req) => {
     // Watchdog - if the model call hangs and the edge runtime is about to be
     // killed (~150s wall on Supabase), mark the row failed FIRST so the UI
     // doesn't stay stuck on "Running…" forever.
-    const WATCHDOG_MS = 120_000;
+    // Large projects legitimately take >2min. Supabase allows ~400s wall clock,
+    // so keep the watchdog well above observed run times (~145s) instead of
+    // killing runs that would have succeeded.
+    const WATCHDOG_MS = 300_000;
     let watchdogFired = false;
     const watchdog = setTimeout(async () => {
       watchdogFired = true;
