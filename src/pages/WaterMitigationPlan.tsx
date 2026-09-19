@@ -920,7 +920,6 @@ export default function WaterMitigationPlan() {
     new Set((plan.excluded_instances || {})[controlId] || []);
 
   const planUsesProductForClass = (plan: Plan, productId: string, catalogId: string | null, assignmentId?: string | null) => {
-    if (!plan.product_assignments?.__configured) return true;
     if (!catalogId) return false;
     const assigned = plan.product_assignments[assignmentId || catalogId] ?? plan.product_assignments[catalogId];
     return Array.isArray(assigned) && assigned.includes(productId);

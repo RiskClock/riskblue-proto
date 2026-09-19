@@ -19,7 +19,7 @@ export function ThreatOverviewCard({ code, name, count, children }: ThreatOvervi
         </TooltipTrigger>
         <TooltipContent>{name}</TooltipContent>
       </Tooltip>
-      <div className="px-2 pt-2 text-2xl font-bold tabular-nums text-primary">{count}</div>
+      <div className="px-2 pt-2 text-2xl font-bold tabular-nums text-report-header">{count}</div>
       <div className="min-h-10 px-2 pb-2 text-[11px] text-muted-foreground">{name}</div>
       {children}
     </div>
