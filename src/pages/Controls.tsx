@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -24,9 +25,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useTenant } from "@/contexts/TenantContext";
-import { Loader2, Search, Package, Plus, Trash2, ImagePlus } from "lucide-react";
+import { Loader2, Search, Package, Plus, Trash2, ImagePlus, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { productCatalogLabel } from "@/lib/catalogLabel";
+import { tagStyle } from "@/lib/tagColor";
 
 interface MitigationControl {
   id: string;
@@ -58,6 +60,7 @@ interface TenantProduct {
   monthly_maint_cost: number | null;
   maint_interval: "monthly" | "yearly";
   applied_in_any_plan: boolean;
+  pipe_diameter_inches: number | null;
   scope_customized: boolean;
   critical_asset_ids: string[];
   water_system_ids: string[];
@@ -93,6 +96,7 @@ export default function Controls() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [typePickerOpen, setTypePickerOpen] = useState(false);
+  const [scopePickerOpen, setScopePickerOpen] = useState(false);
 
   // ---------- data ----------
   const emptyCatalog = useMemo(
@@ -190,9 +194,6 @@ export default function Controls() {
     (catalogRows.water_systems || []).forEach((r) => {
       if ((r.default_control_ids || []).includes(controlId)) result.water_systems.push(r.id);
     });
-    (catalogRows.processes || []).forEach((r) => {
-      if ((r.default_control_ids || []).includes(controlId)) result.processes.push(r.id);
-    });
     return result;
   }, [selected?.control_id, catalogRows]);
 
@@ -201,7 +202,7 @@ export default function Controls() {
       return {
         critical_assets: selected.critical_asset_ids || [],
         water_systems: selected.water_system_ids || [],
-        processes: selected.process_ids || [],
+        processes: [],
       };
     }
     return defaultScope;
@@ -279,25 +280,6 @@ export default function Controls() {
     queryClient.invalidateQueries({ queryKey: ["tenant-products", tenantId] });
   };
 
-  const toggleScopeItem = (item: CatalogItem) => {
-    if (!canEdit || !selected) return;
-    const next = {
-      critical_assets: [...scope.critical_assets],
-      water_systems: [...scope.water_systems],
-      processes: [...scope.processes],
-    };
-    const list = next[item.category];
-    const idx = list.indexOf(item.id);
-    if (idx >= 0) list.splice(idx, 1);
-    else list.push(item.id);
-    void patchProduct(selected.id, {
-      critical_asset_ids: next.critical_assets,
-      water_system_ids: next.water_systems,
-      process_ids: next.processes,
-      scope_customized: true,
-    });
-  };
-
   const uploadImage = async (file: File) => {
     if (!selected || !tenantId) return;
     const ext = file.name.split(".").pop() || "png";
@@ -317,6 +299,7 @@ export default function Controls() {
   const [nameDraft, setNameDraft] = useState("");
   const [codeDraft, setCodeDraft] = useState("");
   const [descDraft, setDescDraft] = useState("");
+  const [diameterDraft, setDiameterDraft] = useState("");
   const [costDraft, setCostDraft] = useState({ one: "", install: "", maint: "" });
 
   useEffect(() => {
@@ -324,6 +307,7 @@ export default function Controls() {
     setNameDraft(selected.name);
     setCodeDraft(selected.product_code ?? "");
     setDescDraft(selected.description ?? "");
+    setDiameterDraft(selected.pipe_diameter_inches == null ? "" : String(selected.pipe_diameter_inches));
     const control = selected.control_id ? controlMap.get(selected.control_id) : undefined;
     setCostDraft({
       one: String(selected.one_time_cost ?? control?.one_time_cost ?? 0),
@@ -337,6 +321,7 @@ export default function Controls() {
     selected?.installation_cost,
     selected?.monthly_maint_cost,
     selected?.control_id,
+    selected?.pipe_diameter_inches,
     controlMap,
   ]);
 
@@ -407,15 +392,13 @@ export default function Controls() {
       )
     : products;
 
-  const scopeTerm = scopeSearch.trim().toLowerCase();
-  const visibleScopeItems = scopeTerm
-    ? allCatalogItems.filter(
-        (i) => i.name.toLowerCase().includes(scopeTerm) || i.kind.toLowerCase().includes(scopeTerm),
-      )
-    : allCatalogItems;
-
-  const scopeCount = scope.critical_assets.length + scope.water_systems.length + scope.processes.length;
+  const scopeItems = allCatalogItems.filter((item) => item.category !== "processes");
+  const selectedScopeItems = scopeItems.filter((item) => scope[item.category].includes(item.id));
+  const scopeCount = selectedScopeItems.length;
   const selectedControl = selected?.control_id ? controlMap.get(selected.control_id) : undefined;
+  const needsPipeDiameter = ["automatic shut off valve", "flow sensor", "water meter"].includes(
+    selectedControl?.name.toLowerCase() ?? "",
+  );
 
 
   return (
@@ -493,7 +476,8 @@ export default function Controls() {
               ) : (
                 <div className="flex flex-col gap-4">
                   {/* Header: image + identity */}
-                  <section className="rounded-md border bg-card p-4 flex gap-4 items-start">
+                  <section className="rounded-md border bg-card p-4">
+                    <div className="flex gap-4 items-start">
                     <label
                       className={`relative h-24 w-24 shrink-0 rounded-md border border-dashed flex items-center justify-center overflow-hidden bg-muted/40 ${
                         canEdit ? "cursor-pointer hover:bg-muted" : ""
@@ -517,8 +501,8 @@ export default function Controls() {
                       />
                     </label>
 
-                    <div className="flex-1 min-w-0 space-y-3">
-                      <div className="space-y-1.5">
+                      <div className="flex-1 min-w-0 grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground uppercase tracking-wide">Product name</Label>
                         <Input
                           value={nameDraft}
@@ -534,21 +518,6 @@ export default function Controls() {
                           }}
                           className="h-9"
                         />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Product type</Label>
-                          <Button
-                            variant="outline"
-                            className="w-full justify-start h-9 font-normal"
-                            disabled={!canEdit}
-                            onClick={() => setTypePickerOpen(true)}
-                          >
-                            <span className="truncate">
-                              {selectedControl?.name || <span className="text-muted-foreground">Select control</span>}
-                            </span>
-                          </Button>
                         </div>
                         <div className="space-y-1.5">
                           <Label className="text-xs text-muted-foreground uppercase tracking-wide">Product ID</Label>
@@ -570,8 +539,10 @@ export default function Controls() {
                           />
                         </div>
                       </div>
+                    </div>
 
-                      <div className="space-y-1.5">
+                    <div className="mt-4 space-y-4">
+                      <div className="space-y-1.5 w-full">
                         <Label className="text-xs text-muted-foreground uppercase tracking-wide">
                           Description
                         </Label>
@@ -589,6 +560,82 @@ export default function Controls() {
                           }}
                           className="text-sm"
                         />
+                      </div>
+
+                      <div className="space-y-1.5 w-full">
+                        <Label className="text-xs text-muted-foreground uppercase tracking-wide">Product type</Label>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start h-9 font-normal"
+                          disabled={!canEdit}
+                          onClick={() => setTypePickerOpen(true)}
+                        >
+                          <span className="truncate">
+                            {selectedControl?.name || <span className="text-muted-foreground">Select product type</span>}
+                          </span>
+                        </Button>
+                      </div>
+
+                      {needsPipeDiameter && (
+                        <div className="space-y-1.5 w-full">
+                          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Pipe diameter (inches)</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            inputMode="decimal"
+                            value={diameterDraft}
+                            disabled={!canEdit}
+                            placeholder="e.g. 1.5"
+                            onChange={(e) => setDiameterDraft(e.target.value)}
+                            onBlur={() => {
+                              const parsed = diameterDraft.trim() === "" ? null : Number(diameterDraft);
+                              if (parsed !== null && (!Number.isFinite(parsed) || parsed < 0)) {
+                                setDiameterDraft(selected.pipe_diameter_inches == null ? "" : String(selected.pipe_diameter_inches));
+                                toast.error("Enter a valid pipe diameter");
+                                return;
+                              }
+                              if (parsed !== selected.pipe_diameter_inches) {
+                                void patchProduct(selected.id, { pipe_diameter_inches: parsed });
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                            }}
+                            className="h-9 w-full"
+                          />
+                        </div>
+                      )}
+
+                      <div className="space-y-2 w-full">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="text-sm font-semibold text-foreground">Mitigation Scope</h3>
+                            <p className="text-xs text-muted-foreground">{scopeCount} selected</p>
+                          </div>
+                          {canEdit && (
+                            <Button variant="outline" size="sm" onClick={() => setScopePickerOpen(true)}>
+                              <Pencil className="h-4 w-4 mr-1.5" />
+                              Edit
+                            </Button>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {selectedScopeItems.length > 0 ? selectedScopeItems.map((item) => {
+                            const colors = tagStyle(item.name);
+                            return (
+                              <Badge
+                                key={`${item.category}-${item.id}`}
+                                variant="outline"
+                                style={{ backgroundColor: colors.background, borderColor: colors.border, color: colors.color }}
+                              >
+                                {item.name}
+                              </Badge>
+                            );
+                          }) : (
+                            <span className="text-sm text-muted-foreground">No assets or water systems selected.</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </section>
@@ -683,50 +730,6 @@ export default function Controls() {
                     </div>
                   </section>
 
-                  {/* Mitigation Scope */}
-                  <section className="rounded-md border bg-card p-4 flex flex-col overflow-hidden">
-                    <div className="flex items-center justify-between gap-2 mb-3 shrink-0">
-                      <h3 className="text-sm font-semibold text-foreground">Mitigation Scope</h3>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">{scopeCount} selected</span>
-                        {canEdit && selected.scope_customized && (
-                          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={resetScope}>
-                            Reset
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="relative mb-3">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        value={scopeSearch}
-                        onChange={(e) => setScopeSearch(e.target.value)}
-                        placeholder="Search assets, systems, processes"
-                        className="pl-9 h-9"
-                      />
-                    </div>
-                    <div className="max-h-64 min-h-[8rem] overflow-y-auto pr-1 space-y-0.5">
-                      {visibleScopeItems.length === 0 ? (
-                        <p className="text-sm text-muted-foreground py-6 text-center">No matches.</p>
-                      ) : (
-                        visibleScopeItems.map((item) => (
-                          <label
-                            key={`${item.category}-${item.id}`}
-                            className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50 cursor-pointer"
-                          >
-                            <Checkbox
-                              checked={scope[item.category].includes(item.id)}
-                              disabled={!canEdit}
-                              onCheckedChange={() => toggleScopeItem(item)}
-                            />
-                            <span className="text-sm flex-1 truncate">{item.name}</span>
-                            <span className="text-xs text-muted-foreground shrink-0">{item.kind}</span>
-                          </label>
-                        ))
-                      )}
-                    </div>
-                  </section>
-
                   {/* Special Conditions */}
                   <section className="rounded-md border bg-card p-4 shrink-0">
                     <h3 className="text-sm font-semibold text-foreground mb-3">Special Conditions</h3>
@@ -800,7 +803,97 @@ export default function Controls() {
           }}
         />
       )}
+
+      {scopePickerOpen && selected && (
+        <ScopePickerModal
+          items={scopeItems}
+          selectedIds={{ critical_assets: scope.critical_assets, water_systems: scope.water_systems }}
+          canReset={selected.scope_customized}
+          onClose={() => setScopePickerOpen(false)}
+          onReset={() => {
+            resetScope();
+            setScopePickerOpen(false);
+          }}
+          onSave={(next) => {
+            void patchProduct(selected.id, {
+              critical_asset_ids: next.critical_assets,
+              water_system_ids: next.water_systems,
+              process_ids: [],
+              scope_customized: true,
+            });
+            setScopePickerOpen(false);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function ScopePickerModal({
+  items,
+  selectedIds,
+  canReset,
+  onClose,
+  onReset,
+  onSave,
+}: {
+  items: CatalogItem[];
+  selectedIds: { critical_assets: string[]; water_systems: string[] };
+  canReset: boolean;
+  onClose: () => void;
+  onReset: () => void;
+  onSave: (value: { critical_assets: string[]; water_systems: string[] }) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [draft, setDraft] = useState(selectedIds);
+  const term = query.trim().toLowerCase();
+  const filtered = term
+    ? items.filter((item) => item.name.toLowerCase().includes(term) || item.kind.toLowerCase().includes(term))
+    : items;
+
+  const toggle = (item: CatalogItem) => {
+    if (item.category === "processes") return;
+    setDraft((current) => {
+      const values = current[item.category];
+      return {
+        ...current,
+        [item.category]: values.includes(item.id)
+          ? values.filter((id) => id !== item.id)
+          : [...values, item.id],
+      };
+    });
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Edit Mitigation Scope</DialogTitle>
+          <DialogDescription>Select the assets and water systems this product protects.</DialogDescription>
+        </DialogHeader>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search assets and water systems" className="pl-9" />
+        </div>
+        <div className="max-h-[50vh] overflow-y-auto rounded-md border p-1">
+          {filtered.map((item) => (
+            <label key={`${item.category}-${item.id}`} className="flex items-center gap-2 rounded px-2 py-2 hover:bg-muted/50 cursor-pointer">
+              <Checkbox checked={draft[item.category as "critical_assets" | "water_systems"].includes(item.id)} onCheckedChange={() => toggle(item)} />
+              <span className="text-sm flex-1">{item.name}</span>
+              <span className="text-xs text-muted-foreground">{item.kind}</span>
+            </label>
+          ))}
+          {filtered.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No matches.</p>}
+        </div>
+        <DialogFooter className="sm:justify-between">
+          <div>{canReset && <Button variant="ghost" onClick={onReset}>Reset</Button>}</div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button onClick={() => onSave(draft)}>Save</Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
