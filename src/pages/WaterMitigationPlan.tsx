@@ -1782,7 +1782,7 @@ actions and posts its own recap.`;
             <div className="w-max min-w-full bg-background py-3">
               <div className="sticky left-0 inline-flex items-center gap-2 px-1">
                 <div className="text-sm font-medium text-foreground whitespace-nowrap">Breakdown by Control Type</div>
-                {controlRows.length > 0 && (
+                {visibleControlRows.length > 0 && (
                   <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={toggleAllExpanded}>
                     {allControlsExpanded ? <ChevronDown className="h-3.5 w-3.5 mr-1" /> : <ChevronRight className="h-3.5 w-3.5 mr-1" />}
                     {allControlsExpanded ? "Collapse all" : "Expand all"}
@@ -1795,10 +1795,10 @@ actions and posts its own recap.`;
             <table className="w-full border-collapse">
               {sharedColumns}
               <tbody>
-                {controlRows.length === 0 ? (
+                {visibleControlRows.length === 0 && visibleBaseRows.length === 0 ? (
                   <tr className="border-b">
                     <td className="px-4 py-6 text-sm text-muted-foreground" colSpan={plans.length + 2}>
-                      No controls selected in the Mitigation Control Library yet.
+                      No products have been added to a plan yet.
                     </td>
                   </tr>
                 ) : (
@@ -1809,12 +1809,20 @@ actions and posts its own recap.`;
                       <td key={plan.id} className="border-r px-4 py-3">
                         <div className="flex justify-center">
                           <CostPie
-                            slices={controlRows.map((row, colorIndex) => ({
-                              id: row.id,
-                              name: row.name,
-                              value: countFor(plan, row.id) * row.unitCost,
-                              colorIndex,
-                            }))}
+                            slices={[
+                              ...visibleControlRows.map((row, colorIndex) => ({
+                                id: row.id,
+                                name: row.name,
+                                value: countFor(plan, row.id) * row.unitCost,
+                                colorIndex,
+                              })),
+                              ...visibleBaseRows.map((row, index) => ({
+                                id: row.id,
+                                name: row.name,
+                                value: baseCountFor(plan, row.id) * row.unitCost,
+                                colorIndex: visibleControlRows.length + index,
+                              })),
+                            ]}
                             hovered={hoveredControl}
                             onHover={setHoveredControl}
                             onSelect={focusControlRow}
@@ -1824,7 +1832,7 @@ actions and posts its own recap.`;
                     ))}
                     <td />
                   </tr>
-                  {controlRows.map((row, colorIndex) => {
+                  {visibleControlRows.map((row, colorIndex) => {
                     const spaces = spacesForControl(row.id);
                     const isOpen = expanded.has(row.id);
                     return (
