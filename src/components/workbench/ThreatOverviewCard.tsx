@@ -13,7 +13,7 @@ export function ThreatOverviewCard({ code, name, count, children }: ThreatOvervi
     <div className="overflow-hidden rounded border bg-card text-center">
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="cursor-help bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground">
+          <div className="cursor-help bg-sidebar-primary px-2 py-1 text-xs font-semibold text-sidebar-primary-foreground">
             {code}
           </div>
         </TooltipTrigger>
