@@ -86,6 +86,8 @@ interface ControlRow {
   isOverridden: boolean;
   /** Set when the product is applied in every plan at a fixed quantity. */
   fixedQuantity?: number | null;
+  /** Product pipe diameter in inches, when the product type is size-specific. */
+  pipeDiameterInches?: number | null;
 }
 
 interface DetectionRow {
@@ -373,7 +375,7 @@ export default function WaterMitigationPlan() {
       const { data, error } = await supabase
         .from("tenant_products")
         .select(
-          "id, name, product_code, control_id, one_time_cost, installation_cost, monthly_maint_cost, maint_interval, applied_in_any_plan, fixed_quantity, scope_customized, critical_asset_ids, water_system_ids, process_ids",
+          "id, name, product_code, control_id, one_time_cost, installation_cost, monthly_maint_cost, maint_interval, applied_in_any_plan, fixed_quantity, pipe_diameter_inches, scope_customized, critical_asset_ids, water_system_ids, process_ids",
         )
         .eq("tenant_id", planTenantId!)
         .order("created_at");
