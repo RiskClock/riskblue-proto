@@ -493,7 +493,8 @@ export default function WaterMitigationPlan() {
 
   // Rows come from the company's Product Catalog; older companies without any
   // products keep using their saved control selections.
-  const controlRows: ControlRow[] = useMemo(() => {
+  const buildProductRow = useMemo(() => {
+    const controlById = new Map((controls as any[]).map((c) => [c.id, c]));
     const withCost = (id: string, controlId: string, name: string, base: number): ControlRow => {
       const scenario = costOverrides[id];
       const isOverridden = typeof scenario === "number" && Number.isFinite(scenario);
@@ -507,38 +508,38 @@ export default function WaterMitigationPlan() {
         isOverridden,
       };
     };
+    return (p: any): ControlRow => {
+      const control = p.control_id ? controlById.get(p.control_id) : undefined;
+      const ov = p.control_id ? overrideMap.get(p.control_id) : undefined;
+      // Per-unit cost = upfront + installation + one year of maintenance.
+      const oneTime = Number(p.one_time_cost ?? ov?.one_time_cost ?? control?.one_time_cost ?? 0) || 0;
+      const install = Number(p.installation_cost ?? 0) || 0;
+      const maint = Number(p.monthly_maint_cost ?? control?.monthly_maint_cost ?? 0) || 0;
+      const annualMaint = p.maint_interval === "yearly" ? maint : maint * 12;
+      const row = withCost(
+        p.id,
+        p.control_id || p.id,
+        p.name || p.product_code || control?.name || "Product",
+        oneTime + install + annualMaint,
+      );
+      row.code = p.product_code || null;
+      row.scopeIds = p.scope_customized
+        ? [
+            ...((p.critical_asset_ids as string[]) || []),
+            ...((p.water_system_ids as string[]) || []),
+            ...((p.process_ids as string[]) || []),
+          ]
+        : null;
+      if (p.applied_in_any_plan && p.control_id) {
+        row.fixedQuantity = Math.max(0, Number(p.fixed_quantity ?? 1) || 0);
+      }
+      return row;
+    };
+  }, [controls, overrideMap, costOverrides]);
 
+  const controlRows: ControlRow[] = useMemo(() => {
     if ((products as any[]).length > 0) {
-      const controlById = new Map((controls as any[]).map((c) => [c.id, c]));
-      return (products as any[])
-        .filter((p) => !!p.control_id || p.applied_in_any_plan)
-        .map((p) => {
-          const control = p.control_id ? controlById.get(p.control_id) : undefined;
-          const ov = p.control_id ? overrideMap.get(p.control_id) : undefined;
-          // Per-unit cost = upfront + installation + one year of maintenance.
-          const oneTime = Number(p.one_time_cost ?? ov?.one_time_cost ?? control?.one_time_cost ?? 0) || 0;
-          const install = Number(p.installation_cost ?? 0) || 0;
-          const maint = Number(p.monthly_maint_cost ?? control?.monthly_maint_cost ?? 0) || 0;
-          const annualMaint = p.maint_interval === "yearly" ? maint : maint * 12;
-          const base = oneTime + install + annualMaint;
-          const row = withCost(
-            p.id,
-            p.control_id || p.id,
-            p.name || p.product_code || control?.name || "Product",
-            base,
-          );
-          row.scopeIds = p.scope_customized
-            ? [
-                ...((p.critical_asset_ids as string[]) || []),
-                ...((p.water_system_ids as string[]) || []),
-                ...((p.process_ids as string[]) || []),
-              ]
-            : null;
-          if (p.applied_in_any_plan) {
-            row.fixedQuantity = Math.max(0, Number(p.fixed_quantity ?? 1) || 0);
-          }
-          return row;
-        });
+      return (products as any[]).filter((p) => !!p.control_id).map(buildProductRow);
     }
 
     const selected = new Set(selections.map((s: any) => s.control_id));
@@ -546,13 +547,28 @@ export default function WaterMitigationPlan() {
       .filter((c) => selected.has(c.id))
       .map((c) => {
         const ov = overrideMap.get(c.id);
-        const row = withCost(c.id, c.id, c.name, ov?.one_time_cost ?? c.one_time_cost ?? 0);
-        row.scopeIds = ov?.assets_customized
-          ? [...(ov.critical_asset_ids || []), ...(ov.water_system_ids || []), ...(ov.process_ids || [])]
-          : null;
-        return row;
+        const scenario = costOverrides[c.id];
+        const isOverridden = typeof scenario === "number" && Number.isFinite(scenario);
+        const base = Number(ov?.one_time_cost ?? c.one_time_cost ?? 0) || 0;
+        return {
+          id: c.id,
+          name: c.name,
+          controlId: c.id,
+          libraryUnitCost: base,
+          unitCost: isOverridden ? scenario : base,
+          isOverridden,
+          scopeIds: ov?.assets_customized
+            ? [...(ov.critical_asset_ids || []), ...(ov.water_system_ids || []), ...(ov.process_ids || [])]
+            : null,
+        } as ControlRow;
       });
-  }, [controls, products, selections, overrideMap, costOverrides]);
+  }, [controls, products, selections, overrideMap, costOverrides, buildProductRow]);
+
+  /** Catalog products with no control type: only reachable through Base Requirements. */
+  const baseRows: ControlRow[] = useMemo(
+    () => (products as any[]).filter((p) => !p.control_id).map(buildProductRow),
+    [products, buildProductRow],
+  );
 
   // --- Per-unit cost editing (project scenario only) ---
   const [editingCostId, setEditingCostId] = useState<string | null>(null);
