@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronsUpDown, Plus, Search, X } from "lucide-react";
+import { ChevronsUpDown, Minus, Plus, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -36,24 +36,40 @@ export interface PlanEditorSource {
   assignments: Record<string, string[]>;
 }
 
+export interface PlanEditorBaseProduct {
+  id: string;
+  name: string;
+  code?: string | null;
+}
+
 interface Props {
   open: boolean;
   mode: "create" | "edit";
   initialName: string;
   initialDescription: string;
   initialAssignments: Record<string, string[]>;
+  initialBaseQuantities?: Record<string, number>;
   classes: PlanEditorClass[];
+  baseProducts?: PlanEditorBaseProduct[];
   existingPlans?: PlanEditorSource[];
   saving?: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (value: { name: string; description: string; assignments: Record<string, string[]> }) => void;
+  onSave: (value: {
+    name: string;
+    description: string;
+    assignments: Record<string, string[]>;
+    baseQuantities: Record<string, number>;
+  }) => void;
 }
 
-export function PlanEditorModal({ open, mode, initialName, initialDescription, initialAssignments, classes, existingPlans = [], saving, onOpenChange, onSave }: Props) {
+export function PlanEditorModal({ open, mode, initialName, initialDescription, initialAssignments, initialBaseQuantities = {}, classes, baseProducts = [], existingPlans = [], saving, onOpenChange, onSave }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [showDescription, setShowDescription] = useState(false);
   const [assignments, setAssignments] = useState<Record<string, string[]>>({});
+  const [baseQuantities, setBaseQuantities] = useState<Record<string, number>>({});
+  const [baseOpen, setBaseOpen] = useState(false);
+  const [baseSearch, setBaseSearch] = useState("");
   const [openClass, setOpenClass] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [loadOpen, setLoadOpen] = useState(false);
@@ -65,11 +81,31 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
     setDescription(initialDescription);
     setShowDescription(!!initialDescription.trim());
     setAssignments(JSON.parse(JSON.stringify(initialAssignments || {})));
+    setBaseQuantities({ ...(initialBaseQuantities || {}) });
+    setBaseOpen(false);
+    setBaseSearch("");
     setOpenClass(null);
     setSearch("");
     setLoadOpen(false);
     setPendingSource(null);
-  }, [open, initialName, initialDescription, initialAssignments]);
+  }, [open, initialName, initialDescription, initialAssignments, initialBaseQuantities]);
+
+  const setBaseQuantity = (productId: string, quantity: number) => {
+    setBaseQuantities((current) => {
+      const next = { ...current };
+      if (quantity <= 0) delete next[productId];
+      else next[productId] = quantity;
+      return next;
+    });
+  };
+
+  const addedBaseProducts = baseProducts.filter((product) => (baseQuantities[product.id] || 0) > 0);
+  const baseQuery = baseSearch.trim().toLowerCase();
+  const availableBaseProducts = baseProducts.filter(
+    (product) =>
+      !(baseQuantities[product.id] > 0) &&
+      `${product.code || ""} ${product.name}`.toLowerCase().includes(baseQuery),
+  );
 
   const productById = useMemo(() => {
     const map = new Map<string, { id: string; name: string; code?: string | null }>();
@@ -132,6 +168,75 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
               />
             )}
           </div>
+
+          {baseProducts.length > 0 && (
+            <div className="space-y-2">
+              <div>
+                <h3 className="text-sm font-semibold">Base Requirements</h3>
+                <p className="text-xs text-muted-foreground">Products that are not tied to a control type. Set how many this plan needs.</p>
+              </div>
+              <div className="rounded-lg border p-2 space-y-1.5">
+                {addedBaseProducts.map((product) => {
+                  const quantity = baseQuantities[product.id] || 0;
+                  return (
+                    <div key={product.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50">
+                      <span className="flex-1 truncate text-sm">
+                        {product.code ? <strong>{product.code}</strong> : null}
+                        {product.code && product.name ? " " : ""}
+                        {product.name}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <Button type="button" variant="outline" size="icon" className="h-7 w-7" aria-label="Decrease quantity" onClick={() => setBaseQuantity(product.id, quantity - 1)}>
+                          <Minus className="h-3.5 w-3.5" />
+                        </Button>
+                        <Input
+                          value={String(quantity)}
+                          onChange={(event) => setBaseQuantity(product.id, Math.max(0, Math.floor(Number(event.target.value.replace(/[^0-9]/g, "")) || 0)))}
+                          className="h-7 w-14 px-1 text-center text-xs tabular-nums"
+                          aria-label={`Quantity for ${product.name || product.code}`}
+                        />
+                        <Button type="button" variant="outline" size="icon" className="h-7 w-7" aria-label="Increase quantity" onClick={() => setBaseQuantity(product.id, quantity + 1)}>
+                          <Plus className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label={`Remove ${product.name || product.code}`} onClick={() => setBaseQuantity(product.id, 0)}>
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+                <Popover open={baseOpen} onOpenChange={(next) => { setBaseOpen(next); setBaseSearch(""); }}>
+                  <PopoverTrigger asChild>
+                    <button type="button" className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-primary hover:underline">
+                      <Plus className="h-3 w-3" />
+                      Add Product
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-72 p-0">
+                    <div className="relative border-b p-1.5">
+                      <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                      <Input value={baseSearch} onChange={(event) => setBaseSearch(event.target.value)} placeholder="Search products" className="h-8 pl-8 text-xs" />
+                    </div>
+                    <div className="max-h-56 overflow-y-auto p-1">
+                      {availableBaseProducts.map((product) => (
+                        <Button
+                          key={product.id}
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="w-full justify-start h-auto px-2 py-1.5 text-xs"
+                          onClick={() => { setBaseQuantity(product.id, 1); setBaseOpen(false); }}
+                        >
+                          <span className="truncate">{product.code ? <strong>{product.code}&nbsp;</strong> : null}{product.name}</span>
+                        </Button>
+                      ))}
+                      {availableBaseProducts.length === 0 && <div className="px-2 py-3 text-xs text-muted-foreground">No products available.</div>}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-2">
             <div className="flex items-start justify-between gap-3">
@@ -239,7 +344,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button type="button" disabled={saving || !name.trim()} onClick={() => onSave({ name: name.trim(), description, assignments })}>
+          <Button type="button" disabled={saving || !name.trim()} onClick={() => onSave({ name: name.trim(), description, assignments, baseQuantities })}>
             {saving ? "Saving…" : mode === "create" ? "Create plan" : "Save changes"}
           </Button>
         </DialogFooter>

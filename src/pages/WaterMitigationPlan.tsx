@@ -65,13 +65,16 @@ interface Plan {
   control_counts: Record<string, number>;
   /** controlId -> detection ids this plan has switched the control off for. */
   excluded_instances: Record<string, string[]>;
-  product_assignments: Record<string, string[] | boolean>;
+  /** classId -> product ids, plus `__base` (productId -> quantity) and `__configured`. */
+  product_assignments: Record<string, string[] | boolean | Record<string, number>>;
   sort_order: number;
 }
 
 interface ControlRow {
   id: string;
   name: string;
+  /** Product ID from the catalog, shown in bold before the name. */
+  code?: string | null;
   /** Linked mitigation control (equals `id` for legacy selection-based rows). */
   controlId: string;
   /** Explicit protected-item ids when the row overrides the Risk-Control Map defaults. */
@@ -493,7 +496,8 @@ export default function WaterMitigationPlan() {
 
   // Rows come from the company's Product Catalog; older companies without any
   // products keep using their saved control selections.
-  const controlRows: ControlRow[] = useMemo(() => {
+  const buildProductRow = useMemo(() => {
+    const controlById = new Map((controls as any[]).map((c) => [c.id, c]));
     const withCost = (id: string, controlId: string, name: string, base: number): ControlRow => {
       const scenario = costOverrides[id];
       const isOverridden = typeof scenario === "number" && Number.isFinite(scenario);
@@ -507,38 +511,38 @@ export default function WaterMitigationPlan() {
         isOverridden,
       };
     };
+    return (p: any): ControlRow => {
+      const control = p.control_id ? controlById.get(p.control_id) : undefined;
+      const ov = p.control_id ? overrideMap.get(p.control_id) : undefined;
+      // Per-unit cost = upfront + installation + one year of maintenance.
+      const oneTime = Number(p.one_time_cost ?? ov?.one_time_cost ?? control?.one_time_cost ?? 0) || 0;
+      const install = Number(p.installation_cost ?? 0) || 0;
+      const maint = Number(p.monthly_maint_cost ?? control?.monthly_maint_cost ?? 0) || 0;
+      const annualMaint = p.maint_interval === "yearly" ? maint : maint * 12;
+      const row = withCost(
+        p.id,
+        p.control_id || p.id,
+        p.name || p.product_code || control?.name || "Product",
+        oneTime + install + annualMaint,
+      );
+      row.code = p.product_code || null;
+      row.scopeIds = p.scope_customized
+        ? [
+            ...((p.critical_asset_ids as string[]) || []),
+            ...((p.water_system_ids as string[]) || []),
+            ...((p.process_ids as string[]) || []),
+          ]
+        : null;
+      if (p.applied_in_any_plan && p.control_id) {
+        row.fixedQuantity = Math.max(0, Number(p.fixed_quantity ?? 1) || 0);
+      }
+      return row;
+    };
+  }, [controls, overrideMap, costOverrides]);
 
+  const controlRows: ControlRow[] = useMemo(() => {
     if ((products as any[]).length > 0) {
-      const controlById = new Map((controls as any[]).map((c) => [c.id, c]));
-      return (products as any[])
-        .filter((p) => !!p.control_id || p.applied_in_any_plan)
-        .map((p) => {
-          const control = p.control_id ? controlById.get(p.control_id) : undefined;
-          const ov = p.control_id ? overrideMap.get(p.control_id) : undefined;
-          // Per-unit cost = upfront + installation + one year of maintenance.
-          const oneTime = Number(p.one_time_cost ?? ov?.one_time_cost ?? control?.one_time_cost ?? 0) || 0;
-          const install = Number(p.installation_cost ?? 0) || 0;
-          const maint = Number(p.monthly_maint_cost ?? control?.monthly_maint_cost ?? 0) || 0;
-          const annualMaint = p.maint_interval === "yearly" ? maint : maint * 12;
-          const base = oneTime + install + annualMaint;
-          const row = withCost(
-            p.id,
-            p.control_id || p.id,
-            p.name || p.product_code || control?.name || "Product",
-            base,
-          );
-          row.scopeIds = p.scope_customized
-            ? [
-                ...((p.critical_asset_ids as string[]) || []),
-                ...((p.water_system_ids as string[]) || []),
-                ...((p.process_ids as string[]) || []),
-              ]
-            : null;
-          if (p.applied_in_any_plan) {
-            row.fixedQuantity = Math.max(0, Number(p.fixed_quantity ?? 1) || 0);
-          }
-          return row;
-        });
+      return (products as any[]).filter((p) => !!p.control_id).map(buildProductRow);
     }
 
     const selected = new Set(selections.map((s: any) => s.control_id));
@@ -546,13 +550,28 @@ export default function WaterMitigationPlan() {
       .filter((c) => selected.has(c.id))
       .map((c) => {
         const ov = overrideMap.get(c.id);
-        const row = withCost(c.id, c.id, c.name, ov?.one_time_cost ?? c.one_time_cost ?? 0);
-        row.scopeIds = ov?.assets_customized
-          ? [...(ov.critical_asset_ids || []), ...(ov.water_system_ids || []), ...(ov.process_ids || [])]
-          : null;
-        return row;
+        const scenario = costOverrides[c.id];
+        const isOverridden = typeof scenario === "number" && Number.isFinite(scenario);
+        const base = Number(ov?.one_time_cost ?? c.one_time_cost ?? 0) || 0;
+        return {
+          id: c.id,
+          name: c.name,
+          controlId: c.id,
+          libraryUnitCost: base,
+          unitCost: isOverridden ? scenario : base,
+          isOverridden,
+          scopeIds: ov?.assets_customized
+            ? [...(ov.critical_asset_ids || []), ...(ov.water_system_ids || []), ...(ov.process_ids || [])]
+            : null,
+        } as ControlRow;
       });
-  }, [controls, products, selections, overrideMap, costOverrides]);
+  }, [controls, products, selections, overrideMap, costOverrides, buildProductRow]);
+
+  /** Catalog products with no control type: only reachable through Base Requirements. */
+  const baseRows: ControlRow[] = useMemo(
+    () => (products as any[]).filter((p) => !p.control_id).map(buildProductRow),
+    [products, buildProductRow],
+  );
 
   // --- Per-unit cost editing (project scenario only) ---
   const [editingCostId, setEditingCostId] = useState<string | null>(null);
@@ -962,11 +981,43 @@ export default function WaterMitigationPlan() {
     return n;
   };
 
+  /** Base Requirements: manual quantities per product, stored under `__base`. */
+  const baseQuantitiesFor = (plan: Plan): Record<string, number> => {
+    const raw = (plan.product_assignments || {})["__base"];
+    if (!raw || Array.isArray(raw) || typeof raw !== "object") return {};
+    return raw as Record<string, number>;
+  };
+
+  const baseCountFor = (plan: Plan, productId: string) => Math.max(0, Number(baseQuantitiesFor(plan)[productId] || 0));
+
+  /** Only controls picked in at least one plan appear in the breakdown. */
+  const visibleControlRows = useMemo(
+    () =>
+      controlRows.filter((row) =>
+        plans.some((plan) =>
+          Object.entries(plan.product_assignments || {}).some(
+            ([key, value]) => key !== "__base" && Array.isArray(value) && value.includes(row.id),
+          ),
+        ),
+      ),
+    [controlRows, plans],
+  );
+
+  const visibleBaseRows = useMemo(
+    () => baseRows.filter((row) => plans.some((plan) => baseCountFor(plan, row.id) > 0)),
+    [baseRows, plans],
+  );
+
   const planTotals = (plan: Plan) => {
     let count = 0;
     let cost = 0;
     controlRows.forEach((row) => {
       const n = countFor(plan, row.id);
+      count += n;
+      cost += n * row.unitCost;
+    });
+    baseRows.forEach((row) => {
+      const n = baseCountFor(plan, row.id);
       count += n;
       cost += n * row.unitCost;
     });
@@ -1051,11 +1102,26 @@ export default function WaterMitigationPlan() {
       });
   }, [plans, planEditor, editorClasses]);
 
+  /** Catalog products with no control type, selectable under Base Requirements. */
+  const editorBaseProducts = useMemo(
+    () => baseRows.map((row) => ({ id: row.id, name: row.name, code: row.code ?? null })),
+    [baseRows],
+  );
 
-  const savePlanEditor = async (value: { name: string; description: string; assignments: Record<string, string[]> }) => {
+  const editorBaseQuantities = useMemo(
+    () => (planEditor?.plan ? baseQuantitiesFor(planEditor.plan) : {}),
+    [planEditor],
+  );
+
+  const savePlanEditor = async (value: {
+    name: string;
+    description: string;
+    assignments: Record<string, string[]>;
+    baseQuantities: Record<string, number>;
+  }) => {
     if (!projectId || !planEditor) return;
     setSavingPlan(true);
-    const productAssignments = { ...value.assignments, __configured: true };
+    const productAssignments = { ...value.assignments, __base: value.baseQuantities, __configured: true };
     if (planEditor.mode === "create") {
       const nextOrder = plans.length ? Math.max(...plans.map((plan) => plan.sort_order)) + 1 : 0;
       const { data: created, error } = await supabase.from("project_mitigation_plans").insert({
@@ -1160,9 +1226,9 @@ export default function WaterMitigationPlan() {
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  const allControlsExpanded = controlRows.length > 0 && controlRows.every((row) => expanded.has(row.id));
+  const allControlsExpanded = visibleControlRows.length > 0 && visibleControlRows.every((row) => expanded.has(row.id));
   const toggleAllExpanded = () => {
-    setExpanded(allControlsExpanded ? new Set() : new Set(controlRows.map((row) => row.id)));
+    setExpanded(allControlsExpanded ? new Set() : new Set(visibleControlRows.map((row) => row.id)));
   };
 
   const [viewer, setViewer] = useState<{
@@ -1716,7 +1782,7 @@ actions and posts its own recap.`;
             <div className="w-max min-w-full bg-background py-3">
               <div className="sticky left-0 inline-flex items-center gap-2 px-1">
                 <div className="text-sm font-medium text-foreground whitespace-nowrap">Breakdown by Control Type</div>
-                {controlRows.length > 0 && (
+                {visibleControlRows.length > 0 && (
                   <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={toggleAllExpanded}>
                     {allControlsExpanded ? <ChevronDown className="h-3.5 w-3.5 mr-1" /> : <ChevronRight className="h-3.5 w-3.5 mr-1" />}
                     {allControlsExpanded ? "Collapse all" : "Expand all"}
@@ -1729,10 +1795,10 @@ actions and posts its own recap.`;
             <table className="w-full border-collapse">
               {sharedColumns}
               <tbody>
-                {controlRows.length === 0 ? (
+                {visibleControlRows.length === 0 && visibleBaseRows.length === 0 ? (
                   <tr className="border-b">
                     <td className="px-4 py-6 text-sm text-muted-foreground" colSpan={plans.length + 2}>
-                      No controls selected in the Mitigation Control Library yet.
+                      No products have been added to a plan yet.
                     </td>
                   </tr>
                 ) : (
@@ -1743,12 +1809,20 @@ actions and posts its own recap.`;
                       <td key={plan.id} className="border-r px-4 py-3">
                         <div className="flex justify-center">
                           <CostPie
-                            slices={controlRows.map((row, colorIndex) => ({
-                              id: row.id,
-                              name: row.name,
-                              value: countFor(plan, row.id) * row.unitCost,
-                              colorIndex,
-                            }))}
+                            slices={[
+                              ...visibleControlRows.map((row, colorIndex) => ({
+                                id: row.id,
+                                name: row.name,
+                                value: countFor(plan, row.id) * row.unitCost,
+                                colorIndex,
+                              })),
+                              ...visibleBaseRows.map((row, index) => ({
+                                id: row.id,
+                                name: row.name,
+                                value: baseCountFor(plan, row.id) * row.unitCost,
+                                colorIndex: visibleControlRows.length + index,
+                              })),
+                            ]}
                             hovered={hoveredControl}
                             onHover={setHoveredControl}
                             onSelect={focusControlRow}
@@ -1758,7 +1832,7 @@ actions and posts its own recap.`;
                     ))}
                     <td />
                   </tr>
-                  {controlRows.map((row, colorIndex) => {
+                  {visibleControlRows.map((row, colorIndex) => {
                     const spaces = spacesForControl(row.id);
                     const isOpen = expanded.has(row.id);
                     return (
@@ -1779,7 +1853,11 @@ actions and posts its own recap.`;
                               disabled={spaces.length === 0}
                             >
                                <ControlTypeIcon name={row.name} colorIndex={colorIndex} />
-                              <span>{row.name}</span>
+                              <span>
+                                {row.code ? <strong>{row.code}</strong> : null}
+                                {row.code && row.name ? " " : ""}
+                                {row.name}
+                              </span>
                               {spaces.length > 0 ? (
                                 isOpen ? (
                                   <ChevronDown className="ml-auto h-4 w-4 shrink-0" />
@@ -1871,6 +1949,55 @@ actions and posts its own recap.`;
                       </Fragment>
                     );
                   })}
+                  {visibleBaseRows.length > 0 && (
+                    <tr className="border-b bg-muted/40">
+                      <th className={`${labelCellBase} bg-muted/40 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground`}>
+                        Base Requirements
+                      </th>
+                      {plans.map((plan) => (
+                        <td key={plan.id} className="border-r px-4 py-2 bg-muted/40" />
+                      ))}
+                      <td className="bg-muted/40" />
+                    </tr>
+                  )}
+                  {visibleBaseRows.map((row, index) => {
+                    const colorIndex = visibleControlRows.length + index;
+                    return (
+                      <tr
+                        key={row.id}
+                        ref={(el) => {
+                          controlRowRefs.current[row.id] = el;
+                        }}
+                        className={`border-b align-top ${hoveredControl === row.id ? "bg-muted" : ""}`}
+                        onMouseEnter={() => setHoveredControl(row.id)}
+                        onMouseLeave={() => setHoveredControl(null)}
+                      >
+                        <th className={`${labelCellBase} ${hoveredControl === row.id ? "bg-muted" : "bg-card"} text-left font-normal`}>
+                          <div className="flex items-center gap-1.5">
+                            <ControlTypeIcon name={row.name} colorIndex={colorIndex} />
+                            <span>
+                              {row.code ? <strong>{row.code}</strong> : null}
+                              {row.code && row.name ? " " : ""}
+                              {row.name}
+                            </span>
+                          </div>
+                          <div className="mt-0.5 pl-[26px] text-xs text-muted-foreground tabular-nums">
+                            {currency(row.unitCost)} / unit
+                          </div>
+                        </th>
+                        {plans.map((plan) => {
+                          const n = baseCountFor(plan, row.id);
+                          return (
+                            <td key={plan.id} className="border-r px-4 py-2 text-center text-sm tabular-nums">
+                              <div className="font-bold text-foreground">{currency(n * row.unitCost)}</div>
+                              <div>{n} {n === 1 ? "unit" : "units"}</div>
+                            </td>
+                          );
+                        })}
+                        <td />
+                      </tr>
+                    );
+                  })}
                   </>
                 )}
 
@@ -1888,6 +2015,8 @@ actions and posts its own recap.`;
         initialDescription={planEditor?.plan?.summary ?? ""}
         initialAssignments={editorAssignments}
         classes={editorClasses}
+        baseProducts={editorBaseProducts}
+        initialBaseQuantities={editorBaseQuantities}
         existingPlans={editorSourcePlans}
         saving={savingPlan}
         onOpenChange={(open) => { if (!open && !savingPlan) setPlanEditor(null); }}
