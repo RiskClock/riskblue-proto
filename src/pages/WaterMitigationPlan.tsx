@@ -938,6 +938,116 @@ export default function WaterMitigationPlan() {
     return { count, cost };
   };
 
+  // --- create/edit plan modal -----------------------------------------
+  const [planEditor, setPlanEditor] = useState<{ mode: "create" | "edit"; plan: Plan | null } | null>(null);
+  const [savingPlan, setSavingPlan] = useState(false);
+
+  const editorClasses = useMemo<PlanEditorClass[]>(() => {
+    if (!catalog) return [];
+    const detected = new Map<string, number>();
+    detectionRows.forEach((row) => {
+      if (row.catalogId) detected.set(row.catalogId, (detected.get(row.catalogId) || 0) + 1);
+    });
+    (items as any[]).forEach((item) => {
+      const table = CATEGORY_TABLE[item.category];
+      if (table !== "critical_assets" && table !== "water_systems") return;
+      const entry = (catalog[table] || []).find((candidate: any) =>
+        (candidate.name || "").toLowerCase().trim() === (item.name || "").toLowerCase().trim(),
+      );
+      if (entry) detected.set(entry.id, (detected.get(entry.id) || 0) + 1);
+    });
+
+    const productChoices = (catalogId: string, defaultControlIds: string[]) =>
+      (products as any[])
+        .filter((product) => {
+          if (product.applied_in_any_plan) return false;
+          if (product.scope_customized) {
+            return [
+              ...((product.critical_asset_ids as string[]) || []),
+              ...((product.water_system_ids as string[]) || []),
+            ].includes(catalogId);
+          }
+          return !!product.control_id && defaultControlIds.includes(product.control_id);
+        })
+        .map((product) => ({ id: product.id, name: product.name || "", code: product.product_code }));
+
+    const rows: PlanEditorClass[] = [];
+    (["critical_assets", "water_systems"] as const).forEach((key) => {
+      (catalog[key] || []).forEach((entry: any) => {
+        const count = detected.get(entry.id) || 0;
+        if (count === 0) return;
+        rows.push({
+          id: entry.id,
+          name: entry.name,
+          kind: key === "critical_assets" ? "Asset" : "Water System",
+          count,
+          products: productChoices(entry.id, entry.default_control_ids || []),
+        });
+      });
+    });
+    return rows.sort((a, b) => a.name.localeCompare(b.name));
+  }, [catalog, detectionRows, items, products]);
+
+  const inferredAssignments = useMemo(() => {
+    const result: Record<string, string[]> = {};
+    editorClasses.forEach((item) => {
+      result[item.id] = item.products.map((product) => product.id);
+    });
+    return result;
+  }, [editorClasses]);
+
+  const editorAssignments = useMemo(() => {
+    const plan = planEditor?.plan;
+    if (!plan?.product_assignments?.__configured) return inferredAssignments;
+    const result: Record<string, string[]> = {};
+    editorClasses.forEach((item) => {
+      result[item.id] = (plan.product_assignments[item.id] || []).filter((id) => item.products.some((product) => product.id === id));
+    });
+    return result;
+  }, [planEditor, editorClasses, inferredAssignments]);
+
+  const savePlanEditor = async (value: { name: string; description: string; assignments: Record<string, string[]> }) => {
+    if (!projectId || !planEditor) return;
+    setSavingPlan(true);
+    const productAssignments = { ...value.assignments, __configured: true };
+    if (planEditor.mode === "create") {
+      const nextOrder = plans.length ? Math.max(...plans.map((plan) => plan.sort_order)) + 1 : 0;
+      const { data: created, error } = await supabase.from("project_mitigation_plans").insert({
+        project_id: projectId,
+        name: value.name,
+        summary: value.description,
+        control_counts: {},
+        excluded_instances: {},
+        product_assignments: productAssignments,
+        sort_order: nextOrder,
+        created_by: user?.id ?? null,
+      } as any).select("id").single();
+      if (error) toast.error(getUserFriendlyError(error));
+      else {
+        await logPlanChange("create", `Created plan "${value.name}"`, created?.id ?? null, { name: value.name });
+        setPlanEditor(null);
+      }
+    } else {
+      const plan = planEditor.plan;
+      if (!plan) {
+        setSavingPlan(false);
+        return;
+      }
+      const { error } = await supabase.from("project_mitigation_plans").update({
+        name: value.name,
+        summary: value.description,
+        product_assignments: productAssignments,
+      } as any).eq("id", plan.id);
+      if (error) toast.error(getUserFriendlyError(error));
+      else {
+        await logPlanChange("update", `Updated plan "${value.name}"`, plan.id, { name: value.name, product_assignments: productAssignments });
+        setPlanEditor(null);
+      }
+    }
+    await queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
+    setSavingPlan(false);
+  };
+
   const toggleInstance = async (planId: string, controlId: string, instanceId: string) => {
     if (!canEdit) return;
     const plan = plans.find((p) => p.id === planId);
@@ -1465,6 +1575,9 @@ actions and posts its own recap.`;
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => setPlanEditor({ mode: "edit", plan })}>
+                                <Pencil className="h-4 w-4 mr-2" /> Edit plan
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => addPlan(plan)}>Duplicate plan</DropdownMenuItem>
                               <DropdownMenuItem className="text-destructive" onClick={() => deletePlan(plan.id)}>
                                 <Trash2 className="h-4 w-4 mr-2" /> Delete plan
@@ -1477,7 +1590,7 @@ actions and posts its own recap.`;
                   ))}
                   <td className="px-4 py-2 align-top sticky top-0 z-20 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))]">
                     {canEdit && (
-                      <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => addPlan()}>
+                      <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setPlanEditor({ mode: "create", plan: null })}>
                         <Plus className="h-4 w-4 mr-1" /> New plan
                       </Button>
                     )}
@@ -1719,6 +1832,18 @@ actions and posts its own recap.`;
           </div>
         )}
       </main>
+
+      <PlanEditorModal
+        open={!!planEditor}
+        mode={planEditor?.mode ?? "create"}
+        initialName={planEditor?.plan?.name ?? `Plan ${plans.length + 1}`}
+        initialDescription={planEditor?.plan?.summary ?? ""}
+        initialAssignments={editorAssignments}
+        classes={editorClasses}
+        saving={savingPlan}
+        onOpenChange={(open) => { if (!open && !savingPlan) setPlanEditor(null); }}
+        onSave={savePlanEditor}
+      />
 
       {viewer && viewerData && (
         <ControlInstancesModal
