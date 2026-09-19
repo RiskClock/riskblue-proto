@@ -92,7 +92,6 @@ export default function Controls() {
   const pageTitle = productCatalogLabel();
 
   const [search, setSearch] = useState("");
-  const [scopeSearch, setScopeSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [typePickerOpen, setTypePickerOpen] = useState(false);
@@ -314,7 +313,6 @@ export default function Controls() {
       install: String(selected.installation_cost ?? 0),
       maint: String(selected.monthly_maint_cost ?? control?.monthly_maint_cost ?? 0),
     });
-    setScopeSearch("");
   }, [
     selected?.id,
     selected?.one_time_cost,
