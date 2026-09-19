@@ -2062,6 +2062,7 @@ export type Database = {
           excluded_instances: Json
           id: string
           name: string
+          product_assignments: Json
           project_id: string
           sort_order: number
           summary: string | null
@@ -2074,6 +2075,7 @@ export type Database = {
           excluded_instances?: Json
           id?: string
           name?: string
+          product_assignments?: Json
           project_id: string
           sort_order?: number
           summary?: string | null
@@ -2086,6 +2088,7 @@ export type Database = {
           excluded_instances?: Json
           id?: string
           name?: string
+          product_assignments?: Json
           project_id?: string
           sort_order?: number
           summary?: string | null

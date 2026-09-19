@@ -33,6 +33,7 @@ import {
   Trash2,
   MoreVertical,
   Wrench,
+  Pencil,
 } from "lucide-react";
 import { ActivityHistoryPanel } from "@/components/workbench/ActivityHistoryPanel";
 import { toast } from "sonner";
@@ -40,6 +41,7 @@ import { getUserFriendlyError } from "@/lib/errorHandling";
 import { ControlInstancesModal } from "@/components/wizard/ControlInstancesModal";
 import { AskWadePanel } from "@/components/workbench/AskWadePanel";
 import type { DocumentSourceDescriptor } from "@/components/viewer";
+import { PlanEditorModal, type PlanEditorClass } from "@/components/wizard/PlanEditorModal";
 import {
   parseSurveyFloorPlans,
   getAddedUnitPlans,
@@ -62,6 +64,7 @@ interface Plan {
   control_counts: Record<string, number>;
   /** controlId -> detection ids this plan has switched the control off for. */
   excluded_instances: Record<string, string[]>;
+  product_assignments: Record<string, string[] | boolean>;
   sort_order: number;
 }
 
@@ -91,6 +94,7 @@ interface DetectionRow {
   nx: number | null;
   ny: number | null;
   instanceLabel: string;
+  catalogId: string | null;
 }
 
 const CATEGORY_TABLE: Record<string, "critical_assets" | "water_systems" | "processes"> = {
@@ -457,7 +461,7 @@ export default function WaterMitigationPlan() {
     queryFn: async (): Promise<Plan[]> => {
       const { data, error } = await supabase
         .from("project_mitigation_plans")
-        .select("id, name, summary, control_counts, excluded_instances, sort_order")
+        .select("id, name, summary, control_counts, excluded_instances, product_assignments, sort_order")
         .eq("project_id", projectId!)
         .order("sort_order");
       if (error) throw error;
@@ -465,6 +469,7 @@ export default function WaterMitigationPlan() {
         ...p,
         control_counts: (p.control_counts || {}) as Record<string, number>,
         excluded_instances: (p.excluded_instances || {}) as Record<string, string[]>,
+        product_assignments: (p.product_assignments || {}) as Plan["product_assignments"],
       }));
     },
     enabled: !!projectId,
@@ -609,6 +614,12 @@ export default function WaterMitigationPlan() {
 
   const detectionRows: DetectionRow[] = useMemo(() => {
     if (!drawing) return [];
+    const byName = new Map<string, string>();
+    if (catalog) {
+      (["critical_assets", "water_systems", "processes"] as const).forEach((key) => {
+        (catalog[key] || []).forEach((entry: any) => byName.set((entry.name || "").toLowerCase().trim(), entry.id));
+      });
+    }
     return (drawing.instances as any[]).map((d) => {
       let space = UNASSIGNED;
       const entry = d.sheet_id ? sheetPlans.get(d.sheet_id) : undefined;
@@ -643,9 +654,10 @@ export default function WaterMitigationPlan() {
         instanceLabel: d.instance_number
           ? `${d.awp_class_name} ${String(d.instance_number).padStart(3, "0")}`
           : d.awp_class_name,
+        catalogId: byName.get((d.awp_class_name || "").toLowerCase().trim()) ?? null,
       };
     });
-  }, [drawing, sheetPlans]);
+  }, [drawing, sheetPlans, catalog]);
 
   // Every space in the spatial model, in model order, then any extra spaces
   // that only appear on detections, with the unassigned bucket last.
@@ -671,8 +683,8 @@ export default function WaterMitigationPlan() {
 
   // Derived per-space instance breakdown per control.
   const spaceBreakdown = useMemo(() => {
-    // controlId -> space -> { instances, legacy }
-    const breakdown = new Map<string, Map<string, { instances: DetectionRow[]; legacy: number }>>();
+    // productId -> space -> matching detected instances and legacy catalog ids.
+    const breakdown = new Map<string, Map<string, { instances: DetectionRow[]; legacyIds: string[] }>>();
     if (!catalog) return breakdown;
 
     const protectedByControl = new Map<string, Set<string>>();
@@ -708,7 +720,7 @@ export default function WaterMitigationPlan() {
       }
       let cell = spaces.get(space);
       if (!cell) {
-        cell = { instances: [], legacy: 0 };
+        cell = { instances: [], legacyIds: [] };
         spaces.set(space, cell);
       }
       return cell;
@@ -721,12 +733,12 @@ export default function WaterMitigationPlan() {
       if (!catalogId) return;
       controlRows.forEach((row) => {
         if (!protectedByControl.get(row.id)?.has(catalogId)) return;
-        cellFor(row.id, UNASSIGNED).legacy += 1;
+        cellFor(row.id, UNASSIGNED).legacyIds.push(catalogId);
       });
     });
 
     detectionRows.forEach((d) => {
-      const catalogId = byAnyName.get((d.name || "").toLowerCase().trim());
+       const catalogId = d.catalogId || byAnyName.get((d.name || "").toLowerCase().trim());
       if (!catalogId) return;
       controlRows.forEach((row) => {
         if (!protectedByControl.get(row.id)?.has(catalogId)) return;
@@ -742,7 +754,7 @@ export default function WaterMitigationPlan() {
     spaceBreakdown.forEach((spaces, controlId) => {
       let total = 0;
       spaces.forEach((cell) => {
-        total += cell.instances.length + cell.legacy;
+         total += cell.instances.length + cell.legacyIds.length;
       });
       counts[controlId] = total;
     });
@@ -854,6 +866,7 @@ export default function WaterMitigationPlan() {
       summary: source ? source.summary : "",
       control_counts: source ? source.control_counts : {},
       excluded_instances: source ? source.excluded_instances : {},
+        product_assignments: source ? source.product_assignments : {},
       sort_order: nextOrder,
       created_by: user?.id ?? null,
     });
@@ -886,11 +899,19 @@ export default function WaterMitigationPlan() {
   const excludedFor = (plan: Plan, controlId: string) =>
     new Set((plan.excluded_instances || {})[controlId] || []);
 
+  const planUsesProductForClass = (plan: Plan, productId: string, catalogId: string | null) => {
+    if (!plan.product_assignments?.__configured) return true;
+    if (!catalogId) return false;
+    const assigned = plan.product_assignments[catalogId];
+    return Array.isArray(assigned) && assigned.includes(productId);
+  };
+
   const countForSpace = (plan: Plan, controlId: string, space: string) => {
     const cell = spaceBreakdown.get(controlId)?.get(space);
     if (!cell) return 0;
     const ex = excludedFor(plan, controlId);
-    return cell.legacy + cell.instances.filter((i) => !ex.has(i.id)).length;
+    return cell.legacyIds.filter((catalogId) => planUsesProductForClass(plan, controlId, catalogId)).length
+      + cell.instances.filter((i) => planUsesProductForClass(plan, controlId, i.catalogId) && !ex.has(i.id)).length;
   };
 
   const countFor = (plan: Plan, controlId: string) => {
@@ -901,7 +922,8 @@ export default function WaterMitigationPlan() {
     const ex = excludedFor(plan, controlId);
     let n = 0;
     spaces.forEach((cell) => {
-      n += cell.legacy + cell.instances.filter((i) => !ex.has(i.id)).length;
+      n += cell.legacyIds.filter((catalogId) => planUsesProductForClass(plan, controlId, catalogId)).length;
+      n += cell.instances.filter((i) => planUsesProductForClass(plan, controlId, i.catalogId) && !ex.has(i.id)).length;
     });
     return n;
   };
@@ -915,6 +937,117 @@ export default function WaterMitigationPlan() {
       cost += n * row.unitCost;
     });
     return { count, cost };
+  };
+
+  // --- create/edit plan modal -----------------------------------------
+  const [planEditor, setPlanEditor] = useState<{ mode: "create" | "edit"; plan: Plan | null } | null>(null);
+  const [savingPlan, setSavingPlan] = useState(false);
+
+  const editorClasses = useMemo<PlanEditorClass[]>(() => {
+    if (!catalog) return [];
+    const detected = new Map<string, number>();
+    detectionRows.forEach((row) => {
+      if (row.catalogId) detected.set(row.catalogId, (detected.get(row.catalogId) || 0) + 1);
+    });
+    (items as any[]).forEach((item) => {
+      const table = CATEGORY_TABLE[item.category];
+      if (table !== "critical_assets" && table !== "water_systems") return;
+      const entry = (catalog[table] || []).find((candidate: any) =>
+        (candidate.name || "").toLowerCase().trim() === (item.name || "").toLowerCase().trim(),
+      );
+      if (entry) detected.set(entry.id, (detected.get(entry.id) || 0) + 1);
+    });
+
+    const productChoices = (catalogId: string, defaultControlIds: string[]) =>
+      (products as any[])
+        .filter((product) => {
+          if (product.applied_in_any_plan) return false;
+          if (product.scope_customized) {
+            return [
+              ...((product.critical_asset_ids as string[]) || []),
+              ...((product.water_system_ids as string[]) || []),
+            ].includes(catalogId);
+          }
+          return !!product.control_id && defaultControlIds.includes(product.control_id);
+        })
+        .map((product) => ({ id: product.id, name: product.name || "", code: product.product_code }));
+
+    const rows: PlanEditorClass[] = [];
+    (["critical_assets", "water_systems"] as const).forEach((key) => {
+      (catalog[key] || []).forEach((entry: any) => {
+        const count = detected.get(entry.id) || 0;
+        if (count === 0) return;
+        rows.push({
+          id: entry.id,
+          name: entry.name,
+          kind: key === "critical_assets" ? "Asset" : "Water System",
+          count,
+          products: productChoices(entry.id, entry.default_control_ids || []),
+        });
+      });
+    });
+    return rows.sort((a, b) => a.name.localeCompare(b.name));
+  }, [catalog, detectionRows, items, products]);
+
+  const inferredAssignments = useMemo(() => {
+    const result: Record<string, string[]> = {};
+    editorClasses.forEach((item) => {
+      result[item.id] = item.products.map((product) => product.id);
+    });
+    return result;
+  }, [editorClasses]);
+
+  const editorAssignments = useMemo(() => {
+    const plan = planEditor?.plan;
+    if (!plan?.product_assignments?.__configured) return inferredAssignments;
+    const result: Record<string, string[]> = {};
+    editorClasses.forEach((item) => {
+      const assigned = plan.product_assignments[item.id];
+      result[item.id] = (Array.isArray(assigned) ? assigned : []).filter((id) => item.products.some((product) => product.id === id));
+    });
+    return result;
+  }, [planEditor, editorClasses, inferredAssignments]);
+
+  const savePlanEditor = async (value: { name: string; description: string; assignments: Record<string, string[]> }) => {
+    if (!projectId || !planEditor) return;
+    setSavingPlan(true);
+    const productAssignments = { ...value.assignments, __configured: true };
+    if (planEditor.mode === "create") {
+      const nextOrder = plans.length ? Math.max(...plans.map((plan) => plan.sort_order)) + 1 : 0;
+      const { data: created, error } = await supabase.from("project_mitigation_plans").insert({
+        project_id: projectId,
+        name: value.name,
+        summary: value.description,
+        control_counts: {},
+        excluded_instances: {},
+        product_assignments: productAssignments,
+        sort_order: nextOrder,
+        created_by: user?.id ?? null,
+      } as any).select("id").single();
+      if (error) toast.error(getUserFriendlyError(error));
+      else {
+        await logPlanChange("create", `Created plan "${value.name}"`, created?.id ?? null, { name: value.name });
+        setPlanEditor(null);
+      }
+    } else {
+      const plan = planEditor.plan;
+      if (!plan) {
+        setSavingPlan(false);
+        return;
+      }
+      const { error } = await supabase.from("project_mitigation_plans").update({
+        name: value.name,
+        summary: value.description,
+        product_assignments: productAssignments,
+      } as any).eq("id", plan.id);
+      if (error) toast.error(getUserFriendlyError(error));
+      else {
+        await logPlanChange("update", `Updated plan "${value.name}"`, plan.id, { name: value.name, product_assignments: productAssignments });
+        setPlanEditor(null);
+      }
+    }
+    await queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
+    setSavingPlan(false);
   };
 
   const toggleInstance = async (planId: string, controlId: string, instanceId: string) => {
@@ -1042,8 +1175,8 @@ export default function WaterMitigationPlan() {
   const spacesForControl = (controlId: string) => {
     const spaces = spaceBreakdown.get(controlId);
     if (!spaces) return [] as string[];
-    const hasUnassigned = (spaces.get(UNASSIGNED)?.instances.length ?? 0) > 0 ||
-      (spaces.get(UNASSIGNED)?.legacy ?? 0) > 0;
+     const hasUnassigned = (spaces.get(UNASSIGNED)?.instances.length ?? 0) > 0 ||
+       (spaces.get(UNASSIGNED)?.legacyIds.length ?? 0) > 0;
     return orderedSpaces.filter((s) => s !== UNASSIGNED || hasUnassigned);
   };
 
@@ -1289,6 +1422,7 @@ actions and posts its own recap.`;
               summary: source.summary,
               control_counts: source.control_counts,
               excluded_instances: source.excluded_instances,
+              product_assignments: source.product_assignments,
               sort_order: nextOrder,
               created_by: user?.id ?? null,
             } as any)
@@ -1444,6 +1578,9 @@ actions and posts its own recap.`;
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => setPlanEditor({ mode: "edit", plan })}>
+                                <Pencil className="h-4 w-4 mr-2" /> Edit plan
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => addPlan(plan)}>Duplicate plan</DropdownMenuItem>
                               <DropdownMenuItem className="text-destructive" onClick={() => deletePlan(plan.id)}>
                                 <Trash2 className="h-4 w-4 mr-2" /> Delete plan
@@ -1456,7 +1593,7 @@ actions and posts its own recap.`;
                   ))}
                   <td className="px-4 py-2 align-top sticky top-0 z-20 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))]">
                     {canEdit && (
-                      <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => addPlan()}>
+                      <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setPlanEditor({ mode: "create", plan: null })}>
                         <Plus className="h-4 w-4 mr-1" /> New plan
                       </Button>
                     )}
@@ -1699,6 +1836,18 @@ actions and posts its own recap.`;
         )}
       </main>
 
+      <PlanEditorModal
+        open={!!planEditor}
+        mode={planEditor?.mode ?? "create"}
+        initialName={planEditor?.plan?.name ?? `Plan ${plans.length + 1}`}
+        initialDescription={planEditor?.plan?.summary ?? ""}
+        initialAssignments={editorAssignments}
+        classes={editorClasses}
+        saving={savingPlan}
+        onOpenChange={(open) => { if (!open && !savingPlan) setPlanEditor(null); }}
+        onSave={savePlanEditor}
+      />
+
       {viewer && viewerData && (
         <ControlInstancesModal
           isOpen
@@ -1716,11 +1865,15 @@ actions and posts its own recap.`;
             instanceLabel: i.instanceLabel,
           }))}
           excludedIds={
-            excludedFor(
-              plans.find((p) => p.id === viewer.planId) ??
-                ({ excluded_instances: {} } as unknown as Plan),
-              viewer.controlId,
-            ) as Set<string>
+            (() => {
+              const activePlan = plans.find((p) => p.id === viewer.planId) ??
+                ({ excluded_instances: {}, product_assignments: {} } as unknown as Plan);
+              const ids = excludedFor(activePlan, viewer.controlId);
+              viewerData.instances.forEach((instance) => {
+                if (!planUsesProductForClass(activePlan, viewer.controlId, instance.catalogId)) ids.add(instance.id);
+              });
+              return ids;
+            })()
           }
           onToggle={(instanceId) => toggleInstance(viewer.planId, viewer.controlId, instanceId)}
           readOnly={!canEdit}
