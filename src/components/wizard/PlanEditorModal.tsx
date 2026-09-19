@@ -1,8 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronsUpDown, Search, X } from "lucide-react";
+import { ChevronsUpDown, Plus, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +30,12 @@ export interface PlanEditorClass {
   products: Array<{ id: string; name: string; code?: string | null }>;
 }
 
+export interface PlanEditorSource {
+  id: string;
+  name: string;
+  assignments: Record<string, string[]>;
+}
+
 interface Props {
   open: boolean;
   mode: "create" | "edit";
@@ -26,25 +43,32 @@ interface Props {
   initialDescription: string;
   initialAssignments: Record<string, string[]>;
   classes: PlanEditorClass[];
+  existingPlans?: PlanEditorSource[];
   saving?: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (value: { name: string; description: string; assignments: Record<string, string[]> }) => void;
 }
 
-export function PlanEditorModal({ open, mode, initialName, initialDescription, initialAssignments, classes, saving, onOpenChange, onSave }: Props) {
+export function PlanEditorModal({ open, mode, initialName, initialDescription, initialAssignments, classes, existingPlans = [], saving, onOpenChange, onSave }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [showDescription, setShowDescription] = useState(false);
   const [assignments, setAssignments] = useState<Record<string, string[]>>({});
   const [openClass, setOpenClass] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [loadOpen, setLoadOpen] = useState(false);
+  const [pendingSource, setPendingSource] = useState<PlanEditorSource | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setName(initialName);
     setDescription(initialDescription);
+    setShowDescription(!!initialDescription.trim());
     setAssignments(JSON.parse(JSON.stringify(initialAssignments || {})));
     setOpenClass(null);
     setSearch("");
+    setLoadOpen(false);
+    setPendingSource(null);
   }, [open, initialName, initialDescription, initialAssignments]);
 
   const productById = useMemo(() => {
@@ -52,6 +76,11 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
     classes.forEach((item) => item.products.forEach((product) => map.set(product.id, product)));
     return map;
   }, [classes]);
+
+  const hasSelections = useMemo(
+    () => Object.values(assignments).some((value) => Array.isArray(value) && value.length > 0),
+    [assignments],
+  );
 
   const toggleProduct = (classId: string, productId: string) => {
     setAssignments((current) => {
@@ -61,6 +90,18 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
     });
   };
 
+  const applySource = (source: PlanEditorSource) => {
+    const next: Record<string, string[]> = {};
+    classes.forEach((item) => {
+      const assigned = source.assignments[item.id] || [];
+      next[item.id] = assigned.filter((id) => item.products.some((product) => product.id === id));
+    });
+    setAssignments(next);
+    setPendingSource(null);
+  };
+
+  const selectableSources = existingPlans.filter((plan) => plan.name);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[88vh] flex flex-col overflow-hidden">
@@ -69,22 +110,60 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
           <DialogDescription>Choose one or more mapped products for each detected class.</DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-5">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="plan-editor-name">Plan Name</Label>
-              <Input id="plan-editor-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Plan name" />
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="plan-editor-name">Plan Name</Label>
+            <div className="flex items-center gap-2">
+              <Input id="plan-editor-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Plan name" className="flex-1" />
+              {!showDescription && (
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowDescription(true)}>
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  Description
+                </Button>
+              )}
             </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="plan-editor-description">Description</Label>
-              <Textarea id="plan-editor-description" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Plan description" className="min-h-20" />
-            </div>
+            {showDescription && (
+              <Textarea
+                id="plan-editor-description"
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="Plan description"
+                className="min-h-16"
+              />
+            )}
           </div>
 
           <div className="space-y-2">
-            <div>
-              <h3 className="text-sm font-semibold">Detected Assets and Water Systems</h3>
-              <p className="text-xs text-muted-foreground">Product choices come from the Risk-Control Map and Product Catalog.</p>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold">Detected Assets and Water Systems</h3>
+                <p className="text-xs text-muted-foreground">Product choices come from the Risk-Control Map and Product Catalog.</p>
+              </div>
+              {selectableSources.length > 0 && (
+                <Popover open={loadOpen} onOpenChange={setLoadOpen}>
+                  <PopoverTrigger asChild>
+                    <Button type="button" variant="outline" size="sm">Load Existing Plan</Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-64 p-1">
+                    {selectableSources.map((plan) => (
+                      <Button
+                        key={plan.id}
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start"
+                        onClick={() => {
+                          setLoadOpen(false);
+                          if (hasSelections) setPendingSource(plan);
+                          else applySource(plan);
+                        }}
+                      >
+                        {plan.name}
+                      </Button>
+                    ))}
+                  </PopoverContent>
+                </Popover>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
               {classes.map((item) => {
@@ -93,32 +172,39 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                 const filtered = item.products.filter((product) => `${product.code || ""} ${product.name}`.toLowerCase().includes(query));
                 return (
                   <ThreatOverviewCard key={item.id} code={item.code} name={item.name} count={item.count}>
-                    <div className="space-y-2 px-2 pb-2 text-left">
-                      <Button type="button" variant="outline" size="sm" className="w-full justify-between font-normal" onClick={() => { setOpenClass(openClass === item.id ? null : item.id); setSearch(""); }}>
-                        <span>{selected.length > 0 ? `${selected.length} selected` : "Select products"}</span>
-                        <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground" />
-                      </Button>
-
-                      {openClass === item.id && (
-                        <div className="rounded-md border bg-popover overflow-hidden">
-                        <div className="relative border-b p-1.5">
-                          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                          <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search products" className="h-8 pl-8 text-xs" />
-                        </div>
-                        <div className="max-h-40 overflow-y-auto p-1">
-                          {filtered.map((product) => {
-                            const checked = selected.includes(product.id);
-                            return (
-                              <Button key={product.id} type="button" variant="ghost" size="sm" className="w-full justify-start h-auto px-2 py-1.5 text-xs" onClick={() => toggleProduct(item.id, product.id)}>
-                                <span className={`mr-2 h-3.5 w-3.5 rounded-sm border flex items-center justify-center ${checked ? "bg-primary border-primary text-primary-foreground" : "border-input"}`}>{checked ? "✓" : ""}</span>
-                                <span className="truncate">{product.code ? <strong>{product.code} </strong> : null}{product.name}</span>
-                              </Button>
-                            );
-                          })}
-                          {filtered.length === 0 && <div className="px-2 py-3 text-xs text-muted-foreground">No mapped products.</div>}
-                        </div>
-                        </div>
-                      )}
+                    <div className="space-y-1.5 px-2 pb-2 text-left">
+                      <Popover
+                        open={openClass === item.id}
+                        onOpenChange={(next) => {
+                          setOpenClass(next ? item.id : null);
+                          setSearch("");
+                        }}
+                      >
+                        <PopoverTrigger asChild>
+                          <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                            <Plus className="h-3 w-3" />
+                            Add Control
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent align="start" className="w-64 p-0">
+                          <div className="relative border-b p-1.5">
+                            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search products" className="h-8 pl-8 text-xs" />
+                          </div>
+                          <div className="max-h-56 overflow-y-auto p-1">
+                            {filtered.map((product) => {
+                              const checked = selected.includes(product.id);
+                              return (
+                                <Button key={product.id} type="button" variant="ghost" size="sm" className="w-full justify-start h-auto px-2 py-1.5 text-xs" onClick={() => toggleProduct(item.id, product.id)}>
+                                  <span className={`mr-2 h-3.5 w-3.5 shrink-0 rounded-sm border flex items-center justify-center ${checked ? "bg-primary border-primary text-primary-foreground" : "border-input"}`}>{checked ? "✓" : ""}</span>
+                                  <span className="truncate">{product.code ? <strong>{product.code} </strong> : null}{product.name}</span>
+                                </Button>
+                              );
+                            })}
+                            {filtered.length === 0 && <div className="px-2 py-3 text-xs text-muted-foreground">No mapped products.</div>}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
 
                       {selected.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
@@ -157,6 +243,21 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
             {saving ? "Saving…" : mode === "create" ? "Create plan" : "Save changes"}
           </Button>
         </DialogFooter>
+
+        <AlertDialog open={!!pendingSource} onOpenChange={(next) => { if (!next) setPendingSource(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Overwrite current selections?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Loading "{pendingSource?.name}" replaces every product you have selected in this plan.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => pendingSource && applySource(pendingSource)}>Overwrite</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );

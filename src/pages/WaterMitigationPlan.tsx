@@ -920,7 +920,6 @@ export default function WaterMitigationPlan() {
     new Set((plan.excluded_instances || {})[controlId] || []);
 
   const planUsesProductForClass = (plan: Plan, productId: string, catalogId: string | null, assignmentId?: string | null) => {
-    if (!plan.product_assignments?.__configured) return true;
     if (!catalogId) return false;
     const assigned = plan.product_assignments[assignmentId || catalogId] ?? plan.product_assignments[catalogId];
     return Array.isArray(assigned) && assigned.includes(productId);
@@ -937,8 +936,7 @@ export default function WaterMitigationPlan() {
   const countFor = (plan: Plan, controlId: string) => {
     const fixed = controlRows.find((r) => r.id === controlId)?.fixedQuantity;
     if (typeof fixed === "number") {
-      if (!plan.product_assignments?.__configured) return fixed;
-      return Object.values(plan.product_assignments).some((value) => Array.isArray(value) && value.includes(controlId)) ? fixed : 0;
+      return Object.values(plan.product_assignments || {}).some((value) => Array.isArray(value) && value.includes(controlId)) ? fixed : 0;
     }
     const spaces = spaceBreakdown.get(controlId);
     if (!spaces) return 0;
@@ -1024,6 +1022,22 @@ export default function WaterMitigationPlan() {
     });
     return result;
   }, [planEditor, editorClasses]);
+
+  const editorSourcePlans = useMemo(() => {
+    const currentId = planEditor?.plan?.id;
+    return plans
+      .filter((plan) => plan.id !== currentId)
+      .map((plan) => {
+        const assignments: Record<string, string[]> = {};
+        editorClasses.forEach((item) => {
+          const catalogId = item.id.split("::")[0];
+          const assigned = plan.product_assignments?.[item.id] ?? plan.product_assignments?.[catalogId];
+          assignments[item.id] = Array.isArray(assigned) ? assigned : [];
+        });
+        return { id: plan.id, name: plan.name, assignments };
+      });
+  }, [plans, planEditor, editorClasses]);
+
 
   const savePlanEditor = async (value: { name: string; description: string; assignments: Record<string, string[]> }) => {
     if (!projectId || !planEditor) return;
@@ -1860,6 +1874,7 @@ actions and posts its own recap.`;
         initialDescription={planEditor?.plan?.summary ?? ""}
         initialAssignments={editorAssignments}
         classes={editorClasses}
+        existingPlans={editorSourcePlans}
         saving={savingPlan}
         onOpenChange={(open) => { if (!open && !savingPlan) setPlanEditor(null); }}
         onSave={savePlanEditor}
