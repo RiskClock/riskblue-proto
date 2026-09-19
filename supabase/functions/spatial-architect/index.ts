@@ -242,7 +242,10 @@ Deno.serve(async (req) => {
     // Watchdog - if the model call hangs and the edge runtime is about to be
     // killed (~150s wall on Supabase), mark the row failed FIRST so the UI
     // doesn't stay stuck on "Running…" forever.
-    const WATCHDOG_MS = 120_000;
+    // Large projects legitimately take >2min. Supabase allows ~400s wall clock,
+    // so keep the watchdog well above observed run times (~145s) instead of
+    // killing runs that would have succeeded.
+    const WATCHDOG_MS = 300_000;
     let watchdogFired = false;
     const watchdog = setTimeout(async () => {
       watchdogFired = true;
@@ -268,7 +271,10 @@ Deno.serve(async (req) => {
     const generateStartedAt = Date.now();
     try {
       const ai = new GoogleGenAI({ apiKey });
-      const resp: any = await ai.models.generateContent({
+      // Stream so bytes keep flowing during long runs (a buffered call on a
+      // large project produced no traffic for >2min and got cut off), and raise
+      // the output cap so big level/unit lists aren't truncated mid-JSON.
+      const stream: any = await ai.models.generateContentStream({
         model: modelId,
         contents: [
           {
@@ -281,19 +287,31 @@ Deno.serve(async (req) => {
         ],
         config: {
           responseMimeType: "application/json",
+          maxOutputTokens: 65536,
         },
       });
+      let finishReason: string | null = null;
+      for await (const chunk of stream) {
+        const piece =
+          chunk?.text ??
+          chunk?.candidates?.[0]?.content?.parts?.map((p: any) => p?.text ?? "").join("") ??
+          "";
+        if (piece) rawText += piece;
+        if (chunk?.usageMetadata) usage = chunk.usageMetadata;
+        const fr = chunk?.candidates?.[0]?.finishReason;
+        if (fr) finishReason = String(fr);
+      }
       const generateMs = Date.now() - generateStartedAt;
-      rawText =
-        resp?.text ??
-        resp?.candidates?.[0]?.content?.parts?.map((p: any) => p?.text ?? "").join("") ??
-        "";
-      usage = resp?.usageMetadata ?? null;
       console.log(
-        `[spatial-architect] gemini OK in ${generateMs}ms rawChars=${rawText.length} usage=${
+        `[spatial-architect] gemini OK in ${generateMs}ms rawChars=${rawText.length} finish=${finishReason} usage=${
           JSON.stringify(usage)
         }`,
       );
+      if (finishReason && finishReason !== "STOP") {
+        throw new Error(
+          `Model stopped early (${finishReason}) after ${rawText.length} characters - the project is too large for one pass. Try a model with a larger output limit or fewer pages.`,
+        );
+      }
 
       const cleaned = rawText
         .trim()
