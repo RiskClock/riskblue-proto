@@ -40,6 +40,7 @@ import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectMo
 import { BulkDrawingDownloadModal } from "@/components/workbench/BulkDrawingDownloadModal";
 import { ManageFilesModal } from "@/components/workbench/ManageFilesModal";
 import { AskWadePanel } from "@/components/workbench/AskWadePanel";
+import { ThreatOverviewCard } from "@/components/workbench/ThreatOverviewCard";
 import { SUBTYPED_CLASSES } from "@/components/CreateProjectModal";
 import { expandSubtypeLabel, expandSubtypeLabelWithSuffix, isSubtypeSplitClass, subtypeAbbr } from "@/lib/awpSubtypeLabels";
 
@@ -7353,25 +7354,12 @@ function InstancesReportModal({
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
               {overviewEntries.map((e) => (
-                <div
+                <ThreatOverviewCard
                   key={e.key}
-                  className="border rounded overflow-hidden text-center"
-                >
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="bg-sky-900 text-white text-xs font-semibold py-1 cursor-help">
-                        {e.displayPrefix}
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent>{e.displayName}</TooltipContent>
-                  </Tooltip>
-                  <div className="py-2 text-2xl font-bold text-sky-700 tabular-nums">
-                    {overviewEntryTotals.get(e.key) || 0}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground pb-2 px-1">
-                    {e.displayName}
-                  </div>
-                </div>
+                  code={e.displayPrefix}
+                  name={e.displayName}
+                  count={overviewEntryTotals.get(e.key) || 0}
+                />
               ))}
             </div>
           )}
