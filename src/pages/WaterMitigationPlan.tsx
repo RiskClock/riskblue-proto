@@ -33,6 +33,7 @@ import {
   Trash2,
   MoreVertical,
   Wrench,
+  Pencil,
 } from "lucide-react";
 import { ActivityHistoryPanel } from "@/components/workbench/ActivityHistoryPanel";
 import { toast } from "sonner";
@@ -40,6 +41,7 @@ import { getUserFriendlyError } from "@/lib/errorHandling";
 import { ControlInstancesModal } from "@/components/wizard/ControlInstancesModal";
 import { AskWadePanel } from "@/components/workbench/AskWadePanel";
 import type { DocumentSourceDescriptor } from "@/components/viewer";
+import { PlanEditorModal, type PlanEditorClass } from "@/components/wizard/PlanEditorModal";
 import {
   parseSurveyFloorPlans,
   getAddedUnitPlans,
@@ -62,6 +64,7 @@ interface Plan {
   control_counts: Record<string, number>;
   /** controlId -> detection ids this plan has switched the control off for. */
   excluded_instances: Record<string, string[]>;
+  product_assignments: Record<string, string[]> & { __configured?: boolean };
   sort_order: number;
 }
 
@@ -91,6 +94,7 @@ interface DetectionRow {
   nx: number | null;
   ny: number | null;
   instanceLabel: string;
+  catalogId: string | null;
 }
 
 const CATEGORY_TABLE: Record<string, "critical_assets" | "water_systems" | "processes"> = {
@@ -457,7 +461,7 @@ export default function WaterMitigationPlan() {
     queryFn: async (): Promise<Plan[]> => {
       const { data, error } = await supabase
         .from("project_mitigation_plans")
-        .select("id, name, summary, control_counts, excluded_instances, sort_order")
+        .select("id, name, summary, control_counts, excluded_instances, product_assignments, sort_order")
         .eq("project_id", projectId!)
         .order("sort_order");
       if (error) throw error;
@@ -465,6 +469,7 @@ export default function WaterMitigationPlan() {
         ...p,
         control_counts: (p.control_counts || {}) as Record<string, number>,
         excluded_instances: (p.excluded_instances || {}) as Record<string, string[]>,
+        product_assignments: (p.product_assignments || {}) as Plan["product_assignments"],
       }));
     },
     enabled: !!projectId,
@@ -609,6 +614,12 @@ export default function WaterMitigationPlan() {
 
   const detectionRows: DetectionRow[] = useMemo(() => {
     if (!drawing) return [];
+    const byName = new Map<string, string>();
+    if (catalog) {
+      (["critical_assets", "water_systems", "processes"] as const).forEach((key) => {
+        (catalog[key] || []).forEach((entry: any) => byName.set((entry.name || "").toLowerCase().trim(), entry.id));
+      });
+    }
     return (drawing.instances as any[]).map((d) => {
       let space = UNASSIGNED;
       const entry = d.sheet_id ? sheetPlans.get(d.sheet_id) : undefined;
@@ -643,9 +654,10 @@ export default function WaterMitigationPlan() {
         instanceLabel: d.instance_number
           ? `${d.awp_class_name} ${String(d.instance_number).padStart(3, "0")}`
           : d.awp_class_name,
+        catalogId: byName.get((d.awp_class_name || "").toLowerCase().trim()) ?? null,
       };
     });
-  }, [drawing, sheetPlans]);
+  }, [drawing, sheetPlans, catalog]);
 
   // Every space in the spatial model, in model order, then any extra spaces
   // that only appear on detections, with the unassigned bucket last.
@@ -671,8 +683,8 @@ export default function WaterMitigationPlan() {
 
   // Derived per-space instance breakdown per control.
   const spaceBreakdown = useMemo(() => {
-    // controlId -> space -> { instances, legacy }
-    const breakdown = new Map<string, Map<string, { instances: DetectionRow[]; legacy: number }>>();
+    // productId -> space -> matching detected instances and legacy catalog ids.
+    const breakdown = new Map<string, Map<string, { instances: DetectionRow[]; legacyIds: string[] }>>();
     if (!catalog) return breakdown;
 
     const protectedByControl = new Map<string, Set<string>>();
@@ -708,7 +720,7 @@ export default function WaterMitigationPlan() {
       }
       let cell = spaces.get(space);
       if (!cell) {
-        cell = { instances: [], legacy: 0 };
+        cell = { instances: [], legacyIds: [] };
         spaces.set(space, cell);
       }
       return cell;
@@ -721,12 +733,12 @@ export default function WaterMitigationPlan() {
       if (!catalogId) return;
       controlRows.forEach((row) => {
         if (!protectedByControl.get(row.id)?.has(catalogId)) return;
-        cellFor(row.id, UNASSIGNED).legacy += 1;
+        cellFor(row.id, UNASSIGNED).legacyIds.push(catalogId);
       });
     });
 
     detectionRows.forEach((d) => {
-      const catalogId = byAnyName.get((d.name || "").toLowerCase().trim());
+       const catalogId = d.catalogId || byAnyName.get((d.name || "").toLowerCase().trim());
       if (!catalogId) return;
       controlRows.forEach((row) => {
         if (!protectedByControl.get(row.id)?.has(catalogId)) return;
@@ -742,7 +754,7 @@ export default function WaterMitigationPlan() {
     spaceBreakdown.forEach((spaces, controlId) => {
       let total = 0;
       spaces.forEach((cell) => {
-        total += cell.instances.length + cell.legacy;
+         total += cell.instances.length + cell.legacyIds.length;
       });
       counts[controlId] = total;
     });
@@ -854,6 +866,7 @@ export default function WaterMitigationPlan() {
       summary: source ? source.summary : "",
       control_counts: source ? source.control_counts : {},
       excluded_instances: source ? source.excluded_instances : {},
+        product_assignments: source ? source.product_assignments : {},
       sort_order: nextOrder,
       created_by: user?.id ?? null,
     });
@@ -886,11 +899,18 @@ export default function WaterMitigationPlan() {
   const excludedFor = (plan: Plan, controlId: string) =>
     new Set((plan.excluded_instances || {})[controlId] || []);
 
+  const planUsesProductForClass = (plan: Plan, productId: string, catalogId: string | null) => {
+    if (!plan.product_assignments?.__configured) return true;
+    if (!catalogId) return false;
+    return (plan.product_assignments[catalogId] || []).includes(productId);
+  };
+
   const countForSpace = (plan: Plan, controlId: string, space: string) => {
     const cell = spaceBreakdown.get(controlId)?.get(space);
     if (!cell) return 0;
     const ex = excludedFor(plan, controlId);
-    return cell.legacy + cell.instances.filter((i) => !ex.has(i.id)).length;
+    return cell.legacyIds.filter((catalogId) => planUsesProductForClass(plan, controlId, catalogId)).length
+      + cell.instances.filter((i) => planUsesProductForClass(plan, controlId, i.catalogId) && !ex.has(i.id)).length;
   };
 
   const countFor = (plan: Plan, controlId: string) => {
@@ -901,7 +921,8 @@ export default function WaterMitigationPlan() {
     const ex = excludedFor(plan, controlId);
     let n = 0;
     spaces.forEach((cell) => {
-      n += cell.legacy + cell.instances.filter((i) => !ex.has(i.id)).length;
+      n += cell.legacyIds.filter((catalogId) => planUsesProductForClass(plan, controlId, catalogId)).length;
+      n += cell.instances.filter((i) => planUsesProductForClass(plan, controlId, i.catalogId) && !ex.has(i.id)).length;
     });
     return n;
   };
@@ -1042,8 +1063,8 @@ export default function WaterMitigationPlan() {
   const spacesForControl = (controlId: string) => {
     const spaces = spaceBreakdown.get(controlId);
     if (!spaces) return [] as string[];
-    const hasUnassigned = (spaces.get(UNASSIGNED)?.instances.length ?? 0) > 0 ||
-      (spaces.get(UNASSIGNED)?.legacy ?? 0) > 0;
+     const hasUnassigned = (spaces.get(UNASSIGNED)?.instances.length ?? 0) > 0 ||
+       (spaces.get(UNASSIGNED)?.legacyIds.length ?? 0) > 0;
     return orderedSpaces.filter((s) => s !== UNASSIGNED || hasUnassigned);
   };
 
