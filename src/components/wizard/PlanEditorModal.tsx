@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { tagStyle } from "@/lib/tagColor";
 import { ThreatOverviewCard } from "@/components/workbench/ThreatOverviewCard";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export interface PlanEditorClass {
   id: string;
@@ -126,12 +127,17 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                           if (!product) return null;
                            const label = `${product.code ? `${product.code} ` : ""}${product.name}`.trim();
                           return (
-                             <Badge key={id} variant="outline" className="gap-1 pr-1 font-normal" style={tagStyle(label)} title={product.name || product.code || "Product"}>
-                               <span>{product.code || product.name || "Product"}</span>
-                              <Button type="button" variant="ghost" size="icon" className="h-4 w-4 rounded-full hover:bg-background/50" aria-label={`Remove ${label}`} onClick={() => toggleProduct(item.id, id)}>
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </Badge>
+                             <Tooltip key={id}>
+                               <TooltipTrigger asChild>
+                                 <Badge variant="outline" className="gap-1 pr-1 font-normal" style={tagStyle(label)}>
+                                   <span>{product.code || product.name || "Product"}</span>
+                                   <Button type="button" variant="ghost" size="icon" className="h-4 w-4 rounded-full hover:bg-background/50" aria-label={`Remove ${label}`} onClick={() => toggleProduct(item.id, id)}>
+                                     <X className="h-3 w-3" />
+                                   </Button>
+                                 </Badge>
+                               </TooltipTrigger>
+                               <TooltipContent>{product.name || product.code || "Product"}</TooltipContent>
+                             </Tooltip>
                           );
                         })}
                         </div>

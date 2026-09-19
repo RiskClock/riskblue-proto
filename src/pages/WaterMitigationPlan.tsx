@@ -450,19 +450,6 @@ export default function WaterMitigationPlan() {
         instances.push(...rows);
         if (rows.length < pageSize) break;
       }
-      const catalogId = byName.get((d.awp_class_name || "").toLowerCase().trim()) ?? null;
-      const metadata = d.metadata && typeof d.metadata === "object" ? d.metadata as Record<string, unknown> : {};
-      const pipeType = typeof metadata.pipe_type === "string" ? metadata.pipe_type.trim() : "";
-      const pipeDiameter = typeof metadata.pipe_diameter === "string" ? metadata.pipe_diameter.trim() : "";
-      const splitSubtype = catalogId && isSubtypeSplitClass(d.awp_class_name || "");
-      const typeKey = pipeType || "(untyped)";
-      const diameterKey = pipeDiameter || "(no size)";
-      const subtypeCode = splitSubtype
-        ? `${subtypeAbbr(d.awp_class_name, pipeType) || pipeType || "?"}${pipeDiameter ? ` ${pipeDiameter}` : ""}`
-        : null;
-      const subtypeName = splitSubtype
-        ? `${d.awp_class_name}${pipeType ? ` ${expandSubtypeLabelWithSuffix(d.awp_class_name, pipeType)}` : ""}${pipeDiameter ? ` ${pipeDiameter}` : ""}`.replace(/\s+/g, " ").trim()
-        : null;
       return {
         requests,
         files: filesRes.data || [],
@@ -659,6 +646,19 @@ export default function WaterMitigationPlan() {
           if (labels.length > 0) space = labels[0];
         }
       }
+      const catalogId = byName.get((d.awp_class_name || "").toLowerCase().trim()) ?? null;
+      const metadata = d.metadata && typeof d.metadata === "object" ? d.metadata as Record<string, unknown> : {};
+      const pipeType = typeof metadata.pipe_type === "string" ? metadata.pipe_type.trim() : "";
+      const pipeDiameter = typeof metadata.pipe_diameter === "string" ? metadata.pipe_diameter.trim() : "";
+      const splitSubtype = !!catalogId && isSubtypeSplitClass(d.awp_class_name || "");
+      const typeKey = pipeType || "(untyped)";
+      const diameterKey = pipeDiameter || "(no size)";
+      const subtypeCode = splitSubtype
+        ? `${subtypeAbbr(d.awp_class_name, pipeType) || pipeType || "?"}${pipeDiameter ? ` ${pipeDiameter}` : ""}`
+        : null;
+      const subtypeName = splitSubtype
+        ? `${d.awp_class_name}${pipeType ? ` ${expandSubtypeLabelWithSuffix(d.awp_class_name, pipeType)}` : ""}${pipeDiameter ? ` ${pipeDiameter}` : ""}`.replace(/\s+/g, " ").trim()
+        : null;
       return {
         id: d.id,
         name: d.awp_class_name,
