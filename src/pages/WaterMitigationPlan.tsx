@@ -72,6 +72,8 @@ interface Plan {
 interface ControlRow {
   id: string;
   name: string;
+  /** Product ID from the catalog, shown in bold before the name. */
+  code?: string | null;
   /** Linked mitigation control (equals `id` for legacy selection-based rows). */
   controlId: string;
   /** Explicit protected-item ids when the row overrides the Risk-Control Map defaults. */
