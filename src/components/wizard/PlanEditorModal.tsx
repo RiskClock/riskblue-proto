@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { X, Search } from "lucide-react";
+import { ChevronsUpDown, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { tagStyle } from "@/lib/tagColor";
 import { ThreatOverviewCard } from "@/components/workbench/ThreatOverviewCard";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export interface PlanEditorClass {
   id: string;
@@ -95,7 +96,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                     <div className="space-y-2 px-2 pb-2 text-left">
                       <Button type="button" variant="outline" size="sm" className="w-full justify-between font-normal" onClick={() => { setOpenClass(openClass === item.id ? null : item.id); setSearch(""); }}>
                         <span>{selected.length > 0 ? `${selected.length} selected` : "Select products"}</span>
-                        <Search className="h-3.5 w-3.5 text-muted-foreground" />
+                        <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground" />
                       </Button>
 
                       {openClass === item.id && (
@@ -124,14 +125,19 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                         {selected.map((id) => {
                           const product = productById.get(id);
                           if (!product) return null;
-                          const label = `${product.code ? `${product.code} ` : ""}${product.name}`.trim();
+                           const label = `${product.code ? `${product.code} ` : ""}${product.name}`.trim();
                           return (
-                            <Badge key={id} variant="outline" className="gap-1 pr-1 font-normal" style={tagStyle(label)}>
-                              <span>{product.code ? <strong>{product.code} </strong> : null}{product.name}</span>
-                              <Button type="button" variant="ghost" size="icon" className="h-4 w-4 rounded-full hover:bg-background/50" aria-label={`Remove ${label}`} onClick={() => toggleProduct(item.id, id)}>
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </Badge>
+                             <Tooltip key={id}>
+                               <TooltipTrigger asChild>
+                                 <Badge variant="outline" className="gap-1 pr-1 font-normal" style={tagStyle(label)}>
+                                   <span>{product.code || product.name || "Product"}</span>
+                                   <Button type="button" variant="ghost" size="icon" className="h-4 w-4 rounded-full hover:bg-background/50" aria-label={`Remove ${label}`} onClick={() => toggleProduct(item.id, id)}>
+                                     <X className="h-3 w-3" />
+                                   </Button>
+                                 </Badge>
+                               </TooltipTrigger>
+                               <TooltipContent>{product.name || product.code || "Product"}</TooltipContent>
+                             </Tooltip>
                           );
                         })}
                         </div>

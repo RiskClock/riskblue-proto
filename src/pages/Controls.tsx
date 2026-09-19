@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -17,6 +17,16 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import {
@@ -94,7 +104,10 @@ export interface NewProductInput {
   productCode: string;
   description: string;
   controlId: string | null;
+  pipeDiameterInches: number | null;
 }
+
+const PIPE_DIAMETER_TYPES = new Set(["automatic shut off valve", "flow sensor", "water meter"]);
 
 const formatCost = (cost?: number | null) => {
   if (!cost) return "$0";
@@ -117,6 +130,7 @@ export default function Controls() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [scopePickerOpen, setScopePickerOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const sortStorageKey = `product-catalog-sort:${user?.id || "anonymous"}:${tenantId || "none"}`;
   const [sortField, setSortField] = useState<ProductSortField>("product_code");
   const [sortDirection, setSortDirection] = useState<ProductSortDirection>("asc");
@@ -292,6 +306,7 @@ export default function Controls() {
         product_code: input.productCode || null,
         description: input.description || null,
         control_id: input.controlId,
+        pipe_diameter_inches: input.pipeDiameterInches,
         one_time_cost: control?.one_time_cost ?? null,
         monthly_maint_cost: control?.monthly_maint_cost ?? null,
         created_by: user.id,
@@ -451,9 +466,7 @@ export default function Controls() {
   const scopeItems = allCatalogItems.filter((item) => item.category !== "processes");
   const selectedScopeItems = scopeItems.filter((item) => scope[item.category].includes(item.id));
   const selectedControl = selected?.control_id ? controlMap.get(selected.control_id) : undefined;
-  const needsPipeDiameter = ["automatic shut off valve", "flow sensor", "water meter"].includes(
-    selectedControl?.name.toLowerCase() ?? "",
-  );
+  const needsPipeDiameter = PIPE_DIAMETER_TYPES.has(selectedControl?.name.toLowerCase() ?? "");
 
 
   return (
@@ -840,7 +853,7 @@ export default function Controls() {
                         variant="outline"
                         size="sm"
                         className="text-destructive hover:text-destructive"
-                        onClick={() => void deleteProduct(selected.id)}
+                        onClick={() => setDeleteConfirmOpen(true)}
                       >
                         <Trash2 className="h-4 w-4 mr-1.5" />
                         Delete product
@@ -883,6 +896,28 @@ export default function Controls() {
           }}
         />
       )}
+
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete product?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes {selected?.product_code || selected?.name || "this product"} from the Product Catalog.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (selected) void deleteProduct(selected.id);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -969,12 +1004,20 @@ function AddProductModal({
   const [productCode, setProductCode] = useState("");
   const [description, setDescription] = useState("");
   const [controlId, setControlId] = useState<string | null>(null);
+  const [pipeDiameter, setPipeDiameter] = useState("");
   const [saving, setSaving] = useState(false);
 
   const canSave = !!name.trim() || !!productCode.trim();
+  const selectedControl = controls.find((control) => control.id === controlId);
+  const needsPipeDiameter = PIPE_DIAMETER_TYPES.has(selectedControl?.name.toLowerCase() ?? "");
 
   const submit = async () => {
     if (!canSave) return;
+    const parsedDiameter = pipeDiameter.trim() === "" ? null : Number(pipeDiameter);
+    if (needsPipeDiameter && parsedDiameter !== null && (!Number.isFinite(parsedDiameter) || parsedDiameter < 0)) {
+      toast.error("Enter a valid pipe diameter");
+      return;
+    }
     setSaving(true);
     try {
       await onSave({
@@ -982,6 +1025,7 @@ function AddProductModal({
         productCode: productCode.trim(),
         description: description.trim(),
         controlId,
+        pipeDiameterInches: needsPipeDiameter ? parsedDiameter : null,
       });
     } finally {
       setSaving(false);
@@ -1024,6 +1068,21 @@ function AddProductModal({
             <Label>Product Type</Label>
             <SearchableControlSelect controls={controls} selectedId={controlId} onSelect={setControlId} />
           </div>
+          {needsPipeDiameter && (
+            <div className="space-y-1.5">
+              <Label htmlFor="new-product-pipe-diameter">Pipe diameter (inches)</Label>
+              <Input
+                id="new-product-pipe-diameter"
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                value={pipeDiameter}
+                onChange={(event) => setPipeDiameter(event.target.value)}
+                placeholder="e.g. 1.5"
+              />
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
@@ -1049,10 +1108,16 @@ function SearchableControlSelect({
   onSelect: (controlId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const listRef = useRef<HTMLDivElement>(null);
   const selectedControl = controls.find((control) => control.id === selectedId);
 
+  useEffect(() => {
+    listRef.current?.scrollTo({ top: 0 });
+  }, [query]);
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(next) => { setOpen(next); if (!next) setQuery(""); }}>
       <PopoverTrigger asChild>
         <Button variant="outline" role="combobox" aria-label="Product type" aria-expanded={open} disabled={disabled} className="h-9 w-full justify-between font-normal">
           <span className={selectedControl ? "truncate" : "truncate text-muted-foreground"}>{selectedControl?.name || "Select product type"}</span>
@@ -1061,8 +1126,8 @@ function SearchableControlSelect({
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
         <Command>
-          <CommandInput placeholder="Search product types" />
-          <CommandList>
+          <CommandInput value={query} onValueChange={setQuery} placeholder="Search product types" />
+          <CommandList ref={listRef}>
             <CommandEmpty>No product types match.</CommandEmpty>
             <CommandGroup>
               {controls.map((control) => (

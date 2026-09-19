@@ -42,6 +42,7 @@ import { ControlInstancesModal } from "@/components/wizard/ControlInstancesModal
 import { AskWadePanel } from "@/components/workbench/AskWadePanel";
 import type { DocumentSourceDescriptor } from "@/components/viewer";
 import { PlanEditorModal, type PlanEditorClass } from "@/components/wizard/PlanEditorModal";
+import { expandSubtypeLabelWithSuffix, isSubtypeSplitClass, subtypeAbbr } from "@/lib/awpSubtypeLabels";
 import {
   parseSurveyFloorPlans,
   getAddedUnitPlans,
@@ -95,6 +96,9 @@ interface DetectionRow {
   ny: number | null;
   instanceLabel: string;
   catalogId: string | null;
+  assignmentId: string | null;
+  subtypeCode: string | null;
+  subtypeName: string | null;
 }
 
 const CATEGORY_TABLE: Record<string, "critical_assets" | "water_systems" | "processes"> = {
@@ -437,7 +441,7 @@ export default function WaterMitigationPlan() {
         const { data, error } = await supabase
           .from("drawing_instances")
           .select(
-            "id, awp_class_name, file_id, sheet_id, page_index, nx, ny, instance_number, analysis_request_id",
+            "id, awp_class_name, file_id, sheet_id, page_index, nx, ny, instance_number, analysis_request_id, metadata",
           )
           .in("analysis_request_id", ids)
           .range(from, from + pageSize - 1);
@@ -642,6 +646,19 @@ export default function WaterMitigationPlan() {
           if (labels.length > 0) space = labels[0];
         }
       }
+      const catalogId = byName.get((d.awp_class_name || "").toLowerCase().trim()) ?? null;
+      const metadata = d.metadata && typeof d.metadata === "object" ? d.metadata as Record<string, unknown> : {};
+      const pipeType = typeof metadata.pipe_type === "string" ? metadata.pipe_type.trim() : "";
+      const pipeDiameter = typeof metadata.pipe_diameter === "string" ? metadata.pipe_diameter.trim() : "";
+      const splitSubtype = !!catalogId && isSubtypeSplitClass(d.awp_class_name || "");
+      const typeKey = pipeType || "(untyped)";
+      const diameterKey = pipeDiameter || "(no size)";
+      const subtypeCode = splitSubtype
+        ? `${subtypeAbbr(d.awp_class_name, pipeType) || pipeType || "?"}${pipeDiameter ? ` ${pipeDiameter}` : ""}`
+        : null;
+      const subtypeName = splitSubtype
+        ? `${d.awp_class_name}${pipeType ? ` ${expandSubtypeLabelWithSuffix(d.awp_class_name, pipeType)}` : ""}${pipeDiameter ? ` ${pipeDiameter}` : ""}`.replace(/\s+/g, " ").trim()
+        : null;
       return {
         id: d.id,
         name: d.awp_class_name,
@@ -654,7 +671,10 @@ export default function WaterMitigationPlan() {
         instanceLabel: d.instance_number
           ? `${d.awp_class_name} ${String(d.instance_number).padStart(3, "0")}`
           : d.awp_class_name,
-        catalogId: byName.get((d.awp_class_name || "").toLowerCase().trim()) ?? null,
+        catalogId,
+        assignmentId: splitSubtype ? `${catalogId}::${typeKey}::${diameterKey}` : catalogId,
+        subtypeCode,
+        subtypeName,
       };
     });
   }, [drawing, sheetPlans, catalog]);
@@ -899,10 +919,10 @@ export default function WaterMitigationPlan() {
   const excludedFor = (plan: Plan, controlId: string) =>
     new Set((plan.excluded_instances || {})[controlId] || []);
 
-  const planUsesProductForClass = (plan: Plan, productId: string, catalogId: string | null) => {
+  const planUsesProductForClass = (plan: Plan, productId: string, catalogId: string | null, assignmentId?: string | null) => {
     if (!plan.product_assignments?.__configured) return true;
     if (!catalogId) return false;
-    const assigned = plan.product_assignments[catalogId];
+    const assigned = plan.product_assignments[assignmentId || catalogId] ?? plan.product_assignments[catalogId];
     return Array.isArray(assigned) && assigned.includes(productId);
   };
 
@@ -911,19 +931,22 @@ export default function WaterMitigationPlan() {
     if (!cell) return 0;
     const ex = excludedFor(plan, controlId);
     return cell.legacyIds.filter((catalogId) => planUsesProductForClass(plan, controlId, catalogId)).length
-      + cell.instances.filter((i) => planUsesProductForClass(plan, controlId, i.catalogId) && !ex.has(i.id)).length;
+      + cell.instances.filter((i) => planUsesProductForClass(plan, controlId, i.catalogId, i.assignmentId) && !ex.has(i.id)).length;
   };
 
   const countFor = (plan: Plan, controlId: string) => {
     const fixed = controlRows.find((r) => r.id === controlId)?.fixedQuantity;
-    if (typeof fixed === "number") return fixed;
+    if (typeof fixed === "number") {
+      if (!plan.product_assignments?.__configured) return fixed;
+      return Object.values(plan.product_assignments).some((value) => Array.isArray(value) && value.includes(controlId)) ? fixed : 0;
+    }
     const spaces = spaceBreakdown.get(controlId);
     if (!spaces) return 0;
     const ex = excludedFor(plan, controlId);
     let n = 0;
     spaces.forEach((cell) => {
       n += cell.legacyIds.filter((catalogId) => planUsesProductForClass(plan, controlId, catalogId)).length;
-      n += cell.instances.filter((i) => planUsesProductForClass(plan, controlId, i.catalogId) && !ex.has(i.id)).length;
+      n += cell.instances.filter((i) => planUsesProductForClass(plan, controlId, i.catalogId, i.assignmentId) && !ex.has(i.id)).length;
     });
     return n;
   };
@@ -945,9 +968,11 @@ export default function WaterMitigationPlan() {
 
   const editorClasses = useMemo<PlanEditorClass[]>(() => {
     if (!catalog) return [];
-    const detected = new Map<string, number>();
+    const detected = new Map<string, { catalogId: string; count: number; code: string | null; name: string | null }>();
     detectionRows.forEach((row) => {
-      if (row.catalogId) detected.set(row.catalogId, (detected.get(row.catalogId) || 0) + 1);
+      if (!row.catalogId || !row.assignmentId) return;
+      const current = detected.get(row.assignmentId);
+      detected.set(row.assignmentId, { catalogId: row.catalogId, count: (current?.count || 0) + 1, code: row.subtypeCode, name: row.subtypeName });
     });
     (items as any[]).forEach((item) => {
       const table = CATEGORY_TABLE[item.category];
@@ -955,13 +980,12 @@ export default function WaterMitigationPlan() {
       const entry = (catalog[table] || []).find((candidate: any) =>
         (candidate.name || "").toLowerCase().trim() === (item.name || "").toLowerCase().trim(),
       );
-      if (entry) detected.set(entry.id, (detected.get(entry.id) || 0) + 1);
+      if (entry && !detected.has(entry.id)) detected.set(entry.id, { catalogId: entry.id, count: 1, code: null, name: null });
     });
 
     const productChoices = (catalogId: string, defaultControlIds: string[]) =>
       (products as any[])
         .filter((product) => {
-          if (product.applied_in_any_plan) return false;
           if (product.scope_customized) {
             return [
               ...((product.critical_asset_ids as string[]) || []),
@@ -975,39 +999,31 @@ export default function WaterMitigationPlan() {
     const rows: PlanEditorClass[] = [];
     (["critical_assets", "water_systems"] as const).forEach((key) => {
       (catalog[key] || []).forEach((entry: any) => {
-        const count = detected.get(entry.id) || 0;
-        if (count === 0) return;
-        rows.push({
-          id: entry.id,
-          name: entry.name,
-          code: entry.id_prefix || entry.name,
+        const matches = [...detected.entries()].filter(([, value]) => value.catalogId === entry.id);
+        matches.forEach(([assignmentId, value]) => rows.push({
+          id: assignmentId,
+          name: value.name || entry.name,
+          code: value.code ? `${entry.id_prefix || entry.name}-${value.code}` : entry.id_prefix || entry.name,
           kind: key === "critical_assets" ? "Asset" : "Water System",
-          count,
+          count: value.count,
           products: productChoices(entry.id, entry.default_control_ids || []),
-        });
+        }));
       });
     });
     return rows.sort((a, b) => a.name.localeCompare(b.name));
   }, [catalog, detectionRows, items, products]);
 
-  const inferredAssignments = useMemo(() => {
-    const result: Record<string, string[]> = {};
-    editorClasses.forEach((item) => {
-      result[item.id] = item.products.map((product) => product.id);
-    });
-    return result;
-  }, [editorClasses]);
-
   const editorAssignments = useMemo(() => {
     const plan = planEditor?.plan;
-    if (!plan?.product_assignments?.__configured) return inferredAssignments;
+    if (!plan) return {};
     const result: Record<string, string[]> = {};
     editorClasses.forEach((item) => {
-      const assigned = plan.product_assignments[item.id];
+      const catalogId = item.id.split("::")[0];
+      const assigned = plan.product_assignments[item.id] ?? plan.product_assignments[catalogId];
       result[item.id] = (Array.isArray(assigned) ? assigned : []).filter((id) => item.products.some((product) => product.id === id));
     });
     return result;
-  }, [planEditor, editorClasses, inferredAssignments]);
+  }, [planEditor, editorClasses]);
 
   const savePlanEditor = async (value: { name: string; description: string; assignments: Record<string, string[]> }) => {
     if (!projectId || !planEditor) return;
@@ -1871,7 +1887,7 @@ actions and posts its own recap.`;
                 ({ excluded_instances: {}, product_assignments: {} } as unknown as Plan);
               const ids = excludedFor(activePlan, viewer.controlId);
               viewerData.instances.forEach((instance) => {
-                if (!planUsesProductForClass(activePlan, viewer.controlId, instance.catalogId)) ids.add(instance.id);
+                if (!planUsesProductForClass(activePlan, viewer.controlId, instance.catalogId, instance.assignmentId)) ids.add(instance.id);
               });
               return ids;
             })()
