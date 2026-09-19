@@ -104,6 +104,8 @@ interface DetectionRow {
   assignmentId: string | null;
   subtypeCode: string | null;
   subtypeName: string | null;
+  /** Detected pipe size in millimetres, when the detection records one. */
+  pipeSizeMm: number | null;
 }
 
 const CATEGORY_TABLE: Record<string, "critical_assets" | "water_systems" | "processes"> = {
@@ -722,6 +724,7 @@ export default function WaterMitigationPlan() {
         assignmentId: splitSubtype ? `${catalogId}::${typeKey}::${diameterKey}` : catalogId,
         subtypeCode,
         subtypeName,
+        pipeSizeMm: parsePipeSizeMm(pipeDiameter),
       };
     });
   }, [drawing, sheetPlans, catalog]);
