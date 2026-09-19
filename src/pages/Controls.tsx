@@ -17,6 +17,17 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -25,7 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useTenant } from "@/contexts/TenantContext";
-import { Loader2, Search, Package, Plus, Trash2, ImagePlus, Pencil } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronsUpDown, Loader2, Search, Package, Plus, Trash2, ImagePlus, Pencil, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { productCatalogLabel } from "@/lib/catalogLabel";
 import { tagStyle } from "@/lib/tagColor";
@@ -65,7 +76,18 @@ interface TenantProduct {
   critical_asset_ids: string[];
   water_system_ids: string[];
   process_ids: string[];
+  created_at: string;
 }
+
+type ProductSortField = "created_at" | "name" | "product_code" | "control_id";
+type ProductSortDirection = "asc" | "desc";
+
+const PRODUCT_SORT_LABELS: Record<ProductSortField, string> = {
+  created_at: "Date created",
+  name: "Name",
+  product_code: "Product ID",
+  control_id: "Product type",
+};
 
 export interface NewProductInput {
   name: string;
@@ -94,8 +116,31 @@ export default function Controls() {
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [typePickerOpen, setTypePickerOpen] = useState(false);
   const [scopePickerOpen, setScopePickerOpen] = useState(false);
+  const sortStorageKey = `product-catalog-sort:${user?.id || "anonymous"}:${tenantId || "none"}`;
+  const [sortField, setSortField] = useState<ProductSortField>("product_code");
+  const [sortDirection, setSortDirection] = useState<ProductSortDirection>("asc");
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(sortStorageKey);
+      if (!saved) {
+        setSortField("product_code");
+        setSortDirection("asc");
+        return;
+      }
+      const parsed = JSON.parse(saved) as { field?: ProductSortField; direction?: ProductSortDirection };
+      if (parsed.field && PRODUCT_SORT_LABELS[parsed.field]) setSortField(parsed.field);
+      if (parsed.direction === "asc" || parsed.direction === "desc") setSortDirection(parsed.direction);
+    } catch {
+      setSortField("product_code");
+      setSortDirection("asc");
+    }
+  }, [sortStorageKey]);
+
+  useEffect(() => {
+    window.localStorage.setItem(sortStorageKey, JSON.stringify({ field: sortField, direction: sortDirection }));
+  }, [sortDirection, sortField, sortStorageKey]);
 
   // ---------- data ----------
   const emptyCatalog = useMemo(
@@ -382,13 +427,26 @@ export default function Controls() {
   }
 
   const searchTerm = search.trim().toLowerCase();
-  const visibleProducts = searchTerm
+  const filteredProducts = searchTerm
     ? products.filter(
         (p) =>
           p.name.toLowerCase().includes(searchTerm) ||
           (p.product_code || "").toLowerCase().includes(searchTerm),
       )
     : products;
+  const visibleProducts = [...filteredProducts].sort((a, b) => {
+    let first = "";
+    let second = "";
+    if (sortField === "control_id") {
+      first = a.control_id ? controlMap.get(a.control_id)?.name || "" : "";
+      second = b.control_id ? controlMap.get(b.control_id)?.name || "" : "";
+    } else {
+      first = String(a[sortField] || "");
+      second = String(b[sortField] || "");
+    }
+    const compared = first.localeCompare(second, undefined, { numeric: true, sensitivity: "base" });
+    return sortDirection === "asc" ? compared : -compared;
+  });
 
   const scopeItems = allCatalogItems.filter((item) => item.category !== "processes");
   const selectedScopeItems = scopeItems.filter((item) => scope[item.category].includes(item.id));
@@ -425,14 +483,36 @@ export default function Controls() {
                   <Plus className="h-4 w-4 mr-1.5" />
                   Add Product
                 </Button>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search products by name or ID"
-                    className="pl-9"
-                  />
+                <div className="flex gap-2">
+                  <div className="relative flex-1 min-w-0">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Search products by name or ID"
+                      className="pl-9"
+                    />
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="icon" aria-label={`Sort by ${PRODUCT_SORT_LABELS[sortField]}, ${sortDirection === "asc" ? "ascending" : "descending"}`} title="Sort products">
+                        <SlidersHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-52">
+                      <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+                      <DropdownMenuRadioGroup value={sortField} onValueChange={(value) => setSortField(value as ProductSortField)}>
+                        {(Object.entries(PRODUCT_SORT_LABELS) as Array<[ProductSortField, string]>).map(([value, label]) => (
+                          <DropdownMenuRadioItem key={value} value={value}>{label}</DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuRadioGroup value={sortDirection} onValueChange={(value) => setSortDirection(value as ProductSortDirection)}>
+                        <DropdownMenuRadioItem value="asc"><ArrowUp className="mr-2 h-4 w-4" />Ascending</DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="desc"><ArrowDown className="mr-2 h-4 w-4" />Descending</DropdownMenuRadioItem>
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
               <div className="p-2 flex-1 min-h-0 overflow-y-auto space-y-0.5">
@@ -562,16 +642,12 @@ export default function Controls() {
 
                       <div className="space-y-1.5 w-full">
                         <Label className="text-xs text-muted-foreground uppercase tracking-wide">Product type</Label>
-                        <Button
-                          variant="outline"
-                          className="w-full justify-start h-9 font-normal"
+                        <SearchableControlSelect
+                          controls={allControls}
+                          selectedId={selected.control_id}
                           disabled={!canEdit}
-                          onClick={() => setTypePickerOpen(true)}
-                        >
-                          <span className="truncate">
-                            {selectedControl?.name || <span className="text-muted-foreground">Select product type</span>}
-                          </span>
-                        </Button>
+                          onSelect={(controlId) => void patchProduct(selected.id, { control_id: controlId, scope_customized: false })}
+                        />
                       </div>
 
                       {needsPipeDiameter && (
@@ -607,10 +683,7 @@ export default function Controls() {
 
                       <div className="space-y-2 w-full">
                         <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <h3 className="text-sm font-semibold text-foreground">Mitigation Scope</h3>
-                            <p className="text-xs text-muted-foreground">{scopeCount} selected</p>
-                          </div>
+                          <h3 className="text-sm font-semibold text-foreground">Mitigation Scope</h3>
                           {canEdit && (
                             <Button variant="outline" size="sm" onClick={() => setScopePickerOpen(true)}>
                               <Pencil className="h-4 w-4 mr-1.5" />
@@ -790,18 +863,6 @@ export default function Controls() {
         />
       )}
 
-      {typePickerOpen && selected && (
-        <ControlPickerModal
-          controls={allControls}
-          selectedId={selected.control_id}
-          onClose={() => setTypePickerOpen(false)}
-          onSelect={(controlId) => {
-            void patchProduct(selected.id, { control_id: controlId, scope_customized: false });
-            setTypePickerOpen(false);
-          }}
-        />
-      )}
-
       {scopePickerOpen && selected && (
         <ScopePickerModal
           items={scopeItems}
@@ -965,32 +1026,7 @@ function AddProductModal({
           </div>
           <div className="space-y-1.5">
             <Label>Product Type</Label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search controls"
-                className="pl-9 h-9"
-              />
-            </div>
-            <div className="max-h-56 overflow-y-auto rounded-md border divide-y">
-              {filtered.length === 0 && (
-                <p className="text-sm text-muted-foreground py-6 text-center">No controls match.</p>
-              )}
-              {filtered.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setControlId(c.id)}
-                  className={`w-full text-left px-3 py-2 text-sm hover:bg-muted/60 ${
-                    controlId === c.id ? "bg-primary/10 font-medium" : ""
-                  }`}
-                >
-                  {c.name}
-                </button>
-              ))}
-            </div>
+            <SearchableControlSelect controls={controls} selectedId={controlId} onSelect={setControlId} />
           </div>
         </div>
         <DialogFooter>
@@ -1004,59 +1040,52 @@ function AddProductModal({
   );
 }
 
-// ---------------- Control picker (product type) ----------------
-function ControlPickerModal({
+// ---------------- Searchable product type dropdown ----------------
+function SearchableControlSelect({
   controls,
   selectedId,
-  onClose,
+  disabled,
   onSelect,
 }: {
   controls: MitigationControl[];
   selectedId: string | null;
-  onClose: () => void;
+  disabled?: boolean;
   onSelect: (controlId: string) => void;
 }) {
-  const [query, setQuery] = useState("");
-  const term = query.trim().toLowerCase();
-  const filtered = term ? controls.filter((c) => c.name.toLowerCase().includes(term)) : controls;
+  const [open, setOpen] = useState(false);
+  const selectedControl = controls.find((control) => control.id === selectedId);
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Select product type</DialogTitle>
-          <DialogDescription>Pick the control this product delivers.</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search controls"
-              className="pl-9 h-9"
-              autoFocus
-            />
-          </div>
-          <div className="max-h-72 overflow-y-auto rounded-md border divide-y">
-            {filtered.length === 0 && (
-              <p className="text-sm text-muted-foreground py-6 text-center">No controls match.</p>
-            )}
-            {filtered.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => onSelect(c.id)}
-                className={`w-full text-left px-3 py-2 text-sm hover:bg-muted/60 ${
-                  selectedId === c.id ? "bg-primary/10 font-medium" : ""
-                }`}
-              >
-                {c.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" role="combobox" aria-expanded={open} disabled={disabled} className="h-9 w-full justify-between font-normal">
+          <span className={selectedControl ? "truncate" : "truncate text-muted-foreground"}>{selectedControl?.name || "Select product type"}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
+        <Command>
+          <CommandInput placeholder="Search product types" />
+          <CommandList>
+            <CommandEmpty>No product types match.</CommandEmpty>
+            <CommandGroup>
+              {controls.map((control) => (
+                <CommandItem
+                  key={control.id}
+                  value={control.name}
+                  onSelect={() => {
+                    onSelect(control.id);
+                    setOpen(false);
+                  }}
+                >
+                  <Check className={`mr-2 h-4 w-4 ${selectedId === control.id ? "opacity-100" : "opacity-0"}`} />
+                  {control.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
