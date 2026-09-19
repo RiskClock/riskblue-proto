@@ -1937,6 +1937,55 @@ actions and posts its own recap.`;
                       </Fragment>
                     );
                   })}
+                  {visibleBaseRows.length > 0 && (
+                    <tr className="border-b bg-muted/40">
+                      <th className={`${labelCellBase} bg-muted/40 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground`}>
+                        Base Requirements
+                      </th>
+                      {plans.map((plan) => (
+                        <td key={plan.id} className="border-r px-4 py-2 bg-muted/40" />
+                      ))}
+                      <td className="bg-muted/40" />
+                    </tr>
+                  )}
+                  {visibleBaseRows.map((row, index) => {
+                    const colorIndex = visibleControlRows.length + index;
+                    return (
+                      <tr
+                        key={row.id}
+                        ref={(el) => {
+                          controlRowRefs.current[row.id] = el;
+                        }}
+                        className={`border-b align-top ${hoveredControl === row.id ? "bg-muted" : ""}`}
+                        onMouseEnter={() => setHoveredControl(row.id)}
+                        onMouseLeave={() => setHoveredControl(null)}
+                      >
+                        <th className={`${labelCellBase} ${hoveredControl === row.id ? "bg-muted" : "bg-card"} text-left font-normal`}>
+                          <div className="flex items-center gap-1.5">
+                            <ControlTypeIcon name={row.name} colorIndex={colorIndex} />
+                            <span>
+                              {row.code ? <strong>{row.code}</strong> : null}
+                              {row.code && row.name ? " " : ""}
+                              {row.name}
+                            </span>
+                          </div>
+                          <div className="mt-0.5 pl-[26px] text-xs text-muted-foreground tabular-nums">
+                            {currency(row.unitCost)} / unit
+                          </div>
+                        </th>
+                        {plans.map((plan) => {
+                          const n = baseCountFor(plan, row.id);
+                          return (
+                            <td key={plan.id} className="border-r px-4 py-2 text-center text-sm tabular-nums">
+                              <div className="font-bold text-foreground">{currency(n * row.unitCost)}</div>
+                              <div>{n} {n === 1 ? "unit" : "units"}</div>
+                            </td>
+                          );
+                        })}
+                        <td />
+                      </tr>
+                    );
+                  })}
                   </>
                 )}
 
