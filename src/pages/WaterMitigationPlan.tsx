@@ -2015,6 +2015,8 @@ actions and posts its own recap.`;
         initialDescription={planEditor?.plan?.summary ?? ""}
         initialAssignments={editorAssignments}
         classes={editorClasses}
+        baseProducts={editorBaseProducts}
+        initialBaseQuantities={editorBaseQuantities}
         existingPlans={editorSourcePlans}
         saving={savingPlan}
         onOpenChange={(open) => { if (!open && !savingPlan) setPlanEditor(null); }}
