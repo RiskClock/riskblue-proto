@@ -1226,9 +1226,9 @@ export default function WaterMitigationPlan() {
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  const allControlsExpanded = controlRows.length > 0 && controlRows.every((row) => expanded.has(row.id));
+  const allControlsExpanded = visibleControlRows.length > 0 && visibleControlRows.every((row) => expanded.has(row.id));
   const toggleAllExpanded = () => {
-    setExpanded(allControlsExpanded ? new Set() : new Set(controlRows.map((row) => row.id)));
+    setExpanded(allControlsExpanded ? new Set() : new Set(visibleControlRows.map((row) => row.id)));
   };
 
   const [viewer, setViewer] = useState<{
