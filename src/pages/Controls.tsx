@@ -1054,7 +1054,7 @@ function SearchableControlSelect({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" aria-expanded={open} disabled={disabled} className="h-9 w-full justify-between font-normal">
+        <Button variant="outline" role="combobox" aria-label="Product type" aria-expanded={open} disabled={disabled} className="h-9 w-full justify-between font-normal">
           <span className={selectedControl ? "truncate" : "truncate text-muted-foreground"}>{selectedControl?.name || "Select product type"}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
