@@ -1422,6 +1422,7 @@ actions and posts its own recap.`;
               summary: source.summary,
               control_counts: source.control_counts,
               excluded_instances: source.excluded_instances,
+              product_assignments: source.product_assignments,
               sort_order: nextOrder,
               created_by: user?.id ?? null,
             } as any)
@@ -1864,11 +1865,15 @@ actions and posts its own recap.`;
             instanceLabel: i.instanceLabel,
           }))}
           excludedIds={
-            excludedFor(
-              plans.find((p) => p.id === viewer.planId) ??
-                ({ excluded_instances: {} } as unknown as Plan),
-              viewer.controlId,
-            ) as Set<string>
+            (() => {
+              const activePlan = plans.find((p) => p.id === viewer.planId) ??
+                ({ excluded_instances: {}, product_assignments: {} } as unknown as Plan);
+              const ids = excludedFor(activePlan, viewer.controlId);
+              viewerData.instances.forEach((instance) => {
+                if (!planUsesProductForClass(activePlan, viewer.controlId, instance.catalogId)) ids.add(instance.id);
+              });
+              return ids;
+            })()
           }
           onToggle={(instanceId) => toggleInstance(viewer.planId, viewer.controlId, instanceId)}
           readOnly={!canEdit}
