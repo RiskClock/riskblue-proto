@@ -814,7 +814,7 @@ export default function WaterMitigationPlan() {
         setSeeding(false);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, plansLoading, plans.length, catalog, controlRows.length, derivedCounts, canEdit]);
+  }, [projectId, plansLoading, plans.length, catalog, controlRows.length, derivedCounts, canEdit, seededFlag]);
 
   // Backfill the baseline plan when it was created before detections existed.
   const [backfilled, setBackfilled] = useState(false);
