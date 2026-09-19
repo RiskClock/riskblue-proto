@@ -1023,6 +1023,22 @@ export default function WaterMitigationPlan() {
     return result;
   }, [planEditor, editorClasses]);
 
+  const editorSourcePlans = useMemo(() => {
+    const currentId = planEditor?.plan?.id;
+    return plans
+      .filter((plan) => plan.id !== currentId)
+      .map((plan) => {
+        const assignments: Record<string, string[]> = {};
+        editorClasses.forEach((item) => {
+          const catalogId = item.id.split("::")[0];
+          const assigned = plan.product_assignments?.[item.id] ?? plan.product_assignments?.[catalogId];
+          assignments[item.id] = Array.isArray(assigned) ? assigned : [];
+        });
+        return { id: plan.id, name: plan.name, assignments };
+      });
+  }, [plans, planEditor, editorClasses]);
+
+
   const savePlanEditor = async (value: { name: string; description: string; assignments: Record<string, string[]> }) => {
     if (!projectId || !planEditor) return;
     setSavingPlan(true);
