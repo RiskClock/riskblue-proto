@@ -922,6 +922,8 @@ export default function WaterMitigationPlan() {
       toast.error(getUserFriendlyError(error));
       return;
     }
+    // Deleting proves a plan existed — never auto-seed afterwards.
+    markSeeded();
     void logPlanChange("delete", `Deleted plan "${before?.name ?? ""}"`, planId, {});
     queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
   };
