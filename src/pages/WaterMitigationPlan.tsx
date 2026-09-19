@@ -320,8 +320,8 @@ export default function WaterMitigationPlan() {
     queryKey: ["wmp-catalog"],
     queryFn: async () => {
       const [assets, systems, processes] = await Promise.all([
-        supabase.from("critical_assets").select("id, name, default_control_ids").eq("is_active", true),
-        supabase.from("water_systems").select("id, name, default_control_ids").eq("is_active", true),
+        supabase.from("critical_assets").select("id, name, id_prefix, default_control_ids").eq("is_active", true),
+        supabase.from("water_systems").select("id, name, id_prefix, default_control_ids").eq("is_active", true),
         supabase.from("processes").select("id, name, default_control_ids").eq("is_active", true),
       ]);
       return {
@@ -980,6 +980,7 @@ export default function WaterMitigationPlan() {
         rows.push({
           id: entry.id,
           name: entry.name,
+          code: entry.id_prefix || entry.name,
           kind: key === "critical_assets" ? "Asset" : "Water System",
           count,
           products: productChoices(entry.id, entry.default_control_ids || []),

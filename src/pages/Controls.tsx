@@ -450,7 +450,6 @@ export default function Controls() {
 
   const scopeItems = allCatalogItems.filter((item) => item.category !== "processes");
   const selectedScopeItems = scopeItems.filter((item) => scope[item.category].includes(item.id));
-  const scopeCount = selectedScopeItems.length;
   const selectedControl = selected?.control_id ? controlMap.get(selected.control_id) : undefined;
   const needsPipeDiameter = ["automatic shut off valve", "flow sensor", "water meter"].includes(
     selectedControl?.name.toLowerCase() ?? "",
@@ -970,11 +969,8 @@ function AddProductModal({
   const [productCode, setProductCode] = useState("");
   const [description, setDescription] = useState("");
   const [controlId, setControlId] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const term = query.trim().toLowerCase();
-  const filtered = term ? controls.filter((c) => c.name.toLowerCase().includes(term)) : controls;
   const canSave = !!name.trim() || !!productCode.trim();
 
   const submit = async () => {
