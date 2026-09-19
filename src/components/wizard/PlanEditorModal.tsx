@@ -36,24 +36,40 @@ export interface PlanEditorSource {
   assignments: Record<string, string[]>;
 }
 
+export interface PlanEditorBaseProduct {
+  id: string;
+  name: string;
+  code?: string | null;
+}
+
 interface Props {
   open: boolean;
   mode: "create" | "edit";
   initialName: string;
   initialDescription: string;
   initialAssignments: Record<string, string[]>;
+  initialBaseQuantities?: Record<string, number>;
   classes: PlanEditorClass[];
+  baseProducts?: PlanEditorBaseProduct[];
   existingPlans?: PlanEditorSource[];
   saving?: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (value: { name: string; description: string; assignments: Record<string, string[]> }) => void;
+  onSave: (value: {
+    name: string;
+    description: string;
+    assignments: Record<string, string[]>;
+    baseQuantities: Record<string, number>;
+  }) => void;
 }
 
-export function PlanEditorModal({ open, mode, initialName, initialDescription, initialAssignments, classes, existingPlans = [], saving, onOpenChange, onSave }: Props) {
+export function PlanEditorModal({ open, mode, initialName, initialDescription, initialAssignments, initialBaseQuantities = {}, classes, baseProducts = [], existingPlans = [], saving, onOpenChange, onSave }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [showDescription, setShowDescription] = useState(false);
   const [assignments, setAssignments] = useState<Record<string, string[]>>({});
+  const [baseQuantities, setBaseQuantities] = useState<Record<string, number>>({});
+  const [baseOpen, setBaseOpen] = useState(false);
+  const [baseSearch, setBaseSearch] = useState("");
   const [openClass, setOpenClass] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [loadOpen, setLoadOpen] = useState(false);
@@ -65,11 +81,31 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
     setDescription(initialDescription);
     setShowDescription(!!initialDescription.trim());
     setAssignments(JSON.parse(JSON.stringify(initialAssignments || {})));
+    setBaseQuantities({ ...(initialBaseQuantities || {}) });
+    setBaseOpen(false);
+    setBaseSearch("");
     setOpenClass(null);
     setSearch("");
     setLoadOpen(false);
     setPendingSource(null);
-  }, [open, initialName, initialDescription, initialAssignments]);
+  }, [open, initialName, initialDescription, initialAssignments, initialBaseQuantities]);
+
+  const setBaseQuantity = (productId: string, quantity: number) => {
+    setBaseQuantities((current) => {
+      const next = { ...current };
+      if (quantity <= 0) delete next[productId];
+      else next[productId] = quantity;
+      return next;
+    });
+  };
+
+  const addedBaseProducts = baseProducts.filter((product) => (baseQuantities[product.id] || 0) > 0);
+  const baseQuery = baseSearch.trim().toLowerCase();
+  const availableBaseProducts = baseProducts.filter(
+    (product) =>
+      !(baseQuantities[product.id] > 0) &&
+      `${product.code || ""} ${product.name}`.toLowerCase().includes(baseQuery),
+  );
 
   const productById = useMemo(() => {
     const map = new Map<string, { id: string; name: string; code?: string | null }>();
