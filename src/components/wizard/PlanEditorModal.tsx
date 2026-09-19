@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { tagStyle } from "@/lib/tagColor";
+import { ThreatOverviewCard } from "@/components/workbench/ThreatOverviewCard";
 
 export interface PlanEditorClass {
   id: string;
@@ -90,12 +91,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                 const query = openClass === item.id ? search.trim().toLowerCase() : "";
                 const filtered = item.products.filter((product) => `${product.code || ""} ${product.name}`.toLowerCase().includes(query));
                 return (
-                  <section key={item.id} className="overflow-hidden rounded border bg-card text-center">
-                    <div className="bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground" title={item.name}>
-                      {item.code}
-                    </div>
-                    <div className="px-2 pt-2 text-2xl font-bold tabular-nums text-primary">{item.count}</div>
-                    <div className="min-h-10 px-2 pb-2 text-[11px] text-muted-foreground">{item.name}</div>
+                  <ThreatOverviewCard key={item.id} code={item.code} name={item.name} count={item.count}>
                     <div className="space-y-2 px-2 pb-2 text-left">
                       <Button type="button" variant="outline" size="sm" className="w-full justify-between font-normal" onClick={() => { setOpenClass(openClass === item.id ? null : item.id); setSearch(""); }}>
                         <span>{selected.length > 0 ? `${selected.length} selected` : "Select products"}</span>
@@ -141,7 +137,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                         </div>
                       )}
                     </div>
-                  </section>
+                  </ThreatOverviewCard>
                 );
               })}
               {classes.length === 0 && <p className="text-sm text-muted-foreground sm:col-span-2 py-6 text-center">No Asset or Water System classes were detected for this project.</p>}
