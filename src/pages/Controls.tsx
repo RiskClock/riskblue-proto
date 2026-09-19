@@ -1013,6 +1013,11 @@ function AddProductModal({
 
   const submit = async () => {
     if (!canSave) return;
+    const parsedDiameter = pipeDiameter.trim() === "" ? null : Number(pipeDiameter);
+    if (needsPipeDiameter && parsedDiameter !== null && (!Number.isFinite(parsedDiameter) || parsedDiameter < 0)) {
+      toast.error("Enter a valid pipe diameter");
+      return;
+    }
     setSaving(true);
     try {
       await onSave({
@@ -1020,7 +1025,7 @@ function AddProductModal({
         productCode: productCode.trim(),
         description: description.trim(),
         controlId,
-        pipeDiameterInches: needsPipeDiameter && pipeDiameter.trim() !== "" ? Number(pipeDiameter) : null,
+        pipeDiameterInches: needsPipeDiameter ? parsedDiameter : null,
       });
     } finally {
       setSaving(false);

@@ -936,7 +936,10 @@ export default function WaterMitigationPlan() {
 
   const countFor = (plan: Plan, controlId: string) => {
     const fixed = controlRows.find((r) => r.id === controlId)?.fixedQuantity;
-    if (typeof fixed === "number") return fixed;
+    if (typeof fixed === "number") {
+      if (!plan.product_assignments?.__configured) return fixed;
+      return Object.values(plan.product_assignments).some((value) => Array.isArray(value) && value.includes(controlId)) ? fixed : 0;
+    }
     const spaces = spaceBreakdown.get(controlId);
     if (!spaces) return 0;
     const ex = excludedFor(plan, controlId);
@@ -983,7 +986,6 @@ export default function WaterMitigationPlan() {
     const productChoices = (catalogId: string, defaultControlIds: string[]) =>
       (products as any[])
         .filter((product) => {
-          if (product.applied_in_any_plan) return false;
           if (product.scope_customized) {
             return [
               ...((product.critical_asset_ids as string[]) || []),
@@ -1016,7 +1018,8 @@ export default function WaterMitigationPlan() {
     if (!plan) return {};
     const result: Record<string, string[]> = {};
     editorClasses.forEach((item) => {
-      const assigned = plan.product_assignments[item.id];
+      const catalogId = item.id.split("::")[0];
+      const assigned = plan.product_assignments[item.id] ?? plan.product_assignments[catalogId];
       result[item.id] = (Array.isArray(assigned) ? assigned : []).filter((id) => item.products.some((product) => product.id === id));
     });
     return result;
