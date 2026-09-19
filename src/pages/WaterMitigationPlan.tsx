@@ -528,6 +528,10 @@ export default function WaterMitigationPlan() {
         oneTime + install + annualMaint,
       );
       row.code = p.product_code || null;
+      row.pipeDiameterInches =
+        p.pipe_diameter_inches === null || p.pipe_diameter_inches === undefined
+          ? null
+          : Number(p.pipe_diameter_inches);
       row.scopeIds = p.scope_customized
         ? [
             ...((p.critical_asset_ids as string[]) || []),
