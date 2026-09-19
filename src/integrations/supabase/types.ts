@@ -3022,6 +3022,7 @@ export type Database = {
           monthly_maint_cost: number | null
           name: string
           one_time_cost: number | null
+          pipe_diameter_inches: number | null
           process_ids: string[]
           product_code: string | null
           scope_customized: boolean
@@ -3045,6 +3046,7 @@ export type Database = {
           monthly_maint_cost?: number | null
           name: string
           one_time_cost?: number | null
+          pipe_diameter_inches?: number | null
           process_ids?: string[]
           product_code?: string | null
           scope_customized?: boolean
@@ -3068,6 +3070,7 @@ export type Database = {
           monthly_maint_cost?: number | null
           name?: string
           one_time_cost?: number | null
+          pipe_diameter_inches?: number | null
           process_ids?: string[]
           product_code?: string | null
           scope_customized?: boolean
