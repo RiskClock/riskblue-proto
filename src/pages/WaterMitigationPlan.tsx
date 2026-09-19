@@ -64,7 +64,7 @@ interface Plan {
   control_counts: Record<string, number>;
   /** controlId -> detection ids this plan has switched the control off for. */
   excluded_instances: Record<string, string[]>;
-  product_assignments: Record<string, string[]> & { __configured?: boolean };
+  product_assignments: Record<string, string[] | boolean>;
   sort_order: number;
 }
 
@@ -902,7 +902,8 @@ export default function WaterMitigationPlan() {
   const planUsesProductForClass = (plan: Plan, productId: string, catalogId: string | null) => {
     if (!plan.product_assignments?.__configured) return true;
     if (!catalogId) return false;
-    return (plan.product_assignments[catalogId] || []).includes(productId);
+    const assigned = plan.product_assignments[catalogId];
+    return Array.isArray(assigned) && assigned.includes(productId);
   };
 
   const countForSpace = (plan: Plan, controlId: string, space: string) => {
@@ -1001,7 +1002,8 @@ export default function WaterMitigationPlan() {
     if (!plan?.product_assignments?.__configured) return inferredAssignments;
     const result: Record<string, string[]> = {};
     editorClasses.forEach((item) => {
-      result[item.id] = (plan.product_assignments[item.id] || []).filter((id) => item.products.some((product) => product.id === id));
+      const assigned = plan.product_assignments[item.id];
+      result[item.id] = (Array.isArray(assigned) ? assigned : []).filter((id) => item.products.some((product) => product.id === id));
     });
     return result;
   }, [planEditor, editorClasses, inferredAssignments]);
