@@ -1858,6 +1858,7 @@ actions and posts its own recap.`;
         initialDescription={planEditor?.plan?.summary ?? ""}
         initialAssignments={editorAssignments}
         classes={editorClasses}
+        existingPlans={editorSourcePlans}
         saving={savingPlan}
         onOpenChange={(open) => { if (!open && !savingPlan) setPlanEditor(null); }}
         onSave={savePlanEditor}
