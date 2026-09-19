@@ -115,6 +115,28 @@ const CATEGORY_TABLE: Record<string, "critical_assets" | "water_systems" | "proc
 const UNASSIGNED = "Unassigned";
 
 const currency = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
+
+/** Formats a product pipe diameter (inches) for display, e.g. 0.866 -> `0.87" (22mm)`. */
+export const formatPipeDiameter = (inches?: number | null) => {
+  if (inches === null || inches === undefined || !Number.isFinite(Number(inches))) return null;
+  const value = Number(inches);
+  const mm = Math.round(value * 25.4);
+  const shown = Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)));
+  return `${shown}" (${mm}mm)`;
+};
+
+/** Parses a detection pipe-size label ("22mm", `1 1/2"`) into millimetres. */
+export const parsePipeSizeMm = (label?: string | null): number | null => {
+  const raw = (label || "").trim();
+  if (!raw) return null;
+  const mm = raw.match(/([\d.]+)\s*mm/i);
+  if (mm) return Number(mm[1]) || null;
+  const inch = raw.match(/([\d.]+)\s*(?:"|in\b|inch)/i);
+  if (inch) return (Number(inch[1]) || 0) * 25.4 || null;
+  const plain = raw.match(/^([\d.]+)$/);
+  if (plain) return Number(plain[1]) || null;
+  return null;
+};
 const locationLabel = (n: number) => `${n} ${n === 1 ? "location" : "locations"}`;
 
 const CONTROL_COLORS = [
