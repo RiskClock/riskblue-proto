@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronsUpDown, Minus, Plus, Search, X } from "lucide-react";
+import { Minus, Plus, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -21,26 +21,33 @@ import { tagStyle } from "@/lib/tagColor";
 import { ThreatOverviewCard } from "@/components/workbench/ThreatOverviewCard";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
+export interface PlanEditorProduct {
+  id: string;
+  name: string;
+  code?: string | null;
+  /** Product pipe diameter in inches, when the product type is size-specific. */
+  pipeDiameterInches?: number | null;
+}
+
 export interface PlanEditorClass {
   id: string;
   name: string;
   code: string;
   kind: "Asset" | "Water System";
   count: number;
-  products: Array<{ id: string; name: string; code?: string | null }>;
+  /** Detected pipe size in millimetres, used to suggest matching products. */
+  pipeSizeMm?: number | null;
+  products: PlanEditorProduct[];
 }
 
 export interface PlanEditorSource {
   id: string;
   name: string;
   assignments: Record<string, string[]>;
+  baseQuantities?: Record<string, number>;
 }
 
-export interface PlanEditorBaseProduct {
-  id: string;
-  name: string;
-  code?: string | null;
-}
+export type PlanEditorBaseProduct = PlanEditorProduct;
 
 interface Props {
   open: boolean;
@@ -62,6 +69,21 @@ interface Props {
   }) => void;
 }
 
+/** `0.87" (22mm)` for a product diameter in inches. */
+function diameterLabel(inches?: number | null): string | null {
+  if (inches === null || inches === undefined || !Number.isFinite(Number(inches))) return null;
+  const value = Number(inches);
+  const shown = Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)));
+  return `${shown}" (${Math.round(value * 25.4)}mm)`;
+}
+
+/** Products whose diameter is within ~2mm of the detected pipe size come first. */
+const SIZE_TOLERANCE_MM = 2;
+function isSizeMatch(product: PlanEditorProduct, pipeSizeMm?: number | null) {
+  if (!pipeSizeMm || product.pipeDiameterInches === null || product.pipeDiameterInches === undefined) return false;
+  return Math.abs(Number(product.pipeDiameterInches) * 25.4 - pipeSizeMm) <= SIZE_TOLERANCE_MM;
+}
+
 export function PlanEditorModal({ open, mode, initialName, initialDescription, initialAssignments, initialBaseQuantities = {}, classes, baseProducts = [], existingPlans = [], saving, onOpenChange, onSave }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -73,7 +95,8 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
   const [openClass, setOpenClass] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [loadOpen, setLoadOpen] = useState(false);
-  const [pendingSource, setPendingSource] = useState<PlanEditorSource | null>(null);
+  const [loadBaseOpen, setLoadBaseOpen] = useState(false);
+  const [pendingSource, setPendingSource] = useState<{ source: PlanEditorSource; scope: "classes" | "base" } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -87,6 +110,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
     setOpenClass(null);
     setSearch("");
     setLoadOpen(false);
+    setLoadBaseOpen(false);
     setPendingSource(null);
   }, [open, initialName, initialDescription, initialAssignments, initialBaseQuantities]);
 
@@ -108,7 +132,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
   );
 
   const productById = useMemo(() => {
-    const map = new Map<string, { id: string; name: string; code?: string | null }>();
+    const map = new Map<string, PlanEditorProduct>();
     classes.forEach((item) => item.products.forEach((product) => map.set(product.id, product)));
     return map;
   }, [classes]);
@@ -117,6 +141,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
     () => Object.values(assignments).some((value) => Array.isArray(value) && value.length > 0),
     [assignments],
   );
+  const hasBaseSelections = Object.values(baseQuantities).some((value) => value > 0);
 
   const toggleProduct = (classId: string, productId: string) => {
     setAssignments((current) => {
@@ -126,17 +151,53 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
     });
   };
 
-  const applySource = (source: PlanEditorSource) => {
-    const next: Record<string, string[]> = {};
-    classes.forEach((item) => {
-      const assigned = source.assignments[item.id] || [];
-      next[item.id] = assigned.filter((id) => item.products.some((product) => product.id === id));
-    });
-    setAssignments(next);
+  const applySource = (source: PlanEditorSource, scope: "classes" | "base") => {
+    if (scope === "base") {
+      setBaseQuantities({ ...(source.baseQuantities || {}) });
+    } else {
+      const next: Record<string, string[]> = {};
+      classes.forEach((item) => {
+        const assigned = source.assignments[item.id] || [];
+        next[item.id] = assigned.filter((id) => item.products.some((product) => product.id === id));
+      });
+      setAssignments(next);
+    }
     setPendingSource(null);
   };
 
   const selectableSources = existingPlans.filter((plan) => plan.name);
+
+  const loadPlanButton = (scope: "classes" | "base") => {
+    if (selectableSources.length === 0) return null;
+    const isOpen = scope === "base" ? loadBaseOpen : loadOpen;
+    const setOpen = scope === "base" ? setLoadBaseOpen : setLoadOpen;
+    const dirty = scope === "base" ? hasBaseSelections : hasSelections;
+    return (
+      <Popover open={isOpen} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button type="button" variant="outline" size="sm">Load Existing Plan</Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-64 max-h-64 overflow-y-auto overscroll-contain p-1" onWheel={(event) => event.stopPropagation()}>
+          {selectableSources.map((plan) => (
+            <Button
+              key={plan.id}
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start"
+              onClick={() => {
+                setOpen(false);
+                if (dirty) setPendingSource({ source: plan, scope });
+                else applySource(plan, scope);
+              }}
+            >
+              {plan.name}
+            </Button>
+          ))}
+        </PopoverContent>
+      </Popover>
+    );
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -171,19 +232,24 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
 
           {baseProducts.length > 0 && (
             <div className="space-y-2">
-              <div>
-                <h3 className="text-sm font-semibold">Base Requirements</h3>
-                <p className="text-xs text-muted-foreground">Products that are not tied to a control type. Set how many this plan needs.</p>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold">Base Requirements</h3>
+                  <p className="text-xs text-muted-foreground">Products that are not tied to a control type. Set how many this plan needs.</p>
+                </div>
+                {loadPlanButton("base")}
               </div>
               <div className="rounded-lg border p-2 space-y-1.5">
                 {addedBaseProducts.map((product) => {
                   const quantity = baseQuantities[product.id] || 0;
+                  const size = diameterLabel(product.pipeDiameterInches);
                   return (
                     <div key={product.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50">
                       <span className="flex-1 truncate text-sm">
                         {product.code ? <strong>{product.code}</strong> : null}
                         {product.code && product.name ? " " : ""}
                         {product.name}
+                        {size ? <span className="ml-1 text-xs text-muted-foreground">{size}</span> : null}
                       </span>
                       <div className="flex items-center gap-1">
                         <Button type="button" variant="outline" size="icon" className="h-7 w-7" aria-label="Decrease quantity" onClick={() => setBaseQuantity(product.id, quantity - 1)}>
@@ -217,19 +283,30 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                       <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                       <Input value={baseSearch} onChange={(event) => setBaseSearch(event.target.value)} placeholder="Search products" className="h-8 pl-8 text-xs" />
                     </div>
-                    <div className="max-h-56 overflow-y-auto p-1">
-                      {availableBaseProducts.map((product) => (
-                        <Button
-                          key={product.id}
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="w-full justify-start h-auto px-2 py-1.5 text-xs"
-                          onClick={() => { setBaseQuantity(product.id, 1); setBaseOpen(false); }}
-                        >
-                          <span className="truncate">{product.code ? <strong>{product.code}&nbsp;</strong> : null}{product.name}</span>
-                        </Button>
-                      ))}
+                    <div
+                      className="max-h-56 overflow-y-auto overscroll-contain p-1"
+                      onWheel={(event) => event.stopPropagation()}
+                      onTouchMove={(event) => event.stopPropagation()}
+                    >
+                      {availableBaseProducts.map((product) => {
+                        const size = diameterLabel(product.pipeDiameterInches);
+                        return (
+                          <Button
+                            key={product.id}
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start h-auto px-2 py-1.5 text-xs"
+                            onClick={() => { setBaseQuantity(product.id, 1); setBaseOpen(false); }}
+                          >
+                            <span className="truncate">
+                              {product.code ? <strong>{product.code}&nbsp;</strong> : null}
+                              {product.name}
+                              {size ? <span className="ml-1 text-muted-foreground">{size}</span> : null}
+                            </span>
+                          </Button>
+                        );
+                      })}
                       {availableBaseProducts.length === 0 && <div className="px-2 py-3 text-xs text-muted-foreground">No products available.</div>}
                     </div>
                   </PopoverContent>
@@ -244,37 +321,29 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                 <h3 className="text-sm font-semibold">Detected Assets and Water Systems</h3>
                 <p className="text-xs text-muted-foreground">Product choices come from the Risk-Control Map and Product Catalog.</p>
               </div>
-              {selectableSources.length > 0 && (
-                <Popover open={loadOpen} onOpenChange={setLoadOpen}>
-                  <PopoverTrigger asChild>
-                    <Button type="button" variant="outline" size="sm">Load Existing Plan</Button>
-                  </PopoverTrigger>
-                  <PopoverContent align="end" className="w-64 p-1">
-                    {selectableSources.map((plan) => (
-                      <Button
-                        key={plan.id}
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="w-full justify-start"
-                        onClick={() => {
-                          setLoadOpen(false);
-                          if (hasSelections) setPendingSource(plan);
-                          else applySource(plan);
-                        }}
-                      >
-                        {plan.name}
-                      </Button>
-                    ))}
-                  </PopoverContent>
-                </Popover>
-              )}
+              {loadPlanButton("classes")}
             </div>
             <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
               {classes.map((item) => {
                 const selected = assignments[item.id] || [];
                 const query = openClass === item.id ? search.trim().toLowerCase() : "";
                 const filtered = item.products.filter((product) => `${product.code || ""} ${product.name}`.toLowerCase().includes(query));
+                const suggested = filtered.filter((product) => isSizeMatch(product, item.pipeSizeMm));
+                const others = filtered.filter((product) => !isSizeMatch(product, item.pipeSizeMm));
+                const renderOption = (product: PlanEditorProduct) => {
+                  const checked = selected.includes(product.id);
+                  const size = diameterLabel(product.pipeDiameterInches);
+                  return (
+                    <Button key={product.id} type="button" variant="ghost" size="sm" className="w-full justify-start h-auto px-2 py-1.5 text-xs" onClick={() => toggleProduct(item.id, product.id)}>
+                      <span className={`mr-2 h-3.5 w-3.5 shrink-0 rounded-sm border flex items-center justify-center ${checked ? "bg-primary border-primary text-primary-foreground" : "border-input"}`}>{checked ? "✓" : ""}</span>
+                      <span className="truncate">
+                        {product.code ? <strong>{product.code} </strong> : null}
+                        {product.name}
+                        {size ? <span className="ml-1 text-muted-foreground">{size}</span> : null}
+                      </span>
+                    </Button>
+                  );
+                };
                 return (
                   <ThreatOverviewCard key={item.id} code={item.code} name={item.name} count={item.count}>
                     <div className="space-y-1.5 px-2 pb-2 text-left">
@@ -296,16 +365,21 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                             <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                             <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search products" className="h-8 pl-8 text-xs" />
                           </div>
-                          <div className="max-h-56 overflow-y-auto p-1">
-                            {filtered.map((product) => {
-                              const checked = selected.includes(product.id);
-                              return (
-                                <Button key={product.id} type="button" variant="ghost" size="sm" className="w-full justify-start h-auto px-2 py-1.5 text-xs" onClick={() => toggleProduct(item.id, product.id)}>
-                                  <span className={`mr-2 h-3.5 w-3.5 shrink-0 rounded-sm border flex items-center justify-center ${checked ? "bg-primary border-primary text-primary-foreground" : "border-input"}`}>{checked ? "✓" : ""}</span>
-                                  <span className="truncate">{product.code ? <strong>{product.code} </strong> : null}{product.name}</span>
-                                </Button>
-                              );
-                            })}
+                          <div
+                            className="max-h-56 overflow-y-auto overscroll-contain p-1"
+                            onWheel={(event) => event.stopPropagation()}
+                            onTouchMove={(event) => event.stopPropagation()}
+                          >
+                            {suggested.length > 0 && (
+                              <>
+                                <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  Suggested for {item.pipeSizeMm}mm
+                                </div>
+                                {suggested.map(renderOption)}
+                                {others.length > 0 && <div className="my-1 border-t" />}
+                              </>
+                            )}
+                            {others.map(renderOption)}
                             {filtered.length === 0 && <div className="px-2 py-3 text-xs text-muted-foreground">No mapped products.</div>}
                           </div>
                         </PopoverContent>
@@ -316,7 +390,8 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                         {selected.map((id) => {
                           const product = productById.get(id);
                           if (!product) return null;
-                           const label = `${product.code ? `${product.code} ` : ""}${product.name}`.trim();
+                          const label = `${product.code ? `${product.code} ` : ""}${product.name}`.trim();
+                          const size = diameterLabel(product.pipeDiameterInches);
                           return (
                              <Tooltip key={id}>
                                <TooltipTrigger asChild>
@@ -327,7 +402,10 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                                    </Button>
                                  </Badge>
                                </TooltipTrigger>
-                               <TooltipContent>{product.name || product.code || "Product"}</TooltipContent>
+                               <TooltipContent>
+                                 {product.name || product.code || "Product"}
+                                 {size ? ` · ${size}` : ""}
+                               </TooltipContent>
                              </Tooltip>
                           );
                         })}
@@ -354,12 +432,13 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
             <AlertDialogHeader>
               <AlertDialogTitle>Overwrite current selections?</AlertDialogTitle>
               <AlertDialogDescription>
-                Loading "{pendingSource?.name}" replaces every product you have selected in this plan.
+                Loading "{pendingSource?.source.name}" replaces the{" "}
+                {pendingSource?.scope === "base" ? "Base Requirements" : "detected class"} selections in this plan.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={() => pendingSource && applySource(pendingSource)}>Overwrite</AlertDialogAction>
+              <AlertDialogAction onClick={() => pendingSource && applySource(pendingSource.source, pendingSource.scope)}>Overwrite</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

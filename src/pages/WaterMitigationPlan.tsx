@@ -86,6 +86,8 @@ interface ControlRow {
   isOverridden: boolean;
   /** Set when the product is applied in every plan at a fixed quantity. */
   fixedQuantity?: number | null;
+  /** Product pipe diameter in inches, when the product type is size-specific. */
+  pipeDiameterInches?: number | null;
 }
 
 interface DetectionRow {
@@ -102,6 +104,8 @@ interface DetectionRow {
   assignmentId: string | null;
   subtypeCode: string | null;
   subtypeName: string | null;
+  /** Detected pipe size in millimetres, when the detection records one. */
+  pipeSizeMm: number | null;
 }
 
 const CATEGORY_TABLE: Record<string, "critical_assets" | "water_systems" | "processes"> = {
@@ -113,6 +117,28 @@ const CATEGORY_TABLE: Record<string, "critical_assets" | "water_systems" | "proc
 const UNASSIGNED = "Unassigned";
 
 const currency = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
+
+/** Formats a product pipe diameter (inches) for display, e.g. 0.866 -> `0.87" (22mm)`. */
+export const formatPipeDiameter = (inches?: number | null) => {
+  if (inches === null || inches === undefined || !Number.isFinite(Number(inches))) return null;
+  const value = Number(inches);
+  const mm = Math.round(value * 25.4);
+  const shown = Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)));
+  return `${shown}" (${mm}mm)`;
+};
+
+/** Parses a detection pipe-size label ("22mm", `1 1/2"`) into millimetres. */
+export const parsePipeSizeMm = (label?: string | null): number | null => {
+  const raw = (label || "").trim();
+  if (!raw) return null;
+  const mm = raw.match(/([\d.]+)\s*mm/i);
+  if (mm) return Number(mm[1]) || null;
+  const inch = raw.match(/([\d.]+)\s*(?:"|in\b|inch)/i);
+  if (inch) return (Number(inch[1]) || 0) * 25.4 || null;
+  const plain = raw.match(/^([\d.]+)$/);
+  if (plain) return Number(plain[1]) || null;
+  return null;
+};
 const locationLabel = (n: number) => `${n} ${n === 1 ? "location" : "locations"}`;
 
 const CONTROL_COLORS = [
@@ -373,7 +399,7 @@ export default function WaterMitigationPlan() {
       const { data, error } = await supabase
         .from("tenant_products")
         .select(
-          "id, name, product_code, control_id, one_time_cost, installation_cost, monthly_maint_cost, maint_interval, applied_in_any_plan, fixed_quantity, scope_customized, critical_asset_ids, water_system_ids, process_ids",
+          "id, name, product_code, control_id, one_time_cost, installation_cost, monthly_maint_cost, maint_interval, applied_in_any_plan, fixed_quantity, pipe_diameter_inches, scope_customized, critical_asset_ids, water_system_ids, process_ids",
         )
         .eq("tenant_id", planTenantId!)
         .order("created_at");
@@ -526,6 +552,10 @@ export default function WaterMitigationPlan() {
         oneTime + install + annualMaint,
       );
       row.code = p.product_code || null;
+      row.pipeDiameterInches =
+        p.pipe_diameter_inches === null || p.pipe_diameter_inches === undefined
+          ? null
+          : Number(p.pipe_diameter_inches);
       row.scopeIds = p.scope_customized
         ? [
             ...((p.critical_asset_ids as string[]) || []),
@@ -694,6 +724,7 @@ export default function WaterMitigationPlan() {
         assignmentId: splitSubtype ? `${catalogId}::${typeKey}::${diameterKey}` : catalogId,
         subtypeCode,
         subtypeName,
+        pipeSizeMm: parsePipeSizeMm(pipeDiameter),
       };
     });
   }, [drawing, sheetPlans, catalog]);
@@ -1030,11 +1061,17 @@ export default function WaterMitigationPlan() {
 
   const editorClasses = useMemo<PlanEditorClass[]>(() => {
     if (!catalog) return [];
-    const detected = new Map<string, { catalogId: string; count: number; code: string | null; name: string | null }>();
+    const detected = new Map<string, { catalogId: string; count: number; code: string | null; name: string | null; pipeSizeMm: number | null }>();
     detectionRows.forEach((row) => {
       if (!row.catalogId || !row.assignmentId) return;
       const current = detected.get(row.assignmentId);
-      detected.set(row.assignmentId, { catalogId: row.catalogId, count: (current?.count || 0) + 1, code: row.subtypeCode, name: row.subtypeName });
+      detected.set(row.assignmentId, {
+        catalogId: row.catalogId,
+        count: (current?.count || 0) + 1,
+        code: row.subtypeCode,
+        name: row.subtypeName,
+        pipeSizeMm: current?.pipeSizeMm ?? row.pipeSizeMm,
+      });
     });
     (items as any[]).forEach((item) => {
       const table = CATEGORY_TABLE[item.category];
@@ -1042,7 +1079,7 @@ export default function WaterMitigationPlan() {
       const entry = (catalog[table] || []).find((candidate: any) =>
         (candidate.name || "").toLowerCase().trim() === (item.name || "").toLowerCase().trim(),
       );
-      if (entry && !detected.has(entry.id)) detected.set(entry.id, { catalogId: entry.id, count: 1, code: null, name: null });
+      if (entry && !detected.has(entry.id)) detected.set(entry.id, { catalogId: entry.id, count: 1, code: null, name: null, pipeSizeMm: null });
     });
 
     const productChoices = (catalogId: string, defaultControlIds: string[]) =>
@@ -1056,7 +1093,15 @@ export default function WaterMitigationPlan() {
           }
           return !!product.control_id && defaultControlIds.includes(product.control_id);
         })
-        .map((product) => ({ id: product.id, name: product.name || "", code: product.product_code }));
+        .map((product) => ({
+          id: product.id,
+          name: product.name || "",
+          code: product.product_code,
+          pipeDiameterInches:
+            product.pipe_diameter_inches === null || product.pipe_diameter_inches === undefined
+              ? null
+              : Number(product.pipe_diameter_inches),
+        }));
 
     const rows: PlanEditorClass[] = [];
     (["critical_assets", "water_systems"] as const).forEach((key) => {
@@ -1068,6 +1113,7 @@ export default function WaterMitigationPlan() {
           code: value.code ? `${entry.id_prefix || entry.name}-${value.code}` : entry.id_prefix || entry.name,
           kind: key === "critical_assets" ? "Asset" : "Water System",
           count: value.count,
+          pipeSizeMm: value.pipeSizeMm,
           products: productChoices(entry.id, entry.default_control_ids || []),
         }));
       });
@@ -1098,13 +1144,13 @@ export default function WaterMitigationPlan() {
           const assigned = plan.product_assignments?.[item.id] ?? plan.product_assignments?.[catalogId];
           assignments[item.id] = Array.isArray(assigned) ? assigned : [];
         });
-        return { id: plan.id, name: plan.name, assignments };
+        return { id: plan.id, name: plan.name, assignments, baseQuantities: baseQuantitiesFor(plan) };
       });
   }, [plans, planEditor, editorClasses]);
 
   /** Catalog products with no control type, selectable under Base Requirements. */
   const editorBaseProducts = useMemo(
-    () => baseRows.map((row) => ({ id: row.id, name: row.name, code: row.code ?? null })),
+    () => baseRows.map((row) => ({ id: row.id, name: row.name, code: row.code ?? null, pipeDiameterInches: row.pipeDiameterInches ?? null })),
     [baseRows],
   );
 
@@ -1857,6 +1903,9 @@ actions and posts its own recap.`;
                                 {row.code ? <strong>{row.code}</strong> : null}
                                 {row.code && row.name ? " " : ""}
                                 {row.name}
+                                {formatPipeDiameter(row.pipeDiameterInches) ? (
+                                  <span className="ml-1 text-xs text-muted-foreground">{formatPipeDiameter(row.pipeDiameterInches)}</span>
+                                ) : null}
                               </span>
                               {spaces.length > 0 ? (
                                 isOpen ? (
@@ -1979,6 +2028,9 @@ actions and posts its own recap.`;
                               {row.code ? <strong>{row.code}</strong> : null}
                               {row.code && row.name ? " " : ""}
                               {row.name}
+                              {formatPipeDiameter(row.pipeDiameterInches) ? (
+                                <span className="ml-1 text-xs text-muted-foreground">{formatPipeDiameter(row.pipeDiameterInches)}</span>
+                              ) : null}
                             </span>
                           </div>
                           <div className="mt-0.5 pl-[26px] text-xs text-muted-foreground tabular-nums">
