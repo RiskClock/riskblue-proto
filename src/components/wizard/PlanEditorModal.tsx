@@ -366,7 +366,19 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                   const checked = selected.includes(product.id);
                   const size = diameterLabel(product.pipeDiameterInches);
                   return (
-                    <button key={product.id} type="button" className="flex w-full items-start gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => toggleProduct(item.id, product.id)}>
+                    <div
+                      key={product.id}
+                      role="button"
+                      tabIndex={0}
+                      className="flex w-full cursor-pointer items-start gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+                      onClick={() => toggleProduct(item.id, product.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          toggleProduct(item.id, product.id);
+                        }
+                      }}
+                    >
                       <Checkbox checked={checked} className="pointer-events-none mt-0.5" />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate">
@@ -378,7 +390,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                         </span>
                       </span>
                       {checked && <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />}
-                    </button>
+                    </div>
                   );
                 };
                 return (
