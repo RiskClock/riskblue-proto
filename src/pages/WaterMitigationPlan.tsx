@@ -844,31 +844,6 @@ export default function WaterMitigationPlan() {
       .update({ project_data: { ...existing, wmp_seeded: true } } as any)
       .eq("id", projectId);
   };
-  const [seeding, setSeeding] = useState(false);
-  useEffect(() => {
-    if (!projectId || plansLoading || plans.length > 0 || seeding || !canEdit) return;
-    if (!catalog || controlRows.length === 0) return;
-    if (seededFlag) return;
-    setSeeding(true);
-    markSeeded();
-    supabase
-      .from("project_mitigation_plans")
-      .insert({
-        project_id: projectId,
-        name: "Plan 1",
-        summary: "",
-        control_counts: derivedCounts,
-        sort_order: 0,
-        created_by: user?.id ?? null,
-      })
-      .then(({ error }) => {
-        if (error) toast.error(getUserFriendlyError(error));
-        queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
-        setSeeding(false);
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, plansLoading, plans.length, catalog, controlRows.length, derivedCounts, canEdit, seededFlag]);
-
   // Backfill the baseline plan when it was created before detections existed.
   const [backfilled, setBackfilled] = useState(false);
   useEffect(() => {
@@ -1169,6 +1144,32 @@ export default function WaterMitigationPlan() {
     assignments.__base = base;
     return assignments;
   }, [editorBaseProducts, editorClasses]);
+
+  const [seeding, setSeeding] = useState(false);
+  useEffect(() => {
+    if (!projectId || plansLoading || plans.length > 0 || seeding || !canEdit) return;
+    if (!catalog || controlRows.length === 0) return;
+    if (seededFlag) return;
+    setSeeding(true);
+    markSeeded();
+    supabase
+      .from("project_mitigation_plans")
+      .insert({
+        project_id: projectId,
+        name: "Plan 1",
+        summary: "",
+        control_counts: derivedCounts,
+        product_assignments: newPlanProductAssignments,
+        sort_order: 0,
+        created_by: user?.id ?? null,
+      })
+      .then(({ error }) => {
+        if (error) toast.error(getUserFriendlyError(error));
+        queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
+        setSeeding(false);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, plansLoading, plans.length, catalog, controlRows.length, derivedCounts, canEdit, seededFlag, newPlanProductAssignments]);
 
   const editorAssignments = useMemo(() => {
     const plan = planEditor?.plan;
