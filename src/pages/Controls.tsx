@@ -883,7 +883,7 @@ export default function Controls() {
                   </section>
 
                   {canEdit && (
-                    <div className="pb-2">
+                    <div className="flex justify-end pb-2">
                       <Button
                         variant="outline"
                         size="sm"
