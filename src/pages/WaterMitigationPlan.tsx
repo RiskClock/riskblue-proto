@@ -1555,7 +1555,7 @@ actions and posts its own recap.`;
           const nextOrder = workingPlans.length
             ? Math.max(...workingPlans.map((p) => p.sort_order)) + 1
             : 0;
-          const productAssignments: Plan["product_assignments"] = { __configured: true, __base: {} };
+          const productAssignments: Plan["product_assignments"] = JSON.parse(JSON.stringify(newPlanProductAssignments));
           const { data: created, error } = await supabase
             .from("project_mitigation_plans")
             .insert({
@@ -2179,7 +2179,7 @@ actions and posts its own recap.`;
                   {visibleBaseRows.length > 0 && (
                     <tr className="border-b bg-muted/40">
                       <th className={`${labelCellBase} bg-muted/40 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground`}>
-                        Base Requirements
+                        Essential Components
                       </th>
                       {plans.map((plan) => (
                         <td key={plan.id} className="border-r px-4 py-2 bg-muted/40" />
