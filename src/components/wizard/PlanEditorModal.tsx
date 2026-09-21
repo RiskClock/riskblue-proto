@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, Minus, Plus, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -366,9 +367,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                   const size = diameterLabel(product.pipeDiameterInches);
                   return (
                     <button key={product.id} type="button" className="flex w-full items-start gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => toggleProduct(item.id, product.id)}>
-                      <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${checked ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background"}`}>
-                        {checked && <Check className="h-3 w-3" />}
-                      </span>
+                      <Checkbox checked={checked} className="pointer-events-none mt-0.5" />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate">
                           {product.code ? <strong>{product.code} </strong> : null}
@@ -378,6 +377,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                           {[product.controlName, size].filter(Boolean).join(" · ")}
                         </span>
                       </span>
+                      {checked && <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />}
                     </button>
                   );
                 };
