@@ -51,6 +51,7 @@ import { toast } from "sonner";
 import { productCatalogLabel } from "@/lib/catalogLabel";
 import { tagStyle } from "@/lib/tagColor";
 import { currencySymbol, formatCompactCurrencyAmount } from "@/lib/currency";
+import { useIsSystemAdmin } from "@/hooks/useIsSystemAdmin";
 
 interface MitigationControl {
   id: string;
@@ -115,8 +116,7 @@ export default function Controls() {
   const { tenant, tenantId, loading: tenantLoading } = useTenant();
   const queryClient = useQueryClient();
 
-  const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
-  const canEdit = isInternalUser || tenant?.role === "admin" || tenant?.role === "member";
+  const canEdit = useIsSystemAdmin();
 
   const pageTitle = productCatalogLabel();
   const tenantCurrency = tenant?.default_currency ?? "USD";

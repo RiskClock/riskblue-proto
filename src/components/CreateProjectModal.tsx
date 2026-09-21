@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Upload, FileText, X, Loader2, Coins, ChevronDown, ChevronRight } from "lucide-react";
@@ -135,13 +134,26 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
     queryFn: async () => {
       const { data, error } = await supabase
         .from("mitigation_controls")
-        .select("id, name, category")
+        .select("id, name, category, responsible, vendor_name, application_component")
         .eq("is_active", true)
         .order("display_order");
       if (error) throw error;
-      return ((data || []) as { id: string; name: string; category?: string | null }[]).filter((control) => {
-        const text = `${control.name || ""} ${control.category || ""}`.toLowerCase();
-        return !text.includes("contractor");
+      return ((data || []) as {
+        id: string;
+        name: string;
+        category?: string | null;
+        responsible?: string | null;
+        vendor_name?: string | null;
+        application_component?: string | null;
+      }[]).filter((control) => {
+        const metadata = `${control.category || ""} ${control.responsible || ""} ${control.vendor_name || ""} ${control.application_component || ""}`.toLowerCase();
+        const contractorTerms = [
+          "contractor",
+          "water mitigation solution provider",
+          "water mitigation vendor",
+          "mechanical contractor",
+        ];
+        return !contractorTerms.some((term) => metadata.includes(term));
       });
     },
     enabled: open,
@@ -159,7 +171,6 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
   const [selectedControlIds, setSelectedControlIds] = useState<Set<string>>(new Set());
   const [otherTextByTab, setOtherTextByTab] = useState<Record<IdentifyTab, string>>(EMPTY_OTHER_TEXT);
   const [activeIdentifyTab, setActiveIdentifyTab] = useState<IdentifyTab>("water_systems");
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [currencyCode, setCurrencyCode] = useState<CurrencyCode>(normalizeCurrencyCode(tenant?.default_currency));
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -175,7 +186,6 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
       setSelectedControlIds(new Set());
       setOtherTextByTab(EMPTY_OTHER_TEXT);
       setActiveIdentifyTab("water_systems");
-      setAdvancedOpen(false);
       setCurrencyCode(normalizeCurrencyCode(tenant?.default_currency));
       setFiles([]);
       setSubmitting(false);
@@ -717,33 +727,24 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
               </Tabs>
             </div>
 
-            <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen} className="rounded-lg border bg-muted/20">
-              <button
-                type="button"
-                className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold"
-                onClick={() => setAdvancedOpen((value) => !value)}
-              >
-                Advanced Options
-                {advancedOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              </button>
-              <CollapsibleContent className="border-t px-4 py-3">
-                <div className="space-y-2 sm:max-w-xs">
-                  <Label>Currency</Label>
-                  <Select value={currencyCode} onValueChange={(value) => setCurrencyCode(normalizeCurrencyCode(value))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CURRENCY_OPTIONS.map((option) => (
-                        <SelectItem key={option.code} value={option.code}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
+            <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
+              <Label>Advanced Options</Label>
+              <div className="space-y-2 sm:max-w-xs">
+                <Label className="text-sm text-muted-foreground">Currency</Label>
+                <Select value={currencyCode} onValueChange={(value) => setCurrencyCode(normalizeCurrencyCode(value))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CURRENCY_OPTIONS.map((option) => (
+                      <SelectItem key={option.code} value={option.code}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
           </div>
 

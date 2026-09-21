@@ -90,8 +90,9 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
     if (isInternalUser) {
       keys.push("companyManagement", "userManagement", "configuration", "workbench", "logs");
       if (isRefineryAdmin) keys.push("promptRefinery");
-    } else if (tenantId && tenant?.role === "admin") {
-      keys.push("userManagement");
+    } else if (tenantId) {
+      keys.push("controls");
+      if (tenant?.role === "admin") keys.push("userManagement");
     }
     preloadRoutes(keys);
   };
@@ -223,6 +224,16 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
                 >
                   <Users className="h-4 w-4 mr-2" />
                   User Management
+                </DropdownMenuItem>
+              )}
+              {tenantId && !isInternalUser && tenant && (
+                <DropdownMenuItem
+                  onClick={() => menuNavigate(tenantPath("/controls"))}
+                  className="cursor-pointer"
+                  {...menuItemProps("controls")}
+                >
+                  <ShieldCheck className="h-4 w-4 mr-2" />
+                  {productCatalogLabel()}
                 </DropdownMenuItem>
               )}
               {tenantId && isInternalUser && (

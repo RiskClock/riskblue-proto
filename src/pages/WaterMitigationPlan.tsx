@@ -59,6 +59,7 @@ import {
   type ParsedFloorPlan,
 } from "@/lib/surveyFloorPlans";
 import { formatCurrencyAmount, normalizeCurrencyCode, type CurrencyCode } from "@/lib/currency";
+import { useIsSystemAdmin } from "@/hooks/useIsSystemAdmin";
 
 interface Plan {
   id: string;
@@ -334,8 +335,7 @@ export default function WaterMitigationPlan() {
   const { tenantId, tenant, tenantPath } = useTenant();
   const queryClient = useQueryClient();
 
-  const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
-  const canEdit = isInternalUser || tenant?.role === "admin" || tenant?.role === "member" || !tenantId;
+  const canEdit = useIsSystemAdmin();
 
   const { data: project } = useQuery({
     queryKey: ["wmp-project", projectId],
@@ -1852,6 +1852,10 @@ actions and posts its own recap.`;
   };
 
   const labelWidth = plans.length === 0 ? "w-[180px] min-w-[180px]" : "w-[280px] min-w-[280px]";
+  const labelColumnPx = plans.length === 0 ? 180 : 280;
+  const planColumnPx = 220;
+  const actionColumnPx = 140;
+  const tableWidth = `${labelColumnPx + plans.length * planColumnPx + actionColumnPx}px`;
   const labelCellBase = `sticky left-0 z-10 px-4 py-3 text-sm font-medium text-foreground ${labelWidth} shadow-[inset_-1px_0_0_hsl(var(--border))]`;
   const labelCell = `${labelCellBase} bg-card`;
   const planTotalsById = new Map(plans.map((plan) => [plan.id, planTotals(plan)]));
@@ -1922,7 +1926,7 @@ actions and posts its own recap.`;
         ) : (
           <div className="overflow-auto min-h-0 max-h-full">
             <div className="w-max min-w-full rounded-lg border bg-card">
-            <table className="w-full border-collapse">
+            <table className="min-w-full table-fixed border-collapse" style={{ width: tableWidth }}>
               {sharedColumns}
               <tbody>
                 <tr className="border-b">
@@ -2068,7 +2072,7 @@ actions and posts its own recap.`;
             </div>
 
             <div className="w-max min-w-full rounded-lg border bg-card">
-            <table className="w-full border-collapse">
+            <table className="min-w-full table-fixed border-collapse" style={{ width: tableWidth }}>
               {sharedColumns}
               <tbody>
                 {visibleControlRows.length === 0 && visibleBaseRows.length === 0 ? (
