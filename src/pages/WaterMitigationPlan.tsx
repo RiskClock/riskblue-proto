@@ -1128,25 +1128,6 @@ export default function WaterMitigationPlan() {
     return rows.sort((a, b) => a.name.localeCompare(b.name));
   }, [catalog, controls, detectionRows, items, products]);
 
-  const editorAssignments = useMemo(() => {
-    const plan = planEditor?.plan;
-    if (!plan) {
-      const result: Record<string, string[]> = {};
-      editorClasses.forEach((item) => {
-        const assigned = newPlanProductAssignments[item.id];
-        result[item.id] = Array.isArray(assigned) ? assigned : [];
-      });
-      return result;
-    }
-    const result: Record<string, string[]> = {};
-    editorClasses.forEach((item) => {
-      const catalogId = item.id.split("::")[0];
-      const assigned = plan.product_assignments[item.id] ?? plan.product_assignments[catalogId];
-      result[item.id] = (Array.isArray(assigned) ? assigned : []).filter((id) => item.products.some((product) => product.id === id));
-    });
-    return result;
-  }, [planEditor, editorClasses, newPlanProductAssignments]);
-
   const editorSourcePlans = useMemo(() => {
     const currentId = planEditor?.plan?.id;
     return plans
@@ -1188,6 +1169,25 @@ export default function WaterMitigationPlan() {
     assignments.__base = base;
     return assignments;
   }, [editorBaseProducts, editorClasses]);
+
+  const editorAssignments = useMemo(() => {
+    const plan = planEditor?.plan;
+    if (!plan) {
+      const result: Record<string, string[]> = {};
+      editorClasses.forEach((item) => {
+        const assigned = newPlanProductAssignments[item.id];
+        result[item.id] = Array.isArray(assigned) ? assigned : [];
+      });
+      return result;
+    }
+    const result: Record<string, string[]> = {};
+    editorClasses.forEach((item) => {
+      const catalogId = item.id.split("::")[0];
+      const assigned = plan.product_assignments[item.id] ?? plan.product_assignments[catalogId];
+      result[item.id] = (Array.isArray(assigned) ? assigned : []).filter((id) => item.products.some((product) => product.id === id));
+    });
+    return result;
+  }, [planEditor, editorClasses, newPlanProductAssignments]);
 
   const editorBaseQuantities = useMemo(
     () => (planEditor?.plan ? baseQuantitiesFor(planEditor.plan) : ((newPlanProductAssignments.__base || {}) as Record<string, number>)),
