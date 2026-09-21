@@ -50,6 +50,7 @@ import { ArrowDown, ArrowUp, Check, ChevronsUpDown, Loader2, Search, Package, Pl
 import { toast } from "sonner";
 import { productCatalogLabel } from "@/lib/catalogLabel";
 import { tagStyle } from "@/lib/tagColor";
+import { currencySymbol, formatCompactCurrencyAmount } from "@/lib/currency";
 
 interface MitigationControl {
   id: string;
@@ -109,13 +110,6 @@ export interface NewProductInput {
 
 const PIPE_DIAMETER_TYPES = new Set(["automatic shut off valve", "flow sensor", "water meter"]);
 
-const formatCost = (cost?: number | null) => {
-  if (!cost) return "$0";
-  if (cost >= 1000000) return `$${(cost / 1000000).toFixed(1)}M`;
-  if (cost >= 1000) return `$${(cost / 1000).toFixed(1)}K`;
-  return `$${cost}`;
-};
-
 export default function Controls() {
   const { user } = useAuth();
   const { tenant, tenantId, loading: tenantLoading } = useTenant();
@@ -125,6 +119,8 @@ export default function Controls() {
   const canEdit = isInternalUser || tenant?.role === "admin" || tenant?.role === "member";
 
   const pageTitle = productCatalogLabel();
+  const tenantCurrency = tenant?.default_currency ?? "USD";
+  const priceSymbol = currencySymbol(tenantCurrency);
 
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -768,7 +764,7 @@ export default function Controls() {
                         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">One-time</p>
                         {canEdit ? (
                           <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{priceSymbol}</span>
                             <Input
                               value={costDraft.one}
                               onChange={(e) => setCostDraft((d) => ({ ...d, one: e.target.value }))}
@@ -782,7 +778,7 @@ export default function Controls() {
                           </div>
                         ) : (
                           <p className="text-lg font-semibold">
-                            {formatCost(selected.one_time_cost ?? selectedControl?.one_time_cost)}
+                            {formatCompactCurrencyAmount(selected.one_time_cost ?? selectedControl?.one_time_cost, tenantCurrency)}
                           </p>
                         )}
                       </div>
@@ -790,7 +786,7 @@ export default function Controls() {
                         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Installation</p>
                         {canEdit ? (
                           <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{priceSymbol}</span>
                             <Input
                               value={costDraft.install}
                               onChange={(e) => setCostDraft((d) => ({ ...d, install: e.target.value }))}
@@ -803,7 +799,7 @@ export default function Controls() {
                             />
                           </div>
                         ) : (
-                          <p className="text-lg font-semibold">{formatCost(selected.installation_cost)}</p>
+                          <p className="text-lg font-semibold">{formatCompactCurrencyAmount(selected.installation_cost, tenantCurrency)}</p>
                         )}
                       </div>
                       <div>
@@ -811,7 +807,7 @@ export default function Controls() {
                         {canEdit ? (
                           <div className="flex gap-2">
                             <div className="relative flex-1">
-                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{priceSymbol}</span>
                               <Input
                                 value={costDraft.maint}
                                 onChange={(e) => setCostDraft((d) => ({ ...d, maint: e.target.value }))}
@@ -842,7 +838,7 @@ export default function Controls() {
                           </div>
                         ) : (
                           <p className="text-lg font-semibold">
-                            {formatCost(selected.monthly_maint_cost ?? selectedControl?.monthly_maint_cost)}
+                            {formatCompactCurrencyAmount(selected.monthly_maint_cost ?? selectedControl?.monthly_maint_cost, tenantCurrency)}
                             <span className="text-xs font-normal text-muted-foreground">
                               {selectedRecurringInterval === "yearly" ? "/yr" : "/mo"}
                             </span>
