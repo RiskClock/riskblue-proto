@@ -759,7 +759,7 @@ export default function Controls() {
                   {/* Pricing */}
                   <section className="rounded-md border bg-card p-4 shrink-0">
                     <h3 className="text-sm font-semibold text-foreground mb-3">Pricing</h3>
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_104px]">
                       <div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">One-time</p>
                         {canEdit ? (
@@ -805,36 +805,18 @@ export default function Controls() {
                       <div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Recurring</p>
                         {canEdit ? (
-                          <div className="flex gap-2">
-                            <div className="relative flex-1">
-                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{priceSymbol}</span>
-                              <Input
-                                value={costDraft.maint}
-                                onChange={(e) => setCostDraft((d) => ({ ...d, maint: e.target.value }))}
-                                onBlur={() => commitCost("maint")}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                                }}
-                                inputMode="decimal"
-                                className="pl-6 h-9"
-                              />
-                            </div>
-                            <Select
-                              value={selectedRecurringInterval}
-                              onValueChange={(v) => {
-                                const interval = v === "yearly" ? "yearly" : "monthly";
-                                setRecurringDefault(interval);
-                                void patchProduct(selected.id, { maint_interval: interval });
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{priceSymbol}</span>
+                            <Input
+                              value={costDraft.maint}
+                              onChange={(e) => setCostDraft((d) => ({ ...d, maint: e.target.value }))}
+                              onBlur={() => commitCost("maint")}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                               }}
-                            >
-                              <SelectTrigger className="h-9 w-[104px]">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="monthly">Monthly</SelectItem>
-                                <SelectItem value="yearly">Yearly</SelectItem>
-                              </SelectContent>
-                            </Select>
+                              inputMode="decimal"
+                              className="pl-6 h-9"
+                            />
                           </div>
                         ) : (
                           <p className="text-lg font-semibold">
@@ -845,6 +827,29 @@ export default function Controls() {
                           </p>
                         )}
                       </div>
+                      {canEdit ? (
+                        <div>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Period</p>
+                          <Select
+                            value={selectedRecurringInterval}
+                            onValueChange={(v) => {
+                              const interval = v === "yearly" ? "yearly" : "monthly";
+                              setRecurringDefault(interval);
+                              void patchProduct(selected.id, { maint_interval: interval });
+                            }}
+                          >
+                            <SelectTrigger className="h-9 w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="monthly">Monthly</SelectItem>
+                              <SelectItem value="yearly">Yearly</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ) : (
+                        <div className="hidden md:block" />
+                      )}
                     </div>
                   </section>
 

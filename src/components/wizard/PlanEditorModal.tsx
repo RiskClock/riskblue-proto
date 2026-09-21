@@ -339,7 +339,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
           </div>
 
           {baseProducts.length > 0 && (
-            <div className="space-y-2 pt-3">
+            <div className="inline-flex min-w-[20rem] max-w-full flex-col gap-2 pt-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-base font-semibold">Essential Components</h3>
@@ -347,13 +347,13 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                 </div>
                 {loadPlanButton("base")}
               </div>
-              <div className="inline-flex min-w-[20rem] max-w-full flex-col rounded-lg border p-2 space-y-1.5 overflow-x-auto">
+              <div className="flex max-w-full flex-col space-y-1.5 overflow-x-auto rounded-lg border p-2">
                 {addedBaseProducts.map((product) => {
                   const quantity = baseQuantities[product.id] || 0;
                   const size = diameterLabel(product.pipeDiameterInches);
                   return (
-                    <div key={product.id} className="flex min-w-[20rem] items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50">
-                      <span className="min-w-0 flex-1 text-sm">
+                    <div key={product.id} className="flex min-w-[20rem] items-center gap-4 rounded-md px-2 py-1.5 hover:bg-muted/50">
+                      <span className="min-w-0 flex-1 pr-2 text-sm">
                         {product.code ? <strong>{product.code}</strong> : null}
                         {product.code && product.name ? " " : ""}
                         {product.name}
