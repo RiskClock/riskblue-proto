@@ -861,12 +861,24 @@ export default function WaterMitigationPlan() {
   // Seed the first plan from the detected instances — only once ever per
   // project, so deleting the last plan doesn't immediately recreate one.
   const seededFlag = Boolean((project as any)?.project_data?.wmp_seeded);
-  const markSeeded = () => {
+  const [seededLocally, setSeededLocally] = useState(false);
+  useEffect(() => {
+    if (seededFlag) setSeededLocally(true);
+  }, [seededFlag]);
+  const seedBlocked = seededFlag || seededLocally;
+  const markSeeded = async () => {
+    if (!projectId) return;
+    setSeededLocally(true);
     const existing = ((project as any)?.project_data || {}) as Record<string, any>;
-    void supabase
+    const nextProjectData = { ...existing, wmp_seeded: true };
+    queryClient.setQueryData(["wmp-project", projectId], (current: any) =>
+      current ? { ...current, project_data: { ...((current as any).project_data || {}), wmp_seeded: true } } : current,
+    );
+    const { error } = await supabase
       .from("projects")
-      .update({ project_data: { ...existing, wmp_seeded: true } } as any)
+      .update({ project_data: nextProjectData } as any)
       .eq("id", projectId);
+    if (!error) queryClient.invalidateQueries({ queryKey: ["wmp-project", projectId] });
   };
   // Backfill the baseline plan when it was created before detections existed.
   const [backfilled, setBackfilled] = useState(false);
@@ -975,7 +987,7 @@ export default function WaterMitigationPlan() {
       return;
     }
     // Deleting proves a plan existed — never auto-seed afterwards.
-    markSeeded();
+    await markSeeded();
     void logPlanChange("delete", `Deleted plan "${before?.name ?? ""}"`, planId, {});
     queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
   };
@@ -1173,9 +1185,9 @@ export default function WaterMitigationPlan() {
   useEffect(() => {
     if (!projectId || plansLoading || plans.length > 0 || seeding || !canEdit) return;
     if (!catalog || controlRows.length === 0) return;
-    if (seededFlag) return;
+    if (seedBlocked) return;
     setSeeding(true);
-    markSeeded();
+    void markSeeded();
     supabase
       .from("project_mitigation_plans")
       .insert({
@@ -1193,7 +1205,7 @@ export default function WaterMitigationPlan() {
         setSeeding(false);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, plansLoading, plans.length, catalog, controlRows.length, derivedCounts, canEdit, seededFlag, newPlanProductAssignments]);
+  }, [projectId, plansLoading, plans.length, catalog, controlRows.length, derivedCounts, canEdit, seedBlocked, newPlanProductAssignments]);
 
   const editorAssignments = useMemo(() => {
     const plan = planEditor?.plan;
@@ -1789,7 +1801,7 @@ actions and posts its own recap.`;
           }
            const { error } = await supabase.from("project_mitigation_plans").delete().eq("id", plan.id);
            if (error) throw error;
-           markSeeded();
+            await markSeeded();
            lines.push(`Deleted ${plan.name}.`);
           const removedIdx = workingPlans.findIndex((p) => p.id === plan.id);
           if (removedIdx >= 0) workingPlans.splice(removedIdx, 1);
