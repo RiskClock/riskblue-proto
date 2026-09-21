@@ -91,6 +91,7 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
     const keys: RouteKey[] = ["projects"];
     if (isInternalUser) {
       keys.push("companyManagement", "userManagement", "configuration", "workbench", "logs");
+      if (isSystemAdmin) keys.push("controls");
       if (isRefineryAdmin) keys.push("promptRefinery");
     } else if (tenantId) {
       if (isSystemAdmin) keys.push("controls");

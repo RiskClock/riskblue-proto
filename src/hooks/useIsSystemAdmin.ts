@@ -11,22 +11,24 @@ import { supabase } from "@/integrations/supabase/client";
  */
 export function useSystemAdminStatus(): { isSystemAdmin: boolean; isLoading: boolean } {
   const { user } = useAuth();
+  const userId = user?.id;
   const byEmail = !!user?.email?.toLowerCase().endsWith("@riskclock.com");
 
   const { data, isLoading } = useQuery({
-    queryKey: ["is-system-admin", user?.id],
-    enabled: !!user?.id && !byEmail,
+    queryKey: ["is-system-admin", userId],
+    enabled: !!userId && !byEmail,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
+      if (!userId) return false;
       const { data, error } = await supabase.rpc("is_system_admin", {
-        _user_id: user!.id,
+        _user_id: userId,
       });
       if (error) throw error;
       return data === true;
     },
   });
 
-  return { isSystemAdmin: byEmail || data === true, isLoading: !!user?.id && !byEmail && isLoading };
+  return { isSystemAdmin: byEmail || data === true, isLoading: !!userId && !byEmail && isLoading };
 }
 
 export function useIsSystemAdmin(): boolean {

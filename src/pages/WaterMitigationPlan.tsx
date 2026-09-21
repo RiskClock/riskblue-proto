@@ -389,6 +389,7 @@ export default function WaterMitigationPlan() {
         processes: (processes.data || []) as any[],
       };
     },
+    enabled: canEdit,
   });
 
   const { data: controls = [] } = useQuery({
@@ -402,6 +403,7 @@ export default function WaterMitigationPlan() {
       if (error) throw error;
       return data || [];
     },
+    enabled: canEdit,
   });
 
   const { data: selections = [] } = useQuery({
@@ -414,7 +416,7 @@ export default function WaterMitigationPlan() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!planTenantId,
+    enabled: !!planTenantId && canEdit,
   });
 
   // Products defined in the company's Product Catalog. When present they drive
@@ -432,7 +434,7 @@ export default function WaterMitigationPlan() {
       if (error) throw error;
       return (data || []) as any[];
     },
-    enabled: !!planTenantId,
+    enabled: !!planTenantId && canEdit,
   });
 
   const { data: overrides = [] } = useQuery({
@@ -445,7 +447,7 @@ export default function WaterMitigationPlan() {
       if (error) throw error;
       return (data || []) as any[];
     },
-    enabled: !!planTenantId,
+    enabled: !!planTenantId && canEdit,
   });
 
   // Detections come from two places: AWP wizard items (project_analysis_items)
@@ -460,7 +462,7 @@ export default function WaterMitigationPlan() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!projectId,
+    enabled: !!projectId && canEdit,
   });
 
   // Drawing detections plus the file/sheet context needed to resolve spaces
@@ -512,7 +514,7 @@ export default function WaterMitigationPlan() {
         instances,
       };
     },
-    enabled: !!projectId,
+    enabled: !!projectId && canEdit,
   });
 
   const { data: plans = [], isLoading: plansLoading } = useQuery({
@@ -531,7 +533,7 @@ export default function WaterMitigationPlan() {
         product_assignments: (p.product_assignments || {}) as Plan["product_assignments"],
       }));
     },
-    enabled: !!projectId,
+    enabled: !!projectId && canEdit,
   });
 
   const overrideMap = useMemo(() => {
@@ -1867,6 +1869,40 @@ actions and posts its own recap.`;
       <col style={{ width: actionColumnPx }} />
     </colgroup>
   );
+
+  if (adminLoading || !canEdit) {
+    return (
+      <div className="h-screen flex flex-col bg-background overflow-hidden">
+        <AppHeader
+          title={
+            <div className="flex items-center gap-1.5 min-w-0">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0"
+                onClick={() => navigate(tenantPath("/projects"))}
+                aria-label="Back"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <span className="truncate">{project?.name || "Project"}</span>
+            </div>
+          }
+        />
+        <main className="container mx-auto px-6 py-20 flex-1">
+          {adminLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="rounded-lg border bg-card p-8 text-center">
+              <p className="font-medium text-foreground">This page is only available to internal system admins.</p>
+            </div>
+          )}
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
