@@ -1968,8 +1968,8 @@ actions and posts its own recap.`;
                   ))}
                   <td className="px-4 py-2 align-top sticky top-0 z-20 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))]">
                     {canEdit && (
-                      <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setPlanEditor({ mode: "create", plan: null })}>
-                        <Plus className="h-4 w-4 mr-1" /> New plan
+                      <Button variant="outline" onClick={() => setPlanEditor({ mode: "create", plan: null })}>
+                        <Plus className="h-4 w-4 mr-2" /> New plan
                       </Button>
                     )}
                   </td>
@@ -2383,7 +2383,7 @@ actions and posts its own recap.`;
         onOpenChange={setHistoryOpen}
         projectId={projectId!}
         entityTypes={["mitigation_plan"]}
-        title="Change history"
+        title="Change History"
         description="Changes made to the water mitigation plans for this project."
       />
     </div>
