@@ -86,6 +86,8 @@ interface ControlRow {
   isOverridden: boolean;
   /** Set when the product is applied in every plan at a fixed quantity. */
   fixedQuantity?: number | null;
+  /** Catalog flag for products that should prefill in new plans. */
+  autoAdd?: boolean;
   /** Product pipe diameter in inches, when the product type is size-specific. */
   pipeDiameterInches?: number | null;
 }
@@ -563,7 +565,8 @@ export default function WaterMitigationPlan() {
             ...((p.process_ids as string[]) || []),
           ]
         : null;
-      if (p.applied_in_any_plan && p.control_id) {
+      row.autoAdd = !!p.applied_in_any_plan;
+      if (p.applied_in_any_plan) {
         row.fixedQuantity = Math.max(0, Number(p.fixed_quantity ?? 1) || 0);
       }
       return row;
@@ -1099,6 +1102,8 @@ export default function WaterMitigationPlan() {
           name: product.name || "",
           code: product.product_code,
           controlName: product.control_id ? (controls as any[]).find((control) => control.id === product.control_id)?.name || null : null,
+          autoAdd: !!product.applied_in_any_plan,
+          fixedQuantity: Math.max(0, Number(product.fixed_quantity ?? 1) || 0),
           pipeDiameterInches:
             product.pipe_diameter_inches === null || product.pipe_diameter_inches === undefined
               ? null
@@ -1152,13 +1157,34 @@ export default function WaterMitigationPlan() {
 
   /** Catalog products with no control type, selectable under Base Requirements. */
   const editorBaseProducts = useMemo(
-    () => baseRows.map((row) => ({ id: row.id, name: row.name, code: row.code ?? null, pipeDiameterInches: row.pipeDiameterInches ?? null })),
+    () => baseRows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      code: row.code ?? null,
+      autoAdd: !!row.autoAdd,
+      fixedQuantity: Math.max(0, Number(row.fixedQuantity ?? 1) || 0),
+      pipeDiameterInches: row.pipeDiameterInches ?? null,
+    })),
     [baseRows],
   );
 
+  const newPlanProductAssignments = useMemo<Plan["product_assignments"]>(() => {
+    const assignments: Plan["product_assignments"] = { __configured: true };
+    editorClasses.forEach((item) => {
+      const ids = item.products.filter((product) => product.autoAdd).map((product) => product.id);
+      if (ids.length > 0) assignments[item.id] = ids;
+    });
+    const base: Record<string, number> = {};
+    editorBaseProducts.forEach((product) => {
+      if (product.autoAdd) base[product.id] = Math.max(1, Math.floor(Number(product.fixedQuantity ?? 1) || 1));
+    });
+    assignments.__base = base;
+    return assignments;
+  }, [editorBaseProducts, editorClasses]);
+
   const editorBaseQuantities = useMemo(
-    () => (planEditor?.plan ? baseQuantitiesFor(planEditor.plan) : {}),
-    [planEditor],
+    () => (planEditor?.plan ? baseQuantitiesFor(planEditor.plan) : ((newPlanProductAssignments.__base || {}) as Record<string, number>)),
+    [planEditor, newPlanProductAssignments],
   );
 
   const savePlanEditor = async (value: {
