@@ -9,24 +9,30 @@ import { supabase } from "@/integrations/supabase/client";
  * @riskclock.com address (legacy fallback). The email part resolves
  * synchronously so gated UI does not flicker for staff addresses.
  */
-export function useIsSystemAdmin(): boolean {
+export function useSystemAdminStatus(): { isSystemAdmin: boolean; isLoading: boolean } {
   const { user } = useAuth();
+  const userId = user?.id;
   const byEmail = !!user?.email?.toLowerCase().endsWith("@riskclock.com");
 
-  const { data } = useQuery({
-    queryKey: ["is-system-admin", user?.id],
-    enabled: !!user?.id && !byEmail,
+  const { data, isLoading } = useQuery({
+    queryKey: ["is-system-admin", userId],
+    enabled: !!userId && !byEmail,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
+      if (!userId) return false;
       const { data, error } = await supabase.rpc("is_system_admin", {
-        _user_id: user!.id,
+        _user_id: userId,
       });
       if (error) throw error;
       return data === true;
     },
   });
 
-  return byEmail || data === true;
+  return { isSystemAdmin: byEmail || data === true, isLoading: !!userId && !byEmail && isLoading };
+}
+
+export function useIsSystemAdmin(): boolean {
+  return useSystemAdminStatus().isSystemAdmin;
 }
 
 /** Ids of every staff account, used to hide them from company users. */

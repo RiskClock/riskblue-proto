@@ -28,6 +28,7 @@ import { EditProfileModal } from "@/components/EditProfileModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { isPaymentsTestMode } from "@/lib/stripe";
+import { useIsSystemAdmin } from "@/hooks/useIsSystemAdmin";
 
 interface AppHeaderProps {
   leftContent?: React.ReactNode;
@@ -58,6 +59,7 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
 
 
   const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
+  const isSystemAdmin = useIsSystemAdmin();
   const isRefineryAdmin = (user?.email?.toLowerCase() ?? "") === "admin@riskclock.com";
 
   // Inside a company workspace credits come from the shared tenant pool and are
@@ -89,9 +91,11 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
     const keys: RouteKey[] = ["projects"];
     if (isInternalUser) {
       keys.push("companyManagement", "userManagement", "configuration", "workbench", "logs");
+      if (isSystemAdmin) keys.push("controls");
       if (isRefineryAdmin) keys.push("promptRefinery");
-    } else if (tenantId && tenant?.role === "admin") {
-      keys.push("userManagement");
+    } else if (tenantId) {
+      if (isSystemAdmin) keys.push("controls");
+      if (tenant?.role === "admin") keys.push("userManagement");
     }
     preloadRoutes(keys);
   };
@@ -225,7 +229,7 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
                   User Management
                 </DropdownMenuItem>
               )}
-              {tenantId && isInternalUser && (
+              {tenantId && isSystemAdmin && (
                 <DropdownMenuItem
                   onClick={() => menuNavigate(tenantPath("/controls"))}
                   className="cursor-pointer"

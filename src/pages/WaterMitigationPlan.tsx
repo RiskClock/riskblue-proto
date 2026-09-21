@@ -59,6 +59,7 @@ import {
   type ParsedFloorPlan,
 } from "@/lib/surveyFloorPlans";
 import { formatCurrencyAmount, normalizeCurrencyCode, type CurrencyCode } from "@/lib/currency";
+import { useSystemAdminStatus } from "@/hooks/useIsSystemAdmin";
 
 interface Plan {
   id: string;
@@ -334,8 +335,7 @@ export default function WaterMitigationPlan() {
   const { tenantId, tenant, tenantPath } = useTenant();
   const queryClient = useQueryClient();
 
-  const isInternalUser = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
-  const canEdit = isInternalUser || tenant?.role === "admin" || tenant?.role === "member" || !tenantId;
+  const { isSystemAdmin: canEdit, isLoading: adminLoading } = useSystemAdminStatus();
 
   const { data: project } = useQuery({
     queryKey: ["wmp-project", projectId],
@@ -389,6 +389,7 @@ export default function WaterMitigationPlan() {
         processes: (processes.data || []) as any[],
       };
     },
+    enabled: canEdit,
   });
 
   const { data: controls = [] } = useQuery({
@@ -402,6 +403,7 @@ export default function WaterMitigationPlan() {
       if (error) throw error;
       return data || [];
     },
+    enabled: canEdit,
   });
 
   const { data: selections = [] } = useQuery({
@@ -414,7 +416,7 @@ export default function WaterMitigationPlan() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!planTenantId,
+    enabled: !!planTenantId && canEdit,
   });
 
   // Products defined in the company's Product Catalog. When present they drive
@@ -432,7 +434,7 @@ export default function WaterMitigationPlan() {
       if (error) throw error;
       return (data || []) as any[];
     },
-    enabled: !!planTenantId,
+    enabled: !!planTenantId && canEdit,
   });
 
   const { data: overrides = [] } = useQuery({
@@ -445,7 +447,7 @@ export default function WaterMitigationPlan() {
       if (error) throw error;
       return (data || []) as any[];
     },
-    enabled: !!planTenantId,
+    enabled: !!planTenantId && canEdit,
   });
 
   // Detections come from two places: AWP wizard items (project_analysis_items)
@@ -460,7 +462,7 @@ export default function WaterMitigationPlan() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!projectId,
+    enabled: !!projectId && canEdit,
   });
 
   // Drawing detections plus the file/sheet context needed to resolve spaces
@@ -512,7 +514,7 @@ export default function WaterMitigationPlan() {
         instances,
       };
     },
-    enabled: !!projectId,
+    enabled: !!projectId && canEdit,
   });
 
   const { data: plans = [], isLoading: plansLoading } = useQuery({
@@ -531,7 +533,7 @@ export default function WaterMitigationPlan() {
         product_assignments: (p.product_assignments || {}) as Plan["product_assignments"],
       }));
     },
-    enabled: !!projectId,
+    enabled: !!projectId && canEdit,
   });
 
   const overrideMap = useMemo(() => {
@@ -1852,17 +1854,55 @@ actions and posts its own recap.`;
   };
 
   const labelWidth = plans.length === 0 ? "w-[180px] min-w-[180px]" : "w-[280px] min-w-[280px]";
+  const labelColumnPx = plans.length === 0 ? 180 : 280;
+  const planColumnPx = 220;
+  const actionColumnPx = 140;
+  const tableWidth = `${labelColumnPx + plans.length * planColumnPx + actionColumnPx}px`;
   const labelCellBase = `sticky left-0 z-10 px-4 py-3 text-sm font-medium text-foreground ${labelWidth} shadow-[inset_-1px_0_0_hsl(var(--border))]`;
   const labelCell = `${labelCellBase} bg-card`;
   const planTotalsById = new Map(plans.map((plan) => [plan.id, planTotals(plan)]));
   const highestControlsApplied = Math.max(0, ...plans.map((plan) => planTotalsById.get(plan.id)?.count ?? 0));
   const sharedColumns = (
     <colgroup>
-      <col className={labelWidth} />
-      {plans.map((plan) => <col key={plan.id} className="w-[220px] min-w-[220px]" />)}
-      <col className="w-[140px] min-w-[140px]" />
+      <col style={{ width: labelColumnPx }} />
+      {plans.map((plan) => <col key={plan.id} style={{ width: planColumnPx }} />)}
+      <col style={{ width: actionColumnPx }} />
     </colgroup>
   );
+
+  if (adminLoading || !canEdit) {
+    return (
+      <div className="h-screen flex flex-col bg-background overflow-hidden">
+        <AppHeader
+          title={
+            <div className="flex items-center gap-1.5 min-w-0">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0"
+                onClick={() => navigate(tenantPath("/projects"))}
+                aria-label="Back"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <span className="truncate">{project?.name || "Project"}</span>
+            </div>
+          }
+        />
+        <main className="container mx-auto px-6 py-20 flex-1">
+          {adminLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="rounded-lg border bg-card p-8 text-center">
+              <p className="font-medium text-foreground">This page is only available to internal system admins.</p>
+            </div>
+          )}
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
@@ -1922,7 +1962,7 @@ actions and posts its own recap.`;
         ) : (
           <div className="overflow-auto min-h-0 max-h-full">
             <div className="w-max min-w-full rounded-lg border bg-card">
-            <table className="w-full border-collapse">
+            <table className="table-fixed border-collapse" style={{ width: tableWidth }}>
               {sharedColumns}
               <tbody>
                 <tr className="border-b">
@@ -2068,7 +2108,7 @@ actions and posts its own recap.`;
             </div>
 
             <div className="w-max min-w-full rounded-lg border bg-card">
-            <table className="w-full border-collapse">
+            <table className="table-fixed border-collapse" style={{ width: tableWidth }}>
               {sharedColumns}
               <tbody>
                 {visibleControlRows.length === 0 && visibleBaseRows.length === 0 ? (
