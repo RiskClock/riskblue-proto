@@ -406,7 +406,10 @@ export default function Controls() {
         ? { one_time_cost: parsed }
         : field === "install"
         ? { installation_cost: parsed }
-        : { monthly_maint_cost: parsed };
+        : {
+            monthly_maint_cost: parsed,
+            ...((selected.monthly_maint_cost === null || selected.monthly_maint_cost === undefined) ? { maint_interval: recurringDefault } : {}),
+          };
     void patchProduct(selected.id, patch);
   };
 
