@@ -72,8 +72,10 @@ interface Props {
 }
 
 const productDisplay = (product: PlanEditorProduct) => `${product.code || ""} ${product.name || ""}`.trim() || "Product";
-const productSearchText = (product: PlanEditorProduct) =>
-  `${product.code || ""} ${product.name || ""} ${product.controlName || ""}`.toLowerCase();
+const productSearchText = (product: PlanEditorProduct) => {
+  const diameter = diameterLabel(product.pipeDiameterInches) || "";
+  return `${product.code || ""} ${product.name || ""} ${product.controlName || ""} ${diameter}`.toLowerCase();
+};
 const compareProductId = (a: PlanEditorProduct, b: PlanEditorProduct) =>
   (a.code || a.name || "").localeCompare(b.code || b.name || "", undefined, { numeric: true, sensitivity: "base" }) ||
   (a.name || "").localeCompare(b.name || "", undefined, { numeric: true, sensitivity: "base" });
@@ -116,6 +118,36 @@ function isSizeMatch(product: PlanEditorProduct, pipeSizeMm?: number | null) {
   return Math.abs(Number(product.pipeDiameterInches) * 25.4 - pipeSizeMm) <= SIZE_TOLERANCE_MM;
 }
 
+function ProductPickerOption({ product, checked, onToggle }: { product: PlanEditorProduct; checked: boolean; onToggle: () => void }) {
+  const size = diameterLabel(product.pipeDiameterInches);
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      className="flex w-full cursor-pointer items-start gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+      onClick={onToggle}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onToggle();
+        }
+      }}
+    >
+      <Checkbox checked={checked} className="pointer-events-none mt-0.5" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate">
+          {product.code ? <strong>{product.code} </strong> : null}
+          {product.name}
+        </span>
+        <span className="block truncate text-xs text-muted-foreground">
+          {[product.controlName, size].filter(Boolean).join(" · ")}
+        </span>
+      </span>
+      {checked && <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />}
+    </div>
+  );
+}
+
 export function PlanEditorModal({ open, mode, initialName, initialDescription, initialAssignments, initialBaseQuantities = {}, classes, baseProducts = [], existingPlans = [], saving, onOpenChange, onSave }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -155,10 +187,10 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
     });
   };
 
-  const addedBaseProducts = baseProducts.filter((product) => (baseQuantities[product.id] || 0) > 0);
+  const addedBaseProducts = baseProducts.filter((product) => (baseQuantities[product.id] || 0) > 0).sort(compareProductId);
   const baseQuery = baseSearch.trim().toLowerCase();
-  const availableBaseProducts = baseProducts
-    .filter((product) => !(baseQuantities[product.id] > 0) && productSearchText(product).includes(baseQuery))
+  const filteredBaseProducts = baseProducts
+    .filter((product) => productSearchText(product).includes(baseQuery))
     .sort(compareProductId);
 
   const productById = useMemo(() => {
@@ -205,7 +237,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
     return (
       <Popover open={isOpen} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button type="button" variant="outline" size="sm">Load Existing Plan</Button>
+          <Button type="button" variant="outline" size="sm">Load from Existing Plan</Button>
         </PopoverTrigger>
         <PopoverContent align="end" className="w-64 max-h-64 overflow-y-auto overscroll-contain p-1" onWheel={(event) => event.stopPropagation()}>
           {selectableSources.map((plan) => (
@@ -231,7 +263,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[88vh] flex flex-col overflow-hidden">
+      <DialogContent className="w-[96vw] max-w-[96vw] sm:max-w-[1180px] max-h-[88vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>{mode === "create" ? "New Water Mitigation Plan" : "Edit Water Mitigation Plan"}</DialogTitle>
           <DialogDescription>Choose one or more mapped products for each detected class.</DialogDescription>
@@ -261,10 +293,10 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
           </div>
 
           {baseProducts.length > 0 && (
-            <div className="space-y-2">
+            <div className="space-y-2 pt-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-semibold">Base Requirements</h3>
+                  <h3 className="text-base font-semibold">Essential Components</h3>
                   <p className="text-xs text-muted-foreground">Products that are not tied to a control type. Set how many this plan needs.</p>
                 </div>
                 {loadPlanButton("base")}
@@ -303,10 +335,10 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                 })}
                 <Popover open={baseOpen} onOpenChange={(next) => { setBaseOpen(next); setBaseSearch(""); }}>
                   <PopoverTrigger asChild>
-                    <button type="button" className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-primary hover:underline">
+                    <Button type="button" variant="ghost" size="sm" className="mx-auto flex h-7 px-2 text-xs font-medium text-primary hover:bg-primary/10">
                       <Plus className="h-3 w-3" />
-                      Add Product
-                    </button>
+                      Add Component
+                    </Button>
                   </PopoverTrigger>
                   <PopoverContent align="start" className="w-80 p-0">
                     <div className="relative border-b p-2">
@@ -318,28 +350,15 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                       onWheel={(event) => event.stopPropagation()}
                       onTouchMove={(event) => event.stopPropagation()}
                     >
-                      {availableBaseProducts.map((product) => {
-                        const size = diameterLabel(product.pipeDiameterInches);
-                        return (
-                          <Button
-                            key={product.id}
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="w-full justify-start h-auto rounded-md px-3 py-2 text-left text-sm"
-                            onClick={() => { setBaseQuantity(product.id, 1); setBaseOpen(false); }}
-                          >
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate">
-                                {product.code ? <strong>{product.code}&nbsp;</strong> : null}
-                                {product.name}
-                              </span>
-                              {size ? <span className="block text-xs text-muted-foreground">{size}</span> : null}
-                            </span>
-                          </Button>
-                        );
-                      })}
-                      {availableBaseProducts.length === 0 && <div className="px-2 py-3 text-xs text-muted-foreground">No products available.</div>}
+                      {filteredBaseProducts.map((product) => (
+                        <ProductPickerOption
+                          key={product.id}
+                          product={product}
+                          checked={(baseQuantities[product.id] || 0) > 0}
+                          onToggle={() => setBaseQuantity(product.id, (baseQuantities[product.id] || 0) > 0 ? 0 : 1)}
+                        />
+                      ))}
+                      {filteredBaseProducts.length === 0 && <div className="px-2 py-3 text-xs text-muted-foreground">No products available.</div>}
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -347,55 +366,53 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
             </div>
           )}
 
-          <div className="space-y-2">
+          <div className="space-y-2 pt-3">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-sm font-semibold">Detected Assets and Water Systems</h3>
+                <h3 className="text-base font-semibold">Detected Risk Classes</h3>
                 <p className="text-xs text-muted-foreground">Product choices come from the Risk-Control Map and Product Catalog.</p>
               </div>
               {loadPlanButton("classes")}
             </div>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 items-start gap-2 md:grid-cols-3 lg:grid-cols-4 min-[1080px]:grid-cols-5">
               {classes.map((item) => {
                 const selected = assignments[item.id] || [];
                 const query = openClass === item.id ? search.trim().toLowerCase() : "";
                 const filtered = item.products.filter((product) => productSearchText(product).includes(query)).sort(compareProductId);
                 const suggested = filtered.filter((product) => isSizeMatch(product, item.pipeSizeMm));
                 const others = filtered.filter((product) => !isSizeMatch(product, item.pipeSizeMm));
-                const renderOption = (product: PlanEditorProduct) => {
-                  const checked = selected.includes(product.id);
-                  const size = diameterLabel(product.pipeDiameterInches);
-                  return (
-                    <div
-                      key={product.id}
-                      role="button"
-                      tabIndex={0}
-                      className="flex w-full cursor-pointer items-start gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
-                      onClick={() => toggleProduct(item.id, product.id)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          toggleProduct(item.id, product.id);
-                        }
-                      }}
-                    >
-                      <Checkbox checked={checked} className="pointer-events-none mt-0.5" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate">
-                          {product.code ? <strong>{product.code} </strong> : null}
-                          {product.name}
-                        </span>
-                        <span className="block truncate text-xs text-muted-foreground">
-                          {[product.controlName, size].filter(Boolean).join(" · ")}
-                        </span>
-                      </span>
-                      {checked && <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />}
-                    </div>
-                  );
-                };
+                const renderOption = (product: PlanEditorProduct) => (
+                  <ProductPickerOption key={product.id} product={product} checked={selected.includes(product.id)} onToggle={() => toggleProduct(item.id, product.id)} />
+                );
                 return (
                   <ThreatOverviewCard key={item.id} code={item.code} name={item.name} count={item.count}>
-                    <div className="space-y-1.5 px-2 pb-2 text-left">
+                    <div className="flex flex-col items-center gap-2 px-2 pb-2 text-left">
+                      {selected.length > 0 && (
+                        <div className="flex flex-wrap justify-center gap-1.5">
+                          {selected.map((id) => {
+                            const product = productById.get(id);
+                            if (!product) return null;
+                            const label = `${product.code ? `${product.code} ` : ""}${product.name}`.trim();
+                            const size = diameterLabel(product.pipeDiameterInches);
+                            return (
+                              <Tooltip key={id}>
+                                <TooltipTrigger asChild>
+                                  <Badge variant="outline" className="gap-1 pr-1 font-normal" style={tagStyle(label)}>
+                                    <span>{product.code || product.name || "Product"}</span>
+                                    <Button type="button" variant="ghost" size="icon" className="h-4 w-4 rounded-full hover:bg-background/50" aria-label={`Remove ${label}`} onClick={() => toggleProduct(item.id, id)}>
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {product.name || product.code || "Product"}
+                                  {size ? ` · ${size}` : ""}
+                                </TooltipContent>
+                              </Tooltip>
+                            );
+                          })}
+                        </div>
+                      )}
                       <Popover
                         open={openClass === item.id}
                         onOpenChange={(next) => {
@@ -404,10 +421,10 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                         }}
                       >
                         <PopoverTrigger asChild>
-                          <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                          <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs font-medium text-primary hover:bg-primary/10">
                             <Plus className="h-3 w-3" />
                             Add Control
-                          </button>
+                          </Button>
                         </PopoverTrigger>
                         <PopoverContent align="start" className="w-80 p-0">
                           <div className="relative border-b p-2">
@@ -433,33 +450,6 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                           </div>
                         </PopoverContent>
                       </Popover>
-
-                      {selected.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5">
-                        {selected.map((id) => {
-                          const product = productById.get(id);
-                          if (!product) return null;
-                          const label = `${product.code ? `${product.code} ` : ""}${product.name}`.trim();
-                          const size = diameterLabel(product.pipeDiameterInches);
-                          return (
-                             <Tooltip key={id}>
-                               <TooltipTrigger asChild>
-                                 <Badge variant="outline" className="gap-1 pr-1 font-normal" style={tagStyle(label)}>
-                                   <span>{product.code || product.name || "Product"}</span>
-                                   <Button type="button" variant="ghost" size="icon" className="h-4 w-4 rounded-full hover:bg-background/50" aria-label={`Remove ${label}`} onClick={() => toggleProduct(item.id, id)}>
-                                     <X className="h-3 w-3" />
-                                   </Button>
-                                 </Badge>
-                               </TooltipTrigger>
-                               <TooltipContent>
-                                 {product.name || product.code || "Product"}
-                                 {size ? ` · ${size}` : ""}
-                               </TooltipContent>
-                             </Tooltip>
-                          );
-                        })}
-                        </div>
-                      )}
                     </div>
                   </ThreatOverviewCard>
                 );
@@ -482,7 +472,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
               <AlertDialogTitle>Overwrite current selections?</AlertDialogTitle>
               <AlertDialogDescription>
                 Loading "{pendingSource?.source.name}" replaces the{" "}
-                {pendingSource?.scope === "base" ? "Base Requirements" : "detected class"} selections in this plan.
+                {pendingSource?.scope === "base" ? "Essential Components" : "Detected Risk Classes"} selections in this plan.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
