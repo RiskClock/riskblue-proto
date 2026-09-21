@@ -30,6 +30,7 @@ import {
 import { cn } from "@/lib/utils";
 import { CompanyLogoField, uploadCompanyLogo, purgeCompanyLogos } from "@/components/users/CompanyLogoField";
 import { MultiSelectChecklist } from "@/components/common/MultiSelectChecklist";
+import { CURRENCY_OPTIONS, normalizeCurrencyCode, type CurrencyCode } from "@/lib/currency";
 
 
 type TenantRole = "admin" | "member" | "guest";
@@ -39,6 +40,7 @@ interface TenantSummary {
   name: string;
   slug: string | null;
   credits_balance: number;
+  default_currency: CurrencyCode;
   is_active: boolean;
   created_at: string;
   member_count: number;
@@ -131,7 +133,7 @@ const CompanyManagement = () => {
     queryFn: async (): Promise<TenantSummary[]> => {
       const { data, error } = await supabase.rpc("get_tenant_summaries");
       if (error) throw error;
-      return (data ?? []) as any as TenantSummary[];
+      return ((data ?? []) as any[]).map((t) => ({ ...t, default_currency: normalizeCurrencyCode(t.default_currency) })) as TenantSummary[];
     },
     enabled: isInternal,
   });
@@ -515,6 +517,7 @@ const CompanyDialog = ({
 
   const [name, setName] = useState(tenant?.name ?? "");
   const [credits, setCredits] = useState(String(tenant?.credits_balance ?? 0));
+  const [defaultCurrency, setDefaultCurrency] = useState<CurrencyCode>(normalizeCurrencyCode(tenant?.default_currency));
   const [saving, setSaving] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoRemoved, setLogoRemoved] = useState(false);
@@ -525,6 +528,16 @@ const CompanyDialog = ({
   // Staged member list — nothing is written until Save.
   const [rows, setRows] = useState<MemberRow[]>([]);
   const [initialRows, setInitialRows] = useState<MemberRow[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    setName(tenant?.name ?? "");
+    setCredits(String(tenant?.credits_balance ?? 0));
+    setDefaultCurrency(normalizeCurrencyCode(tenant?.default_currency));
+    setLogoFile(null);
+    setLogoRemoved(false);
+    setConfirmDelete(false);
+  }, [open, tenant?.id, tenant?.name, tenant?.credits_balance, tenant?.default_currency]);
 
   const { data: savedMembers, isLoading: membersLoading } = useQuery({
     queryKey: ["tenant-members", tenant?.id],
@@ -667,6 +680,7 @@ const CompanyDialog = ({
           .insert({
             name: trimmedName,
             credits_balance: targetCredits,
+            default_currency: defaultCurrency,
             is_active: true,
             created_by: user?.id ?? null,
           })
@@ -677,7 +691,7 @@ const CompanyDialog = ({
       } else {
         const { error } = await supabase
           .from("tenants")
-          .update({ name: trimmedName, is_active: true })
+          .update({ name: trimmedName, default_currency: defaultCurrency, is_active: true })
           .eq("id", tenant!.id);
         if (error) throw error;
         if (targetCredits !== tenant!.credits_balance) {
@@ -724,6 +738,7 @@ const CompanyDialog = ({
 
       toast({ title: isNew ? "Company created" : "Company updated" });
       queryClient.invalidateQueries({ queryKey: ["tenant-members", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["my-tenants"] });
       onChanged();
       onOpenChange(false);
     } catch (e) {
@@ -754,7 +769,7 @@ const CompanyDialog = ({
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
           <section className="space-y-3">
             <h3 className="text-sm font-semibold">Settings</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div className="space-y-2 sm:col-span-2">
                 <Label>Company Name</Label>
                 <Input
@@ -771,6 +786,22 @@ const CompanyDialog = ({
               <div className="space-y-2">
                 <Label>Credits</Label>
                 <Input type="number" min={0} value={credits} onChange={(e) => setCredits(e.target.value)} />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Currency</Label>
+                <Select value={defaultCurrency} onValueChange={(value) => setDefaultCurrency(normalizeCurrencyCode(value))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CURRENCY_OPTIONS.map((option) => (
+                      <SelectItem key={option.code} value={option.code}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="space-y-2">
