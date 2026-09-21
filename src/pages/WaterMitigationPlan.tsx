@@ -8,6 +8,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,6 +58,7 @@ import {
   asPointsPct,
   type ParsedFloorPlan,
 } from "@/lib/surveyFloorPlans";
+import { formatCurrencyAmount, normalizeCurrencyCode, type CurrencyCode } from "@/lib/currency";
 
 interface Plan {
   id: string;
@@ -117,8 +119,6 @@ const CATEGORY_TABLE: Record<string, "critical_assets" | "water_systems" | "proc
 };
 
 const UNASSIGNED = "Unassigned";
-
-const currency = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 
 /** Formats a product pipe diameter (inches) for display, e.g. 0.866 -> `0.87" (22mm)`. */
 export const formatPipeDiameter = (inches?: number | null) => {
@@ -207,11 +207,13 @@ const polar = (cx: number, cy: number, r: number, angle: number) => [
 const CostPie = ({
   slices,
   hovered,
+  currencyCode,
   onHover,
   onSelect,
 }: {
   slices: PieSlice[];
   hovered: string | null;
+  currencyCode: CurrencyCode;
   onHover: (id: string | null) => void;
   onSelect: (id: string) => void;
 }) => {
@@ -269,7 +271,7 @@ const CostPie = ({
         className="pointer-events-none absolute z-50 -translate-x-1/2 whitespace-nowrap rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md"
         style={{ left: tip.x, top: tip.y - 34 }}
       >
-        {tipSlice.name}: {currency(tipSlice.value)}
+        {tipSlice.name}: {formatCurrencyAmount(tipSlice.value, currencyCode)}
       </div>
     )}
     </div>
