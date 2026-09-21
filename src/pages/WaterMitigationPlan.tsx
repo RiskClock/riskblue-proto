@@ -1961,7 +1961,7 @@ actions and posts its own recap.`;
           </div>
         ) : (
           <div className="overflow-auto min-h-0 max-h-full">
-            <div className="w-max min-w-full rounded-lg border bg-card">
+            <div className="inline-block rounded-lg border bg-card overflow-hidden">
             <table className="table-fixed border-collapse" style={{ width: tableWidth }}>
               {sharedColumns}
               <tbody>
@@ -2095,7 +2095,7 @@ actions and posts its own recap.`;
             </table>
             </div>
 
-            <div className="w-max min-w-full bg-background py-3">
+            <div className="w-max bg-background py-3">
               <div className="sticky left-0 inline-flex items-center gap-2 px-1">
                 <div className="text-sm font-medium text-foreground whitespace-nowrap">Breakdown by Control Type</div>
                 {visibleControlRows.length > 0 && (
@@ -2107,7 +2107,7 @@ actions and posts its own recap.`;
               </div>
             </div>
 
-            <div className="w-max min-w-full rounded-lg border bg-card">
+            <div className="inline-block rounded-lg border bg-card overflow-hidden">
             <table className="table-fixed border-collapse" style={{ width: tableWidth }}>
               {sharedColumns}
               <tbody>
