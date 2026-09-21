@@ -49,6 +49,8 @@ const IDENTIFY_TABS: { id: IdentifyTab; label: string }[] = [
   { id: "controls", label: "Controls" },
 ];
 
+const INTAKE_CONTROL_CATEGORIES = new Set(["risk detection", "valve and automation controls"]);
+
 export type ProjectSizeTier = "small" | "medium" | "large" | "enterprise";
 
 export const PROJECT_SIZE_TIERS: {
@@ -148,14 +150,8 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
         description?: string | null;
         action?: string | null;
       }[]).filter((control) => {
-        const metadata = `${control.category || ""} ${control.responsible || ""} ${control.vendor_name || ""} ${control.application_component || ""} ${control.description || ""} ${control.action || ""}`.toLowerCase();
-        const contractorTerms = [
-          "contractor",
-          "water mitigation solution provider",
-          "water mitigation vendor",
-          "mechanical contractor",
-        ];
-        return !contractorTerms.some((term) => metadata.includes(term));
+        const category = (control.category || "").trim().toLowerCase();
+        return INTAKE_CONTROL_CATEGORIES.has(category);
       });
     },
     enabled: open,
