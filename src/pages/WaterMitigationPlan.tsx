@@ -950,7 +950,7 @@ export default function WaterMitigationPlan() {
       summary: source ? source.summary : "",
       control_counts: source ? source.control_counts : {},
       excluded_instances: source ? source.excluded_instances : {},
-        product_assignments: source ? source.product_assignments : {},
+      product_assignments: source ? source.product_assignments : newPlanProductAssignments,
       sort_order: nextOrder,
       created_by: user?.id ?? null,
     });
@@ -1130,7 +1130,14 @@ export default function WaterMitigationPlan() {
 
   const editorAssignments = useMemo(() => {
     const plan = planEditor?.plan;
-    if (!plan) return {};
+    if (!plan) {
+      const result: Record<string, string[]> = {};
+      editorClasses.forEach((item) => {
+        const assigned = newPlanProductAssignments[item.id];
+        result[item.id] = Array.isArray(assigned) ? assigned : [];
+      });
+      return result;
+    }
     const result: Record<string, string[]> = {};
     editorClasses.forEach((item) => {
       const catalogId = item.id.split("::")[0];
@@ -1138,7 +1145,7 @@ export default function WaterMitigationPlan() {
       result[item.id] = (Array.isArray(assigned) ? assigned : []).filter((id) => item.products.some((product) => product.id === id));
     });
     return result;
-  }, [planEditor, editorClasses]);
+  }, [planEditor, editorClasses, newPlanProductAssignments]);
 
   const editorSourcePlans = useMemo(() => {
     const currentId = planEditor?.plan?.id;
