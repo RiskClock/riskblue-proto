@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Minus, Plus, Search, X } from "lucide-react";
+import { Check, Minus, Plus, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -25,6 +25,7 @@ export interface PlanEditorProduct {
   id: string;
   name: string;
   code?: string | null;
+  controlName?: string | null;
   /** Product pipe diameter in inches, when the product type is size-specific. */
   pipeDiameterInches?: number | null;
 }
@@ -69,6 +70,13 @@ interface Props {
   }) => void;
 }
 
+const productDisplay = (product: PlanEditorProduct) => `${product.code || ""} ${product.name || ""}`.trim() || "Product";
+const productSearchText = (product: PlanEditorProduct) =>
+  `${product.code || ""} ${product.name || ""} ${product.controlName || ""}`.toLowerCase();
+const compareProductId = (a: PlanEditorProduct, b: PlanEditorProduct) =>
+  (a.code || a.name || "").localeCompare(b.code || b.name || "", undefined, { numeric: true, sensitivity: "base" }) ||
+  (a.name || "").localeCompare(b.name || "", undefined, { numeric: true, sensitivity: "base" });
+
 /** `0.87" (22mm)` for a product diameter in inches. */
 function diameterLabel(inches?: number | null): string | null {
   if (inches === null || inches === undefined || !Number.isFinite(Number(inches))) return null;
@@ -77,10 +85,33 @@ function diameterLabel(inches?: number | null): string | null {
   return `${shown}" (${Math.round(value * 25.4)}mm)`;
 }
 
-/** Products whose diameter is within ~2mm of the detected pipe size come first. */
+const NOMINAL_PIPE_INCHES_BY_MM: Record<number, number> = {
+  15: 0.5,
+  22: 0.75,
+  28: 1,
+  35: 1.25,
+  42: 1.5,
+  54: 2,
+  67: 2.5,
+  76: 3,
+  108: 4,
+  159: 6,
+  219: 8,
+};
 const SIZE_TOLERANCE_MM = 2;
+const SIZE_TOLERANCE_INCHES = 0.03;
+
+function nominalPipeInches(pipeSizeMm?: number | null): number | null {
+  if (!pipeSizeMm) return null;
+  const entry = Object.entries(NOMINAL_PIPE_INCHES_BY_MM).find(([mm]) => Math.abs(Number(mm) - pipeSizeMm) <= SIZE_TOLERANCE_MM);
+  return entry ? entry[1] : null;
+}
+
+/** Products whose diameter matches the common nominal trade size come first. */
 function isSizeMatch(product: PlanEditorProduct, pipeSizeMm?: number | null) {
   if (!pipeSizeMm || product.pipeDiameterInches === null || product.pipeDiameterInches === undefined) return false;
+  const nominalInches = nominalPipeInches(pipeSizeMm);
+  if (nominalInches !== null) return Math.abs(Number(product.pipeDiameterInches) - nominalInches) <= SIZE_TOLERANCE_INCHES;
   return Math.abs(Number(product.pipeDiameterInches) * 25.4 - pipeSizeMm) <= SIZE_TOLERANCE_MM;
 }
 
@@ -125,11 +156,9 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
 
   const addedBaseProducts = baseProducts.filter((product) => (baseQuantities[product.id] || 0) > 0);
   const baseQuery = baseSearch.trim().toLowerCase();
-  const availableBaseProducts = baseProducts.filter(
-    (product) =>
-      !(baseQuantities[product.id] > 0) &&
-      `${product.code || ""} ${product.name}`.toLowerCase().includes(baseQuery),
-  );
+  const availableBaseProducts = baseProducts
+    .filter((product) => !(baseQuantities[product.id] > 0) && productSearchText(product).includes(baseQuery))
+    .sort(compareProductId);
 
   const productById = useMemo(() => {
     const map = new Map<string, PlanEditorProduct>();
@@ -278,13 +307,13 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                       Add Product
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent align="start" className="w-72 p-0">
-                    <div className="relative border-b p-1.5">
+                  <PopoverContent align="start" className="w-80 p-0">
+                    <div className="relative border-b p-2">
                       <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                      <Input value={baseSearch} onChange={(event) => setBaseSearch(event.target.value)} placeholder="Search products" className="h-8 pl-8 text-xs" />
+                      <Input value={baseSearch} onChange={(event) => setBaseSearch(event.target.value)} placeholder="Search product, ID or type" className="h-8 pl-8 text-sm" />
                     </div>
                     <div
-                      className="max-h-56 overflow-y-auto overscroll-contain p-1"
+                      className="max-h-64 overflow-y-auto overscroll-contain p-1"
                       onWheel={(event) => event.stopPropagation()}
                       onTouchMove={(event) => event.stopPropagation()}
                     >
@@ -296,13 +325,15 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                             type="button"
                             variant="ghost"
                             size="sm"
-                            className="w-full justify-start h-auto px-2 py-1.5 text-xs"
+                            className="w-full justify-start h-auto rounded-md px-3 py-2 text-left text-sm"
                             onClick={() => { setBaseQuantity(product.id, 1); setBaseOpen(false); }}
                           >
-                            <span className="truncate">
-                              {product.code ? <strong>{product.code}&nbsp;</strong> : null}
-                              {product.name}
-                              {size ? <span className="ml-1 text-muted-foreground">{size}</span> : null}
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate">
+                                {product.code ? <strong>{product.code}&nbsp;</strong> : null}
+                                {product.name}
+                              </span>
+                              {size ? <span className="block text-xs text-muted-foreground">{size}</span> : null}
                             </span>
                           </Button>
                         );
@@ -327,21 +358,27 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
               {classes.map((item) => {
                 const selected = assignments[item.id] || [];
                 const query = openClass === item.id ? search.trim().toLowerCase() : "";
-                const filtered = item.products.filter((product) => `${product.code || ""} ${product.name}`.toLowerCase().includes(query));
+                const filtered = item.products.filter((product) => productSearchText(product).includes(query)).sort(compareProductId);
                 const suggested = filtered.filter((product) => isSizeMatch(product, item.pipeSizeMm));
                 const others = filtered.filter((product) => !isSizeMatch(product, item.pipeSizeMm));
                 const renderOption = (product: PlanEditorProduct) => {
                   const checked = selected.includes(product.id);
                   const size = diameterLabel(product.pipeDiameterInches);
                   return (
-                    <Button key={product.id} type="button" variant="ghost" size="sm" className="w-full justify-start h-auto px-2 py-1.5 text-xs" onClick={() => toggleProduct(item.id, product.id)}>
-                      <span className={`mr-2 h-3.5 w-3.5 shrink-0 rounded-sm border flex items-center justify-center ${checked ? "bg-primary border-primary text-primary-foreground" : "border-input"}`}>{checked ? "✓" : ""}</span>
-                      <span className="truncate">
-                        {product.code ? <strong>{product.code} </strong> : null}
-                        {product.name}
-                        {size ? <span className="ml-1 text-muted-foreground">{size}</span> : null}
+                    <button key={product.id} type="button" className="flex w-full items-start gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => toggleProduct(item.id, product.id)}>
+                      <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${checked ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background"}`}>
+                        {checked && <Check className="h-3 w-3" />}
                       </span>
-                    </Button>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">
+                          {product.code ? <strong>{product.code} </strong> : null}
+                          {product.name}
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {[product.controlName, size].filter(Boolean).join(" · ")}
+                        </span>
+                      </span>
+                    </button>
                   );
                 };
                 return (
@@ -360,19 +397,19 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                             Add Control
                           </button>
                         </PopoverTrigger>
-                        <PopoverContent align="start" className="w-64 p-0">
-                          <div className="relative border-b p-1.5">
+                        <PopoverContent align="start" className="w-80 p-0">
+                          <div className="relative border-b p-2">
                             <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search products" className="h-8 pl-8 text-xs" />
+                            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search product, ID or type" className="h-8 pl-8 text-sm" />
                           </div>
                           <div
-                            className="max-h-56 overflow-y-auto overscroll-contain p-1"
+                            className="max-h-64 overflow-y-auto overscroll-contain p-1"
                             onWheel={(event) => event.stopPropagation()}
                             onTouchMove={(event) => event.stopPropagation()}
                           >
                             {suggested.length > 0 && (
                               <>
-                                <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                                   Suggested for {item.pipeSizeMm}mm
                                 </div>
                                 {suggested.map(renderOption)}
@@ -380,7 +417,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                               </>
                             )}
                             {others.map(renderOption)}
-                            {filtered.length === 0 && <div className="px-2 py-3 text-xs text-muted-foreground">No mapped products.</div>}
+                            {filtered.length === 0 && <div className="px-3 py-4 text-sm text-muted-foreground">No mapped products.</div>}
                           </div>
                         </PopoverContent>
                       </Popover>
