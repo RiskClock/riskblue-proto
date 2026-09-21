@@ -125,8 +125,8 @@ export const useTenant = (): TenantContextValue => {
       loading: false,
       tenantId: null,
       tenant: null,
-      
       forbidden: false,
+      
       hasPermission: () => false,
       tenantPath: (path) => (path.startsWith("/") ? path : `/${path}`),
       refetch: () => {},
