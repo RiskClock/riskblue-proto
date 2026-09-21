@@ -84,6 +84,8 @@ interface ControlRow {
   scopeIds: string[] | null;
   /** Effective per-unit cost used for this project (override when set). */
   unitCost: number;
+  /** How the row cost should be labelled in the breakdown. */
+  costPeriod?: "unit" | "month" | "year";
   /** Per-unit cost as defined in the control library. */
   libraryUnitCost: number;
   isOverridden: boolean;
@@ -567,11 +569,10 @@ export default function WaterMitigationPlan() {
     };
     return (p: any): ControlRow => {
       const control = p.control_id ? controlById.get(p.control_id) : undefined;
-      const ov = p.control_id ? overrideMap.get(p.control_id) : undefined;
-      // Per-unit cost = upfront + installation + one year of maintenance.
-      const oneTime = Number(p.one_time_cost ?? ov?.one_time_cost ?? control?.one_time_cost ?? 0) || 0;
+      // Product Catalog pricing is authoritative for products; null means no charge for that field.
+      const oneTime = Number(p.one_time_cost ?? 0) || 0;
       const install = Number(p.installation_cost ?? 0) || 0;
-      const maint = Number(p.monthly_maint_cost ?? control?.monthly_maint_cost ?? 0) || 0;
+      const maint = Number(p.monthly_maint_cost ?? 0) || 0;
       const annualMaint = p.maint_interval === "yearly" ? maint : maint * 12;
       const row = withCost(
         p.id,
@@ -579,6 +580,9 @@ export default function WaterMitigationPlan() {
         p.name || p.product_code || control?.name || "Product",
         oneTime + install + annualMaint,
       );
+      row.costPeriod = oneTime === 0 && install === 0 && maint > 0
+        ? p.maint_interval === "yearly" ? "year" : "month"
+        : "unit";
       row.code = p.product_code || null;
       row.pipeDiameterInches =
         p.pipe_diameter_inches === null || p.pipe_diameter_inches === undefined
@@ -1857,7 +1861,10 @@ actions and posts its own recap.`;
   const labelColumnPx = plans.length === 0 ? 180 : 280;
   const planColumnPx = 220;
   const actionColumnPx = 140;
-  const tableWidth = `${labelColumnPx + plans.length * planColumnPx + actionColumnPx}px`;
+  const tableMinWidthPx = labelColumnPx + plans.length * planColumnPx + actionColumnPx;
+  const planColumnWidth = plans.length > 0
+    ? `calc((100% - ${labelColumnPx + actionColumnPx}px) / ${plans.length})`
+    : `${planColumnPx}px`;
   const labelCellBase = `sticky left-0 z-10 px-4 py-3 text-sm font-medium text-foreground ${labelWidth} shadow-[inset_-1px_0_0_hsl(var(--border))]`;
   const labelCell = `${labelCellBase} bg-card`;
   const planTotalsById = new Map(plans.map((plan) => [plan.id, planTotals(plan)]));
@@ -1865,10 +1872,11 @@ actions and posts its own recap.`;
   const sharedColumns = (
     <colgroup>
       <col style={{ width: labelColumnPx }} />
-      {plans.map((plan) => <col key={plan.id} style={{ width: planColumnPx }} />)}
+      {plans.map((plan) => <col key={plan.id} style={{ width: planColumnWidth }} />)}
       <col style={{ width: actionColumnPx }} />
     </colgroup>
   );
+  const costPeriodLabel = (row: ControlRow) => row.costPeriod === "year" ? "year" : row.costPeriod === "month" ? "month" : "unit";
 
   if (adminLoading || !canEdit) {
     return (
@@ -1961,14 +1969,14 @@ actions and posts its own recap.`;
           </div>
         ) : (
           <div className="overflow-auto min-h-0 max-h-full">
-            <div className="inline-block rounded-lg border bg-card overflow-hidden">
-            <table className="table-fixed border-collapse" style={{ width: tableWidth }}>
+            <div className="min-w-full rounded-lg border bg-card overflow-hidden">
+            <table className="w-full table-fixed border-collapse" style={{ minWidth: tableMinWidthPx }}>
               {sharedColumns}
               <tbody>
                 <tr className="border-b">
                   <th className={`${labelCell} text-left sticky top-0 z-30 [box-shadow:inset_-1px_0_0_hsl(var(--border)),inset_0_-1px_0_hsl(var(--border))]`}>Plan Name</th>
                   {plans.map((plan) => (
-                    <td key={plan.id} className="border-r px-4 py-2 min-w-[220px] align-top sticky top-0 z-20 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))]">
+                    <td key={plan.id} className="border-r px-4 py-2 align-top sticky top-0 z-20 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))]">
                       <div className="flex items-center gap-1">
                         {editing?.id === plan.id && editing.field === "name" ? (
                           <Input
@@ -2107,8 +2115,8 @@ actions and posts its own recap.`;
               </div>
             </div>
 
-            <div className="inline-block rounded-lg border bg-card overflow-hidden">
-            <table className="table-fixed border-collapse" style={{ width: tableWidth }}>
+            <div className="min-w-full rounded-lg border bg-card overflow-hidden">
+            <table className="w-full table-fixed border-collapse" style={{ minWidth: tableMinWidthPx }}>
               {sharedColumns}
               <tbody>
                 {visibleControlRows.length === 0 && visibleBaseRows.length === 0 ? (
@@ -2216,7 +2224,7 @@ actions and posts its own recap.`;
                                       : "Cost per unit from the control library"
                                   }
                                 >
-                                  {currency(row.unitCost)} / unit
+                                  {currency(row.unitCost)} / {costPeriodLabel(row)}
                                 </button>
                               )}
                               {row.isOverridden && canEdit && editingCostId !== row.id && (
@@ -2305,7 +2313,7 @@ actions and posts its own recap.`;
                             </span>
                           </div>
                           <div className="mt-0.5 pl-[26px] text-xs text-muted-foreground tabular-nums">
-                            {currency(row.unitCost)} / unit
+                            {currency(row.unitCost)} / {costPeriodLabel(row)}
                           </div>
                         </th>
                         {plans.map((plan) => {
