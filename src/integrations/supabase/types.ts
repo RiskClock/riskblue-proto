@@ -2151,6 +2151,7 @@ export type Database = {
           country: string | null
           created_at: string
           credits_consumed: number | null
+          currency_code: string
           drive_folder_id: string | null
           estimated_units: number | null
           filesearch_store_id: string | null
@@ -2195,6 +2196,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           credits_consumed?: number | null
+          currency_code?: string
           drive_folder_id?: string | null
           estimated_units?: number | null
           filesearch_store_id?: string | null
@@ -2239,6 +2241,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           credits_consumed?: number | null
+          currency_code?: string
           drive_folder_id?: string | null
           estimated_units?: number | null
           filesearch_store_id?: string | null
@@ -3104,6 +3107,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           credits_balance: number
+          default_currency: string
           id: string
           is_active: boolean
           name: string
@@ -3114,6 +3118,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           credits_balance?: number
+          default_currency?: string
           id?: string
           is_active?: boolean
           name: string
@@ -3124,6 +3129,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           credits_balance?: number
+          default_currency?: string
           id?: string
           is_active?: boolean
           name?: string
@@ -3713,6 +3719,7 @@ export type Database = {
         Args: never
         Returns: {
           credits_balance: number
+          default_currency: string
           id: string
           is_member: boolean
           name: string
@@ -3744,6 +3751,7 @@ export type Database = {
         Returns: {
           created_at: string
           credits_balance: number
+          default_currency: string
           id: string
           is_active: boolean
           member_count: number

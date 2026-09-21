@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import type { CurrencyCode } from "@/lib/currency";
 
 export type TenantRole = "admin" | "member" | "guest";
 
@@ -22,6 +23,7 @@ export interface TenantMembership {
   name: string;
   slug: string | null;
   credits_balance: number | null;
+  default_currency: CurrencyCode;
   role: TenantRole;
   permissions: Record<string, boolean>;
   /** True only when the user is an actual member (internal staff see all companies). */
@@ -55,6 +57,7 @@ export const useMyTenants = () => {
         name: t.name,
         slug: t.slug ?? null,
         credits_balance: t.credits_balance ?? null,
+        default_currency: t.default_currency === "GBP" ? "GBP" : "USD",
         role: t.role as TenantRole,
         permissions: (t.permissions ?? {}) as Record<string, boolean>,
         isMember: t.is_member !== false,
@@ -123,6 +126,7 @@ export const useTenant = (): TenantContextValue => {
       tenantId: null,
       tenant: null,
       forbidden: false,
+      
       hasPermission: () => false,
       tenantPath: (path) => (path.startsWith("/") ? path : `/${path}`),
       refetch: () => {},

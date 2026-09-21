@@ -1,6 +1,7 @@
 import { toStorageSafeFileName } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +15,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Upload, FileText, X, Loader2, Coins, ChevronDown, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -23,6 +27,7 @@ import { useCredits } from "@/hooks/useCredits";
 import { BuyCreditsModal } from "@/components/BuyCreditsModal";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import { useTenant } from "@/contexts/TenantContext";
+import { CURRENCY_OPTIONS, normalizeCurrencyCode, type CurrencyCode } from "@/lib/currency";
 
 interface CreateProjectModalProps {
   open: boolean;
@@ -31,6 +36,21 @@ interface CreateProjectModalProps {
 }
 
 const ACCEPTED_TYPES = ".pdf,.png,.jpg,.jpeg,.dwg,.dxf";
+type IdentifyTab = "water_systems" | "assets" | "equipment_fixtures" | "controls";
+
+const EMPTY_OTHER_TEXT: Record<IdentifyTab, string> = {
+  water_systems: "",
+  assets: "",
+  equipment_fixtures: "",
+  controls: "",
+};
+
+const IDENTIFY_TABS: { id: IdentifyTab; label: string }[] = [
+  { id: "water_systems", label: "Water Systems" },
+  { id: "assets", label: "Assets" },
+  { id: "equipment_fixtures", label: "Equipment & Fixtures" },
+  { id: "controls", label: "Controls" },
+];
 
 export type ProjectSizeTier = "small" | "medium" | "large" | "enterprise";
 
@@ -113,6 +133,19 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
   const navigate = useNavigate();
   const { toast } = useToast();
   const { data: awpOptions } = useAWPOptions();
+  const { data: mitigationControls = [] } = useQuery({
+    queryKey: ["create-project-mitigation-controls"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("mitigation_controls")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("display_order");
+      if (error) throw error;
+      return (data || []) as { id: string; name: string }[];
+    },
+    enabled: open,
+  });
   const { balance, refetch: refetchCredits } = useCredits();
   const { tenantId, tenant, refetch: refetchTenants } = useTenant();
   // Company workspaces draw from the shared company pool instead of the personal one.
@@ -123,8 +156,11 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
   const [name, setName] = useState("");
   const [sizeTier, setSizeTier] = useState<ProjectSizeTier | null>(null);
   const [selectedClassNames, setSelectedClassNames] = useState<Set<string>>(new Set());
-  const [otherEnabled, setOtherEnabled] = useState(false);
-  const [otherText, setOtherText] = useState("");
+  const [selectedControlIds, setSelectedControlIds] = useState<Set<string>>(new Set());
+  const [otherTextByTab, setOtherTextByTab] = useState<Record<IdentifyTab, string>>(EMPTY_OTHER_TEXT);
+  const [activeIdentifyTab, setActiveIdentifyTab] = useState<IdentifyTab>("water_systems");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [currencyCode, setCurrencyCode] = useState<CurrencyCode>(normalizeCurrencyCode(tenant?.default_currency));
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [showBuyCredits, setShowBuyCredits] = useState(false);
@@ -136,35 +172,60 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
       setName("");
       setSizeTier(null);
       setSelectedClassNames(new Set());
-      setOtherEnabled(false);
-      setOtherText("");
+      setSelectedControlIds(new Set());
+      setOtherTextByTab(EMPTY_OTHER_TEXT);
+      setActiveIdentifyTab("water_systems");
+      setAdvancedOpen(false);
+      setCurrencyCode(normalizeCurrencyCode(tenant?.default_currency));
       setFiles([]);
       setSubmitting(false);
       setExpandedClasses(new Set());
       setSubtypesByClass({});
       setTimeout(() => nameRef.current?.focus(), 100);
     }
-  }, [open]);
+  }, [open, tenant?.default_currency]);
 
   const eligibleOptions = useMemo(
-    () => (awpOptions || []).filter((o) => o.category === "Asset" || o.category === "Water System"),
+    () =>
+      (awpOptions || []).filter(
+        (o) => o.displayCategory === "Asset" || o.displayCategory === "Water System" || o.displayCategory === "Equipment & Fixtures",
+      ),
     [awpOptions],
   );
   const grouped = useMemo(() => groupAWPOptionsByCategory(eligibleOptions), [eligibleOptions]);
+  const optionsByTab = useMemo(
+    () => ({
+      water_systems: grouped["Water System"] || [],
+      assets: grouped.Asset || [],
+      equipment_fixtures: grouped["Equipment & Fixtures"] || [],
+      controls: [],
+    }),
+    [grouped],
+  );
 
   const tierConfig = sizeTier ? PROJECT_SIZE_TIERS.find((t) => t.id === sizeTier)! : null;
   const units = tierConfig ? tierConfig.units : null;
   const { cost, contact } = computeCreditCost(units);
 
+  const otherEntriesByTab = useMemo(() => {
+    const entries = {} as Record<IdentifyTab, string[]>;
+    IDENTIFY_TABS.forEach((tab) => {
+      entries[tab.id] = otherTextByTab[tab.id]
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    });
+    return entries;
+  }, [otherTextByTab]);
+
+  const selectedControlNames = useMemo(
+    () => mitigationControls.filter((control) => selectedControlIds.has(control.id)).map((control) => control.name),
+    [mitigationControls, selectedControlIds],
+  );
+
   const otherList = useMemo(
-    () =>
-      otherEnabled
-        ? otherText
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean)
-        : [],
-    [otherEnabled, otherText],
+    () => [...Object.values(otherEntriesByTab).flat(), ...selectedControlNames],
+    [otherEntriesByTab, selectedControlNames],
   );
 
   const anySubtypeSelected = useMemo(
@@ -174,8 +235,9 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
 
   const hasAnyClass =
     selectedClassNames.size > 0 ||
+    selectedControlIds.size > 0 ||
     anySubtypeSelected ||
-    (otherEnabled && otherList.length > 0);
+    otherList.length > 0;
 
   const finalSelectedClassNames = useMemo(() => {
     const s = new Set(selectedClassNames);
@@ -204,6 +266,29 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
       else next.add(abbr);
       return { ...prev, [className]: next };
     });
+  };
+
+  const toggleControl = (id: string) => {
+    setSelectedControlIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const setOtherTextForTab = (tab: IdentifyTab, value: string) =>
+    setOtherTextByTab((prev) => ({ ...prev, [tab]: value }));
+
+  const countForIdentifyTab = (tab: IdentifyTab) => {
+    const otherCount = otherEntriesByTab[tab].length;
+    if (tab === "controls") return selectedControlIds.size + otherCount;
+    const optionCount = optionsByTab[tab].reduce((total: number, opt: any) => {
+      const subtypeCount = subtypesByClass[opt.name]?.size ?? 0;
+      if (subtypeCount > 0) return total + subtypeCount;
+      return total + (selectedClassNames.has(opt.name) ? 1 : 0);
+    }, 0);
+    return optionCount + otherCount;
   };
 
 
@@ -288,9 +373,19 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
           estimated_units: units,
           credits_consumed: cost,
           tenant_id: tenantId,
+          currency_code: currencyCode,
           selected_awp_class_names: finalSelectedClassNames,
           selected_other_classes: otherList,
           selected_awp_subtypes: selectedSubtypesMap,
+          project_data: {
+            intake_identify_selections: {
+              water_systems: optionsByTab.water_systems.filter((opt) => selectedClassNames.has(opt.name)).map((opt) => opt.name),
+              assets: optionsByTab.assets.filter((opt) => selectedClassNames.has(opt.name)).map((opt) => opt.name),
+              equipment_fixtures: optionsByTab.equipment_fixtures.filter((opt) => selectedClassNames.has(opt.name)).map((opt) => opt.name),
+              controls: selectedControlNames,
+              other: otherEntriesByTab,
+            },
+          },
         } as any)
         .select("id")
         .single();
@@ -525,127 +620,132 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
               )}
             </div>
 
+            <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen} className="rounded-lg border bg-muted/20">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold"
+                onClick={() => setAdvancedOpen((value) => !value)}
+              >
+                Advanced Options
+                {advancedOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              </button>
+              <CollapsibleContent className="border-t px-4 py-3">
+                <div className="space-y-2 sm:max-w-xs">
+                  <Label>Currency</Label>
+                  <Select value={currencyCode} onValueChange={(value) => setCurrencyCode(normalizeCurrencyCode(value))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CURRENCY_OPTIONS.map((option) => (
+                        <SelectItem key={option.code} value={option.code}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
             {/* Classes */}
             <div className="space-y-2">
               <Label>
-                Assets & Water Systems to identify{" "}
-                <span className="text-destructive">*</span>
+                Elements to Identify <span className="text-destructive">*</span>
               </Label>
-              <div className="border rounded-md">
-                <div className="p-3 space-y-4">
-                  {Object.entries(grouped).map(([category, opts]) => (
-                    <div key={category}>
-                      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                        {category}
-                      </div>
-                      <div className="space-y-2">
-                        {opts.map((opt) => {
-                          const subtypeDefs = SUBTYPED_CLASSES[opt.name];
-                          if (subtypeDefs) {
-                            const expanded = expandedClasses.has(opt.name);
-                            const picked = subtypesByClass[opt.name] || new Set<string>();
-                            return (
-                              <div key={opt.id} className="space-y-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setExpandedClasses((prev) => {
-                                      const next = new Set(prev);
-                                      if (next.has(opt.name)) next.delete(opt.name);
-                                      else next.add(opt.name);
-                                      return next;
-                                    })
-                                  }
-                                  className="flex items-center gap-2 text-sm w-full text-left"
-                                >
-                                  {expanded ? (
-                                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                                  ) : (
-                                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                                  )}
-                                  {opt.idPrefix && (
-                                    <span className="font-mono text-xs text-muted-foreground">
-                                      {opt.idPrefix}
-                                    </span>
-                                  )}
-                                  <span>{opt.name}</span>
-                                  {picked.size > 0 && (
-                                    <span className="ml-1 text-xs text-muted-foreground">
-                                      ({picked.size} selected)
-                                    </span>
-                                  )}
-                                </button>
-                                {expanded && (
-                                  <div className="pl-6 space-y-1.5">
-                                    {subtypeDefs.map((sub) => (
-                                      <label
-                                        key={sub.abbr}
-                                        className="flex items-center gap-2 text-sm cursor-pointer"
-                                      >
-                                        <Checkbox
-                                          checked={picked.has(sub.abbr)}
-                                          onCheckedChange={() => toggleSubtype(opt.name, sub.abbr)}
-                                        />
-                                        <span className="font-mono text-xs text-muted-foreground">
-                                          {sub.abbr}
-                                        </span>
-                                        <span>{sub.label}</span>
-                                      </label>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          }
-
-                          const checked = selectedClassNames.has(opt.name);
-                          return (
-                            <label
-                              key={opt.id}
-                              className="flex items-center gap-2 text-sm cursor-pointer"
-                            >
-                              <Checkbox
-                                checked={checked}
-                                onCheckedChange={() => toggleClass(opt.name)}
-                              />
-                              <span>
-                                {opt.idPrefix && (
-                                  <span className="font-mono text-xs text-muted-foreground mr-2">
-                                    {opt.idPrefix}
-                                  </span>
-                                )}
-                                {opt.name}
-                              </span>
+              <Tabs value={activeIdentifyTab} onValueChange={(value) => setActiveIdentifyTab(value as IdentifyTab)} className="rounded-md border">
+                <TabsList className="m-3 mb-0 flex h-auto flex-wrap justify-start">
+                  {IDENTIFY_TABS.map((tab) => {
+                    const count = countForIdentifyTab(tab.id);
+                    return (
+                      <TabsTrigger key={tab.id} value={tab.id} className="text-xs">
+                        {tab.label}{count > 0 ? ` (${count})` : ""}
+                      </TabsTrigger>
+                    );
+                  })}
+                </TabsList>
+                {IDENTIFY_TABS.map((tab) => (
+                  <TabsContent key={tab.id} value={tab.id} className="m-0">
+                    <div className="p-3 space-y-3">
+                      {tab.id === "controls" ? (
+                        <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                          {mitigationControls.map((control) => (
+                            <label key={control.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                              <Checkbox checked={selectedControlIds.has(control.id)} onCheckedChange={() => toggleControl(control.id)} />
+                              <span>{control.name}</span>
                             </label>
-                          );
-                        })}
-                      </div>
+                          ))}
+                          {mitigationControls.length === 0 && <p className="text-sm text-muted-foreground">No controls available.</p>}
+                        </div>
+                      ) : (
+                        <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                          {optionsByTab[tab.id].map((opt) => {
+                            const subtypeDefs = SUBTYPED_CLASSES[opt.name];
+                            if (subtypeDefs) {
+                              const expanded = expandedClasses.has(opt.name);
+                              const picked = subtypesByClass[opt.name] || new Set<string>();
+                              return (
+                                <div key={opt.id} className="space-y-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setExpandedClasses((prev) => {
+                                        const next = new Set(prev);
+                                        if (next.has(opt.name)) next.delete(opt.name);
+                                        else next.add(opt.name);
+                                        return next;
+                                      })
+                                    }
+                                    className="flex items-center gap-2 text-sm w-full text-left"
+                                  >
+                                    {expanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                                    {opt.idPrefix && <span className="font-mono text-xs text-muted-foreground">{opt.idPrefix}</span>}
+                                    <span>{opt.name}</span>
+                                    {picked.size > 0 && <span className="ml-1 text-xs text-muted-foreground">({picked.size} selected)</span>}
+                                  </button>
+                                  {expanded && (
+                                    <div className="pl-6 space-y-1.5">
+                                      {subtypeDefs.map((sub) => (
+                                        <label key={sub.abbr} className="flex items-center gap-2 text-sm cursor-pointer">
+                                          <Checkbox checked={picked.has(sub.abbr)} onCheckedChange={() => toggleSubtype(opt.name, sub.abbr)} />
+                                          <span className="font-mono text-xs text-muted-foreground">{sub.abbr}</span>
+                                          <span>{sub.label}</span>
+                                        </label>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <label key={opt.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                                <Checkbox checked={selectedClassNames.has(opt.name)} onCheckedChange={() => toggleClass(opt.name)} />
+                                <span>
+                                  {opt.idPrefix && <span className="font-mono text-xs text-muted-foreground mr-2">{opt.idPrefix}</span>}
+                                  {opt.name}
+                                </span>
+                              </label>
+                            );
+                          })}
+                          {optionsByTab[tab.id].length === 0 && <p className="text-sm text-muted-foreground">No options available.</p>}
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
 
-                <Separator />
+                    <Separator />
 
-                <div className="p-3 space-y-2 bg-muted/30">
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <Checkbox
-                      checked={otherEnabled}
-                      onCheckedChange={(v) => setOtherEnabled(!!v)}
-                    />
-                    <span>Other (specify)</span>
-                  </label>
-                  <Input
-                    value={otherText}
-                    onChange={(e) => {
-                      setOtherText(e.target.value);
-                      if (e.target.value.trim().length > 0 && !otherEnabled) {
-                        setOtherEnabled(true);
-                      }
-                    }}
-                    placeholder="Type anything (comma-separate to add multiple)"
-                  />
-                </div>
-              </div>
+                    <div className="p-3 space-y-2 bg-muted/30">
+                      <Label className="text-sm">Other</Label>
+                      <Input
+                        value={otherTextByTab[tab.id]}
+                        onChange={(e) => setOtherTextForTab(tab.id, e.target.value)}
+                        placeholder="Type anything (comma-separate to add multiple)"
+                      />
+                    </div>
+                  </TabsContent>
+                ))}
+              </Tabs>
             </div>
           </div>
           </div>

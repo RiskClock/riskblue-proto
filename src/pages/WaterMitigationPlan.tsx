@@ -8,6 +8,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,6 +58,7 @@ import {
   asPointsPct,
   type ParsedFloorPlan,
 } from "@/lib/surveyFloorPlans";
+import { formatCurrencyAmount, normalizeCurrencyCode, type CurrencyCode } from "@/lib/currency";
 
 interface Plan {
   id: string;
@@ -117,8 +119,6 @@ const CATEGORY_TABLE: Record<string, "critical_assets" | "water_systems" | "proc
 };
 
 const UNASSIGNED = "Unassigned";
-
-const currency = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 
 /** Formats a product pipe diameter (inches) for display, e.g. 0.866 -> `0.87" (22mm)`. */
 export const formatPipeDiameter = (inches?: number | null) => {
@@ -207,11 +207,13 @@ const polar = (cx: number, cy: number, r: number, angle: number) => [
 const CostPie = ({
   slices,
   hovered,
+  currencyCode,
   onHover,
   onSelect,
 }: {
   slices: PieSlice[];
   hovered: string | null;
+  currencyCode: CurrencyCode;
   onHover: (id: string | null) => void;
   onSelect: (id: string) => void;
 }) => {
@@ -269,7 +271,7 @@ const CostPie = ({
         className="pointer-events-none absolute z-50 -translate-x-1/2 whitespace-nowrap rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md"
         style={{ left: tip.x, top: tip.y - 34 }}
       >
-        {tipSlice.name}: {currency(tipSlice.value)}
+        {tipSlice.name}: {formatCurrencyAmount(tipSlice.value, currencyCode)}
       </div>
     )}
     </div>
@@ -340,7 +342,7 @@ export default function WaterMitigationPlan() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("projects")
-        .select("id, name, tenant_id, project_data")
+        .select("id, name, tenant_id, project_data, currency_code")
         .eq("id", projectId!)
         .single();
       if (error) throw error;
@@ -350,6 +352,28 @@ export default function WaterMitigationPlan() {
   });
 
   const planTenantId = project?.tenant_id ?? tenantId ?? null;
+  const defaultProjectCurrency = normalizeCurrencyCode((project as any)?.currency_code ?? tenant?.default_currency);
+  const [selectedCurrency, setSelectedCurrency] = useState<CurrencyCode>(defaultProjectCurrency);
+
+  useEffect(() => {
+    setSelectedCurrency(defaultProjectCurrency);
+  }, [defaultProjectCurrency]);
+
+  const currency = (n: number) => formatCurrencyAmount(n, selectedCurrency);
+
+  const changeCurrency = async (value: string) => {
+    if (!value) return;
+    const next = normalizeCurrencyCode(value);
+    setSelectedCurrency(next);
+    if (!projectId || !canEdit || next === normalizeCurrencyCode((project as any)?.currency_code)) return;
+    const { error } = await supabase.from("projects").update({ currency_code: next } as any).eq("id", projectId);
+    if (error) {
+      toast.error(getUserFriendlyError(error));
+      setSelectedCurrency(defaultProjectCurrency);
+      return;
+    }
+    await queryClient.invalidateQueries({ queryKey: ["wmp-project", projectId] });
+  };
 
   const { data: catalog } = useQuery({
     queryKey: ["wmp-catalog"],
@@ -1815,13 +1839,14 @@ actions and posts its own recap.`;
     return `**Applied to the plans:**\n${lines.map((l) => `- ${l}`).join("\n")}`;
   };
 
-  const labelCellBase = "sticky left-0 z-10 px-4 py-3 text-sm font-medium text-foreground w-[280px] min-w-[280px] shadow-[inset_-1px_0_0_hsl(var(--border))]";
+  const labelWidth = plans.length === 0 ? "w-[180px] min-w-[180px]" : "w-[280px] min-w-[280px]";
+  const labelCellBase = `sticky left-0 z-10 px-4 py-3 text-sm font-medium text-foreground ${labelWidth} shadow-[inset_-1px_0_0_hsl(var(--border))]`;
   const labelCell = `${labelCellBase} bg-card`;
   const planTotalsById = new Map(plans.map((plan) => [plan.id, planTotals(plan)]));
   const highestControlsApplied = Math.max(0, ...plans.map((plan) => planTotalsById.get(plan.id)?.count ?? 0));
   const sharedColumns = (
     <colgroup>
-      <col className="w-[280px] min-w-[280px]" />
+      <col className={labelWidth} />
       {plans.map((plan) => <col key={plan.id} className="w-[220px] min-w-[220px]" />)}
       <col className="w-[140px] min-w-[140px]" />
     </colgroup>
@@ -1850,9 +1875,20 @@ actions and posts its own recap.`;
         <div className="flex items-center justify-between gap-2 pb-3 shrink-0">
           <h1 className="text-lg font-semibold truncate">Water Mitigation Plans</h1>
           <div className="flex items-center gap-2 shrink-0">
-            <Button variant="outline" onClick={() => setHistoryOpen(true)}>
-              <History className="h-4 w-4 mr-2" /> Change history
-            </Button>
+            <ToggleGroup
+              type="single"
+              value={selectedCurrency}
+              onValueChange={changeCurrency}
+              className="rounded-md border bg-card p-0.5"
+              aria-label="Currency"
+            >
+              <ToggleGroupItem value="USD" aria-label="Dollar" className="h-8 px-3 text-sm">
+                $
+              </ToggleGroupItem>
+              <ToggleGroupItem value="GBP" aria-label="Pound" className="h-8 px-3 text-sm">
+                £
+              </ToggleGroupItem>
+            </ToggleGroup>
             <Button
               variant="outline"
               onClick={() => {
@@ -1861,6 +1897,9 @@ actions and posts its own recap.`;
               }}
             >
               <MessageSquare className="h-4 w-4 mr-2" /> Open Wade
+            </Button>
+            <Button variant="outline" onClick={() => setHistoryOpen(true)}>
+              <History className="h-4 w-4 mr-2" /> Change History
             </Button>
           </div>
         </div>
@@ -1929,8 +1968,8 @@ actions and posts its own recap.`;
                   ))}
                   <td className="px-4 py-2 align-top sticky top-0 z-20 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))]">
                     {canEdit && (
-                      <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setPlanEditor({ mode: "create", plan: null })}>
-                        <Plus className="h-4 w-4 mr-1" /> New plan
+                      <Button variant="outline" onClick={() => setPlanEditor({ mode: "create", plan: null })}>
+                        <Plus className="h-4 w-4 mr-2" /> New plan
                       </Button>
                     )}
                   </td>
@@ -2023,7 +2062,7 @@ actions and posts its own recap.`;
                 {visibleControlRows.length === 0 && visibleBaseRows.length === 0 ? (
                   <tr className="border-b">
                     <td className="px-4 py-6 text-sm text-muted-foreground" colSpan={plans.length + 2}>
-                      No products have been added to a plan yet.
+                      {plans.length === 0 ? "There are no plans yet." : "No products have been added to a plan yet."}
                     </td>
                   </tr>
                 ) : (
@@ -2049,6 +2088,7 @@ actions and posts its own recap.`;
                               })),
                             ]}
                             hovered={hoveredControl}
+                            currencyCode={selectedCurrency}
                             onHover={setHoveredControl}
                             onSelect={focusControlRow}
                           />
@@ -2343,7 +2383,7 @@ actions and posts its own recap.`;
         onOpenChange={setHistoryOpen}
         projectId={projectId!}
         entityTypes={["mitigation_plan"]}
-        title="Change history"
+        title="Change History"
         description="Changes made to the water mitigation plans for this project."
       />
     </div>
