@@ -59,7 +59,7 @@ import {
   type ParsedFloorPlan,
 } from "@/lib/surveyFloorPlans";
 import { formatCurrencyAmount, normalizeCurrencyCode, type CurrencyCode } from "@/lib/currency";
-import { useIsSystemAdmin } from "@/hooks/useIsSystemAdmin";
+import { useSystemAdminStatus } from "@/hooks/useIsSystemAdmin";
 
 interface Plan {
   id: string;
@@ -335,7 +335,7 @@ export default function WaterMitigationPlan() {
   const { tenantId, tenant, tenantPath } = useTenant();
   const queryClient = useQueryClient();
 
-  const canEdit = useIsSystemAdmin();
+  const { isSystemAdmin: canEdit, isLoading: adminLoading } = useSystemAdminStatus();
 
   const { data: project } = useQuery({
     queryKey: ["wmp-project", projectId],

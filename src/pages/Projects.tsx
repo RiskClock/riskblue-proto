@@ -308,7 +308,7 @@ const Projects = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="h-9 flex items-center justify-end gap-1">
-                        {isInternalUser && (
+                        {isStaffViewer && (
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>

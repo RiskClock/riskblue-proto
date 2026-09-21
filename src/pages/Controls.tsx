@@ -51,7 +51,7 @@ import { toast } from "sonner";
 import { productCatalogLabel } from "@/lib/catalogLabel";
 import { tagStyle } from "@/lib/tagColor";
 import { currencySymbol, formatCompactCurrencyAmount } from "@/lib/currency";
-import { useIsSystemAdmin } from "@/hooks/useIsSystemAdmin";
+import { useSystemAdminStatus } from "@/hooks/useIsSystemAdmin";
 
 interface MitigationControl {
   id: string;
@@ -116,7 +116,7 @@ export default function Controls() {
   const { tenant, tenantId, loading: tenantLoading } = useTenant();
   const queryClient = useQueryClient();
 
-  const canEdit = useIsSystemAdmin();
+  const { isSystemAdmin: canEdit, isLoading: adminLoading } = useSystemAdminStatus();
 
   const pageTitle = productCatalogLabel();
   const tenantCurrency = tenant?.default_currency ?? "USD";
@@ -188,7 +188,7 @@ export default function Controls() {
         processes: (processesRes.data || []) as any,
       };
     },
-    enabled: !!tenantId,
+    enabled: !!tenantId && canEdit,
   });
 
   const { data: allControls = [], isLoading: controlsLoading } = useQuery({
@@ -202,7 +202,7 @@ export default function Controls() {
       if (error) throw error;
       return (data || []) as MitigationControl[];
     },
-    enabled: !!tenantId,
+    enabled: !!tenantId && canEdit,
   });
 
   const { data: products = [], isLoading: productsLoading } = useQuery({
@@ -216,7 +216,7 @@ export default function Controls() {
       if (error) throw error;
       return (data || []) as any;
     },
-    enabled: !!user && !!tenantId,
+    enabled: !!user && !!tenantId && canEdit,
   });
 
   const controlMap = useMemo(() => {
@@ -420,7 +420,7 @@ export default function Controls() {
   };
 
   // ---------- render guards ----------
-  if (tenantLoading) {
+  if (tenantLoading || adminLoading) {
     return (
       <div className="min-h-screen bg-background">
         <AppHeader title={pageTitle} />
@@ -437,6 +437,19 @@ export default function Controls() {
         <AppHeader title={pageTitle} />
         <div className="flex items-center justify-center py-20">
           <p className="text-muted-foreground">Select a company to manage its {pageTitle}.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!canEdit) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AppHeader title={pageTitle} />
+        <div className="container mx-auto px-6 py-20">
+          <div className="rounded-lg border bg-card p-8 text-center">
+            <p className="font-medium text-foreground">This page is only available to internal system admins.</p>
+          </div>
         </div>
       </div>
     );
@@ -493,10 +506,6 @@ export default function Controls() {
         infoContent={<p>Products your company offers, each mapped to a mitigation control.</p>}
       />
       <main className="container mx-auto px-6 py-6 flex-1 min-h-0 flex flex-col">
-        {!canEdit && (
-          <p className="text-sm text-muted-foreground mb-3">You have view-only access to this listing.</p>
-        )}
-
         <div className="bg-card rounded-lg border overflow-hidden flex-1 min-h-0">
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] h-full min-h-0">
             {/* Products */}
