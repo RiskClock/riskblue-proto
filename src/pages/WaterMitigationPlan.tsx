@@ -1097,6 +1097,7 @@ export default function WaterMitigationPlan() {
           id: product.id,
           name: product.name || "",
           code: product.product_code,
+          controlName: product.control_id ? (controls as any[]).find((control) => control.id === product.control_id)?.name || null : null,
           pipeDiameterInches:
             product.pipe_diameter_inches === null || product.pipe_diameter_inches === undefined
               ? null
@@ -1119,7 +1120,7 @@ export default function WaterMitigationPlan() {
       });
     });
     return rows.sort((a, b) => a.name.localeCompare(b.name));
-  }, [catalog, detectionRows, items, products]);
+  }, [catalog, controls, detectionRows, items, products]);
 
   const editorAssignments = useMemo(() => {
     const plan = planEditor?.plan;
