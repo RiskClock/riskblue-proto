@@ -480,7 +480,8 @@ export default function Controls() {
   const selectedScopeItems = scopeItems.filter((item) => scope[item.category].includes(item.id));
   const selectedControl = selected?.control_id ? controlMap.get(selected.control_id) : undefined;
   const needsPipeDiameter = PIPE_DIAMETER_TYPES.has(selectedControl?.name.toLowerCase() ?? "");
-  const selectedRecurringInterval = selected?.maint_interval === "yearly" || selected?.maint_interval === "monthly"
+  const selectedHasRecurringValue = selected?.monthly_maint_cost !== null && selected?.monthly_maint_cost !== undefined;
+  const selectedRecurringInterval = selectedHasRecurringValue && (selected?.maint_interval === "yearly" || selected?.maint_interval === "monthly")
     ? selected.maint_interval
     : recurringDefault;
 
