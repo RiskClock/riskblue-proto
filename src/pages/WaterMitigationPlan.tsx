@@ -1369,8 +1369,21 @@ export default function WaterMitigationPlan() {
       name: plan.name,
       summary: plan.summary,
       totals: planTotals(plan),
+      assignments: editorClasses.map((item) => ({
+        risk: item.name,
+        risk_code: item.code,
+        products: ((plan.product_assignments[item.id] || []) as string[])
+          .map((id) => item.products.find((product) => product.id === id))
+          .filter(Boolean)
+          .map((product) => ({ id: product?.id, product_id: product?.code, name: product?.name, product_type: product?.controlName })),
+      })),
+      essential_components: editorBaseProducts
+        .map((product) => ({ product_id: product.code, name: product.name, quantity: baseCountFor(plan, product.id) }))
+        .filter((item) => item.quantity > 0),
       controls: controlRows.map((row) => ({
         control: row.name,
+        product_id: row.code,
+        pipe_diameter: formatPipeDiameter(row.pipeDiameterInches),
         unit_cost: row.unitCost,
         locations: countFor(plan, row.id),
         by_space: spacesForControl(row.id).map((space) => ({
@@ -1383,7 +1396,27 @@ export default function WaterMitigationPlan() {
       page: "water_mitigation_plan",
       project: project?.name,
       plans: plansCtx,
-      detections: detectionRows.map((d) => ({ class: d.name, space: d.space })),
+      detected_risk_classes: editorClasses.map((item) => ({
+        id: item.id,
+        risk: item.name,
+        risk_code: item.code,
+        count: item.count,
+        pipe_size_mm: item.pipeSizeMm,
+        available_products: item.products.map((product) => ({
+          id: product.id,
+          product_id: product.code,
+          name: product.name,
+          product_type: product.controlName,
+          pipe_diameter: formatPipeDiameter(product.pipeDiameterInches),
+        })),
+      })),
+      essential_component_products: editorBaseProducts.map((product) => ({
+        id: product.id,
+        product_id: product.code,
+        name: product.name,
+        pipe_diameter: formatPipeDiameter(product.pipeDiameterInches),
+      })),
+      detections: detectionRows.map((d) => ({ class: d.name, space: d.space, pipe_size_mm: d.pipeSizeMm })),
     };
   };
 
@@ -1391,6 +1424,9 @@ export default function WaterMitigationPlan() {
 When the user asks for a change, apply it immediately (no confirmation step) by ending your reply
 with a fenced code block tagged wade-actions containing JSON: {"actions":[...]}.
 Supported actions (use the exact plan / control / space names from the context):
+- {"type":"create_plan","name":"Plan 4","summary":"optional"}
+- {"type":"set_risk_products","plan":"Plan 4","risk":"CW-Meter 22mm","products":["SNS25","SNS11"],"mode":"replace"}
+- {"type":"set_essential_component","plan":"Plan 4","product":"PUMP-01","quantity":2}
 - {"type":"set_control","plan":"Plan 3","control":"Automatic Shut Off Valve - 1\\"","enabled":false}
 - {"type":"set_control_space","plan":"Plan 3","control":"...","space":"Level 6","enabled":true}
 - {"type":"remove_fraction_by_space","plan":"Plan 2","control":"Ultrasonic Flow Sensors","remove_fraction":0.5}
@@ -1425,8 +1461,34 @@ actions and posts its own recap.`;
     const findControl = (name: unknown) => {
       const n = norm(name);
       return (
-        controlRows.find((c) => norm(c.name) === n) ||
-        controlRows.find((c) => n.length > 2 && norm(c.name).includes(n)) ||
+        controlRows.find((c) => norm(c.name) === n || norm(c.code) === n) ||
+        controlRows.find((c) => n.length > 2 && (norm(c.name).includes(n) || norm(c.code).includes(n))) ||
+        null
+      );
+    };
+    const findRisk = (name: unknown) => {
+      const n = norm(name);
+      return (
+        editorClasses.find((item) => norm(item.id) === n || norm(item.code) === n || norm(item.name) === n) ||
+        editorClasses.find((item) => n.length > 1 && (norm(item.code).includes(n) || norm(item.name).includes(n))) ||
+        null
+      );
+    };
+    const productAliases = (product: { id: string; code?: string | null; name?: string | null; controlName?: string | null }) =>
+      [product.id, product.code, product.name, product.controlName].filter(Boolean).map((value) => norm(value));
+    const findClassProduct = (risk: PlanEditorClass, productName: unknown) => {
+      const n = norm(productName);
+      return (
+        risk.products.find((product) => productAliases(product).includes(n)) ||
+        risk.products.find((product) => n.length > 1 && productAliases(product).some((alias) => alias.includes(n))) ||
+        null
+      );
+    };
+    const findBaseProduct = (productName: unknown) => {
+      const n = norm(productName);
+      return (
+        editorBaseProducts.find((product) => productAliases(product).includes(n)) ||
+        editorBaseProducts.find((product) => n.length > 1 && productAliases(product).some((alias) => alias.includes(n))) ||
         null
       );
     };
@@ -1443,13 +1505,84 @@ actions and posts its own recap.`;
       pending.get(plan.id) ??
       (pending.set(plan.id, JSON.parse(JSON.stringify(plan.excluded_instances || {}))),
         pending.get(plan.id)!);
+    const pendingAssignments = new Map<string, Plan["product_assignments"]>();
+    const assignmentsFor = (plan: Plan) =>
+      pendingAssignments.get(plan.id) ??
+      (pendingAssignments.set(plan.id, JSON.parse(JSON.stringify(plan.product_assignments || {}))),
+        pendingAssignments.get(plan.id)!);
 
     const lines: string[] = [];
 
     for (const a of actions) {
       const type = String(a?.type || "");
       try {
-        if (type === "set_control" || type === "set_control_space") {
+        if (type === "create_plan") {
+          const name = String(a.name || "").trim() || `Plan ${workingPlans.length + 1}`;
+          const summary = String(a.summary ?? "");
+          const nextOrder = workingPlans.length
+            ? Math.max(...workingPlans.map((p) => p.sort_order)) + 1
+            : 0;
+          const productAssignments: Plan["product_assignments"] = { __configured: true, __base: {} };
+          const { data: created, error } = await supabase
+            .from("project_mitigation_plans")
+            .insert({
+              project_id: projectId!,
+              name,
+              summary,
+              control_counts: {},
+              excluded_instances: {},
+              product_assignments: productAssignments,
+              sort_order: nextOrder,
+              created_by: user?.id ?? null,
+            } as any)
+            .select()
+            .single();
+          if (error) throw error;
+          if (created) workingPlans.push(created as unknown as Plan);
+          lines.push(`Created ${name}.`);
+        } else if (type === "set_risk_products" || type === "assign_products_to_risk" || type === "assign_controls_to_risk") {
+          const plan = findPlan(a.plan);
+          const risk = findRisk(a.risk ?? a.class ?? a.detected_class);
+          if (!plan || !risk) {
+            lines.push(`Skipped ${type}: could not match ${!plan ? `plan "${a.plan}"` : `risk "${a.risk ?? a.class ?? a.detected_class}"`}.`);
+            continue;
+          }
+          const requested = Array.isArray(a.products) ? a.products : Array.isArray(a.controls) ? a.controls : [a.product ?? a.control].filter(Boolean);
+          const matched = requested.map((value) => findClassProduct(risk, value)).filter(Boolean) as PlanEditorClass["products"];
+          if (matched.length === 0) {
+            lines.push(`Skipped ${risk.code}: could not match any products.`);
+            continue;
+          }
+          const mode = String(a.mode || "replace").toLowerCase();
+          const next = assignmentsFor(plan);
+          const current = new Set(Array.isArray(next[risk.id]) ? next[risk.id] as string[] : []);
+          if (mode === "remove") matched.forEach((product) => current.delete(product.id));
+          else if (mode === "add") matched.forEach((product) => current.add(product.id));
+          else {
+            current.clear();
+            matched.forEach((product) => current.add(product.id));
+          }
+          next[risk.id] = [...current];
+          next.__configured = true;
+          plan.product_assignments = next;
+          lines.push(`Set ${risk.code} in ${plan.name} to ${matched.map((product) => product.code || product.name).join(", ")}.`);
+        } else if (type === "set_essential_component" || type === "set_base_component") {
+          const plan = findPlan(a.plan);
+          const product = findBaseProduct(a.product ?? a.component);
+          const quantity = Math.max(0, Math.floor(Number(a.quantity ?? 1) || 0));
+          if (!plan || !product) {
+            lines.push(`Skipped ${type}: could not match ${!plan ? `plan "${a.plan}"` : `component "${a.product ?? a.component}"`}.`);
+            continue;
+          }
+          const next = assignmentsFor(plan);
+          const base = (!next.__base || Array.isArray(next.__base) || typeof next.__base !== "object") ? {} : { ...(next.__base as Record<string, number>) };
+          if (quantity > 0) base[product.id] = quantity;
+          else delete base[product.id];
+          next.__base = base;
+          next.__configured = true;
+          plan.product_assignments = next;
+          lines.push(`Set ${product.code || product.name} in ${plan.name} to quantity ${quantity}.`);
+        } else if (type === "set_control" || type === "set_control_space") {
           const plan = findPlan(a.plan);
           const control = findControl(a.control);
           if (!plan || !control) {
