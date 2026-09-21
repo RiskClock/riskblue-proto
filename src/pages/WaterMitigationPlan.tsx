@@ -86,6 +86,8 @@ interface ControlRow {
   isOverridden: boolean;
   /** Set when the product is applied in every plan at a fixed quantity. */
   fixedQuantity?: number | null;
+  /** Catalog flag for products that should prefill in new plans. */
+  autoAdd?: boolean;
   /** Product pipe diameter in inches, when the product type is size-specific. */
   pipeDiameterInches?: number | null;
 }
@@ -563,7 +565,8 @@ export default function WaterMitigationPlan() {
             ...((p.process_ids as string[]) || []),
           ]
         : null;
-      if (p.applied_in_any_plan && p.control_id) {
+      row.autoAdd = !!p.applied_in_any_plan;
+      if (p.applied_in_any_plan) {
         row.fixedQuantity = Math.max(0, Number(p.fixed_quantity ?? 1) || 0);
       }
       return row;
@@ -841,31 +844,6 @@ export default function WaterMitigationPlan() {
       .update({ project_data: { ...existing, wmp_seeded: true } } as any)
       .eq("id", projectId);
   };
-  const [seeding, setSeeding] = useState(false);
-  useEffect(() => {
-    if (!projectId || plansLoading || plans.length > 0 || seeding || !canEdit) return;
-    if (!catalog || controlRows.length === 0) return;
-    if (seededFlag) return;
-    setSeeding(true);
-    markSeeded();
-    supabase
-      .from("project_mitigation_plans")
-      .insert({
-        project_id: projectId,
-        name: "Plan 1",
-        summary: "",
-        control_counts: derivedCounts,
-        sort_order: 0,
-        created_by: user?.id ?? null,
-      })
-      .then(({ error }) => {
-        if (error) toast.error(getUserFriendlyError(error));
-        queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
-        setSeeding(false);
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, plansLoading, plans.length, catalog, controlRows.length, derivedCounts, canEdit, seededFlag]);
-
   // Backfill the baseline plan when it was created before detections existed.
   const [backfilled, setBackfilled] = useState(false);
   useEffect(() => {
@@ -947,7 +925,7 @@ export default function WaterMitigationPlan() {
       summary: source ? source.summary : "",
       control_counts: source ? source.control_counts : {},
       excluded_instances: source ? source.excluded_instances : {},
-        product_assignments: source ? source.product_assignments : {},
+      product_assignments: source ? source.product_assignments : newPlanProductAssignments,
       sort_order: nextOrder,
       created_by: user?.id ?? null,
     });
@@ -1099,6 +1077,8 @@ export default function WaterMitigationPlan() {
           name: product.name || "",
           code: product.product_code,
           controlName: product.control_id ? (controls as any[]).find((control) => control.id === product.control_id)?.name || null : null,
+          autoAdd: !!product.applied_in_any_plan,
+          fixedQuantity: Math.max(0, Number(product.fixed_quantity ?? 1) || 0),
           pipeDiameterInches:
             product.pipe_diameter_inches === null || product.pipe_diameter_inches === undefined
               ? null
@@ -1123,18 +1103,6 @@ export default function WaterMitigationPlan() {
     return rows.sort((a, b) => a.name.localeCompare(b.name));
   }, [catalog, controls, detectionRows, items, products]);
 
-  const editorAssignments = useMemo(() => {
-    const plan = planEditor?.plan;
-    if (!plan) return {};
-    const result: Record<string, string[]> = {};
-    editorClasses.forEach((item) => {
-      const catalogId = item.id.split("::")[0];
-      const assigned = plan.product_assignments[item.id] ?? plan.product_assignments[catalogId];
-      result[item.id] = (Array.isArray(assigned) ? assigned : []).filter((id) => item.products.some((product) => product.id === id));
-    });
-    return result;
-  }, [planEditor, editorClasses]);
-
   const editorSourcePlans = useMemo(() => {
     const currentId = planEditor?.plan?.id;
     return plans
@@ -1152,13 +1120,79 @@ export default function WaterMitigationPlan() {
 
   /** Catalog products with no control type, selectable under Base Requirements. */
   const editorBaseProducts = useMemo(
-    () => baseRows.map((row) => ({ id: row.id, name: row.name, code: row.code ?? null, pipeDiameterInches: row.pipeDiameterInches ?? null })),
+    () => baseRows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      code: row.code ?? null,
+      autoAdd: !!row.autoAdd,
+      fixedQuantity: Math.max(0, Number(row.fixedQuantity ?? 1) || 0),
+      pipeDiameterInches: row.pipeDiameterInches ?? null,
+    })),
     [baseRows],
   );
 
+  const newPlanProductAssignments = useMemo<Plan["product_assignments"]>(() => {
+    const assignments: Plan["product_assignments"] = { __configured: true };
+    editorClasses.forEach((item) => {
+      const ids = item.products.filter((product) => product.autoAdd).map((product) => product.id);
+      if (ids.length > 0) assignments[item.id] = ids;
+    });
+    const base: Record<string, number> = {};
+    editorBaseProducts.forEach((product) => {
+      if (product.autoAdd) base[product.id] = Math.max(1, Math.floor(Number(product.fixedQuantity ?? 1) || 1));
+    });
+    assignments.__base = base;
+    return assignments;
+  }, [editorBaseProducts, editorClasses]);
+
+  const [seeding, setSeeding] = useState(false);
+  useEffect(() => {
+    if (!projectId || plansLoading || plans.length > 0 || seeding || !canEdit) return;
+    if (!catalog || controlRows.length === 0) return;
+    if (seededFlag) return;
+    setSeeding(true);
+    markSeeded();
+    supabase
+      .from("project_mitigation_plans")
+      .insert({
+        project_id: projectId,
+        name: "Plan 1",
+        summary: "",
+        control_counts: derivedCounts,
+        product_assignments: newPlanProductAssignments,
+        sort_order: 0,
+        created_by: user?.id ?? null,
+      })
+      .then(({ error }) => {
+        if (error) toast.error(getUserFriendlyError(error));
+        queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
+        setSeeding(false);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, plansLoading, plans.length, catalog, controlRows.length, derivedCounts, canEdit, seededFlag, newPlanProductAssignments]);
+
+  const editorAssignments = useMemo(() => {
+    const plan = planEditor?.plan;
+    if (!plan) {
+      const result: Record<string, string[]> = {};
+      editorClasses.forEach((item) => {
+        const assigned = newPlanProductAssignments[item.id];
+        result[item.id] = Array.isArray(assigned) ? assigned : [];
+      });
+      return result;
+    }
+    const result: Record<string, string[]> = {};
+    editorClasses.forEach((item) => {
+      const catalogId = item.id.split("::")[0];
+      const assigned = plan.product_assignments[item.id] ?? plan.product_assignments[catalogId];
+      result[item.id] = (Array.isArray(assigned) ? assigned : []).filter((id) => item.products.some((product) => product.id === id));
+    });
+    return result;
+  }, [planEditor, editorClasses, newPlanProductAssignments]);
+
   const editorBaseQuantities = useMemo(
-    () => (planEditor?.plan ? baseQuantitiesFor(planEditor.plan) : {}),
-    [planEditor],
+    () => (planEditor?.plan ? baseQuantitiesFor(planEditor.plan) : ((newPlanProductAssignments.__base || {}) as Record<string, number>)),
+    [planEditor, newPlanProductAssignments],
   );
 
   const savePlanEditor = async (value: {
@@ -1522,7 +1556,7 @@ actions and posts its own recap.`;
           const nextOrder = workingPlans.length
             ? Math.max(...workingPlans.map((p) => p.sort_order)) + 1
             : 0;
-          const productAssignments: Plan["product_assignments"] = { __configured: true, __base: {} };
+          const productAssignments: Plan["product_assignments"] = JSON.parse(JSON.stringify(newPlanProductAssignments));
           const { data: created, error } = await supabase
             .from("project_mitigation_plans")
             .insert({
@@ -2146,7 +2180,7 @@ actions and posts its own recap.`;
                   {visibleBaseRows.length > 0 && (
                     <tr className="border-b bg-muted/40">
                       <th className={`${labelCellBase} bg-muted/40 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground`}>
-                        Base Requirements
+                        Essential Components
                       </th>
                       {plans.map((plan) => (
                         <td key={plan.id} className="border-r px-4 py-2 bg-muted/40" />

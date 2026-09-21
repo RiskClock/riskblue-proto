@@ -27,6 +27,8 @@ export interface PlanEditorProduct {
   name: string;
   code?: string | null;
   controlName?: string | null;
+  autoAdd?: boolean;
+  fixedQuantity?: number | null;
   /** Product pipe diameter in inches, when the product type is size-specific. */
   pipeDiameterInches?: number | null;
 }
@@ -79,6 +81,22 @@ const productSearchText = (product: PlanEditorProduct) => {
 const compareProductId = (a: PlanEditorProduct, b: PlanEditorProduct) =>
   (a.code || a.name || "").localeCompare(b.code || b.name || "", undefined, { numeric: true, sensitivity: "base" }) ||
   (a.name || "").localeCompare(b.name || "", undefined, { numeric: true, sensitivity: "base" });
+
+const cleanAssignments = (value: Record<string, string[]> = {}) =>
+  Object.fromEntries(
+    Object.entries(value)
+      .map(([key, values]) => [key, [...(Array.isArray(values) ? values : [])].sort()] as const)
+      .filter(([, values]) => values.length > 0)
+      .sort(([a], [b]) => a.localeCompare(b)),
+  );
+
+const cleanBaseQuantities = (value: Record<string, number> = {}) =>
+  Object.fromEntries(
+    Object.entries(value)
+      .map(([key, quantity]) => [key, Math.max(0, Math.floor(Number(quantity) || 0))] as const)
+      .filter(([, quantity]) => quantity > 0)
+      .sort(([a], [b]) => a.localeCompare(b)),
+  );
 
 /** `0.87" (22mm)` for a product diameter in inches. */
 function diameterLabel(inches?: number | null): string | null {
@@ -161,6 +179,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
   const [loadOpen, setLoadOpen] = useState(false);
   const [loadBaseOpen, setLoadBaseOpen] = useState(false);
   const [pendingSource, setPendingSource] = useState<{ source: PlanEditorSource; scope: "classes" | "base" } | null>(null);
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -176,6 +195,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
     setLoadOpen(false);
     setLoadBaseOpen(false);
     setPendingSource(null);
+    setDiscardConfirmOpen(false);
   }, [open, initialName, initialDescription, initialAssignments, initialBaseQuantities]);
 
   const setBaseQuantity = (productId: string, quantity: number) => {
@@ -204,6 +224,32 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
     [assignments],
   );
   const hasBaseSelections = Object.values(baseQuantities).some((value) => value > 0);
+
+  const initialSnapshot = useMemo(
+    () => JSON.stringify({
+      name: initialName,
+      description: initialDescription,
+      assignments: cleanAssignments(initialAssignments),
+      baseQuantities: cleanBaseQuantities(initialBaseQuantities),
+    }),
+    [initialAssignments, initialBaseQuantities, initialDescription, initialName],
+  );
+  const currentSnapshot = useMemo(
+    () => JSON.stringify({
+      name,
+      description,
+      assignments: cleanAssignments(assignments),
+      baseQuantities: cleanBaseQuantities(baseQuantities),
+    }),
+    [assignments, baseQuantities, description, name],
+  );
+  const hasUnsavedChanges = initialSnapshot !== currentSnapshot;
+
+  const requestClose = () => {
+    if (saving) return;
+    if (hasUnsavedChanges) setDiscardConfirmOpen(true);
+    else onOpenChange(false);
+  };
 
   const toggleProduct = (classId: string, productId: string) => {
     setAssignments((current) => {
@@ -262,7 +308,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next) => { if (next) onOpenChange(true); else requestClose(); }}>
       <DialogContent className="w-[96vw] max-w-[96vw] sm:max-w-[1180px] max-h-[88vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>{mode === "create" ? "New Water Mitigation Plan" : "Edit Water Mitigation Plan"}</DialogTitle>
@@ -301,13 +347,13 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                 </div>
                 {loadPlanButton("base")}
               </div>
-              <div className="rounded-lg border p-2 space-y-1.5">
+              <div className="inline-flex min-w-[20rem] max-w-full flex-col rounded-lg border p-2 space-y-1.5 overflow-x-auto">
                 {addedBaseProducts.map((product) => {
                   const quantity = baseQuantities[product.id] || 0;
                   const size = diameterLabel(product.pipeDiameterInches);
                   return (
-                    <div key={product.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50">
-                      <span className="flex-1 truncate text-sm">
+                    <div key={product.id} className="flex min-w-[20rem] items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50">
+                      <span className="min-w-0 flex-1 text-sm">
                         {product.code ? <strong>{product.code}</strong> : null}
                         {product.code && product.name ? " " : ""}
                         {product.name}
@@ -335,7 +381,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                 })}
                 <Popover open={baseOpen} onOpenChange={(next) => { setBaseOpen(next); setBaseSearch(""); }}>
                   <PopoverTrigger asChild>
-                    <Button type="button" variant="ghost" size="sm" className="mx-auto flex h-7 px-2 text-xs font-medium text-primary hover:bg-primary/10">
+                    <Button type="button" variant="ghost" size="sm" className="flex h-7 self-start px-2 text-xs font-medium text-primary hover:bg-primary/10">
                       <Plus className="h-3 w-3" />
                       Add Component
                     </Button>
@@ -386,9 +432,9 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                 );
                 return (
                   <ThreatOverviewCard key={item.id} code={item.code} name={item.name} count={item.count}>
-                    <div className="flex flex-col items-center gap-2 px-2 pb-2 text-left">
+                    <div className="flex flex-col items-stretch gap-2 px-2 pb-2 text-left">
                       {selected.length > 0 && (
-                        <div className="flex flex-wrap justify-center gap-1.5">
+                        <div className="flex w-full flex-wrap justify-start gap-1.5">
                           {selected.map((id) => {
                             const product = productById.get(id);
                             if (!product) return null;
@@ -421,7 +467,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                         }}
                       >
                         <PopoverTrigger asChild>
-                          <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs font-medium text-primary hover:bg-primary/10">
+                          <Button type="button" variant="ghost" size="sm" className="h-7 self-center px-2 text-xs font-medium text-primary hover:bg-primary/10">
                             <Plus className="h-3 w-3" />
                             Add Control
                           </Button>
@@ -460,7 +506,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button type="button" variant="outline" onClick={requestClose}>Cancel</Button>
           <Button type="button" disabled={saving || !name.trim()} onClick={() => onSave({ name: name.trim(), description, assignments, baseQuantities })}>
             {saving ? "Saving…" : mode === "create" ? "Create plan" : "Save changes"}
           </Button>
@@ -478,6 +524,21 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction onClick={() => pendingSource && applySource(pendingSource.source, pendingSource.scope)}>Overwrite</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={discardConfirmOpen} onOpenChange={setDiscardConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Closing this plan will discard the changes you entered.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Keep editing</AlertDialogCancel>
+              <AlertDialogAction onClick={() => { setDiscardConfirmOpen(false); onOpenChange(false); }}>Discard</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

@@ -46,7 +46,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useTenant } from "@/contexts/TenantContext";
-import { ArrowDown, ArrowUp, Check, ChevronsUpDown, Loader2, Search, Package, Plus, Trash2, ImagePlus, Pencil, SlidersHorizontal } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronsUpDown, Loader2, Search, Package, Plus, Trash2, ImagePlus, Pencil, SlidersHorizontal, X } from "lucide-react";
 import { toast } from "sonner";
 import { productCatalogLabel } from "@/lib/catalogLabel";
 import { tagStyle } from "@/lib/tagColor";
@@ -79,7 +79,7 @@ interface TenantProduct {
   one_time_cost: number | null;
   installation_cost: number | null;
   monthly_maint_cost: number | null;
-  maint_interval: "monthly" | "yearly";
+  maint_interval: "monthly" | "yearly" | null;
   applied_in_any_plan: boolean;
   pipe_diameter_inches: number | null;
   scope_customized: boolean;
@@ -131,9 +131,12 @@ export default function Controls() {
   const [addOpen, setAddOpen] = useState(false);
   const [scopePickerOpen, setScopePickerOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const sortStorageKey = `product-catalog-sort:${user?.id || "anonymous"}:${tenantId || "none"}`;
+  const recurringStorageKey = `product-catalog-recurring-default:${user?.id || "anonymous"}:${tenantId || "none"}`;
   const [sortField, setSortField] = useState<ProductSortField>("product_code");
   const [sortDirection, setSortDirection] = useState<ProductSortDirection>("asc");
+  const [recurringDefault, setRecurringDefault] = useState<"monthly" | "yearly">("monthly");
 
   useEffect(() => {
     try {
@@ -155,6 +158,15 @@ export default function Controls() {
   useEffect(() => {
     window.localStorage.setItem(sortStorageKey, JSON.stringify({ field: sortField, direction: sortDirection }));
   }, [sortDirection, sortField, sortStorageKey]);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(recurringStorageKey);
+    setRecurringDefault(saved === "yearly" ? "yearly" : "monthly");
+  }, [recurringStorageKey]);
+
+  useEffect(() => {
+    window.localStorage.setItem(recurringStorageKey, recurringDefault);
+  }, [recurringDefault, recurringStorageKey]);
 
   // ---------- data ----------
   const emptyCatalog = useMemo(
@@ -309,6 +321,7 @@ export default function Controls() {
         pipe_diameter_inches: input.pipeDiameterInches,
         one_time_cost: control?.one_time_cost ?? null,
         monthly_maint_cost: control?.monthly_maint_cost ?? null,
+        maint_interval: recurringDefault,
         created_by: user.id,
         updated_by: user.id,
       } as any)
@@ -393,7 +406,10 @@ export default function Controls() {
         ? { one_time_cost: parsed }
         : field === "install"
         ? { installation_cost: parsed }
-        : { monthly_maint_cost: parsed };
+        : {
+            monthly_maint_cost: parsed,
+            ...((selected.monthly_maint_cost === null || selected.monthly_maint_cost === undefined) ? { maint_interval: recurringDefault } : {}),
+          };
     void patchProduct(selected.id, patch);
   };
 
@@ -467,6 +483,10 @@ export default function Controls() {
   const selectedScopeItems = scopeItems.filter((item) => scope[item.category].includes(item.id));
   const selectedControl = selected?.control_id ? controlMap.get(selected.control_id) : undefined;
   const needsPipeDiameter = PIPE_DIAMETER_TYPES.has(selectedControl?.name.toLowerCase() ?? "");
+  const selectedHasRecurringValue = selected?.monthly_maint_cost !== null && selected?.monthly_maint_cost !== undefined;
+  const selectedRecurringInterval = selectedHasRecurringValue && (selected?.maint_interval === "yearly" || selected?.maint_interval === "monthly")
+    ? selected.maint_interval
+    : recurringDefault;
 
 
   return (
@@ -499,11 +519,28 @@ export default function Controls() {
                   <div className="relative flex-1 min-w-0">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
+                      ref={searchInputRef}
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       placeholder="Search products by name or ID"
-                      className="pl-9"
+                      className="pl-9 pr-9"
                     />
+                    {search && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        aria-label="Clear search"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          setSearch("");
+                          requestAnimationFrame(() => searchInputRef.current?.focus());
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -770,7 +807,7 @@ export default function Controls() {
                         )}
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Maintenance</p>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Recurring</p>
                         {canEdit ? (
                           <div className="flex gap-2">
                             <div className="relative flex-1">
@@ -787,10 +824,12 @@ export default function Controls() {
                               />
                             </div>
                             <Select
-                              value={selected.maint_interval ?? "monthly"}
-                              onValueChange={(v) =>
-                                void patchProduct(selected.id, { maint_interval: v as "monthly" | "yearly" })
-                              }
+                              value={selectedRecurringInterval}
+                              onValueChange={(v) => {
+                                const interval = v === "yearly" ? "yearly" : "monthly";
+                                setRecurringDefault(interval);
+                                void patchProduct(selected.id, { maint_interval: interval });
+                              }}
                             >
                               <SelectTrigger className="h-9 w-[104px]">
                                 <SelectValue />
@@ -805,7 +844,7 @@ export default function Controls() {
                           <p className="text-lg font-semibold">
                             {formatCost(selected.monthly_maint_cost ?? selectedControl?.monthly_maint_cost)}
                             <span className="text-xs font-normal text-muted-foreground">
-                              {selected.maint_interval === "yearly" ? "/yr" : "/mo"}
+                              {selectedRecurringInterval === "yearly" ? "/yr" : "/mo"}
                             </span>
                           </p>
                         )}
@@ -824,7 +863,7 @@ export default function Controls() {
                           void patchProduct(selected.id, { applied_in_any_plan: v === true } as any)
                         }
                       />
-                      <span className="text-sm">Applied in any plan</span>
+                      <span className="text-sm">Automatically add to all new plans</span>
                     </label>
                     {selected.applied_in_any_plan && (
                       <div className="mt-3 flex items-center gap-2">
