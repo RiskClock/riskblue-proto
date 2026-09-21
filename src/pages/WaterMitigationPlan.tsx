@@ -84,6 +84,8 @@ interface ControlRow {
   scopeIds: string[] | null;
   /** Effective per-unit cost used for this project (override when set). */
   unitCost: number;
+  /** How the row cost should be labelled in the breakdown. */
+  costPeriod?: "unit" | "month" | "year";
   /** Per-unit cost as defined in the control library. */
   libraryUnitCost: number;
   isOverridden: boolean;
@@ -567,7 +569,6 @@ export default function WaterMitigationPlan() {
     };
     return (p: any): ControlRow => {
       const control = p.control_id ? controlById.get(p.control_id) : undefined;
-      const ov = p.control_id ? overrideMap.get(p.control_id) : undefined;
       // Product Catalog pricing is authoritative for products; null means no charge for that field.
       const oneTime = Number(p.one_time_cost ?? 0) || 0;
       const install = Number(p.installation_cost ?? 0) || 0;
@@ -579,6 +580,9 @@ export default function WaterMitigationPlan() {
         p.name || p.product_code || control?.name || "Product",
         oneTime + install + annualMaint,
       );
+      row.costPeriod = oneTime === 0 && install === 0 && maint > 0
+        ? p.maint_interval === "yearly" ? "year" : "month"
+        : "unit";
       row.code = p.product_code || null;
       row.pipeDiameterInches =
         p.pipe_diameter_inches === null || p.pipe_diameter_inches === undefined
@@ -1858,6 +1862,9 @@ actions and posts its own recap.`;
   const planColumnPx = 220;
   const actionColumnPx = 140;
   const tableMinWidthPx = labelColumnPx + plans.length * planColumnPx + actionColumnPx;
+  const planColumnWidth = plans.length > 0
+    ? `calc((100% - ${labelColumnPx + actionColumnPx}px) / ${plans.length})`
+    : `${planColumnPx}px`;
   const labelCellBase = `sticky left-0 z-10 px-4 py-3 text-sm font-medium text-foreground ${labelWidth} shadow-[inset_-1px_0_0_hsl(var(--border))]`;
   const labelCell = `${labelCellBase} bg-card`;
   const planTotalsById = new Map(plans.map((plan) => [plan.id, planTotals(plan)]));
@@ -1865,10 +1872,11 @@ actions and posts its own recap.`;
   const sharedColumns = (
     <colgroup>
       <col style={{ width: labelColumnPx }} />
-      {plans.map((plan) => <col key={plan.id} style={{ width: planColumnPx }} />)}
+      {plans.map((plan) => <col key={plan.id} style={{ width: planColumnWidth }} />)}
       <col style={{ width: actionColumnPx }} />
     </colgroup>
   );
+  const costPeriodLabel = (row: ControlRow) => row.costPeriod === "year" ? "year" : row.costPeriod === "month" ? "month" : "unit";
 
   if (adminLoading || !canEdit) {
     return (
@@ -2216,7 +2224,7 @@ actions and posts its own recap.`;
                                       : "Cost per unit from the control library"
                                   }
                                 >
-                                  {currency(row.unitCost)} / unit
+                                  {currency(row.unitCost)} / {costPeriodLabel(row)}
                                 </button>
                               )}
                               {row.isOverridden && canEdit && editingCostId !== row.id && (
@@ -2305,7 +2313,7 @@ actions and posts its own recap.`;
                             </span>
                           </div>
                           <div className="mt-0.5 pl-[26px] text-xs text-muted-foreground tabular-nums">
-                            {currency(row.unitCost)} / unit
+                            {currency(row.unitCost)} / {costPeriodLabel(row)}
                           </div>
                         </th>
                         {plans.map((plan) => {
