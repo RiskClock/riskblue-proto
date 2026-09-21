@@ -134,7 +134,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
     queryFn: async () => {
       const { data, error } = await supabase
         .from("mitigation_controls")
-        .select("id, name, category, responsible, vendor_name, application_component")
+        .select("id, name, category, responsible, vendor_name, application_component, description, action")
         .eq("is_active", true)
         .order("display_order");
       if (error) throw error;
@@ -145,8 +145,10 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
         responsible?: string | null;
         vendor_name?: string | null;
         application_component?: string | null;
+        description?: string | null;
+        action?: string | null;
       }[]).filter((control) => {
-        const metadata = `${control.category || ""} ${control.responsible || ""} ${control.vendor_name || ""} ${control.application_component || ""}`.toLowerCase();
+        const metadata = `${control.category || ""} ${control.responsible || ""} ${control.vendor_name || ""} ${control.application_component || ""} ${control.description || ""} ${control.action || ""}`.toLowerCase();
         const contractorTerms = [
           "contractor",
           "water mitigation solution provider",

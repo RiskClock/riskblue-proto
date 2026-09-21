@@ -1862,9 +1862,9 @@ actions and posts its own recap.`;
   const highestControlsApplied = Math.max(0, ...plans.map((plan) => planTotalsById.get(plan.id)?.count ?? 0));
   const sharedColumns = (
     <colgroup>
-      <col className={labelWidth} />
-      {plans.map((plan) => <col key={plan.id} className="w-[220px] min-w-[220px]" />)}
-      <col className="w-[140px] min-w-[140px]" />
+      <col style={{ width: labelColumnPx }} />
+      {plans.map((plan) => <col key={plan.id} style={{ width: planColumnPx }} />)}
+      <col style={{ width: actionColumnPx }} />
     </colgroup>
   );
 
@@ -1926,7 +1926,7 @@ actions and posts its own recap.`;
         ) : (
           <div className="overflow-auto min-h-0 max-h-full">
             <div className="w-max min-w-full rounded-lg border bg-card">
-            <table className="min-w-full table-fixed border-collapse" style={{ width: tableWidth }}>
+            <table className="table-fixed border-collapse" style={{ width: tableWidth }}>
               {sharedColumns}
               <tbody>
                 <tr className="border-b">
@@ -2072,7 +2072,7 @@ actions and posts its own recap.`;
             </div>
 
             <div className="w-max min-w-full rounded-lg border bg-card">
-            <table className="min-w-full table-fixed border-collapse" style={{ width: tableWidth }}>
+            <table className="table-fixed border-collapse" style={{ width: tableWidth }}>
               {sharedColumns}
               <tbody>
                 {visibleControlRows.length === 0 && visibleBaseRows.length === 0 ? (
