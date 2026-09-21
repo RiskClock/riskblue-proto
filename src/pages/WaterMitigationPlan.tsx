@@ -1085,13 +1085,14 @@ export default function WaterMitigationPlan() {
     const productChoices = (catalogId: string, defaultControlIds: string[]) =>
       (products as any[])
         .filter((product) => {
+          if (!product.control_id) return false;
           if (product.scope_customized) {
             return [
               ...((product.critical_asset_ids as string[]) || []),
               ...((product.water_system_ids as string[]) || []),
             ].includes(catalogId);
           }
-          return !!product.control_id && defaultControlIds.includes(product.control_id);
+          return defaultControlIds.includes(product.control_id);
         })
         .map((product) => ({
           id: product.id,
