@@ -151,13 +151,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
         action?: string | null;
       }[]).filter((control) => {
         const category = (control.category || "").trim().toLowerCase();
-        if (!INTAKE_CONTROL_CATEGORIES.has(category)) return false;
-        const metadata = `${control.responsible || ""} ${control.vendor_name || ""} ${control.application_component || ""}`.toLowerCase();
-        const contractorTerms = [
-          "contractor",
-          "mechanical contractor",
-        ];
-        return !contractorTerms.some((term) => metadata.includes(term));
+        return INTAKE_CONTROL_CATEGORIES.has(category);
       });
     },
     enabled: open,
