@@ -1755,6 +1755,16 @@ actions and posts its own recap.`;
         lines.push(`Failed to save changes: ${getUserFriendlyError(error)}`);
       }
     }
+    for (const [planId, productAssignments] of pendingAssignments) {
+      const { error } = await supabase
+        .from("project_mitigation_plans")
+        .update({ product_assignments: productAssignments } as any)
+        .eq("id", planId);
+      if (error) {
+        allPlanWritesSucceeded = false;
+        lines.push(`Failed to save product selections: ${getUserFriendlyError(error)}`);
+      }
+    }
 
     await queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
 
