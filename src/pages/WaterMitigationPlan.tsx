@@ -1757,7 +1757,6 @@ actions and posts its own recap.`;
           }
            const { error } = await supabase.from("project_mitigation_plans").delete().eq("id", plan.id);
            if (error) throw error;
-            await markSeeded();
            lines.push(`Deleted ${plan.name}.`);
           const removedIdx = workingPlans.findIndex((p) => p.id === plan.id);
           if (removedIdx >= 0) workingPlans.splice(removedIdx, 1);
