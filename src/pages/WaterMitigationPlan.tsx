@@ -1049,18 +1049,33 @@ export default function WaterMitigationPlan() {
     [baseRows, plans],
   );
 
+  /** Per-plan pricing overrides live alongside the product assignments. */
+  const planPricingFor = (plan: Plan): PricingOverrides => readPlanPricing(plan.product_assignments as any);
+
+  /** Effective unit cost for a product inside a plan (plan override > project override > catalog). */
+  const rowPricingFor = (plan: Plan, row: ControlRow) => {
+    const override = planPricingFor(plan)[row.id];
+    if (!hasCustomPricing(override)) {
+      return { unitCost: row.unitCost, period: row.costPeriod ?? "unit", custom: false };
+    }
+    const merged = mergePricing(row.pricing, override);
+    return { unitCost: annualUnitCost(merged), period: costPeriodOf(merged), custom: true };
+  };
+
+  const unitCostIn = (plan: Plan, row: ControlRow) => rowPricingFor(plan, row).unitCost;
+
   const planTotals = (plan: Plan) => {
     let count = 0;
     let cost = 0;
     controlRows.forEach((row) => {
       const n = countFor(plan, row.id);
       count += n;
-      cost += n * row.unitCost;
+      cost += n * unitCostIn(plan, row);
     });
     baseRows.forEach((row) => {
       const n = baseCountFor(plan, row.id);
       count += n;
-      cost += n * row.unitCost;
+      cost += n * unitCostIn(plan, row);
     });
     return { count, cost };
   };
