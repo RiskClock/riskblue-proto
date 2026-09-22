@@ -180,7 +180,7 @@ function ProductPickerOption({ product, checked, onToggle }: { product: PlanEdit
   );
 }
 
-export function PlanEditorModal({ open, mode, initialName, initialDescription, initialAssignments, initialBaseQuantities = {}, classes, baseProducts = [], existingPlans = [], saving, onOpenChange, onSave }: Props) {
+export function PlanEditorModal({ open, mode, initialName, initialDescription, initialAssignments, initialBaseQuantities = {}, initialPricing = {}, pricingDefaults = {}, currencySymbol = "$", classes, baseProducts = [], existingPlans = [], saving, onOpenChange, onSave }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [showDescription, setShowDescription] = useState(false);
