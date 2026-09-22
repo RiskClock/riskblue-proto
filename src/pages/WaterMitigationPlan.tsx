@@ -2490,6 +2490,43 @@ actions and posts its own recap.`;
         onSave={savePlanEditor}
       />
 
+      <Dialog open={!!duplicateTarget} onOpenChange={(open) => { if (!open && !duplicating) setDuplicateTarget(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Duplicate plan</DialogTitle>
+            <DialogDescription>Choose a name and what to copy over from "{duplicateTarget?.name}".</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="duplicate-plan-name">Plan name</Label>
+              <Input id="duplicate-plan-name" value={duplicateName} onChange={(e) => setDuplicateName(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              {([
+                ["essentials", "Essential components"],
+                ["riskClasses", "Detected risk classes"],
+                ["pricing", "Custom pricing"],
+              ] as const).map(([key, label]) => (
+                <div key={key} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`duplicate-${key}`}
+                    checked={duplicateParts[key]}
+                    onCheckedChange={(checked) => setDuplicateParts((current) => ({ ...current, [key]: checked === true }))}
+                  />
+                  <Label htmlFor={`duplicate-${key}`} className="font-normal">{label}</Label>
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDuplicateTarget(null)} disabled={duplicating}>Cancel</Button>
+            <Button onClick={confirmDuplicate} disabled={duplicating || !duplicateName.trim()}>
+              {duplicating ? "Duplicating…" : "Duplicate plan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {viewer && viewerData && (
         <ControlInstancesModal
           isOpen
