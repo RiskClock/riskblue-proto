@@ -49,6 +49,7 @@ export interface PlanEditorSource {
   name: string;
   assignments: Record<string, string[]>;
   baseQuantities?: Record<string, number>;
+  pricing?: PricingOverrides;
 }
 
 export type PlanEditorBaseProduct = PlanEditorProduct;
@@ -60,6 +61,10 @@ interface Props {
   initialDescription: string;
   initialAssignments: Record<string, string[]>;
   initialBaseQuantities?: Record<string, number>;
+  initialPricing?: PricingOverrides;
+  /** Catalog pricing per product id, used as the placeholder defaults. */
+  pricingDefaults?: Record<string, ProductPricing>;
+  currencySymbol?: string;
   classes: PlanEditorClass[];
   baseProducts?: PlanEditorBaseProduct[];
   existingPlans?: PlanEditorSource[];
@@ -70,6 +75,7 @@ interface Props {
     description: string;
     assignments: Record<string, string[]>;
     baseQuantities: Record<string, number>;
+    pricing: PricingOverrides;
   }) => void;
 }
 
