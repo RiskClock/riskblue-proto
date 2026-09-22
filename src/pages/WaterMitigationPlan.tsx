@@ -2136,13 +2136,13 @@ actions and posts its own recap.`;
                               ...visibleControlRows.map((row, colorIndex) => ({
                                 id: row.id,
                                 name: row.name,
-                                value: countFor(plan, row.id) * row.unitCost,
+                                value: countFor(plan, row.id) * unitCostIn(plan, row),
                                 colorIndex,
                               })),
                               ...visibleBaseRows.map((row, index) => ({
                                 id: row.id,
                                 name: row.name,
-                                value: baseCountFor(plan, row.id) * row.unitCost,
+                                value: baseCountFor(plan, row.id) * unitCostIn(plan, row),
                                 colorIndex: visibleControlRows.length + index,
                               })),
                             ]}
@@ -2241,9 +2241,12 @@ actions and posts its own recap.`;
                           </th>
                           {plans.map((plan) => {
                             const n = countFor(plan, row.id);
+                            const priced = rowPricingFor(plan, row);
                             return (
                               <td key={plan.id} className="border-r px-4 py-2 text-center text-sm tabular-nums">
-                                <div className="font-bold text-foreground">{currency(n * row.unitCost)}</div>
+                                <div className={`font-bold text-foreground ${priced.custom ? "rounded bg-orange-100 px-1 dark:bg-orange-500/20" : ""}`}>
+                                  {currency(n * priced.unitCost)}
+                                </div>
                                 <div>{locationLabel(n)}</div>
                               </td>
                             );
@@ -2317,9 +2320,12 @@ actions and posts its own recap.`;
                         </th>
                         {plans.map((plan) => {
                           const n = baseCountFor(plan, row.id);
+                          const priced = rowPricingFor(plan, row);
                           return (
                             <td key={plan.id} className="border-r px-4 py-2 text-center text-sm tabular-nums">
-                              <div className="font-bold text-foreground">{currency(n * row.unitCost)}</div>
+                              <div className={`font-bold text-foreground ${priced.custom ? "rounded bg-orange-100 px-1 dark:bg-orange-500/20" : ""}`}>
+                                {currency(n * priced.unitCost)}
+                              </div>
                               <div>{n} {n === 1 ? "unit" : "units"}</div>
                             </td>
                           );
