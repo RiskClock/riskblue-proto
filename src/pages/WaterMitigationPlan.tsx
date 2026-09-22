@@ -2092,6 +2092,7 @@ actions and posts its own recap.`;
                 </div>
               </div>
             ) : (
+            <>
             <div className="sticky top-0 z-40 min-w-full rounded-t-lg border border-b-0 bg-card overflow-visible">
             <table className="w-full table-fixed border-collapse" style={{ minWidth: tableMinWidthPx }}>
               {sharedColumns}
@@ -2235,6 +2236,7 @@ actions and posts its own recap.`;
               </tbody>
             </table>
             </div>
+            </>
             )}
 
             <div className="w-max bg-background py-3">
