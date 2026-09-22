@@ -565,7 +565,7 @@ export default function WaterMitigationPlan() {
   // products keep using their saved control selections.
   const buildProductRow = useMemo(() => {
     const controlById = new Map((controls as any[]).map((c) => [c.id, c]));
-    const withCost = (id: string, controlId: string, name: string, base: number): ControlRow => {
+    const withCost = (id: string, controlId: string, name: string, base: number, pricing: ProductPricing): ControlRow => {
       const scenario = costOverrides[id];
       const isOverridden = typeof scenario === "number" && Number.isFinite(scenario);
       return {
@@ -576,24 +576,26 @@ export default function WaterMitigationPlan() {
         libraryUnitCost: base,
         unitCost: isOverridden ? scenario : base,
         isOverridden,
+        pricing,
       };
     };
     return (p: any): ControlRow => {
       const control = p.control_id ? controlById.get(p.control_id) : undefined;
       // Product Catalog pricing is authoritative for products; null means no charge for that field.
-      const oneTime = Number(p.one_time_cost ?? 0) || 0;
-      const install = Number(p.installation_cost ?? 0) || 0;
-      const maint = Number(p.monthly_maint_cost ?? 0) || 0;
-      const annualMaint = p.maint_interval === "yearly" ? maint : maint * 12;
+      const pricing: ProductPricing = {
+        oneTime: Number(p.one_time_cost ?? 0) || 0,
+        install: Number(p.installation_cost ?? 0) || 0,
+        recurring: Number(p.monthly_maint_cost ?? 0) || 0,
+        interval: p.maint_interval === "yearly" ? "yearly" : "monthly",
+      };
       const row = withCost(
         p.id,
         p.control_id || p.id,
         p.name || p.product_code || control?.name || "Product",
-        oneTime + install + annualMaint,
+        annualUnitCost(pricing),
+        pricing,
       );
-      row.costPeriod = oneTime === 0 && install === 0 && maint > 0
-        ? p.maint_interval === "yearly" ? "year" : "month"
-        : "unit";
+      row.costPeriod = costPeriodOf(pricing);
       row.code = p.product_code || null;
       row.pipeDiameterInches =
         p.pipe_diameter_inches === null || p.pipe_diameter_inches === undefined
