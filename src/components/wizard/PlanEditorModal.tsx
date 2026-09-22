@@ -573,11 +573,112 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
               {classes.length === 0 && <p className="text-sm text-muted-foreground sm:col-span-2 py-6 text-center">No Asset or Water System classes were detected for this project.</p>}
             </div>
           </div>
+
+          <div className="space-y-2 pt-6">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold">Control Pricing</h3>
+                <p className="text-xs text-muted-foreground">
+                  Override Product Catalog pricing for this plan only. Leave a field empty to use the catalog price.
+                </p>
+              </div>
+              {Object.keys(cleanPricingOverrides(pricing)).length > 0 && (
+                <Button type="button" variant="outline" size="sm" onClick={() => setPricing({})}>
+                  <RotateCcw className="mr-1 h-3.5 w-3.5" /> Reset all to default
+                </Button>
+              )}
+            </div>
+            {pricingRows.length === 0 ? (
+              <p className="rounded-lg border p-4 text-sm text-muted-foreground">
+                Add controls or essential components to this plan to set custom pricing.
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border">
+                <table className="w-full min-w-[820px] text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
+                      <th className="px-3 py-2 text-left font-medium">Product</th>
+                      <th className="px-3 py-2 text-left font-medium">One-time ({currencySymbol})</th>
+                      <th className="px-3 py-2 text-left font-medium">Installation ({currencySymbol})</th>
+                      <th className="px-3 py-2 text-left font-medium">Recurring ({currencySymbol})</th>
+                      <th className="px-3 py-2 text-left font-medium">Interval</th>
+                      <th className="px-3 py-2" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pricingRows.map(({ product, group }) => {
+                      const defaults: ProductPricing = pricingDefaults[product.id] || { oneTime: 0, install: 0, recurring: 0, interval: "monthly" };
+                      const custom = hasCustomPricing(pricing[product.id]);
+                      return (
+                        <tr key={product.id} className={`border-b last:border-b-0 ${custom ? "bg-orange-100/70 dark:bg-orange-500/15" : ""}`}>
+                          <td className="px-3 py-2">
+                            <div className="truncate">
+                              {product.code ? <strong>{product.code} </strong> : null}
+                              {product.name}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {group === "base" ? "Essential component" : product.controlName || "Control"}
+                            </div>
+                          </td>
+                          {(["oneTime", "install", "recurring"] as const).map((field) => (
+                            <td key={field} className="px-3 py-2">
+                              <Input
+                                value={amountValue(product.id, field)}
+                                onChange={(event) => onAmountChange(product.id, field, event.target.value)}
+                                placeholder={String(
+                                  field === "oneTime" ? defaults.oneTime : field === "install" ? defaults.install : defaults.recurring,
+                                )}
+                                className="h-8 w-28 text-sm tabular-nums"
+                                inputMode="decimal"
+                                aria-label={`${field} cost for ${product.name || product.code}`}
+                              />
+                            </td>
+                          ))}
+                          <td className="px-3 py-2">
+                            <select
+                              value={pricing[product.id]?.interval || defaults.interval}
+                              onChange={(event) => {
+                                const value = event.target.value as RecurringInterval;
+                                setPricingField(product.id, "interval", value === defaults.interval ? null : value);
+                              }}
+                              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                              aria-label={`Recurring interval for ${product.name || product.code}`}
+                            >
+                              <option value="monthly">Monthly</option>
+                              <option value="yearly">Yearly</option>
+                            </select>
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {custom && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                aria-label={`Reset pricing for ${product.name || product.code}`}
+                                onClick={() => setPricing((current) => {
+                                  const next = { ...current };
+                                  delete next[product.id];
+                                  return next;
+                                })}
+                              >
+                                <RotateCcw className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={requestClose}>Cancel</Button>
-          <Button type="button" disabled={saving || !name.trim()} onClick={() => onSave({ name: name.trim(), description, assignments, baseQuantities })}>
+          <Button type="button" disabled={saving || !name.trim()} onClick={() => onSave({ name: name.trim(), description, assignments, baseQuantities, pricing: cleanPricingOverrides(pricing) })}>
             {saving ? "Saving…" : mode === "create" ? "Create plan" : "Save changes"}
           </Button>
         </DialogFooter>
