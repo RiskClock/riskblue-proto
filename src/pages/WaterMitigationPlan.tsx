@@ -950,19 +950,41 @@ export default function WaterMitigationPlan() {
     queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
   };
 
-  const addPlan = async (source?: Plan) => {
+  const addPlan = async (
+    source?: Plan,
+    options?: { name?: string; essentials?: boolean; riskClasses?: boolean; pricing?: boolean },
+  ) => {
     const nextOrder = plans.length ? Math.max(...plans.map((p) => p.sort_order)) + 1 : 0;
-    const name = source ? `${source.name} (copy)` : `Plan ${plans.length + 1}`;
+    const name = options?.name?.trim() || (source ? `${source.name} (copy)` : `Plan ${plans.length + 1}`);
+
+    let assignments: Plan["product_assignments"] = newPlanProductAssignments;
+    if (source) {
+      const copyEssentials = options?.essentials ?? true;
+      const copyClasses = options?.riskClasses ?? true;
+      const copyPricing = options?.pricing ?? true;
+      const from = (source.product_assignments || {}) as Plan["product_assignments"];
+      const next: Plan["product_assignments"] = { __configured: true };
+      if (copyClasses) {
+        Object.entries(from).forEach(([key, value]) => {
+          if (key.startsWith("__")) return;
+          if (Array.isArray(value)) next[key] = [...value];
+        });
+      }
+      if (copyEssentials && from.__base) next.__base = { ...(from.__base as Record<string, number>) };
+      if (copyPricing && from.__pricing) next.__pricing = JSON.parse(JSON.stringify(from.__pricing));
+      assignments = next;
+    }
+
     const { error } = await supabase.from("project_mitigation_plans").insert({
       project_id: projectId!,
       name,
       summary: source ? source.summary : "",
-      control_counts: source ? source.control_counts : {},
-      excluded_instances: source ? source.excluded_instances : {},
-      product_assignments: source ? source.product_assignments : newPlanProductAssignments,
+      control_counts: source && (options?.riskClasses ?? true) ? source.control_counts : {},
+      excluded_instances: source && (options?.riskClasses ?? true) ? source.excluded_instances : {},
+      product_assignments: assignments,
       sort_order: nextOrder,
       created_by: user?.id ?? null,
-    });
+    } as any);
     if (error) {
       toast.error(getUserFriendlyError(error));
       return;
