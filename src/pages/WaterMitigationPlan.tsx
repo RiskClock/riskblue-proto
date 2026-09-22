@@ -864,28 +864,6 @@ export default function WaterMitigationPlan() {
     return counts;
   }, [spaceBreakdown]);
 
-  // Seed the first plan from the detected instances — only once ever per
-  // project, so deleting the last plan doesn't immediately recreate one.
-  const seededFlag = Boolean((project as any)?.project_data?.wmp_seeded);
-  const [seededLocally, setSeededLocally] = useState(false);
-  useEffect(() => {
-    if (seededFlag) setSeededLocally(true);
-  }, [seededFlag]);
-  const seedBlocked = seededFlag || seededLocally;
-  const markSeeded = async () => {
-    if (!projectId) return;
-    setSeededLocally(true);
-    const existing = ((project as any)?.project_data || {}) as Record<string, any>;
-    const nextProjectData = { ...existing, wmp_seeded: true };
-    queryClient.setQueryData(["wmp-project", projectId], (current: any) =>
-      current ? { ...current, project_data: { ...((current as any).project_data || {}), wmp_seeded: true } } : current,
-    );
-    const { error } = await supabase
-      .from("projects")
-      .update({ project_data: nextProjectData } as any)
-      .eq("id", projectId);
-    if (!error) queryClient.invalidateQueries({ queryKey: ["wmp-project", projectId] });
-  };
   // Backfill the baseline plan when it was created before detections existed.
   const [backfilled, setBackfilled] = useState(false);
   useEffect(() => {
@@ -992,8 +970,6 @@ export default function WaterMitigationPlan() {
       toast.error(getUserFriendlyError(error));
       return;
     }
-    // Deleting proves a plan existed — never auto-seed afterwards.
-    await markSeeded();
     void logPlanChange("delete", `Deleted plan "${before?.name ?? ""}"`, planId, {});
     queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
   };
@@ -1186,32 +1162,6 @@ export default function WaterMitigationPlan() {
     assignments.__base = base;
     return assignments;
   }, [editorBaseProducts, editorClasses]);
-
-  const [seeding, setSeeding] = useState(false);
-  useEffect(() => {
-    if (!projectId || plansLoading || plans.length > 0 || seeding || !canEdit) return;
-    if (!catalog || controlRows.length === 0) return;
-    if (seedBlocked) return;
-    setSeeding(true);
-    void markSeeded();
-    supabase
-      .from("project_mitigation_plans")
-      .insert({
-        project_id: projectId,
-        name: "Plan 1",
-        summary: "",
-        control_counts: derivedCounts,
-        product_assignments: newPlanProductAssignments,
-        sort_order: 0,
-        created_by: user?.id ?? null,
-      })
-      .then(({ error }) => {
-        if (error) toast.error(getUserFriendlyError(error));
-        queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
-        setSeeding(false);
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, plansLoading, plans.length, catalog, controlRows.length, derivedCounts, canEdit, seedBlocked, newPlanProductAssignments]);
 
   const editorAssignments = useMemo(() => {
     const plan = planEditor?.plan;
@@ -1968,7 +1918,27 @@ actions and posts its own recap.`;
             <Loader2 className="h-4 w-4 animate-spin" /> Loading plans…
           </div>
         ) : (
-          <div className="overflow-auto min-h-0 max-h-full">
+          <div className="flex-1 min-h-0 overflow-auto">
+            {plans.length === 0 ? (
+              <div className="flex min-h-[220px] w-full overflow-hidden rounded-lg border bg-card">
+                <div className="w-max shrink-0 border-r">
+                  {["Plan Name", "Plan Summary", "Controls Applied", "Total Cost Estimate"].map((label) => (
+                    <div key={label} className="border-b px-4 py-3 text-sm font-medium text-foreground last:border-b-0">
+                      {label}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex min-w-0 flex-1 flex-col items-center justify-center px-8 py-10 text-center">
+                  <h2 className="text-lg font-semibold text-foreground">Create your first mitigation plan</h2>
+                  <p className="mt-2 max-w-md text-sm text-muted-foreground">
+                    Build a plan by assigning Product Catalog items to the risks detected in this project.
+                  </p>
+                  <Button className="mt-5" onClick={() => setPlanEditor({ mode: "create", plan: null })}>
+                    <Plus className="mr-2 h-4 w-4" /> New plan
+                  </Button>
+                </div>
+              </div>
+            ) : (
             <div className="min-w-full rounded-lg border bg-card overflow-hidden">
             <table className="w-full table-fixed border-collapse" style={{ minWidth: tableMinWidthPx }}>
               {sharedColumns}
@@ -2102,6 +2072,7 @@ actions and posts its own recap.`;
               </tbody>
             </table>
             </div>
+            )}
 
             <div className="w-max bg-background py-3">
               <div className="sticky left-0 inline-flex items-center gap-2 px-1">

@@ -287,11 +287,17 @@ export default function Controls() {
 
   // ---------- mutations ----------
   const patchProduct = async (id: string, patch: Partial<TenantProduct>) => {
+    const queryKey = ["tenant-products", tenantId];
+    const previous = queryClient.getQueryData<TenantProduct[]>(queryKey);
+    queryClient.setQueryData<TenantProduct[]>(queryKey, (current = []) =>
+      current.map((product) => (product.id === id ? { ...product, ...patch } : product)),
+    );
     const { error } = await supabase
       .from("tenant_products")
       .update({ ...(patch as any), updated_by: user?.id })
       .eq("id", id);
     if (error) {
+      queryClient.setQueryData(queryKey, previous);
       const msg = (error as any)?.message || "";
       toast.error(
         (error as any)?.code === "23505" || msg.includes("tenant_products_tenant_code_unique")
@@ -300,7 +306,7 @@ export default function Controls() {
       );
       return;
     }
-    queryClient.invalidateQueries({ queryKey: ["tenant-products", tenantId] });
+    queryClient.invalidateQueries({ queryKey });
   };
 
   const addProduct = async (input: NewProductInput) => {
@@ -700,7 +706,7 @@ export default function Controls() {
                           controls={allControls}
                           selectedId={selected.control_id}
                           disabled={!canEdit}
-                          onSelect={(controlId) => void patchProduct(selected.id, { control_id: controlId, scope_customized: false })}
+                           onSelect={(controlId) => void patchProduct(selected.id, { control_id: controlId, scope_customized: false })}
                         />
                       </div>
 
@@ -1154,12 +1160,13 @@ function SearchableControlSelect({
   controls: MitigationControl[];
   selectedId: string | null;
   disabled?: boolean;
-  onSelect: (controlId: string) => void;
+  onSelect: (controlId: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
   const selectedControl = controls.find((control) => control.id === selectedId);
+  const selectedLabel = selectedId === null ? "Other" : selectedControl?.name;
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: 0 });
@@ -1169,7 +1176,7 @@ function SearchableControlSelect({
     <Popover open={open} onOpenChange={(next) => { setOpen(next); if (!next) setQuery(""); }}>
       <PopoverTrigger asChild>
         <Button variant="outline" role="combobox" aria-label="Product type" aria-expanded={open} disabled={disabled} className="h-9 w-full justify-between font-normal">
-          <span className={selectedControl ? "truncate" : "truncate text-muted-foreground"}>{selectedControl?.name || "Select product type"}</span>
+          <span className={selectedLabel ? "truncate" : "truncate text-muted-foreground"}>{selectedLabel || "Select product type"}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -1179,6 +1186,16 @@ function SearchableControlSelect({
           <CommandList ref={listRef}>
             <CommandEmpty>No product types match.</CommandEmpty>
             <CommandGroup>
+              <CommandItem
+                value="Other"
+                onSelect={() => {
+                  onSelect(null);
+                  setOpen(false);
+                }}
+              >
+                <Check className={`mr-2 h-4 w-4 ${selectedId === null ? "opacity-100" : "opacity-0"}`} />
+                Other
+              </CommandItem>
               {controls.map((control) => (
                 <CommandItem
                   key={control.id}
