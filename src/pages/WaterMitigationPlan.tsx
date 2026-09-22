@@ -1221,10 +1221,16 @@ export default function WaterMitigationPlan() {
     description: string;
     assignments: Record<string, string[]>;
     baseQuantities: Record<string, number>;
+    pricing: PricingOverrides;
   }) => {
     if (!projectId || !planEditor) return;
     setSavingPlan(true);
-    const productAssignments = { ...value.assignments, __base: value.baseQuantities, __configured: true };
+    const productAssignments = {
+      ...value.assignments,
+      __base: value.baseQuantities,
+      __pricing: value.pricing,
+      __configured: true,
+    };
     if (planEditor.mode === "create") {
       const nextOrder = plans.length ? Math.max(...plans.map((plan) => plan.sort_order)) + 1 : 0;
       const { data: created, error } = await supabase.from("project_mitigation_plans").insert({
