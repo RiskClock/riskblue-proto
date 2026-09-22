@@ -636,6 +636,7 @@ export default function WaterMitigationPlan() {
           libraryUnitCost: base,
           unitCost: isOverridden ? scenario : base,
           isOverridden,
+          pricing: { oneTime: base, install: 0, recurring: 0, interval: "monthly" } as ProductPricing,
           scopeIds: ov?.assets_customized
             ? [...(ov.critical_asset_ids || []), ...(ov.water_system_ids || []), ...(ov.process_ids || [])]
             : null,
