@@ -2130,7 +2130,10 @@ actions and posts its own recap.`;
                               <DropdownMenuItem onClick={() => setPlanEditor({ mode: "edit", plan })}>
                                 <Pencil className="h-4 w-4 mr-2" /> Edit plan
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => addPlan(plan)}>Duplicate plan</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openDuplicate(plan)}>Duplicate plan</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => downloadPlan(plan)}>
+                                <Download className="h-4 w-4 mr-2" /> Download plan (XLSX)
+                              </DropdownMenuItem>
                               <DropdownMenuItem className="text-destructive" onClick={() => deletePlan(plan.id)}>
                                 <Trash2 className="h-4 w-4 mr-2" /> Delete plan
                               </DropdownMenuItem>
