@@ -1058,7 +1058,7 @@ function AddProductModal({
   const [name, setName] = useState("");
   const [productCode, setProductCode] = useState("");
   const [description, setDescription] = useState("");
-  const [controlId, setControlId] = useState<string | null>(null);
+  const [controlId, setControlId] = useState<string | null | undefined>(undefined);
   const [pipeDiameter, setPipeDiameter] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -1079,7 +1079,7 @@ function AddProductModal({
         name: name.trim(),
         productCode: productCode.trim(),
         description: description.trim(),
-        controlId,
+        controlId: controlId ?? null,
         pipeDiameterInches: needsPipeDiameter ? parsedDiameter : null,
       });
     } finally {
@@ -1158,7 +1158,7 @@ function SearchableControlSelect({
   onSelect,
 }: {
   controls: MitigationControl[];
-  selectedId: string | null;
+  selectedId: string | null | undefined;
   disabled?: boolean;
   onSelect: (controlId: string | null) => void;
 }) {

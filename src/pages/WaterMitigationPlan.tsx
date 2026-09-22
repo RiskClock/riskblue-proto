@@ -1938,7 +1938,7 @@ actions and posts its own recap.`;
                 </div>
               </div>
             ) : (
-            <div className="min-w-full rounded-lg border bg-card overflow-hidden">
+            <div className="min-w-full rounded-lg border bg-card overflow-visible">
             <table className="w-full table-fixed border-collapse" style={{ minWidth: tableMinWidthPx }}>
               {sharedColumns}
               <tbody>
@@ -2085,7 +2085,7 @@ actions and posts its own recap.`;
               </div>
             </div>
 
-            <div className="min-w-full rounded-lg border bg-card overflow-hidden">
+            <div className="min-w-full rounded-lg border bg-card overflow-visible">
             <table className="w-full table-fixed border-collapse" style={{ minWidth: tableMinWidthPx }}>
               {sharedColumns}
               <tbody>
