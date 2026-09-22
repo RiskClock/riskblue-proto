@@ -58,7 +58,16 @@ import {
   asPointsPct,
   type ParsedFloorPlan,
 } from "@/lib/surveyFloorPlans";
-import { formatCurrencyAmount, normalizeCurrencyCode, type CurrencyCode } from "@/lib/currency";
+import { formatCurrencyAmount, currencySymbol, normalizeCurrencyCode, type CurrencyCode } from "@/lib/currency";
+import {
+  annualUnitCost,
+  costPeriodOf,
+  hasCustomPricing,
+  mergePricing,
+  readPlanPricing,
+  type PricingOverrides,
+  type ProductPricing,
+} from "@/lib/planPricing";
 import { useSystemAdminStatus } from "@/hooks/useIsSystemAdmin";
 
 interface Plan {
@@ -88,6 +97,8 @@ interface ControlRow {
   costPeriod?: "unit" | "month" | "year";
   /** Per-unit cost as defined in the control library. */
   libraryUnitCost: number;
+  /** Catalog pricing components, used as defaults for per-plan overrides. */
+  pricing: ProductPricing;
   isOverridden: boolean;
   /** Set when the product is applied in every plan at a fixed quantity. */
   fixedQuantity?: number | null;
