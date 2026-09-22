@@ -194,6 +194,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
   const [loadBaseOpen, setLoadBaseOpen] = useState(false);
   const [pendingSource, setPendingSource] = useState<{ source: PlanEditorSource; scope: "classes" | "base" } | null>(null);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
+  const [pricing, setPricing] = useState<PricingOverrides>({});
 
   useEffect(() => {
     if (!open) return;
@@ -202,6 +203,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
     setShowDescription(!!initialDescription.trim());
     setAssignments(JSON.parse(JSON.stringify(initialAssignments || {})));
     setBaseQuantities({ ...(initialBaseQuantities || {}) });
+    setPricing(JSON.parse(JSON.stringify(initialPricing || {})));
     setBaseOpen(false);
     setBaseSearch("");
     setOpenClass(null);
