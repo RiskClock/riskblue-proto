@@ -2092,14 +2092,14 @@ actions and posts its own recap.`;
                 </div>
               </div>
             ) : (
-            <div className="min-w-full rounded-lg border bg-card overflow-visible">
+            <div className="sticky top-0 z-40 min-w-full rounded-t-lg border border-b-0 bg-card overflow-visible">
             <table className="w-full table-fixed border-collapse" style={{ minWidth: tableMinWidthPx }}>
               {sharedColumns}
               <tbody>
                 <tr className="border-b">
-                  <th className={`${labelCell} text-left sticky top-0 z-30 [box-shadow:inset_-1px_0_0_hsl(var(--border)),inset_0_-1px_0_hsl(var(--border))]`}>Plan Name</th>
+                  <th className={`${labelCell} text-left z-30`}>Plan Name</th>
                   {plans.map((plan) => (
-                    <td key={plan.id} className="border-r px-4 py-2 align-top sticky top-0 z-20 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))]">
+                    <td key={plan.id} className="border-r px-4 py-2 align-top bg-card">
                       <div className="flex items-center gap-1">
                         {editing?.id === plan.id && editing.field === "name" ? (
                           <Input
