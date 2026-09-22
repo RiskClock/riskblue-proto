@@ -1432,6 +1432,83 @@ export default function WaterMitigationPlan() {
     return orderedSpaces.filter((s) => s !== UNASSIGNED || hasUnassigned);
   };
 
+  // --- duplicate + spreadsheet download ---------------------------------
+  const [duplicateTarget, setDuplicateTarget] = useState<Plan | null>(null);
+  const [duplicateName, setDuplicateName] = useState("");
+  const [duplicateParts, setDuplicateParts] = useState({ essentials: true, riskClasses: true, pricing: true });
+  const [duplicating, setDuplicating] = useState(false);
+
+  const openDuplicate = (plan: Plan) => {
+    setDuplicateTarget(plan);
+    setDuplicateName(`${plan.name} (copy)`);
+    setDuplicateParts({ essentials: true, riskClasses: true, pricing: true });
+  };
+
+  const confirmDuplicate = async () => {
+    if (!duplicateTarget) return;
+    setDuplicating(true);
+    await addPlan(duplicateTarget, { name: duplicateName, ...duplicateParts });
+    setDuplicating(false);
+    setDuplicateTarget(null);
+  };
+
+  const downloadPlan = async (plan: Plan) => {
+    try {
+      const XLSX = await import("xlsx");
+      const totals = planTotals(plan);
+      const symbol = currencySymbol(selectedCurrency);
+
+      const summary = [
+        ["Plan name", plan.name],
+        ["Plan summary", plan.summary || ""],
+        ["Project", project?.name || ""],
+        ["Controls applied", totals.count],
+        [`Total cost estimate (${symbol})`, Math.round(totals.cost)],
+      ];
+
+      const controlSheet: (string | number)[][] = [
+        ["Product ID", "Product", "Type", `Unit cost (${symbol})`, "Period", "Custom price", "Count", `Total (${symbol})`],
+      ];
+      const locationSheet: (string | number)[][] = [["Product ID", "Product", "Location", "Count"]];
+
+      const pushRow = (row: ControlRow, n: number, type: string) => {
+        if (n <= 0) return;
+        const priced = rowPricingFor(plan, row);
+        controlSheet.push([
+          row.code || "",
+          row.name,
+          type,
+          Math.round(priced.unitCost),
+          priced.period,
+          priced.custom ? "Yes" : "No",
+          n,
+          Math.round(n * priced.unitCost),
+        ]);
+      };
+
+      controlRows.forEach((row) => {
+        const n = countFor(plan, row.id);
+        pushRow(row, n, "Control");
+        if (n > 0) {
+          spacesForControl(row.id).forEach((space) => {
+            const count = countForSpace(plan, row.id, space);
+            if (count > 0) locationSheet.push([row.code || "", row.name, space, count]);
+          });
+        }
+      });
+      baseRows.forEach((row) => pushRow(row, baseCountFor(plan, row.id), "Essential component"));
+
+      const book = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(summary), "Summary");
+      XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(controlSheet), "Controls");
+      XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(locationSheet), "Locations");
+      const safeName = (plan.name || "plan").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
+      XLSX.writeFile(book, `${safeName || "plan"}.xlsx`);
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    }
+  };
+
   // --- Wade popover -----------------------------------------------------
   const [wadeOpen, setWadeOpen] = useState(false);
   const [wadeMinimized, setWadeMinimized] = useState(false);
