@@ -78,7 +78,7 @@ interface Plan {
   /** controlId -> detection ids this plan has switched the control off for. */
   excluded_instances: Record<string, string[]>;
   /** classId -> product ids, plus `__base` (productId -> quantity) and `__configured`. */
-  product_assignments: Record<string, string[] | boolean | Record<string, number>>;
+  product_assignments: Record<string, string[] | boolean | Record<string, number> | PricingOverrides>;
   sort_order: number;
 }
 
