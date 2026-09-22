@@ -212,7 +212,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
     setLoadBaseOpen(false);
     setPendingSource(null);
     setDiscardConfirmOpen(false);
-  }, [open, initialName, initialDescription, initialAssignments, initialBaseQuantities]);
+  }, [open, initialName, initialDescription, initialAssignments, initialBaseQuantities, initialPricing]);
 
   const setBaseQuantity = (productId: string, quantity: number) => {
     setBaseQuantities((current) => {
@@ -247,8 +247,9 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
       description: initialDescription,
       assignments: cleanAssignments(initialAssignments),
       baseQuantities: cleanBaseQuantities(initialBaseQuantities),
+      pricing: cleanPricingOverrides(initialPricing),
     }),
-    [initialAssignments, initialBaseQuantities, initialDescription, initialName],
+    [initialAssignments, initialBaseQuantities, initialDescription, initialName, initialPricing],
   );
   const currentSnapshot = useMemo(
     () => JSON.stringify({
@@ -256,9 +257,62 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
       description,
       assignments: cleanAssignments(assignments),
       baseQuantities: cleanBaseQuantities(baseQuantities),
+      pricing: cleanPricingOverrides(pricing),
     }),
-    [assignments, baseQuantities, description, name],
+    [assignments, baseQuantities, description, name, pricing],
   );
+
+  /** Products this plan uses: risk-class picks first, then essential components. */
+  const pricingRows = useMemo(() => {
+    const lookup = new Map<string, PlanEditorProduct>(productById);
+    baseProducts.forEach((product) => lookup.set(product.id, product));
+    const classIds: string[] = [];
+    classes.forEach((item) => {
+      (assignments[item.id] || []).forEach((id) => {
+        if (!classIds.includes(id)) classIds.push(id);
+      });
+    });
+    const baseIds = Object.entries(baseQuantities)
+      .filter(([, quantity]) => quantity > 0)
+      .map(([id]) => id)
+      .filter((id) => !classIds.includes(id));
+    const toRow = (id: string, group: "class" | "base") => {
+      const product = lookup.get(id);
+      return product ? { product, group } : null;
+    };
+    return [
+      ...classIds.map((id) => toRow(id, "class" as const)),
+      ...baseIds.map((id) => toRow(id, "base" as const)),
+    ].filter(Boolean) as { product: PlanEditorProduct; group: "class" | "base" }[];
+  }, [assignments, baseProducts, baseQuantities, classes, productById]);
+
+  const setPricingField = (productId: string, field: keyof PricingOverride, value: number | RecurringInterval | null) => {
+    setPricing((current) => {
+      const next: PricingOverrides = { ...current };
+      const entry: PricingOverride = { ...(next[productId] || {}) };
+      if (value === null) delete entry[field];
+      else (entry as any)[field] = value;
+      if (hasCustomPricing(entry)) next[productId] = entry;
+      else delete next[productId];
+      return next;
+    });
+  };
+
+  const amountValue = (productId: string, field: "oneTime" | "install" | "recurring") => {
+    const value = pricing[productId]?.[field];
+    return typeof value === "number" ? String(value) : "";
+  };
+
+  const onAmountChange = (productId: string, field: "oneTime" | "install" | "recurring", raw: string) => {
+    const cleaned = raw.replace(/[^0-9.]/g, "");
+    if (cleaned.trim() === "") {
+      setPricingField(productId, field, null);
+      return;
+    }
+    const parsed = Number(cleaned);
+    if (!Number.isFinite(parsed) || parsed < 0) return;
+    setPricingField(productId, field, parsed);
+  };
   const hasUnsavedChanges = initialSnapshot !== currentSnapshot;
 
   const requestClose = () => {
