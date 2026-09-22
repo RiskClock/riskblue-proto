@@ -9,6 +9,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +42,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Trash2,
+  Download,
   MoreVertical,
   Wrench,
   Pencil,
@@ -58,7 +69,16 @@ import {
   asPointsPct,
   type ParsedFloorPlan,
 } from "@/lib/surveyFloorPlans";
-import { formatCurrencyAmount, normalizeCurrencyCode, type CurrencyCode } from "@/lib/currency";
+import { formatCurrencyAmount, currencySymbol, normalizeCurrencyCode, type CurrencyCode } from "@/lib/currency";
+import {
+  annualUnitCost,
+  costPeriodOf,
+  hasCustomPricing,
+  mergePricing,
+  readPlanPricing,
+  type PricingOverrides,
+  type ProductPricing,
+} from "@/lib/planPricing";
 import { useSystemAdminStatus } from "@/hooks/useIsSystemAdmin";
 
 interface Plan {
@@ -69,7 +89,7 @@ interface Plan {
   /** controlId -> detection ids this plan has switched the control off for. */
   excluded_instances: Record<string, string[]>;
   /** classId -> product ids, plus `__base` (productId -> quantity) and `__configured`. */
-  product_assignments: Record<string, string[] | boolean | Record<string, number>>;
+  product_assignments: Record<string, string[] | boolean | Record<string, number> | PricingOverrides>;
   sort_order: number;
 }
 
@@ -88,6 +108,8 @@ interface ControlRow {
   costPeriod?: "unit" | "month" | "year";
   /** Per-unit cost as defined in the control library. */
   libraryUnitCost: number;
+  /** Catalog pricing components, used as defaults for per-plan overrides. */
+  pricing: ProductPricing;
   isOverridden: boolean;
   /** Set when the product is applied in every plan at a fixed quantity. */
   fixedQuantity?: number | null;
@@ -554,7 +576,7 @@ export default function WaterMitigationPlan() {
   // products keep using their saved control selections.
   const buildProductRow = useMemo(() => {
     const controlById = new Map((controls as any[]).map((c) => [c.id, c]));
-    const withCost = (id: string, controlId: string, name: string, base: number): ControlRow => {
+    const withCost = (id: string, controlId: string, name: string, base: number, pricing: ProductPricing): ControlRow => {
       const scenario = costOverrides[id];
       const isOverridden = typeof scenario === "number" && Number.isFinite(scenario);
       return {
@@ -565,24 +587,26 @@ export default function WaterMitigationPlan() {
         libraryUnitCost: base,
         unitCost: isOverridden ? scenario : base,
         isOverridden,
+        pricing,
       };
     };
     return (p: any): ControlRow => {
       const control = p.control_id ? controlById.get(p.control_id) : undefined;
       // Product Catalog pricing is authoritative for products; null means no charge for that field.
-      const oneTime = Number(p.one_time_cost ?? 0) || 0;
-      const install = Number(p.installation_cost ?? 0) || 0;
-      const maint = Number(p.monthly_maint_cost ?? 0) || 0;
-      const annualMaint = p.maint_interval === "yearly" ? maint : maint * 12;
+      const pricing: ProductPricing = {
+        oneTime: Number(p.one_time_cost ?? 0) || 0,
+        install: Number(p.installation_cost ?? 0) || 0,
+        recurring: Number(p.monthly_maint_cost ?? 0) || 0,
+        interval: p.maint_interval === "yearly" ? "yearly" : "monthly",
+      };
       const row = withCost(
         p.id,
         p.control_id || p.id,
         p.name || p.product_code || control?.name || "Product",
-        oneTime + install + annualMaint,
+        annualUnitCost(pricing),
+        pricing,
       );
-      row.costPeriod = oneTime === 0 && install === 0 && maint > 0
-        ? p.maint_interval === "yearly" ? "year" : "month"
-        : "unit";
+      row.costPeriod = costPeriodOf(pricing);
       row.code = p.product_code || null;
       row.pipeDiameterInches =
         p.pipe_diameter_inches === null || p.pipe_diameter_inches === undefined
@@ -623,6 +647,7 @@ export default function WaterMitigationPlan() {
           libraryUnitCost: base,
           unitCost: isOverridden ? scenario : base,
           isOverridden,
+          pricing: { oneTime: base, install: 0, recurring: 0, interval: "monthly" } as ProductPricing,
           scopeIds: ov?.assets_customized
             ? [...(ov.critical_asset_ids || []), ...(ov.water_system_ids || []), ...(ov.process_ids || [])]
             : null,
@@ -936,19 +961,41 @@ export default function WaterMitigationPlan() {
     queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
   };
 
-  const addPlan = async (source?: Plan) => {
+  const addPlan = async (
+    source?: Plan,
+    options?: { name?: string; essentials?: boolean; riskClasses?: boolean; pricing?: boolean },
+  ) => {
     const nextOrder = plans.length ? Math.max(...plans.map((p) => p.sort_order)) + 1 : 0;
-    const name = source ? `${source.name} (copy)` : `Plan ${plans.length + 1}`;
+    const name = options?.name?.trim() || (source ? `${source.name} (copy)` : `Plan ${plans.length + 1}`);
+
+    let assignments: Plan["product_assignments"] = newPlanProductAssignments;
+    if (source) {
+      const copyEssentials = options?.essentials ?? true;
+      const copyClasses = options?.riskClasses ?? true;
+      const copyPricing = options?.pricing ?? true;
+      const from = (source.product_assignments || {}) as Plan["product_assignments"];
+      const next: Plan["product_assignments"] = { __configured: true };
+      if (copyClasses) {
+        Object.entries(from).forEach(([key, value]) => {
+          if (key.startsWith("__")) return;
+          if (Array.isArray(value)) next[key] = [...value];
+        });
+      }
+      if (copyEssentials && from.__base) next.__base = { ...(from.__base as Record<string, number>) };
+      if (copyPricing && from.__pricing) next.__pricing = JSON.parse(JSON.stringify(from.__pricing));
+      assignments = next;
+    }
+
     const { error } = await supabase.from("project_mitigation_plans").insert({
       project_id: projectId!,
       name,
       summary: source ? source.summary : "",
-      control_counts: source ? source.control_counts : {},
-      excluded_instances: source ? source.excluded_instances : {},
-      product_assignments: source ? source.product_assignments : newPlanProductAssignments,
+      control_counts: source && (options?.riskClasses ?? true) ? source.control_counts : {},
+      excluded_instances: source && (options?.riskClasses ?? true) ? source.excluded_instances : {},
+      product_assignments: assignments,
       sort_order: nextOrder,
       created_by: user?.id ?? null,
-    });
+    } as any);
     if (error) {
       toast.error(getUserFriendlyError(error));
       return;
@@ -1035,18 +1082,33 @@ export default function WaterMitigationPlan() {
     [baseRows, plans],
   );
 
+  /** Per-plan pricing overrides live alongside the product assignments. */
+  const planPricingFor = (plan: Plan): PricingOverrides => readPlanPricing(plan.product_assignments as any);
+
+  /** Effective unit cost for a product inside a plan (plan override > project override > catalog). */
+  const rowPricingFor = (plan: Plan, row: ControlRow) => {
+    const override = planPricingFor(plan)[row.id];
+    if (!hasCustomPricing(override)) {
+      return { unitCost: row.unitCost, period: row.costPeriod ?? "unit", custom: false };
+    }
+    const merged = mergePricing(row.pricing, override);
+    return { unitCost: annualUnitCost(merged), period: costPeriodOf(merged), custom: true };
+  };
+
+  const unitCostIn = (plan: Plan, row: ControlRow) => rowPricingFor(plan, row).unitCost;
+
   const planTotals = (plan: Plan) => {
     let count = 0;
     let cost = 0;
     controlRows.forEach((row) => {
       const n = countFor(plan, row.id);
       count += n;
-      cost += n * row.unitCost;
+      cost += n * unitCostIn(plan, row);
     });
     baseRows.forEach((row) => {
       const n = baseCountFor(plan, row.id);
       count += n;
-      cost += n * row.unitCost;
+      cost += n * unitCostIn(plan, row);
     });
     return { count, cost };
   };
@@ -1182,6 +1244,15 @@ export default function WaterMitigationPlan() {
     return result;
   }, [planEditor, editorClasses, newPlanProductAssignments]);
 
+  /** Catalog pricing per product, used as placeholders in the plan pricing editor. */
+  const pricingDefaults = useMemo(() => {
+    const map: Record<string, ProductPricing> = {};
+    [...controlRows, ...baseRows].forEach((row) => {
+      map[row.id] = row.pricing;
+    });
+    return map;
+  }, [controlRows, baseRows]);
+
   const editorBaseQuantities = useMemo(
     () => (planEditor?.plan ? baseQuantitiesFor(planEditor.plan) : ((newPlanProductAssignments.__base || {}) as Record<string, number>)),
     [planEditor, newPlanProductAssignments],
@@ -1192,10 +1263,16 @@ export default function WaterMitigationPlan() {
     description: string;
     assignments: Record<string, string[]>;
     baseQuantities: Record<string, number>;
+    pricing: PricingOverrides;
   }) => {
     if (!projectId || !planEditor) return;
     setSavingPlan(true);
-    const productAssignments = { ...value.assignments, __base: value.baseQuantities, __configured: true };
+    const productAssignments = {
+      ...value.assignments,
+      __base: value.baseQuantities,
+      __pricing: value.pricing,
+      __configured: true,
+    };
     if (planEditor.mode === "create") {
       const nextOrder = plans.length ? Math.max(...plans.map((plan) => plan.sort_order)) + 1 : 0;
       const { data: created, error } = await supabase.from("project_mitigation_plans").insert({
@@ -1362,6 +1439,83 @@ export default function WaterMitigationPlan() {
      const hasUnassigned = (spaces.get(UNASSIGNED)?.instances.length ?? 0) > 0 ||
        (spaces.get(UNASSIGNED)?.legacyIds.length ?? 0) > 0;
     return orderedSpaces.filter((s) => s !== UNASSIGNED || hasUnassigned);
+  };
+
+  // --- duplicate + spreadsheet download ---------------------------------
+  const [duplicateTarget, setDuplicateTarget] = useState<Plan | null>(null);
+  const [duplicateName, setDuplicateName] = useState("");
+  const [duplicateParts, setDuplicateParts] = useState({ essentials: true, riskClasses: true, pricing: true });
+  const [duplicating, setDuplicating] = useState(false);
+
+  const openDuplicate = (plan: Plan) => {
+    setDuplicateTarget(plan);
+    setDuplicateName(`${plan.name} (copy)`);
+    setDuplicateParts({ essentials: true, riskClasses: true, pricing: true });
+  };
+
+  const confirmDuplicate = async () => {
+    if (!duplicateTarget) return;
+    setDuplicating(true);
+    await addPlan(duplicateTarget, { name: duplicateName, ...duplicateParts });
+    setDuplicating(false);
+    setDuplicateTarget(null);
+  };
+
+  const downloadPlan = async (plan: Plan) => {
+    try {
+      const XLSX = await import("xlsx");
+      const totals = planTotals(plan);
+      const symbol = currencySymbol(selectedCurrency);
+
+      const summary = [
+        ["Plan name", plan.name],
+        ["Plan summary", plan.summary || ""],
+        ["Project", project?.name || ""],
+        ["Controls applied", totals.count],
+        [`Total cost estimate (${symbol})`, Math.round(totals.cost)],
+      ];
+
+      const controlSheet: (string | number)[][] = [
+        ["Product ID", "Product", "Type", `Unit cost (${symbol})`, "Period", "Custom price", "Count", `Total (${symbol})`],
+      ];
+      const locationSheet: (string | number)[][] = [["Product ID", "Product", "Location", "Count"]];
+
+      const pushRow = (row: ControlRow, n: number, type: string) => {
+        if (n <= 0) return;
+        const priced = rowPricingFor(plan, row);
+        controlSheet.push([
+          row.code || "",
+          row.name,
+          type,
+          Math.round(priced.unitCost),
+          priced.period,
+          priced.custom ? "Yes" : "No",
+          n,
+          Math.round(n * priced.unitCost),
+        ]);
+      };
+
+      controlRows.forEach((row) => {
+        const n = countFor(plan, row.id);
+        pushRow(row, n, "Control");
+        if (n > 0) {
+          spacesForControl(row.id).forEach((space) => {
+            const count = countForSpace(plan, row.id, space);
+            if (count > 0) locationSheet.push([row.code || "", row.name, space, count]);
+          });
+        }
+      });
+      baseRows.forEach((row) => pushRow(row, baseCountFor(plan, row.id), "Essential component"));
+
+      const book = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(summary), "Summary");
+      XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(controlSheet), "Controls");
+      XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(locationSheet), "Locations");
+      const safeName = (plan.name || "plan").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
+      XLSX.writeFile(book, `${safeName || "plan"}.xlsx`);
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    }
   };
 
   // --- Wade popover -----------------------------------------------------
@@ -1938,14 +2092,15 @@ actions and posts its own recap.`;
                 </div>
               </div>
             ) : (
-            <div className="min-w-full rounded-lg border bg-card overflow-visible">
+            <>
+            <div className="sticky top-0 z-40 min-w-full rounded-t-lg border border-b-0 bg-card overflow-visible">
             <table className="w-full table-fixed border-collapse" style={{ minWidth: tableMinWidthPx }}>
               {sharedColumns}
               <tbody>
                 <tr className="border-b">
-                  <th className={`${labelCell} text-left sticky top-0 z-30 [box-shadow:inset_-1px_0_0_hsl(var(--border)),inset_0_-1px_0_hsl(var(--border))]`}>Plan Name</th>
+                  <th className={`${labelCell} text-left z-30`}>Plan Name</th>
                   {plans.map((plan) => (
-                    <td key={plan.id} className="border-r px-4 py-2 align-top sticky top-0 z-20 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))]">
+                    <td key={plan.id} className="border-r px-4 py-2 align-top bg-card">
                       <div className="flex items-center gap-1">
                         {editing?.id === plan.id && editing.field === "name" ? (
                           <Input
@@ -1985,7 +2140,10 @@ actions and posts its own recap.`;
                               <DropdownMenuItem onClick={() => setPlanEditor({ mode: "edit", plan })}>
                                 <Pencil className="h-4 w-4 mr-2" /> Edit plan
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => addPlan(plan)}>Duplicate plan</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openDuplicate(plan)}>Duplicate plan</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => downloadPlan(plan)}>
+                                <Download className="h-4 w-4 mr-2" /> Download plan (XLSX)
+                              </DropdownMenuItem>
                               <DropdownMenuItem className="text-destructive" onClick={() => deletePlan(plan.id)}>
                                 <Trash2 className="h-4 w-4 mr-2" /> Delete plan
                               </DropdownMenuItem>
@@ -1995,7 +2153,7 @@ actions and posts its own recap.`;
                       </div>
                     </td>
                   ))}
-                  <td className="px-4 py-2 align-top sticky top-0 z-20 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))]">
+                  <td className="px-4 py-2 align-top bg-card">
                     {canEdit && (
                       <Button variant="outline" onClick={() => setPlanEditor({ mode: "create", plan: null })}>
                         <Plus className="h-4 w-4 mr-2" /> New plan
@@ -2003,7 +2161,14 @@ actions and posts its own recap.`;
                     )}
                   </td>
                 </tr>
+              </tbody>
+            </table>
+            </div>
 
+            <div className="min-w-full rounded-b-lg border bg-card overflow-visible">
+            <table className="w-full table-fixed border-collapse" style={{ minWidth: tableMinWidthPx }}>
+              {sharedColumns}
+              <tbody>
                 <tr className="border-b group hover:bg-muted">
                   <th className={`${labelCellBase} bg-card group-hover:bg-muted text-left`}>Plan Summary</th>
                   {plans.map((plan) => (
@@ -2071,6 +2236,7 @@ actions and posts its own recap.`;
               </tbody>
             </table>
             </div>
+            </>
             )}
 
             <div className="w-max bg-background py-3">
@@ -2107,13 +2273,13 @@ actions and posts its own recap.`;
                               ...visibleControlRows.map((row, colorIndex) => ({
                                 id: row.id,
                                 name: row.name,
-                                value: countFor(plan, row.id) * row.unitCost,
+                                value: countFor(plan, row.id) * unitCostIn(plan, row),
                                 colorIndex,
                               })),
                               ...visibleBaseRows.map((row, index) => ({
                                 id: row.id,
                                 name: row.name,
-                                value: baseCountFor(plan, row.id) * row.unitCost,
+                                value: baseCountFor(plan, row.id) * unitCostIn(plan, row),
                                 colorIndex: visibleControlRows.length + index,
                               })),
                             ]}
@@ -2212,9 +2378,12 @@ actions and posts its own recap.`;
                           </th>
                           {plans.map((plan) => {
                             const n = countFor(plan, row.id);
+                            const priced = rowPricingFor(plan, row);
                             return (
                               <td key={plan.id} className="border-r px-4 py-2 text-center text-sm tabular-nums">
-                                <div className="font-bold text-foreground">{currency(n * row.unitCost)}</div>
+                                <div className={`font-bold text-foreground ${priced.custom ? "rounded bg-orange-100 px-1 dark:bg-orange-500/20" : ""}`}>
+                                  {currency(n * priced.unitCost)}
+                                </div>
                                 <div>{locationLabel(n)}</div>
                               </td>
                             );
@@ -2288,9 +2457,12 @@ actions and posts its own recap.`;
                         </th>
                         {plans.map((plan) => {
                           const n = baseCountFor(plan, row.id);
+                          const priced = rowPricingFor(plan, row);
                           return (
                             <td key={plan.id} className="border-r px-4 py-2 text-center text-sm tabular-nums">
-                              <div className="font-bold text-foreground">{currency(n * row.unitCost)}</div>
+                              <div className={`font-bold text-foreground ${priced.custom ? "rounded bg-orange-100 px-1 dark:bg-orange-500/20" : ""}`}>
+                                {currency(n * priced.unitCost)}
+                              </div>
                               <div>{n} {n === 1 ? "unit" : "units"}</div>
                             </td>
                           );
@@ -2318,11 +2490,51 @@ actions and posts its own recap.`;
         classes={editorClasses}
         baseProducts={editorBaseProducts}
         initialBaseQuantities={editorBaseQuantities}
+        initialPricing={planEditor?.plan ? planPricingFor(planEditor.plan) : {}}
+        pricingDefaults={pricingDefaults}
+        currencySymbol={currencySymbol(selectedCurrency)}
         existingPlans={editorSourcePlans}
         saving={savingPlan}
         onOpenChange={(open) => { if (!open && !savingPlan) setPlanEditor(null); }}
         onSave={savePlanEditor}
       />
+
+      <Dialog open={!!duplicateTarget} onOpenChange={(open) => { if (!open && !duplicating) setDuplicateTarget(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Duplicate plan</DialogTitle>
+            <DialogDescription>Choose a name and what to copy over from "{duplicateTarget?.name}".</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="duplicate-plan-name">Plan name</Label>
+              <Input id="duplicate-plan-name" value={duplicateName} onChange={(e) => setDuplicateName(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              {([
+                ["essentials", "Essential components"],
+                ["riskClasses", "Detected risk classes"],
+                ["pricing", "Custom pricing"],
+              ] as const).map(([key, label]) => (
+                <div key={key} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`duplicate-${key}`}
+                    checked={duplicateParts[key]}
+                    onCheckedChange={(checked) => setDuplicateParts((current) => ({ ...current, [key]: checked === true }))}
+                  />
+                  <Label htmlFor={`duplicate-${key}`} className="font-normal">{label}</Label>
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDuplicateTarget(null)} disabled={duplicating}>Cancel</Button>
+            <Button onClick={confirmDuplicate} disabled={duplicating || !duplicateName.trim()}>
+              {duplicating ? "Duplicating…" : "Duplicate plan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {viewer && viewerData && (
         <ControlInstancesModal

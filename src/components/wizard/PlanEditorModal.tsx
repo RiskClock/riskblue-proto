@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, Minus, Plus, Search, X } from "lucide-react";
+import { Check, Minus, Plus, RotateCcw, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -19,6 +19,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { tagStyle } from "@/lib/tagColor";
+import {
+  cleanPricingOverrides,
+  hasCustomPricing,
+  type PricingOverride,
+  type PricingOverrides,
+  type ProductPricing,
+  type RecurringInterval,
+} from "@/lib/planPricing";
 import { ThreatOverviewCard } from "@/components/workbench/ThreatOverviewCard";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -49,6 +57,7 @@ export interface PlanEditorSource {
   name: string;
   assignments: Record<string, string[]>;
   baseQuantities?: Record<string, number>;
+  pricing?: PricingOverrides;
 }
 
 export type PlanEditorBaseProduct = PlanEditorProduct;
@@ -60,6 +69,10 @@ interface Props {
   initialDescription: string;
   initialAssignments: Record<string, string[]>;
   initialBaseQuantities?: Record<string, number>;
+  initialPricing?: PricingOverrides;
+  /** Catalog pricing per product id, used as the placeholder defaults. */
+  pricingDefaults?: Record<string, ProductPricing>;
+  currencySymbol?: string;
   classes: PlanEditorClass[];
   baseProducts?: PlanEditorBaseProduct[];
   existingPlans?: PlanEditorSource[];
@@ -70,6 +83,7 @@ interface Props {
     description: string;
     assignments: Record<string, string[]>;
     baseQuantities: Record<string, number>;
+    pricing: PricingOverrides;
   }) => void;
 }
 
@@ -166,7 +180,7 @@ function ProductPickerOption({ product, checked, onToggle }: { product: PlanEdit
   );
 }
 
-export function PlanEditorModal({ open, mode, initialName, initialDescription, initialAssignments, initialBaseQuantities = {}, classes, baseProducts = [], existingPlans = [], saving, onOpenChange, onSave }: Props) {
+export function PlanEditorModal({ open, mode, initialName, initialDescription, initialAssignments, initialBaseQuantities = {}, initialPricing = {}, pricingDefaults = {}, currencySymbol = "$", classes, baseProducts = [], existingPlans = [], saving, onOpenChange, onSave }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [showDescription, setShowDescription] = useState(false);
@@ -180,6 +194,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
   const [loadBaseOpen, setLoadBaseOpen] = useState(false);
   const [pendingSource, setPendingSource] = useState<{ source: PlanEditorSource; scope: "classes" | "base" } | null>(null);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
+  const [pricing, setPricing] = useState<PricingOverrides>({});
 
   useEffect(() => {
     if (!open) return;
@@ -188,6 +203,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
     setShowDescription(!!initialDescription.trim());
     setAssignments(JSON.parse(JSON.stringify(initialAssignments || {})));
     setBaseQuantities({ ...(initialBaseQuantities || {}) });
+    setPricing(JSON.parse(JSON.stringify(initialPricing || {})));
     setBaseOpen(false);
     setBaseSearch("");
     setOpenClass(null);
@@ -196,7 +212,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
     setLoadBaseOpen(false);
     setPendingSource(null);
     setDiscardConfirmOpen(false);
-  }, [open, initialName, initialDescription, initialAssignments, initialBaseQuantities]);
+  }, [open, initialName, initialDescription, initialAssignments, initialBaseQuantities, initialPricing]);
 
   const setBaseQuantity = (productId: string, quantity: number) => {
     setBaseQuantities((current) => {
@@ -231,8 +247,9 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
       description: initialDescription,
       assignments: cleanAssignments(initialAssignments),
       baseQuantities: cleanBaseQuantities(initialBaseQuantities),
+      pricing: cleanPricingOverrides(initialPricing),
     }),
-    [initialAssignments, initialBaseQuantities, initialDescription, initialName],
+    [initialAssignments, initialBaseQuantities, initialDescription, initialName, initialPricing],
   );
   const currentSnapshot = useMemo(
     () => JSON.stringify({
@@ -240,9 +257,62 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
       description,
       assignments: cleanAssignments(assignments),
       baseQuantities: cleanBaseQuantities(baseQuantities),
+      pricing: cleanPricingOverrides(pricing),
     }),
-    [assignments, baseQuantities, description, name],
+    [assignments, baseQuantities, description, name, pricing],
   );
+
+  /** Products this plan uses: risk-class picks first, then essential components. */
+  const pricingRows = useMemo(() => {
+    const lookup = new Map<string, PlanEditorProduct>(productById);
+    baseProducts.forEach((product) => lookup.set(product.id, product));
+    const classIds: string[] = [];
+    classes.forEach((item) => {
+      (assignments[item.id] || []).forEach((id) => {
+        if (!classIds.includes(id)) classIds.push(id);
+      });
+    });
+    const baseIds = Object.entries(baseQuantities)
+      .filter(([, quantity]) => quantity > 0)
+      .map(([id]) => id)
+      .filter((id) => !classIds.includes(id));
+    const toRow = (id: string, group: "class" | "base") => {
+      const product = lookup.get(id);
+      return product ? { product, group } : null;
+    };
+    return [
+      ...classIds.map((id) => toRow(id, "class" as const)),
+      ...baseIds.map((id) => toRow(id, "base" as const)),
+    ].filter(Boolean) as { product: PlanEditorProduct; group: "class" | "base" }[];
+  }, [assignments, baseProducts, baseQuantities, classes, productById]);
+
+  const setPricingField = (productId: string, field: keyof PricingOverride, value: number | RecurringInterval | null) => {
+    setPricing((current) => {
+      const next: PricingOverrides = { ...current };
+      const entry: PricingOverride = { ...(next[productId] || {}) };
+      if (value === null) delete entry[field];
+      else (entry as any)[field] = value;
+      if (hasCustomPricing(entry)) next[productId] = entry;
+      else delete next[productId];
+      return next;
+    });
+  };
+
+  const amountValue = (productId: string, field: "oneTime" | "install" | "recurring") => {
+    const value = pricing[productId]?.[field];
+    return typeof value === "number" ? String(value) : "";
+  };
+
+  const onAmountChange = (productId: string, field: "oneTime" | "install" | "recurring", raw: string) => {
+    const cleaned = raw.replace(/[^0-9.]/g, "");
+    if (cleaned.trim() === "") {
+      setPricingField(productId, field, null);
+      return;
+    }
+    const parsed = Number(cleaned);
+    if (!Number.isFinite(parsed) || parsed < 0) return;
+    setPricingField(productId, field, parsed);
+  };
   const hasUnsavedChanges = initialSnapshot !== currentSnapshot;
 
   const requestClose = () => {
@@ -503,11 +573,112 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
               {classes.length === 0 && <p className="text-sm text-muted-foreground sm:col-span-2 py-6 text-center">No Asset or Water System classes were detected for this project.</p>}
             </div>
           </div>
+
+          <div className="space-y-2 pt-6">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold">Control Pricing</h3>
+                <p className="text-xs text-muted-foreground">
+                  Override Product Catalog pricing for this plan only. Leave a field empty to use the catalog price.
+                </p>
+              </div>
+              {Object.keys(cleanPricingOverrides(pricing)).length > 0 && (
+                <Button type="button" variant="outline" size="sm" onClick={() => setPricing({})}>
+                  <RotateCcw className="mr-1 h-3.5 w-3.5" /> Reset all to default
+                </Button>
+              )}
+            </div>
+            {pricingRows.length === 0 ? (
+              <p className="rounded-lg border p-4 text-sm text-muted-foreground">
+                Add controls or essential components to this plan to set custom pricing.
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border">
+                <table className="w-full min-w-[820px] text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
+                      <th className="px-3 py-2 text-left font-medium">Product</th>
+                      <th className="px-3 py-2 text-left font-medium">One-time ({currencySymbol})</th>
+                      <th className="px-3 py-2 text-left font-medium">Installation ({currencySymbol})</th>
+                      <th className="px-3 py-2 text-left font-medium">Recurring ({currencySymbol})</th>
+                      <th className="px-3 py-2 text-left font-medium">Interval</th>
+                      <th className="px-3 py-2" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pricingRows.map(({ product, group }) => {
+                      const defaults: ProductPricing = pricingDefaults[product.id] || { oneTime: 0, install: 0, recurring: 0, interval: "monthly" };
+                      const custom = hasCustomPricing(pricing[product.id]);
+                      return (
+                        <tr key={product.id} className={`border-b last:border-b-0 ${custom ? "bg-orange-100/70 dark:bg-orange-500/15" : ""}`}>
+                          <td className="px-3 py-2">
+                            <div className="truncate">
+                              {product.code ? <strong>{product.code} </strong> : null}
+                              {product.name}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {group === "base" ? "Essential component" : product.controlName || "Control"}
+                            </div>
+                          </td>
+                          {(["oneTime", "install", "recurring"] as const).map((field) => (
+                            <td key={field} className="px-3 py-2">
+                              <Input
+                                value={amountValue(product.id, field)}
+                                onChange={(event) => onAmountChange(product.id, field, event.target.value)}
+                                placeholder={String(
+                                  field === "oneTime" ? defaults.oneTime : field === "install" ? defaults.install : defaults.recurring,
+                                )}
+                                className="h-8 w-28 text-sm tabular-nums"
+                                inputMode="decimal"
+                                aria-label={`${field} cost for ${product.name || product.code}`}
+                              />
+                            </td>
+                          ))}
+                          <td className="px-3 py-2">
+                            <select
+                              value={pricing[product.id]?.interval || defaults.interval}
+                              onChange={(event) => {
+                                const value = event.target.value as RecurringInterval;
+                                setPricingField(product.id, "interval", value === defaults.interval ? null : value);
+                              }}
+                              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                              aria-label={`Recurring interval for ${product.name || product.code}`}
+                            >
+                              <option value="monthly">Monthly</option>
+                              <option value="yearly">Yearly</option>
+                            </select>
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {custom && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                aria-label={`Reset pricing for ${product.name || product.code}`}
+                                onClick={() => setPricing((current) => {
+                                  const next = { ...current };
+                                  delete next[product.id];
+                                  return next;
+                                })}
+                              >
+                                <RotateCcw className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={requestClose}>Cancel</Button>
-          <Button type="button" disabled={saving || !name.trim()} onClick={() => onSave({ name: name.trim(), description, assignments, baseQuantities })}>
+          <Button type="button" disabled={saving || !name.trim()} onClick={() => onSave({ name: name.trim(), description, assignments, baseQuantities, pricing: cleanPricingOverrides(pricing) })}>
             {saving ? "Saving…" : mode === "create" ? "Create plan" : "Save changes"}
           </Button>
         </DialogFooter>
