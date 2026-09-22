@@ -19,6 +19,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { tagStyle } from "@/lib/tagColor";
+import {
+  cleanPricingOverrides,
+  hasCustomPricing,
+  type PricingOverride,
+  type PricingOverrides,
+  type ProductPricing,
+  type RecurringInterval,
+} from "@/lib/planPricing";
 import { ThreatOverviewCard } from "@/components/workbench/ThreatOverviewCard";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
