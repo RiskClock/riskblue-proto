@@ -1244,6 +1244,15 @@ export default function WaterMitigationPlan() {
     return result;
   }, [planEditor, editorClasses, newPlanProductAssignments]);
 
+  /** Catalog pricing per product, used as placeholders in the plan pricing editor. */
+  const pricingDefaults = useMemo(() => {
+    const map: Record<string, ProductPricing> = {};
+    [...controlRows, ...baseRows].forEach((row) => {
+      map[row.id] = row.pricing;
+    });
+    return map;
+  }, [controlRows, baseRows]);
+
   const editorBaseQuantities = useMemo(
     () => (planEditor?.plan ? baseQuantitiesFor(planEditor.plan) : ((newPlanProductAssignments.__base || {}) as Record<string, number>)),
     [planEditor, newPlanProductAssignments],
@@ -2472,6 +2481,9 @@ actions and posts its own recap.`;
         classes={editorClasses}
         baseProducts={editorBaseProducts}
         initialBaseQuantities={editorBaseQuantities}
+        initialPricing={planEditor?.plan ? planPricingFor(planEditor.plan) : {}}
+        pricingDefaults={pricingDefaults}
+        currencySymbol={currencySymbol(selectedCurrency)}
         existingPlans={editorSourcePlans}
         saving={savingPlan}
         onOpenChange={(open) => { if (!open && !savingPlan) setPlanEditor(null); }}
