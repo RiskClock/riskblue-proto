@@ -2152,7 +2152,7 @@ actions and posts its own recap.`;
                       </div>
                     </td>
                   ))}
-                  <td className="px-4 py-2 align-top sticky top-0 z-20 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))]">
+                  <td className="px-4 py-2 align-top bg-card">
                     {canEdit && (
                       <Button variant="outline" onClick={() => setPlanEditor({ mode: "create", plan: null })}>
                         <Plus className="h-4 w-4 mr-2" /> New plan
@@ -2160,7 +2160,14 @@ actions and posts its own recap.`;
                     )}
                   </td>
                 </tr>
+              </tbody>
+            </table>
+            </div>
 
+            <div className="min-w-full rounded-b-lg border bg-card overflow-visible">
+            <table className="w-full table-fixed border-collapse" style={{ minWidth: tableMinWidthPx }}>
+              {sharedColumns}
+              <tbody>
                 <tr className="border-b group hover:bg-muted">
                   <th className={`${labelCellBase} bg-card group-hover:bg-muted text-left`}>Plan Summary</th>
                   {plans.map((plan) => (
