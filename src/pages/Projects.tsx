@@ -16,6 +16,7 @@ import { CreateProjectModal } from "@/components/CreateProjectModal";
 import { useAccountType } from "@/hooks/useAccountType";
 import { useTenant } from "@/contexts/TenantContext";
 import { useIsSystemAdmin, useStaffUserIds } from "@/hooks/useIsSystemAdmin";
+import { useBetaAccess } from "@/hooks/useBetaAccess";
 
 interface Project {
   id: string;
