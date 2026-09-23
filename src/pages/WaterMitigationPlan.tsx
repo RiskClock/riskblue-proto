@@ -1482,6 +1482,12 @@ export default function WaterMitigationPlan() {
     const controlsName = sheetName("Controls");
     const locationsName = sheetName("Locations");
     const breakdownName = sheetName("Space Breakdown");
+    const uniquify = (name: string) => {
+      let unique = name;
+      let n = 2;
+      while (book.SheetNames.includes(unique)) unique = `${name.slice(0, 29)} ${n++}`;
+      return unique;
+    };
     const quoteSheet = (name: string) => `'${name.replace(/'/g, "''")}'`;
 
     const planControlRows = controlRows.filter((row) => countFor(plan, row.id) > 0);
