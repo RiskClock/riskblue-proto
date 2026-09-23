@@ -1478,16 +1478,16 @@ export default function WaterMitigationPlan() {
     const symbol = currencySymbol(selectedCurrency);
     const namePart = ((plan.name || "").replace(/[\\/:*?[\]]/g, "").trim() || "Plan").slice(0, 20);
     const sheetName = (label: string) => `${prefix}${namePart} - ${label}`.slice(0, 31);
-    const summaryName = sheetName("Summary");
-    const controlsName = sheetName("Controls");
-    const locationsName = sheetName("Locations");
-    const breakdownName = sheetName("Space Breakdown");
     const uniquify = (name: string) => {
       let unique = name;
       let n = 2;
       while (book.SheetNames.includes(unique)) unique = `${name.slice(0, 29)} ${n++}`;
       return unique;
     };
+    const summaryName = uniquify(sheetName("Summary"));
+    const controlsName = uniquify(sheetName("Controls"));
+    const locationsName = uniquify(sheetName("Locations"));
+    const breakdownName = uniquify(sheetName("Space Breakdown"));
     const quoteSheet = (name: string) => `'${name.replace(/'/g, "''")}'`;
 
     const planControlRows = controlRows.filter((row) => countFor(plan, row.id) > 0);
