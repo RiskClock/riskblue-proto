@@ -28,6 +28,8 @@ export interface TenantMembership {
   permissions: Record<string, boolean>;
   /** True only when the user is an actual member (internal staff see all companies). */
   isMember: boolean;
+  /** Company opted into beta programs (Product Catalog, Plan Builder). */
+  betaEnabled: boolean;
 }
 
 interface TenantContextValue {
