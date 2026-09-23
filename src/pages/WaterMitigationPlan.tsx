@@ -81,6 +81,7 @@ import {
   type ProductPricing,
 } from "@/lib/planPricing";
 import { useSystemAdminStatus } from "@/hooks/useIsSystemAdmin";
+import { useBetaAccess } from "@/hooks/useBetaAccess";
 
 interface Plan {
   id: string;
@@ -360,7 +361,7 @@ export default function WaterMitigationPlan() {
   const { tenantId, tenant, tenantPath } = useTenant();
   const queryClient = useQueryClient();
 
-  const { isSystemAdmin: canEdit, isLoading: adminLoading } = useSystemAdminStatus();
+  const { hasBetaAccess: canEdit, isLoading: adminLoading } = useBetaAccess();
 
   const { data: project } = useQuery({
     queryKey: ["wmp-project", projectId],
@@ -2118,7 +2119,7 @@ actions and posts its own recap.`;
             </div>
           ) : (
             <div className="rounded-lg border bg-card p-8 text-center">
-              <p className="font-medium text-foreground">This page is only available to internal system admins.</p>
+              <p className="font-medium text-foreground">This page is part of our beta program and is not enabled for your company.</p>
             </div>
           )}
         </main>

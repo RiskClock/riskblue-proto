@@ -52,6 +52,7 @@ import { productCatalogLabel } from "@/lib/catalogLabel";
 import { tagStyle } from "@/lib/tagColor";
 import { currencySymbol, formatCompactCurrencyAmount } from "@/lib/currency";
 import { useSystemAdminStatus } from "@/hooks/useIsSystemAdmin";
+import { useBetaAccess } from "@/hooks/useBetaAccess";
 
 interface MitigationControl {
   id: string;
@@ -116,7 +117,7 @@ export default function Controls() {
   const { tenant, tenantId, loading: tenantLoading } = useTenant();
   const queryClient = useQueryClient();
 
-  const { isSystemAdmin: canEdit, isLoading: adminLoading } = useSystemAdminStatus();
+  const { hasBetaAccess: canEdit, isLoading: adminLoading } = useBetaAccess();
 
   const pageTitle = productCatalogLabel();
   const tenantCurrency = tenant?.default_currency ?? "USD";
@@ -454,7 +455,7 @@ export default function Controls() {
         <AppHeader title={pageTitle} />
         <div className="container mx-auto px-6 py-20">
           <div className="rounded-lg border bg-card p-8 text-center">
-            <p className="font-medium text-foreground">This page is only available to internal system admins.</p>
+            <p className="font-medium text-foreground">This page is part of our beta program and is not enabled for your company.</p>
           </div>
         </div>
       </div>
