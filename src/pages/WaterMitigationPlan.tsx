@@ -29,6 +29,7 @@ import {
   ArrowLeft,
   BellRing,
   ClipboardCheck,
+  Copy,
   ChevronDown,
   ChevronRight,
   Droplets,
@@ -1446,6 +1447,7 @@ export default function WaterMitigationPlan() {
   const [duplicateName, setDuplicateName] = useState("");
   const [duplicateParts, setDuplicateParts] = useState({ essentials: true, riskClasses: true, pricing: true });
   const [duplicating, setDuplicating] = useState(false);
+  const [downloadingAll, setDownloadingAll] = useState(false);
 
   const openDuplicate = (plan: Plan) => {
     setDuplicateTarget(plan);
@@ -1461,60 +1463,142 @@ export default function WaterMitigationPlan() {
     setDuplicateTarget(null);
   };
 
+  const downloadTimestamp = () => {
+    const d = new Date();
+    const pad = (value: number) => String(value).padStart(2, "0");
+    return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`;
+  };
+
+  const filenamePart = (value: string, fallback: string) =>
+    value.replace(/\s+/g, "").replace(/[\\/:*?"<>|]/g, "") || fallback;
+
+  const appendPlanSheets = (XLSX: typeof import("xlsx"), book: import("xlsx").WorkBook, plan: Plan, prefix = "") => {
+    const symbol = currencySymbol(selectedCurrency);
+    const sheetName = (label: string) => `${prefix}${label}`.slice(0, 31);
+    const summaryName = sheetName("Summary");
+    const controlsName = sheetName("Controls");
+    const locationsName = sheetName("Locations");
+    const breakdownName = sheetName("Space Breakdown");
+    const quoteSheet = (name: string) => `'${name.replace(/'/g, "''")}'`;
+
+    const planControlRows = controlRows.filter((row) => countFor(plan, row.id) > 0);
+    const planBaseRows = baseRows.filter((row) => baseCountFor(plan, row.id) > 0);
+    const controlSheet: (string | number)[][] = [
+      ["Product ID", "Product", "Type", `Unit cost (${symbol})`, "Period", "Custom price", "Count", `Total (${symbol})`],
+    ];
+    const controlSheetRow = new Map<string, number>();
+    const pushControlRow = (row: ControlRow, count: number, type: string) => {
+      const priced = rowPricingFor(plan, row);
+      controlSheet.push([
+        row.code || "",
+        row.name,
+        type,
+        priced.unitCost,
+        priced.period,
+        priced.custom ? "Yes" : "No",
+        count,
+        0,
+      ]);
+      const excelRow = controlSheet.length;
+      controlSheetRow.set(row.id, excelRow);
+      controlSheet[excelRow - 1][7] = { f: `D${excelRow}*G${excelRow}` } as unknown as number;
+    };
+    planControlRows.forEach((row) => pushControlRow(row, countFor(plan, row.id), "Control"));
+    planBaseRows.forEach((row) => pushControlRow(row, baseCountFor(plan, row.id), "Essential component"));
+
+    const lastControlRow = controlSheet.length;
+    const controlsRef = quoteSheet(controlsName);
+    const summary: (string | number | { f: string })[][] = [
+      ["Plan name", plan.name],
+      ["Plan summary", plan.summary || ""],
+      ["Project", project?.name || ""],
+      ["Controls applied", lastControlRow > 1 ? { f: `SUM(${controlsRef}!G2:G${lastControlRow})` } : 0],
+      [`Total cost estimate (${symbol})`, lastControlRow > 1 ? { f: `SUM(${controlsRef}!H2:H${lastControlRow})` } : 0],
+    ];
+
+    const locations: (string | number)[][] = [["Product ID", "Product", "Location", "Count"]];
+    planControlRows.forEach((row) => {
+      spacesForControl(row.id).forEach((space) => {
+        const count = countForSpace(plan, row.id, space);
+        if (count > 0) locations.push([row.code || "", row.name, space, count]);
+      });
+    });
+
+    const breakdownHeader: string[] = ["Space"];
+    planControlRows.forEach((row) => {
+      const label = row.code || row.name;
+      breakdownHeader.push(`${label} Count`, `${label} Cost (${symbol})`);
+    });
+    breakdownHeader.push("Total Count", `Total Cost (${symbol})`);
+    const spaces = orderedSpaces.filter((space) => planControlRows.some((row) => countForSpace(plan, row.id, space) > 0));
+    const breakdown: (string | number | { f: string })[][] = [breakdownHeader];
+    spaces.forEach((space, spaceIndex) => {
+      const excelRow = spaceIndex + 2;
+      const values: (string | number | { f: string })[] = [space];
+      planControlRows.forEach((row, controlIndex) => {
+        const countColumn = XLSX.utils.encode_col(1 + controlIndex * 2);
+        const controlExcelRow = controlSheetRow.get(row.id);
+        values.push(
+          countForSpace(plan, row.id, space),
+          controlExcelRow ? { f: `${countColumn}${excelRow}*${controlsRef}!$D$${controlExcelRow}` } : 0,
+        );
+      });
+      const countColumns = planControlRows.map((_, index) => `${XLSX.utils.encode_col(1 + index * 2)}${excelRow}`);
+      const costColumns = planControlRows.map((_, index) => `${XLSX.utils.encode_col(2 + index * 2)}${excelRow}`);
+      values.push(
+        countColumns.length ? { f: countColumns.join("+") } : 0,
+        costColumns.length ? { f: costColumns.join("+") } : 0,
+      );
+      breakdown.push(values);
+    });
+    const totalRow = breakdown.length + 1;
+    const totals: (string | { f: string })[] = ["Total"];
+    for (let column = 1; column < breakdownHeader.length; column += 1) {
+      const col = XLSX.utils.encode_col(column);
+      totals.push(spaces.length ? { f: `SUM(${col}2:${col}${totalRow - 1})` } : { f: "0" });
+    }
+    breakdown.push(totals);
+
+    const summarySheet = XLSX.utils.aoa_to_sheet(summary);
+    const controlsSheet = XLSX.utils.aoa_to_sheet(controlSheet);
+    const locationsSheet = XLSX.utils.aoa_to_sheet(locations);
+    const breakdownSheet = XLSX.utils.aoa_to_sheet(breakdown);
+    summarySheet["!cols"] = [{ wch: 30 }, { wch: 48 }];
+    controlsSheet["!cols"] = [{ wch: 16 }, { wch: 32 }, { wch: 22 }, { wch: 17 }, { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 17 }];
+    locationsSheet["!cols"] = [{ wch: 16 }, { wch: 32 }, { wch: 28 }, { wch: 10 }];
+    breakdownSheet["!cols"] = breakdownHeader.map((_, index) => ({ wch: index === 0 ? 28 : 16 }));
+    XLSX.utils.book_append_sheet(book, summarySheet, summaryName);
+    XLSX.utils.book_append_sheet(book, controlsSheet, controlsName);
+    XLSX.utils.book_append_sheet(book, locationsSheet, locationsName);
+    XLSX.utils.book_append_sheet(book, breakdownSheet, breakdownName);
+  };
+
   const downloadPlan = async (plan: Plan) => {
     try {
       const XLSX = await import("xlsx");
-      const totals = planTotals(plan);
-      const symbol = currencySymbol(selectedCurrency);
-
-      const summary = [
-        ["Plan name", plan.name],
-        ["Plan summary", plan.summary || ""],
-        ["Project", project?.name || ""],
-        ["Controls applied", totals.count],
-        [`Total cost estimate (${symbol})`, Math.round(totals.cost)],
-      ];
-
-      const controlSheet: (string | number)[][] = [
-        ["Product ID", "Product", "Type", `Unit cost (${symbol})`, "Period", "Custom price", "Count", `Total (${symbol})`],
-      ];
-      const locationSheet: (string | number)[][] = [["Product ID", "Product", "Location", "Count"]];
-
-      const pushRow = (row: ControlRow, n: number, type: string) => {
-        if (n <= 0) return;
-        const priced = rowPricingFor(plan, row);
-        controlSheet.push([
-          row.code || "",
-          row.name,
-          type,
-          Math.round(priced.unitCost),
-          priced.period,
-          priced.custom ? "Yes" : "No",
-          n,
-          Math.round(n * priced.unitCost),
-        ]);
-      };
-
-      controlRows.forEach((row) => {
-        const n = countFor(plan, row.id);
-        pushRow(row, n, "Control");
-        if (n > 0) {
-          spacesForControl(row.id).forEach((space) => {
-            const count = countForSpace(plan, row.id, space);
-            if (count > 0) locationSheet.push([row.code || "", row.name, space, count]);
-          });
-        }
-      });
-      baseRows.forEach((row) => pushRow(row, baseCountFor(plan, row.id), "Essential component"));
-
       const book = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(summary), "Summary");
-      XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(controlSheet), "Controls");
-      XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(locationSheet), "Locations");
-      const safeName = (plan.name || "plan").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
-      XLSX.writeFile(book, `${safeName || "plan"}.xlsx`);
+      appendPlanSheets(XLSX, book, plan);
+      const projectName = filenamePart(project?.name || "Project", "Project");
+      const planName = filenamePart(plan.name || "Plan", "Plan");
+      XLSX.writeFile(book, `RiskBlue_WaterMitigationPlan_${projectName}_${planName}_${downloadTimestamp()}.xlsx`);
     } catch (error) {
       toast.error(getUserFriendlyError(error));
+    }
+  };
+
+  const downloadAllPlans = async () => {
+    if (plans.length === 0) return;
+    setDownloadingAll(true);
+    try {
+      const XLSX = await import("xlsx");
+      const book = XLSX.utils.book_new();
+      plans.forEach((plan, index) => appendPlanSheets(XLSX, book, plan, `P${index + 1} `));
+      const projectName = filenamePart(project?.name || "Project", "Project");
+      XLSX.writeFile(book, `RiskBlue_WaterMitigationPlans_${projectName}_${downloadTimestamp()}.xlsx`);
+    } catch (error) {
+      toast.error(getUserFriendlyError(error));
+    } finally {
+      setDownloadingAll(false);
     }
   };
 
@@ -2061,6 +2145,10 @@ actions and posts its own recap.`;
             >
               <MessageSquare className="h-4 w-4 mr-2" /> Open Wade
             </Button>
+            <Button variant="outline" onClick={downloadAllPlans} disabled={plans.length === 0 || downloadingAll}>
+              {downloadingAll ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+              Download all plans
+            </Button>
             <Button variant="outline" onClick={() => setHistoryOpen(true)}>
               <History className="h-4 w-4 mr-2" /> Change History
             </Button>
@@ -2140,7 +2228,9 @@ actions and posts its own recap.`;
                               <DropdownMenuItem onClick={() => setPlanEditor({ mode: "edit", plan })}>
                                 <Pencil className="h-4 w-4 mr-2" /> Edit plan
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openDuplicate(plan)}>Duplicate plan</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openDuplicate(plan)}>
+                                <Copy className="h-4 w-4 mr-2" /> Duplicate plan
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => downloadPlan(plan)}>
                                 <Download className="h-4 w-4 mr-2" /> Download plan (XLSX)
                               </DropdownMenuItem>
