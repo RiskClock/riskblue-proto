@@ -2145,6 +2145,10 @@ actions and posts its own recap.`;
             >
               <MessageSquare className="h-4 w-4 mr-2" /> Open Wade
             </Button>
+            <Button variant="outline" onClick={downloadAllPlans} disabled={plans.length === 0 || downloadingAll}>
+              {downloadingAll ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+              Download all plans
+            </Button>
             <Button variant="outline" onClick={() => setHistoryOpen(true)}>
               <History className="h-4 w-4 mr-2" /> Change History
             </Button>
@@ -2224,7 +2228,9 @@ actions and posts its own recap.`;
                               <DropdownMenuItem onClick={() => setPlanEditor({ mode: "edit", plan })}>
                                 <Pencil className="h-4 w-4 mr-2" /> Edit plan
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openDuplicate(plan)}>Duplicate plan</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openDuplicate(plan)}>
+                                <Copy className="h-4 w-4 mr-2" /> Duplicate plan
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => downloadPlan(plan)}>
                                 <Download className="h-4 w-4 mr-2" /> Download plan (XLSX)
                               </DropdownMenuItem>
