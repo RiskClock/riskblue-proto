@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, BarChart3, Shield, ShieldCheck, Coins, Users, KeyRound, UserCog, LayoutGrid, Info, FlaskConical, Building2, ArrowLeftRight } from "lucide-react";
+import { LogOut, Settings, BarChart3, Coins, Users, KeyRound, UserCog, LayoutGrid, Info, FlaskConical, Building2, ArrowLeftRight } from "lucide-react";
 import { useTenant, useMyTenants } from "@/contexts/TenantContext";
 import { SwitchCompanyModal } from "@/components/SwitchCompanyModal";
 import { TenantMembersModal } from "@/components/TenantMembersModal";
@@ -146,6 +146,16 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
           >
             Projects
           </button>
+          {tenantId && isSystemAdmin && (
+            <button
+              onClick={() => navigate(tenantPath("/controls"))}
+              onPointerEnter={() => preloadRoute("controls")}
+              onFocus={() => preloadRoute("controls")}
+              className={`hover:text-primary ${isActive(tenantPath("/controls")) ? "text-primary font-medium" : "text-foreground"}`}
+            >
+              {productCatalogLabel()}
+            </button>
+          )}
           {showCredits && (
             <button
               onClick={() => setBuyOpen(true)}
@@ -227,16 +237,6 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
                 >
                   <Users className="h-4 w-4 mr-2" />
                   User Management
-                </DropdownMenuItem>
-              )}
-              {tenantId && isSystemAdmin && (
-                <DropdownMenuItem
-                  onClick={() => menuNavigate(tenantPath("/controls"))}
-                  className="cursor-pointer"
-                  {...menuItemProps("controls")}
-                >
-                  <ShieldCheck className="h-4 w-4 mr-2" />
-                  {productCatalogLabel()}
                 </DropdownMenuItem>
               )}
               {(myTenants.length > 0 || isInternalUser) && (

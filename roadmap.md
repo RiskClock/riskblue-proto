@@ -11,3 +11,7 @@
 - [x] Add per-space control count and cost breakdowns with totals to plan exports.
 - [x] Add Download all plans between Open Wade and Change History, with four sheets per plan.
 - [x] Verify the updated download controls and generated workbook structure.
+- [x] Rename Water Mitigation Plans to Plan Builder (Beta) and replace its project-row icon with a text button.
+- [x] Move Product Catalog into the main header beside Projects for system admins.
+- [x] Confirm mixed pricing is annualized and label totals as yearly only when recurring pricing applies.
+- [x] Verify the updated navigation, labels, and cost display in the live preview.
