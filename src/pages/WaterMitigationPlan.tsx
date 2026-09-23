@@ -1101,17 +1101,20 @@ export default function WaterMitigationPlan() {
   const planTotals = (plan: Plan) => {
     let count = 0;
     let cost = 0;
+    let hasRecurring = false;
     controlRows.forEach((row) => {
       const n = countFor(plan, row.id);
       count += n;
       cost += n * unitCostIn(plan, row);
+      if (n > 0 && mergePricing(row.pricing, planPricingFor(plan)[row.id]).recurring > 0) hasRecurring = true;
     });
     baseRows.forEach((row) => {
       const n = baseCountFor(plan, row.id);
       count += n;
       cost += n * unitCostIn(plan, row);
+      if (n > 0 && mergePricing(row.pricing, planPricingFor(plan)[row.id]).recurring > 0) hasRecurring = true;
     });
-    return { count, cost };
+    return { count, cost, hasRecurring };
   };
 
   // --- create/edit plan modal -----------------------------------------
@@ -2144,7 +2147,7 @@ actions and posts its own recap.`;
 
       <main className="container mx-auto px-6 py-8 flex-1 min-h-0 flex flex-col overflow-hidden">
         <div className="flex items-center justify-between gap-2 pb-3 shrink-0">
-          <h1 className="text-lg font-semibold truncate">Water Mitigation Plans</h1>
+          <h1 className="text-lg font-semibold truncate">Plan Builder (Beta)</h1>
           <div className="flex items-center gap-2 shrink-0">
             <ToggleGroup
               type="single"
@@ -2343,6 +2346,9 @@ actions and posts its own recap.`;
                   {plans.map((plan) => (
                     <td key={plan.id} className="border-r px-4 py-3 text-center text-lg font-bold tabular-nums">
                       {currency(planTotalsById.get(plan.id)?.cost ?? 0)}
+                      {planTotalsById.get(plan.id)?.hasRecurring && (
+                        <span className="ml-1 text-sm font-medium text-muted-foreground">(Yearly)</span>
+                      )}
                     </td>
                   ))}
                   <td />

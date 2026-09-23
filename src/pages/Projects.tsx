@@ -9,7 +9,7 @@ import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import { formatDateShort } from "@/lib/reportGenerator";
 import { AppHeader } from "@/components/AppHeader";
-import { Trash2, X, ClipboardList } from "lucide-react";
+import { Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CreateProjectModal } from "@/components/CreateProjectModal";
@@ -309,24 +309,16 @@ const Projects = () => {
                     <td className="px-6 py-4">
                       <div className="h-9 flex items-center justify-end gap-1">
                         {isStaffViewer && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  aria-label="Water Mitigation Plan"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    navigate(tenantPath(`/project/${project.id}/mitigation-plan`));
-                                  }}
-                                >
-                                  <ClipboardList className="h-4 w-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Water Mitigation Plan</TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(tenantPath(`/project/${project.id}/mitigation-plan`));
+                            }}
+                          >
+                            Plan Builder (Beta)
+                          </Button>
                         )}
                         {userProjectRoles.get(project.id) === "admin" && canDeleteProject && (
                           <Button
