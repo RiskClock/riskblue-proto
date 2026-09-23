@@ -1473,6 +1473,8 @@ export default function WaterMitigationPlan() {
     value.replace(/\s+/g, "").replace(/[\\/:*?"<>|]/g, "") || fallback;
 
   const appendPlanSheets = (XLSX: typeof import("xlsx"), book: import("xlsx").WorkBook, plan: Plan, prefix = "") => {
+    type FormulaCell = { f: string; v: number; t: "n" };
+    const formula = (f: string, value: number): FormulaCell => ({ f, v: value, t: "n" });
     const symbol = currencySymbol(selectedCurrency);
     const sheetName = (label: string) => `${prefix}${label}`.slice(0, 31);
     const summaryName = sheetName("Summary");
@@ -1483,12 +1485,15 @@ export default function WaterMitigationPlan() {
 
     const planControlRows = controlRows.filter((row) => countFor(plan, row.id) > 0);
     const planBaseRows = baseRows.filter((row) => baseCountFor(plan, row.id) > 0);
-    const controlSheet: (string | number)[][] = [
+    const controlSheet: (string | number | FormulaCell)[][] = [
       ["Product ID", "Product", "Type", `Unit cost (${symbol})`, "Period", "Custom price", "Count", `Total (${symbol})`],
     ];
     const controlSheetRow = new Map<string, number>();
+    let controlsApplied = 0;
+    let totalCostEstimate = 0;
     const pushControlRow = (row: ControlRow, count: number, type: string) => {
       const priced = rowPricingFor(plan, row);
+      const rowTotal = priced.unitCost * count;
       controlSheet.push([
         row.code || "",
         row.name,
@@ -1497,23 +1502,24 @@ export default function WaterMitigationPlan() {
         priced.period,
         priced.custom ? "Yes" : "No",
         count,
-        0,
+        formula(`D${controlSheet.length + 1}*G${controlSheet.length + 1}`, rowTotal),
       ]);
       const excelRow = controlSheet.length;
       controlSheetRow.set(row.id, excelRow);
-      controlSheet[excelRow - 1][7] = { f: `D${excelRow}*G${excelRow}` } as unknown as number;
+      controlsApplied += count;
+      totalCostEstimate += rowTotal;
     };
     planControlRows.forEach((row) => pushControlRow(row, countFor(plan, row.id), "Control"));
     planBaseRows.forEach((row) => pushControlRow(row, baseCountFor(plan, row.id), "Essential component"));
 
     const lastControlRow = controlSheet.length;
     const controlsRef = quoteSheet(controlsName);
-    const summary: (string | number | { f: string })[][] = [
+    const summary: (string | number | FormulaCell)[][] = [
       ["Plan name", plan.name],
       ["Plan summary", plan.summary || ""],
       ["Project", project?.name || ""],
-      ["Controls applied", lastControlRow > 1 ? { f: `SUM(${controlsRef}!G2:G${lastControlRow})` } : 0],
-      [`Total cost estimate (${symbol})`, lastControlRow > 1 ? { f: `SUM(${controlsRef}!H2:H${lastControlRow})` } : 0],
+      ["Controls applied", lastControlRow > 1 ? formula(`SUM(${controlsRef}!G2:G${lastControlRow})`, controlsApplied) : 0],
+      [`Total cost estimate (${symbol})`, lastControlRow > 1 ? formula(`SUM(${controlsRef}!H2:H${lastControlRow})`, totalCostEstimate) : 0],
     ];
 
     const locations: (string | number)[][] = [["Product ID", "Product", "Location", "Count"]];
@@ -1531,31 +1537,42 @@ export default function WaterMitigationPlan() {
     });
     breakdownHeader.push("Total Count", `Total Cost (${symbol})`);
     const spaces = orderedSpaces.filter((space) => planControlRows.some((row) => countForSpace(plan, row.id, space) > 0));
-    const breakdown: (string | number | { f: string })[][] = [breakdownHeader];
+    const breakdown: (string | number | FormulaCell)[][] = [breakdownHeader];
+    const breakdownTotals = Array.from({ length: breakdownHeader.length - 1 }, () => 0);
     spaces.forEach((space, spaceIndex) => {
       const excelRow = spaceIndex + 2;
-      const values: (string | number | { f: string })[] = [space];
+      const values: (string | number | FormulaCell)[] = [space];
+      let spaceCount = 0;
+      let spaceCost = 0;
       planControlRows.forEach((row, controlIndex) => {
         const countColumn = XLSX.utils.encode_col(1 + controlIndex * 2);
         const controlExcelRow = controlSheetRow.get(row.id);
+        const count = countForSpace(plan, row.id, space);
+        const cost = count * rowPricingFor(plan, row).unitCost;
         values.push(
-          countForSpace(plan, row.id, space),
-          controlExcelRow ? { f: `${countColumn}${excelRow}*${controlsRef}!$D$${controlExcelRow}` } : 0,
+          count,
+          controlExcelRow ? formula(`${countColumn}${excelRow}*${controlsRef}!$D$${controlExcelRow}`, cost) : 0,
         );
+        breakdownTotals[controlIndex * 2] += count;
+        breakdownTotals[controlIndex * 2 + 1] += cost;
+        spaceCount += count;
+        spaceCost += cost;
       });
       const countColumns = planControlRows.map((_, index) => `${XLSX.utils.encode_col(1 + index * 2)}${excelRow}`);
       const costColumns = planControlRows.map((_, index) => `${XLSX.utils.encode_col(2 + index * 2)}${excelRow}`);
       values.push(
-        countColumns.length ? { f: countColumns.join("+") } : 0,
-        costColumns.length ? { f: costColumns.join("+") } : 0,
+        countColumns.length ? formula(countColumns.join("+"), spaceCount) : 0,
+        costColumns.length ? formula(costColumns.join("+"), spaceCost) : 0,
       );
+      breakdownTotals[breakdownTotals.length - 2] += spaceCount;
+      breakdownTotals[breakdownTotals.length - 1] += spaceCost;
       breakdown.push(values);
     });
     const totalRow = breakdown.length + 1;
-    const totals: (string | { f: string })[] = ["Total"];
+    const totals: (string | FormulaCell)[] = ["Total"];
     for (let column = 1; column < breakdownHeader.length; column += 1) {
       const col = XLSX.utils.encode_col(column);
-      totals.push(spaces.length ? { f: `SUM(${col}2:${col}${totalRow - 1})` } : { f: "0" });
+      totals.push(formula(spaces.length ? `SUM(${col}2:${col}${totalRow - 1})` : "0", breakdownTotals[column - 1]));
     }
     breakdown.push(totals);
 
