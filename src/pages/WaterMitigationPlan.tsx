@@ -1476,7 +1476,8 @@ export default function WaterMitigationPlan() {
     type FormulaCell = { f: string; v: number; t: "n" };
     const formula = (f: string, value: number): FormulaCell => ({ f, v: value, t: "n" });
     const symbol = currencySymbol(selectedCurrency);
-    const sheetName = (label: string) => `${prefix}${label}`.slice(0, 31);
+    const namePart = ((plan.name || "").replace(/[\\/:*?[\]]/g, "").trim() || "Plan").slice(0, 20);
+    const sheetName = (label: string) => `${prefix}${namePart} - ${label}`.slice(0, 31);
     const summaryName = sheetName("Summary");
     const controlsName = sheetName("Controls");
     const locationsName = sheetName("Locations");
