@@ -6,8 +6,8 @@
 - [x] Replace the zero-plan table with a helpful content-hugging empty state and working create-plan action.
 - [x] Import/update workbook products for Connected Sensors, Insight Risk, and arkIQ.
 - [x] Verify TypeScript, live UI behavior, and imported product data.
-- [ ] Add an icon to the Duplicate plan action.
-- [ ] Rename single-plan XLSX exports to match the Threat Report naming convention.
-- [ ] Add per-space control count and cost breakdowns with totals to plan exports.
-- [ ] Add Download all plans between Open Wade and Change History, with four sheets per plan.
-- [ ] Verify the updated download controls and generated workbook structure.
+- [x] Add an icon to the Duplicate plan action.
+- [x] Rename single-plan XLSX exports to match the Threat Report naming convention.
+- [x] Add per-space control count and cost breakdowns with totals to plan exports.
+- [x] Add Download all plans between Open Wade and Change History, with four sheets per plan.
+- [x] Verify the updated download controls and generated workbook structure.
