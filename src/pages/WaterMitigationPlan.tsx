@@ -1616,7 +1616,7 @@ export default function WaterMitigationPlan() {
     try {
       const XLSX = await import("xlsx");
       const book = XLSX.utils.book_new();
-      plans.forEach((plan, index) => appendPlanSheets(XLSX, book, plan, `P${index + 1} `));
+      plans.forEach((plan) => appendPlanSheets(XLSX, book, plan));
       const projectName = filenamePart(project?.name || "Project", "Project");
       XLSX.writeFile(book, `RiskBlue_WaterMitigationPlans_${projectName}_${downloadTimestamp()}.xlsx`);
     } catch (error) {
