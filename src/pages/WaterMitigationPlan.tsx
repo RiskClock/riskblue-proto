@@ -1476,11 +1476,18 @@ export default function WaterMitigationPlan() {
     type FormulaCell = { f: string; v: number; t: "n" };
     const formula = (f: string, value: number): FormulaCell => ({ f, v: value, t: "n" });
     const symbol = currencySymbol(selectedCurrency);
-    const sheetName = (label: string) => `${prefix}${label}`.slice(0, 31);
-    const summaryName = sheetName("Summary");
-    const controlsName = sheetName("Controls");
-    const locationsName = sheetName("Locations");
-    const breakdownName = sheetName("Space Breakdown");
+    const namePart = ((plan.name || "").replace(/[\\/:*?[\]]/g, "").trim() || "Plan").slice(0, 20);
+    const sheetName = (label: string) => `${prefix}${namePart} - ${label}`.slice(0, 31);
+    const uniquify = (name: string) => {
+      let unique = name;
+      let n = 2;
+      while (book.SheetNames.includes(unique)) unique = `${name.slice(0, 29)} ${n++}`;
+      return unique;
+    };
+    const summaryName = uniquify(sheetName("Summary"));
+    const controlsName = uniquify(sheetName("Controls"));
+    const locationsName = uniquify(sheetName("Locations"));
+    const breakdownName = uniquify(sheetName("Space Breakdown"));
     const quoteSheet = (name: string) => `'${name.replace(/'/g, "''")}'`;
 
     const planControlRows = controlRows.filter((row) => countFor(plan, row.id) > 0);
@@ -1609,7 +1616,7 @@ export default function WaterMitigationPlan() {
     try {
       const XLSX = await import("xlsx");
       const book = XLSX.utils.book_new();
-      plans.forEach((plan, index) => appendPlanSheets(XLSX, book, plan, `P${index + 1} `));
+      plans.forEach((plan) => appendPlanSheets(XLSX, book, plan));
       const projectName = filenamePart(project?.name || "Project", "Project");
       XLSX.writeFile(book, `RiskBlue_WaterMitigationPlans_${projectName}_${downloadTimestamp()}.xlsx`);
     } catch (error) {
