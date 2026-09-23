@@ -3104,6 +3104,7 @@ export type Database = {
       }
       tenants: {
         Row: {
+          beta_enabled: boolean
           created_at: string
           created_by: string | null
           credits_balance: number
@@ -3115,6 +3116,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          beta_enabled?: boolean
           created_at?: string
           created_by?: string | null
           credits_balance?: number
@@ -3126,6 +3128,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          beta_enabled?: boolean
           created_at?: string
           created_by?: string | null
           credits_balance?: number
@@ -3718,6 +3721,7 @@ export type Database = {
       get_my_tenants: {
         Args: never
         Returns: {
+          beta_enabled: boolean
           credits_balance: number
           default_currency: string
           id: string
@@ -3749,6 +3753,7 @@ export type Database = {
       get_tenant_summaries: {
         Args: never
         Returns: {
+          beta_enabled: boolean
           created_at: string
           credits_balance: number
           default_currency: string
@@ -3845,6 +3850,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      tenant_beta_enabled: { Args: { _tenant_id: string }; Returns: boolean }
       tenant_has_permission: {
         Args: { _flag: string; _tenant_id: string; _user_id: string }
         Returns: boolean
