@@ -28,6 +28,8 @@ export interface TenantMembership {
   permissions: Record<string, boolean>;
   /** True only when the user is an actual member (internal staff see all companies). */
   isMember: boolean;
+  /** Company opted into beta programs (Product Catalog, Plan Builder). */
+  betaEnabled: boolean;
 }
 
 interface TenantContextValue {
@@ -61,6 +63,7 @@ export const useMyTenants = () => {
         role: t.role as TenantRole,
         permissions: (t.permissions ?? {}) as Record<string, boolean>,
         isMember: t.is_member !== false,
+        betaEnabled: t.beta_enabled === true,
       }));
     },
     enabled: !!user?.id,

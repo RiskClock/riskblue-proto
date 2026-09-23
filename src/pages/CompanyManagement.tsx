@@ -30,6 +30,8 @@ import {
 import { cn } from "@/lib/utils";
 import { CompanyLogoField, uploadCompanyLogo, purgeCompanyLogos } from "@/components/users/CompanyLogoField";
 import { MultiSelectChecklist } from "@/components/common/MultiSelectChecklist";
+import { Switch } from "@/components/ui/switch";
+import { productCatalogLabel } from "@/lib/catalogLabel";
 import { CURRENCY_OPTIONS, normalizeCurrencyCode, type CurrencyCode } from "@/lib/currency";
 
 
@@ -41,6 +43,7 @@ interface TenantSummary {
   slug: string | null;
   credits_balance: number;
   default_currency: CurrencyCode;
+  beta_enabled: boolean;
   is_active: boolean;
   created_at: string;
   member_count: number;
@@ -518,6 +521,7 @@ const CompanyDialog = ({
   const [name, setName] = useState(tenant?.name ?? "");
   const [credits, setCredits] = useState(String(tenant?.credits_balance ?? 0));
   const [defaultCurrency, setDefaultCurrency] = useState<CurrencyCode>(normalizeCurrencyCode(tenant?.default_currency));
+  const [betaEnabled, setBetaEnabled] = useState<boolean>(tenant?.beta_enabled === true);
   const [saving, setSaving] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoRemoved, setLogoRemoved] = useState(false);
@@ -534,10 +538,11 @@ const CompanyDialog = ({
     setName(tenant?.name ?? "");
     setCredits(String(tenant?.credits_balance ?? 0));
     setDefaultCurrency(normalizeCurrencyCode(tenant?.default_currency));
+    setBetaEnabled(tenant?.beta_enabled === true);
     setLogoFile(null);
     setLogoRemoved(false);
     setConfirmDelete(false);
-  }, [open, tenant?.id, tenant?.name, tenant?.credits_balance, tenant?.default_currency]);
+  }, [open, tenant?.id, tenant?.name, tenant?.credits_balance, tenant?.default_currency, tenant?.beta_enabled]);
 
   const { data: savedMembers, isLoading: membersLoading } = useQuery({
     queryKey: ["tenant-members", tenant?.id],
@@ -681,6 +686,7 @@ const CompanyDialog = ({
             name: trimmedName,
             credits_balance: targetCredits,
             default_currency: defaultCurrency,
+            beta_enabled: betaEnabled,
             is_active: true,
             created_by: user?.id ?? null,
           })
@@ -691,7 +697,7 @@ const CompanyDialog = ({
       } else {
         const { error } = await supabase
           .from("tenants")
-          .update({ name: trimmedName, default_currency: defaultCurrency, is_active: true })
+          .update({ name: trimmedName, default_currency: defaultCurrency, beta_enabled: betaEnabled, is_active: true })
           .eq("id", tenant!.id);
         if (error) throw error;
         if (targetCredits !== tenant!.credits_balance) {
@@ -803,6 +809,15 @@ const CompanyDialog = ({
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="flex items-start justify-between gap-4 rounded-md border p-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="beta-program">Beta program</Label>
+                <p className="text-xs text-muted-foreground">
+                  Gives this company access to beta features: {productCatalogLabel()} and Plan Builder.
+                </p>
+              </div>
+              <Switch id="beta-program" checked={betaEnabled} onCheckedChange={setBetaEnabled} />
             </div>
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">Company logo</Label>

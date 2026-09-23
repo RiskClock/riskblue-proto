@@ -16,6 +16,7 @@ import { CreateProjectModal } from "@/components/CreateProjectModal";
 import { useAccountType } from "@/hooks/useAccountType";
 import { useTenant } from "@/contexts/TenantContext";
 import { useIsSystemAdmin, useStaffUserIds } from "@/hooks/useIsSystemAdmin";
+import { useBetaAccess } from "@/hooks/useBetaAccess";
 
 interface Project {
   id: string;
@@ -42,6 +43,7 @@ const Projects = () => {
   const { toast } = useToast();
   const { isWMSV, company } = useAccountType();
   const isStaffViewer = useIsSystemAdmin();
+  const { hasBetaAccess } = useBetaAccess();
   const staffIds = useStaffUserIds();
   /** Staff accounts are never named to company users. */
   const displayCreator = (p: { user_id: string; creator_name: string; creator_email: string }) => {
@@ -308,7 +310,7 @@ const Projects = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="h-9 flex items-center justify-end gap-1">
-                        {isStaffViewer && (
+                        {hasBetaAccess && (
                           <Button
                             variant="ghost"
                             size="sm"
