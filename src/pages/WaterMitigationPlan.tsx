@@ -1591,10 +1591,10 @@ export default function WaterMitigationPlan() {
     controlsSheet["!cols"] = [{ wch: 16 }, { wch: 32 }, { wch: 22 }, { wch: 17 }, { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 17 }];
     locationsSheet["!cols"] = [{ wch: 16 }, { wch: 32 }, { wch: 28 }, { wch: 10 }];
     breakdownSheet["!cols"] = breakdownHeader.map((_, index) => ({ wch: index === 0 ? 28 : 16 }));
-    XLSX.utils.book_append_sheet(book, summarySheet, uniquify(summaryName));
-    XLSX.utils.book_append_sheet(book, controlsSheet, uniquify(controlsName));
-    XLSX.utils.book_append_sheet(book, locationsSheet, uniquify(locationsName));
-    XLSX.utils.book_append_sheet(book, breakdownSheet, uniquify(breakdownName));
+    XLSX.utils.book_append_sheet(book, summarySheet, summaryName);
+    XLSX.utils.book_append_sheet(book, controlsSheet, controlsName);
+    XLSX.utils.book_append_sheet(book, locationsSheet, locationsName);
+    XLSX.utils.book_append_sheet(book, breakdownSheet, breakdownName);
   };
 
   const downloadPlan = async (plan: Plan) => {
