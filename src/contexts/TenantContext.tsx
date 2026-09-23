@@ -63,6 +63,7 @@ export const useMyTenants = () => {
         role: t.role as TenantRole,
         permissions: (t.permissions ?? {}) as Record<string, boolean>,
         isMember: t.is_member !== false,
+        betaEnabled: t.beta_enabled === true,
       }));
     },
     enabled: !!user?.id,
