@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, BarChart3, Shield, ShieldCheck, Coins, Users, KeyRound, UserCog, LayoutGrid, Info, FlaskConical, Building2, ArrowLeftRight } from "lucide-react";
+import { LogOut, Settings, BarChart3, Coins, Users, KeyRound, UserCog, LayoutGrid, Info, FlaskConical, Building2, ArrowLeftRight } from "lucide-react";
 import { useTenant, useMyTenants } from "@/contexts/TenantContext";
 import { SwitchCompanyModal } from "@/components/SwitchCompanyModal";
 import { TenantMembersModal } from "@/components/TenantMembersModal";
