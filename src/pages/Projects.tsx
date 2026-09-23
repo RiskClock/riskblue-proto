@@ -317,7 +317,7 @@ const Projects = () => {
                               navigate(tenantPath(`/project/${project.id}/mitigation-plan`));
                             }}
                           >
-                            Plan Builder (Beta)
+                            Plan Builder
                           </Button>
                         )}
                         {userProjectRoles.get(project.id) === "admin" && canDeleteProject && (
