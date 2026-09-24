@@ -25,7 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import {
   Loader2, Plus, Trash2, ExternalLink, Search, RotateCcw,
-  Settings2, GripVertical, ArrowUp, ArrowDown, ArrowUpDown,
+  Settings2, GripVertical, ArrowUp, ArrowDown, ArrowUpDown, Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CompanyLogoField, uploadCompanyLogo, purgeCompanyLogos } from "@/components/users/CompanyLogoField";
@@ -53,7 +53,7 @@ interface TenantSummary {
 const ROLES: TenantRole[] = ["admin", "member", "guest"];
 
 // ---------- columns ----------
-type ColumnId = "logo" | "name" | "members" | "projects" | "credits" | "created";
+type ColumnId = "logo" | "name" | "members" | "projects" | "credits" | "beta" | "created";
 
 const ALL_COLUMNS: { id: ColumnId; label: string }[] = [
   { id: "logo", label: "Logo" },
@@ -61,6 +61,7 @@ const ALL_COLUMNS: { id: ColumnId; label: string }[] = [
   { id: "members", label: "Members" },
   { id: "projects", label: "Projects" },
   { id: "credits", label: "Credits" },
+  { id: "beta", label: "Beta" },
   { id: "created", label: "Created" },
 ];
 
@@ -258,6 +259,8 @@ const CompanyManagement = () => {
             Credits <SortIcon k="credits" />
           </TableHead>
         );
+      case "beta":
+        return <TableHead key={colId} className="w-16 text-center">Beta</TableHead>;
       case "created":
         return (
           <TableHead key={colId} className="cursor-pointer select-none" onClick={() => toggleSort("created")}>
@@ -291,6 +294,12 @@ const CompanyManagement = () => {
         return <TableCell key={colId} className="text-right tabular-nums">{t.project_count}</TableCell>;
       case "credits":
         return <TableCell key={colId} className="text-right tabular-nums">{t.credits_balance}</TableCell>;
+      case "beta":
+        return (
+          <TableCell key={colId} className="text-center">
+            {t.beta_enabled && <Check className="h-4 w-4 text-primary mx-auto" aria-label="Beta enabled" />}
+          </TableCell>
+        );
       case "created":
         return (
           <TableCell key={colId} className="text-muted-foreground whitespace-nowrap">
