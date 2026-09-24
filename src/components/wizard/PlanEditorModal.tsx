@@ -486,7 +486,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-base font-semibold">Detected Risk Classes</h3>
-                <p className="text-xs text-muted-foreground">Product choices come from the Risk-Control Map and Product Catalog.</p>
+                <p className="text-xs text-muted-foreground">Control list comes from the Product Catalog.</p>
               </div>
               {loadPlanButton("classes")}
             </div>

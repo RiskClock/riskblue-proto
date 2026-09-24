@@ -2148,7 +2148,10 @@ actions and posts its own recap.`;
 
       <main className="container mx-auto px-6 py-8 flex-1 min-h-0 flex flex-col overflow-hidden">
         <div className="flex items-center justify-between gap-2 pb-3 shrink-0">
-          <h1 className="text-lg font-semibold truncate">Plan Builder (Beta)</h1>
+          <h1 className="text-lg font-semibold truncate flex items-center gap-2">
+            Plan Builder
+            <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">Beta</span>
+          </h1>
           <div className="flex items-center gap-2 shrink-0">
             <ToggleGroup
               type="single"
