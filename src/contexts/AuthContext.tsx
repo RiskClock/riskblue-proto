@@ -99,23 +99,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(session?.user ?? null);
       setLoading(false);
 
-      // Heartbeat: stamp profiles.last_seen_at at most once per hour so
-      // User Management can show true "last active" even when the user
-      // stays signed in across visits.
-      if (session?.user?.id) {
-        const uid = session.user.id;
-        const key = `rb-last-seen-${uid}`;
-        try {
-          const last = Number(localStorage.getItem(key) || 0);
-          if (Date.now() - last > 60 * 60 * 1000) {
-            localStorage.setItem(key, String(Date.now()));
-            void supabase
-              .from("profiles")
-              .update({ last_seen_at: new Date().toISOString() })
-              .eq("user_id", uid);
-          }
-        } catch { /* ignore */ }
-      }
+      // Heartbeat: stamp last_seen on session load; the fetch patch above
+      // keeps it fresh on any subsequent backend activity.
+      heartbeatUserId = session?.user?.id ?? null;
+      if (session?.user?.id) stampLastSeen();
 
       if (session?.user?.email && typeof window !== "undefined" && (window as any).heap) {
         (window as any).heap.identify(session.user.email);
