@@ -1722,6 +1722,7 @@ export type Database = {
           id: string
           is_active: boolean
           last_accessed_tenant_id: string | null
+          last_seen_at: string | null
           updated_at: string
           user_id: string
         }
@@ -1736,6 +1737,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           last_accessed_tenant_id?: string | null
+          last_seen_at?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1750,6 +1752,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           last_accessed_tenant_id?: string | null
+          last_seen_at?: string | null
           updated_at?: string
           user_id?: string
         }
