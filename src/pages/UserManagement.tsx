@@ -1038,16 +1038,17 @@ const UserManagement = () => {
                                 </TooltipProvider>
                               </TableCell>
                             );
-                          case "last_sign_in":
+                          case "last_sign_in": {
+                            const lastActive = u.last_seen_at ?? u.last_sign_in_at;
                             return (
                               <TableCell key={colId} className={cn("text-muted-foreground tabular-nums whitespace-nowrap", dim)}>
-                                {u.last_sign_in_at ? (
+                                {lastActive ? (
                                   <TooltipProvider delayDuration={150}>
                                     <Tooltip>
                                       <TooltipTrigger asChild>
-                                        <span className="cursor-default">{format(new Date(u.last_sign_in_at), "MMM d, yyyy")}</span>
+                                        <span className="cursor-default">{format(new Date(lastActive), "MMM d, yyyy")}</span>
                                       </TooltipTrigger>
-                                      <TooltipContent>{format(new Date(u.last_sign_in_at!), "MMM d, yyyy h:mm:ss a")}</TooltipContent>
+                                      <TooltipContent>{format(new Date(lastActive), "MMM d, yyyy h:mm:ss a")}</TooltipContent>
                                     </Tooltip>
                                   </TooltipProvider>
                                 ) : "Never"}
