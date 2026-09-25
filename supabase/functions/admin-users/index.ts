@@ -239,7 +239,7 @@ async function actionList(scopeTenantId: string | null) {
     .filter((u) => !staffIds.has(u.id));
   const { data: profiles, error: pErr } = await adminClient
     .from("profiles")
-    .select("user_id, display_name, account_type, company, credits_balance, is_active, deactivated_at, created_at");
+    .select("user_id, display_name, account_type, company, credits_balance, is_active, deactivated_at, created_at, last_seen_at");
   if (pErr) throw pErr;
 
   const profileMap = new Map((profiles || []).map((p) => [p.user_id, p]));
@@ -313,6 +313,7 @@ async function actionList(scopeTenantId: string | null) {
       email: u.email,
       created_at: u.created_at,
       last_sign_in_at: u.last_sign_in_at,
+      last_seen_at: p.last_seen_at || null,
       email_confirmed_at: u.email_confirmed_at,
       banned_until: u.banned_until,
       display_name: p.display_name || null,
