@@ -306,18 +306,24 @@ export function SpatialArchitectModal({
       return;
     const doomedUids = new Set(doomed.map((l) => l.uid));
     const rest = buildings.filter((x) => x.id !== id);
+    // One building left means back to the default single-building mode: drop
+    // the tab UI entirely and clear building assignments.
+    const backToSingle = rest.length <= 1;
     setLevels((prev) =>
       prev
         .filter((l) => !doomedUids.has(l.uid))
-        .map((l) => ({ ...l, building_ids: l.building_ids.filter((x) => x !== id) })),
+        .map((l) => ({
+          ...l,
+          building_ids: backToSingle ? [] : l.building_ids.filter((x) => x !== id),
+        })),
     );
     setBboxByLevel((prev) => {
       const next = { ...prev };
       for (const u of doomedUids) delete next[u];
       return next;
     });
-    setBuildings(rest);
-    setActiveBuildingId(rest[0]?.id ?? null);
+    setBuildings(backToSingle ? [] : rest);
+    setActiveBuildingId(backToSingle ? null : (rest[0]?.id ?? null));
   };
 
   const toggleLevelBuilding = (uid: string, bid: string) => {
