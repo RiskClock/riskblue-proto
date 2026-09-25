@@ -430,6 +430,7 @@ const UserManagement = () => {
         deactivated_at: null,
         created_at: i.created_at,
         last_sign_in_at: null,
+        last_seen_at: null,
         email_confirmed_at: null,
         banned_until: null,
         has_profile: false,
@@ -1052,8 +1053,9 @@ const UserManagement = () => {
                                     </Tooltip>
                                   </TooltipProvider>
                                 ) : "Never"}
-                              </TableCell>
+                               </TableCell>
                             );
+                          }
                           default:
                             return null;
                         }
