@@ -119,6 +119,7 @@ interface UserRow {
   deactivated_at: string | null;
   created_at: string;
   last_sign_in_at: string | null;
+  last_seen_at: string | null;
   email_confirmed_at: string | null;
   banned_until: string | null;
   has_profile: boolean;
@@ -180,7 +181,7 @@ const ALL_COLUMNS: ColumnDef[] = [
   { id: "type", label: "Type" },
   { id: "status", label: "Status" },
   { id: "created", label: "Created" },
-  { id: "last_sign_in", label: "Last Sign-In" },
+  { id: "last_sign_in", label: "Last Active" },
 ];
 
 
@@ -544,8 +545,8 @@ const UserManagement = () => {
           vb = tenantNamesFor(b.user_id)[0]?.toLowerCase() || "\uffff";
           break;
         case "last_sign_in_at":
-          va = a.last_sign_in_at ? new Date(a.last_sign_in_at).getTime() : 0;
-          vb = b.last_sign_in_at ? new Date(b.last_sign_in_at).getTime() : 0;
+          va = a.last_seen_at ?? a.last_sign_in_at ? new Date((a.last_seen_at ?? a.last_sign_in_at)!).getTime() : 0;
+          vb = b.last_seen_at ?? b.last_sign_in_at ? new Date((b.last_seen_at ?? b.last_sign_in_at)!).getTime() : 0;
           break;
         case "status":
           va = getStatus(a);
@@ -909,7 +910,7 @@ const UserManagement = () => {
                       case "last_sign_in":
                         return (
                           <TableHead key={colId} className="cursor-pointer select-none" onClick={() => toggleSort("last_sign_in_at")}>
-                            Last Sign-In <SortIcon k="last_sign_in_at" />
+                            Last Active <SortIcon k="last_sign_in_at" />
                           </TableHead>
                         );
                       default:
