@@ -26,10 +26,12 @@ const stampLastSeen = () => {
   const now = Date.now();
   if (now - lastHeartbeat < HEARTBEAT_MS) return;
   lastHeartbeat = now;
+  // .then() is required — the query builder only executes when awaited.
   void supabase
     .from("profiles")
     .update({ last_seen_at: new Date(now).toISOString() })
-    .eq("user_id", heartbeatUserId);
+    .eq("user_id", heartbeatUserId)
+    .then(() => undefined, () => undefined);
 };
 
 // Patch fetch once: any request to the backend counts as activity.
