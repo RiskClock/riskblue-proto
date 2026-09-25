@@ -14,6 +14,39 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// ---- Last-seen heartbeat -------------------------------------------------
+// Stamps profiles.last_seen_at so User Management shows true "last active".
+// Fires on session load AND on any backend network call, throttled.
+const HEARTBEAT_MS = 15 * 60 * 1000;
+let heartbeatUserId: string | null = null;
+let lastHeartbeat = 0;
+
+const stampLastSeen = () => {
+  if (!heartbeatUserId) return;
+  const now = Date.now();
+  if (now - lastHeartbeat < HEARTBEAT_MS) return;
+  lastHeartbeat = now;
+  void supabase
+    .from("profiles")
+    .update({ last_seen_at: new Date(now).toISOString() })
+    .eq("user_id", heartbeatUserId);
+};
+
+// Patch fetch once: any request to the backend counts as activity.
+if (typeof window !== "undefined" && !(window.fetch as any).__rbPatched) {
+  const orig = window.fetch.bind(window);
+  const patched: typeof window.fetch = (input, init) => {
+    try {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : "";
+      if (url.includes(".supabase.co") || url.includes("supabase")) stampLastSeen();
+    } catch { /* ignore */ }
+    return orig(input as any, init);
+  };
+  (patched as any).__rbPatched = true;
+  window.fetch = patched;
+}
+// --------------------------------------------------------------------------
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
