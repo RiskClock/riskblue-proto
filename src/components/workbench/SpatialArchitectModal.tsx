@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Plus, ChevronUp, ChevronDown, Trash2, Copy, Check } from "lucide-react";
+import { Loader2, Plus, ChevronUp, ChevronDown, Trash2, Copy, Check, Building2, Pencil } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -43,6 +43,7 @@ interface LevelDraft {
   name: string;
   space_index: number | null;
   matched_sources: Array<{ file_name: string; page_number: number }>;
+  building_ids: string[];
   // any extra fields we preserve verbatim
   extra: Record<string, unknown>;
 }
@@ -59,11 +60,17 @@ function isLevelCategory(cat: unknown): boolean {
   return !c || c === "level" || c === "contiguous storey";
 }
 
-function serializeLevels(levels: LevelDraft[]): string {
-  return JSON.stringify(
+interface BuildingDraft {
+  id: string;
+  name: string;
+}
+
+function serializeLevels(levels: LevelDraft[], buildings: BuildingDraft[] = []): string {
+  return JSON.stringify({ b: buildings, l:
     levels.map((l) => ({
       name: l.name.trim(),
       idx: l.space_index,
+      bld: l.building_ids.slice().sort(),
       ms: l.matched_sources
         .slice()
         .sort((a, b) =>
@@ -71,7 +78,7 @@ function serializeLevels(levels: LevelDraft[]): string {
           a.page_number - b.page_number,
         ),
     })),
-  );
+  });
 }
 
 export interface LevelBboxEntry {
@@ -120,6 +127,9 @@ export function SpatialArchitectModal({
   const { toast } = useToast();
   const [levels, setLevels] = useState<LevelDraft[]>([]);
   const [nonLevels, setNonLevels] = useState<NonLevelRecord[]>([]);
+  const [buildings, setBuildings] = useState<BuildingDraft[]>([]);
+  const [activeBuildingId, setActiveBuildingId] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   // uid -> set of bbox keys attached to that level.
   const [bboxByLevel, setBboxByLevel] = useState<Record<string, string[]>>({});
@@ -139,6 +149,10 @@ export function SpatialArchitectModal({
     const lvl: LevelDraft[] = [];
     const others: NonLevelRecord[] = [];
     const levelByKey = new Map<string, LevelDraft>();
+    const loadedBuildings: BuildingDraft[] = (Array.isArray(parsed?.buildings) ? parsed.buildings : [])
+      .filter((b: any) => b && typeof b.id === "string")
+      .map((b: any) => ({ id: b.id, name: typeof b.name === "string" ? b.name : "Building" }));
+    const validIds = new Set(loadedBuildings.map((b) => b.id));
     let uid = 0;
     for (const r of records) {
       if (isLevelCategory(r?.space_category)) {
@@ -153,10 +167,16 @@ export function SpatialArchitectModal({
           seenPages.add(key);
           ms.push({ file_name: fn, page_number: pn });
         }
-        const { standardized_space_name, space_category, space_index, matched_sources, ...extra } =
+        const { standardized_space_name, space_category, space_index, matched_sources, building_ids, ...extra } =
           r || {};
         const name = typeof standardized_space_name === "string" ? standardized_space_name : "";
-        const mergeKey = name.trim().toLowerCase();
+        let bIds: string[] = (Array.isArray(building_ids) ? building_ids : []).filter(
+          (x: unknown): x is string => typeof x === "string" && validIds.has(x),
+        );
+        if (loadedBuildings.length > 0 && bIds.length === 0) bIds = [loadedBuildings[0].id];
+        const mergeKey = name.trim()
+          ? `${name.trim().toLowerCase()}\u0000${bIds.slice().sort().join(",")}`
+          : "";
         const existing = mergeKey ? levelByKey.get(mergeKey) : undefined;
         if (existing) {
           // Merge matched_sources into the existing level (dedup).
@@ -180,6 +200,7 @@ export function SpatialArchitectModal({
             space_index:
               typeof space_index === "number" && Number.isFinite(space_index) ? space_index : null,
             matched_sources: ms,
+            building_ids: bIds,
             extra,
           };
           lvl.push(draft);
@@ -197,7 +218,10 @@ export function SpatialArchitectModal({
     });
     setLevels(lvl);
     setNonLevels(others);
-    initialSerialized.current = serializeLevels(lvl);
+    setBuildings(loadedBuildings);
+    setActiveBuildingId(loadedBuildings[0]?.id ?? null);
+    setRenamingId(null);
+    initialSerialized.current = serializeLevels(lvl, loadedBuildings);
 
     // Seed bbox attachments per level from the catalog's effective levels
     // (explicit assignment → bbox label → single-bbox page backfill).
@@ -229,10 +253,86 @@ export function SpatialArchitectModal({
 
   const isDirty = useMemo(
     () =>
-      serializeLevels(levels) !== initialSerialized.current ||
+      serializeLevels(levels, buildings) !== initialSerialized.current ||
       bboxSerialized !== initialBboxSerialized.current,
-    [levels, bboxSerialized],
+    [levels, buildings, bboxSerialized],
   );
+
+  const hasBuildings = buildings.length > 0;
+  const visibleLevels = useMemo(
+    () =>
+      hasBuildings && activeBuildingId
+        ? levels.filter((l) => l.building_ids.includes(activeBuildingId))
+        : levels,
+    [levels, hasBuildings, activeBuildingId],
+  );
+  const buildingCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const b of buildings) m.set(b.id, 0);
+    for (const l of levels) for (const id of l.building_ids) m.set(id, (m.get(id) ?? 0) + 1);
+    return m;
+  }, [buildings, levels]);
+
+  const addBuilding = () => {
+    const stamp = Date.now();
+    if (!hasBuildings) {
+      const first = { id: `bld-${stamp}-1`, name: "Building 1" };
+      const second = { id: `bld-${stamp}-2`, name: "Building 2" };
+      setBuildings([first, second]);
+      setLevels((prev) => prev.map((l) => ({ ...l, building_ids: [first.id] })));
+      setActiveBuildingId(second.id);
+      setRenamingId(second.id);
+      return;
+    }
+    const b = { id: `bld-${stamp}`, name: `Building ${buildings.length + 1}` };
+    setBuildings((prev) => [...prev, b]);
+    setActiveBuildingId(b.id);
+    setRenamingId(b.id);
+  };
+
+  const renameBuilding = (id: string, name: string) => {
+    setBuildings((prev) => prev.map((b) => (b.id === id ? { ...b, name } : b)));
+  };
+
+  const deleteBuilding = (id: string) => {
+    const b = buildings.find((x) => x.id === id);
+    if (!b) return;
+    const doomed = levels.filter((l) => l.building_ids.length === 1 && l.building_ids[0] === id);
+    if (
+      !window.confirm(
+        `Delete "${b.name || "this building"}"? ${doomed.length} level(s) only in this building will be removed and their floor plans unassigned. Shared levels stay with the other buildings.`,
+      )
+    )
+      return;
+    const doomedUids = new Set(doomed.map((l) => l.uid));
+    const rest = buildings.filter((x) => x.id !== id);
+    setLevels((prev) =>
+      prev
+        .filter((l) => !doomedUids.has(l.uid))
+        .map((l) => ({ ...l, building_ids: l.building_ids.filter((x) => x !== id) })),
+    );
+    setBboxByLevel((prev) => {
+      const next = { ...prev };
+      for (const u of doomedUids) delete next[u];
+      return next;
+    });
+    setBuildings(rest);
+    setActiveBuildingId(rest[0]?.id ?? null);
+  };
+
+  const toggleLevelBuilding = (uid: string, bid: string) => {
+    setLevels((prev) =>
+      prev.map((l) => {
+        if (l.uid !== uid) return l;
+        const has = l.building_ids.includes(bid);
+        if (has && l.building_ids.length === 1) return l; // keep at least one
+        return {
+          ...l,
+          building_ids: has ? l.building_ids.filter((x) => x !== bid) : [...l.building_ids, bid],
+        };
+      }),
+    );
+  };
 
   const bboxByKey = useMemo(
     () => new Map(bboxCatalog.map((b) => [b.key, b])),
@@ -306,15 +406,32 @@ export function SpatialArchitectModal({
   };
 
   const move = (uid: string, dir: -1 | 1) => {
+    if (!hasBuildings) {
+      setLevels((prev) => {
+        const idx = prev.findIndex((l) => l.uid === uid);
+        if (idx < 0) return prev;
+        const swap = idx + dir;
+        if (swap < 0 || swap >= prev.length) return prev;
+        const next = prev.slice();
+        [next[idx], next[swap]] = [next[swap], next[idx]];
+        return next.map((l, i) => ({ ...l, space_index: i }));
+      });
+      return;
+    }
+    // Within a building tab: swap with the neighbour in that tab, then
+    // re-stamp that building's indexes to follow the new order.
     setLevels((prev) => {
-      const idx = prev.findIndex((l) => l.uid === uid);
-      if (idx < 0) return prev;
-      const swap = idx + dir;
-      if (swap < 0 || swap >= prev.length) return prev;
+      const vis = prev.filter((l) => activeBuildingId && l.building_ids.includes(activeBuildingId));
+      const vi = vis.findIndex((l) => l.uid === uid);
+      const vj = vi + dir;
+      if (vi < 0 || vj < 0 || vj >= vis.length) return prev;
+      const a = prev.indexOf(vis[vi]);
+      const b = prev.indexOf(vis[vj]);
       const next = prev.slice();
-      [next[idx], next[swap]] = [next[swap], next[idx]];
-      // Re-stamp space_index to match new order, preserving sign for parking.
-      return next.map((l, i) => ({ ...l, space_index: i }));
+      [next[a], next[b]] = [next[b], next[a]];
+      const order = next.filter((l) => activeBuildingId && l.building_ids.includes(activeBuildingId));
+      const idxMap = new Map(order.map((l, i) => [l.uid, i]));
+      return next.map((l) => (idxMap.has(l.uid) ? { ...l, space_index: idxMap.get(l.uid)! } : l));
     });
   };
 
@@ -331,6 +448,7 @@ export function SpatialArchitectModal({
         ...src,
         uid: `lvl-dup-${Date.now()}`,
         matched_sources: src.matched_sources.map((m) => ({ ...m })),
+        building_ids: [...src.building_ids],
         extra: { ...src.extra },
       };
       const next = prev.slice();
@@ -346,7 +464,10 @@ export function SpatialArchitectModal({
   const addLevel = () => {
     const uid = `lvl-new-${Date.now()}`;
     setLevels((prev) => {
-      const maxIdx = prev.reduce(
+      const pool = hasBuildings && activeBuildingId
+        ? prev.filter((l) => l.building_ids.includes(activeBuildingId))
+        : prev;
+      const maxIdx = pool.reduce(
         (acc, l) => (typeof l.space_index === "number" && l.space_index > acc ? l.space_index : acc),
         Number.NEGATIVE_INFINITY,
       );
@@ -358,6 +479,7 @@ export function SpatialArchitectModal({
           name: "",
           space_index: nextIdx,
           matched_sources: [],
+          building_ids: hasBuildings && activeBuildingId ? [activeBuildingId] : [],
           extra: {},
         },
       ];
@@ -431,6 +553,11 @@ export function SpatialArchitectModal({
   const handleSave = async () => {
     if (!requestId) return;
     // Validate: every level needs a name.
+    const blankB = buildings.filter((b) => !b.name.trim());
+    if (blankB.length > 0) {
+      toast({ variant: "destructive", title: "Missing building name", description: `${blankB.length} building(s) have no name.` });
+      return;
+    }
     const blanks = levels.filter((l) => !l.name.trim());
     if (blanks.length > 0) {
       toast({
@@ -449,15 +576,18 @@ export function SpatialArchitectModal({
         space_index: l.space_index,
         applies_to_levels: [],
         matched_sources: l.matched_sources,
+        ...(hasBuildings ? { building_ids: l.building_ids } : {}),
       }));
       const editedOthers = nonLevels.map((n) => n.raw);
       const existing = (payload && typeof payload === "object" ? payload : {}) as any;
       const existingParsed =
         existing.parsed && typeof existing.parsed === "object" ? existing.parsed : {};
+      const { buildings: _oldBuildings, ...parsedRest } = existingParsed;
       const nextPayload = {
         ...existing,
         parsed: {
-          ...existingParsed,
+          ...parsedRest,
+          ...(hasBuildings ? { buildings: buildings.map((b) => ({ id: b.id, name: b.name.trim() })) } : {}),
           spatial_records: [...editedLevels, ...editedOthers],
         },
       };
@@ -483,7 +613,7 @@ export function SpatialArchitectModal({
         );
       }
 
-      initialSerialized.current = serializeLevels(levels);
+      initialSerialized.current = serializeLevels(levels, buildings);
       initialBboxSerialized.current = bboxSerialized;
       toast({ title: "Spatial hierarchy saved" });
       onSaved();
@@ -598,9 +728,67 @@ export function SpatialArchitectModal({
 
         {/* Single scroll body: levels list + unmapped bboxes */}
         <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1">
+        {hasBuildings && (
+          <div className="flex flex-wrap items-end gap-1 border-b" role="tablist">
+            {buildings.map((b) => {
+              const active = b.id === activeBuildingId;
+              return (
+                <div
+                  key={b.id}
+                  role="tab"
+                  aria-selected={active}
+                  className={`group flex items-center gap-1 rounded-t-md border border-b-0 px-3 py-1.5 text-sm cursor-pointer ${
+                    active ? "bg-background font-semibold -mb-px" : "bg-muted/40 text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => setActiveBuildingId(b.id)}
+                  onDoubleClick={() => setRenamingId(b.id)}
+                >
+                  {renamingId === b.id ? (
+                    <Input
+                      autoFocus
+                      value={b.name}
+                      onChange={(e) => renameBuilding(b.id, e.target.value)}
+                      onBlur={() => setRenamingId(null)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === "Escape") setRenamingId(null);
+                      }}
+                      className="h-6 w-32 text-sm px-1"
+                    />
+                  ) : (
+                    <span>
+                      {b.name || "Untitled"} ({buildingCounts.get(b.id) ?? 0})
+                    </span>
+                  )}
+                  {active && renamingId !== b.id && (
+                    <>
+                      <button
+                        type="button"
+                        className="text-muted-foreground hover:text-foreground"
+                        onClick={(e) => { e.stopPropagation(); setRenamingId(b.id); }}
+                        aria-label="Rename building"
+                        title="Rename building"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={(e) => { e.stopPropagation(); deleteBuilding(b.id); }}
+                        aria-label="Delete building"
+                        title="Delete building"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
         <div className="flex flex-col border rounded-md overflow-hidden">
           {/* Header */}
-          <div className="sticky top-0 z-10 grid grid-cols-[minmax(0,1fr)_70px_minmax(0,1.6fr)_128px] items-center gap-2 px-3 py-2 bg-muted border-b text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="sticky top-0 z-10 grid grid-cols-[minmax(0,1fr)_70px_minmax(0,1.6fr)_156px] items-center gap-2 px-3 py-2 bg-muted border-b text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             <div>Level name</div>
             <div className="text-center">Index</div>
             <div>Floor plans / schematic rows</div>
@@ -609,17 +797,18 @@ export function SpatialArchitectModal({
 
           <div className="divide-y">
 
-            {levels.length === 0 ? (
+            {visibleLevels.length === 0 ? (
               <div className="p-6 text-sm text-muted-foreground text-center">
-                No levels yet. Click <strong>Build Spatial Model</strong> to
-                analyze the drawings, or add a level manually.
+                {hasBuildings && levels.length > 0 ? "No levels in this building yet. Add a level, or share an existing level with this building." : null}
+                {hasBuildings && levels.length > 0 ? null : <>No levels yet. Click <strong>Build Spatial Model</strong> to
+                analyze the drawings, or add a level manually.</>}
               </div>
             ) : (
-              levels.map((l, i) => (
+              visibleLevels.map((l, i) => (
                 <div
                   key={l.uid}
                   data-level-uid={l.uid}
-                  className="grid grid-cols-[minmax(0,1fr)_70px_minmax(0,1.6fr)_128px] items-start gap-2 px-3 py-2"
+                  className="grid grid-cols-[minmax(0,1fr)_70px_minmax(0,1.6fr)_156px] items-start gap-2 px-3 py-2"
                 >
                   <Input
                     value={l.name}
@@ -693,10 +882,17 @@ export function SpatialArchitectModal({
                       variant="ghost"
                       className="h-7 w-7"
                       onClick={() => move(l.uid, 1)}
-                      disabled={i === levels.length - 1}
+                      disabled={i === visibleLevels.length - 1}
                     >
                       <ChevronDown className="h-4 w-4" />
                     </Button>
+                    {buildings.length > 1 && (
+                      <LevelBuildingsPopover
+                        buildings={buildings}
+                        selected={l.building_ids}
+                        onToggle={(bid) => toggleLevelBuilding(l.uid, bid)}
+                      />
+                    )}
                     <Button
                       type="button"
                       size="icon"
@@ -766,7 +962,11 @@ export function SpatialArchitectModal({
           <Button type="button" variant="outline" size="sm" onClick={addLevel}>
             <Plus className="h-4 w-4 mr-1" /> Add level
           </Button>
+          <Button type="button" variant="outline" size="sm" onClick={addBuilding} className="mr-auto ml-2">
+            <Building2 className="h-4 w-4 mr-1" /> Add building
+          </Button>
           <div className="text-xs text-muted-foreground">
+            {hasBuildings ? `${buildings.length} buildings · ` : ""}
             {levels.length} level{levels.length === 1 ? "" : "s"}
             {nonLevels.length > 0
               ? ` · ${nonLevels.length} unit/template record(s) preserved`
@@ -886,3 +1086,64 @@ function SelectBboxPopover({
   );
 }
 
+
+/** Share a level across buildings (e.g. podium, parking garage). */
+function LevelBuildingsPopover({
+  buildings,
+  selected,
+  onToggle,
+}: {
+  buildings: BuildingDraft[];
+  selected: string[];
+  onToggle: (id: string) => void;
+}) {
+  const sel = new Set(selected);
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7 relative"
+          title="Buildings this level belongs to"
+        >
+          <Building2 className="h-4 w-4" />
+          {selected.length > 1 && (
+            <span className="absolute -top-0.5 -right-0.5 text-[9px] leading-none rounded-full bg-primary text-primary-foreground px-1 py-0.5">
+              {selected.length}
+            </span>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 p-1" align="end">
+        <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Belongs to buildings
+        </div>
+        {buildings.map((b) => {
+          const on = sel.has(b.id);
+          const locked = on && selected.length === 1;
+          return (
+            <button
+              key={b.id}
+              type="button"
+              disabled={locked}
+              title={locked ? "A level needs at least one building" : undefined}
+              className="w-full text-left px-2 py-1 text-xs hover:bg-muted flex items-center gap-2 rounded disabled:opacity-60"
+              onClick={() => onToggle(b.id)}
+            >
+              <span
+                className={`inline-flex items-center justify-center h-4 w-4 shrink-0 rounded border ${
+                  on ? "bg-primary border-primary text-primary-foreground" : "border-input bg-background"
+                }`}
+              >
+                {on && <Check className="h-3 w-3" />}
+              </span>
+              <span className="truncate">{b.name || "Untitled"}</span>
+            </button>
+          );
+        })}
+      </PopoverContent>
+    </Popover>
+  );
+}
