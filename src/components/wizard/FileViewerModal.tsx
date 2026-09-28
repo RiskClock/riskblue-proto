@@ -22,6 +22,7 @@ import {
   Redo2,
   Tag,
   Undo2,
+  ListRestart,
 } from "lucide-react";
 
 import { DrawingViewer } from "@/components/viewer";
@@ -90,6 +91,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 
 
 interface SystemDetection {
@@ -531,6 +534,7 @@ export const FileViewerModal = ({
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [newPlanOpen, setNewPlanOpen] = useState(false);
   const [savingNewPlan, setSavingNewPlan] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const { user } = useAuth();
   const drawingPlans = useDrawingPlans(persistKey, isOpen && !!awpClasses);
   const editingEnabled = sidebarEnabled && !viewingMode;
@@ -925,14 +929,13 @@ export const FileViewerModal = ({
 
 
 
-  // Reset history on open. Selected class is re-synced from localStorage.
-  // Expansion state is NOT reset - it should persist across modal opens
-  // (and, when a parent provides expandedClasses, across page sessions too).
+  // Reset session history and collapse every detection row whenever opened.
   const wasOpenRef = useRef(false);
   useEffect(() => {
     if (isOpen && !wasOpenRef.current) {
       setPast([]);
       setFuture([]);
+      setLocalExpanded(new Set());
       // Preselect takes priority over stored class so cell-click force-selects.
       if (preselectClass && awpClasses?.some((c) => c.name === preselectClass)) {
         setSelectedClass(preselectClass);
@@ -947,26 +950,6 @@ export const FileViewerModal = ({
     }
     wasOpenRef.current = isOpen;
   }, [isOpen, awpClasses, readStoredClass, preselectClass]);
-
-  // Auto-expand newly-arriving classes so they default to expanded.
-  // Track which class names we've already auto-expanded so user-collapsed
-  // classes don't get re-expanded on every render when the awpClasses prop
-  // reference changes.
-  const autoExpandedRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (!awpClasses || awpClasses.length === 0) return;
-    const seen = autoExpandedRef.current;
-    const fresh = awpClasses.map((c) => c.name).filter((n) => !seen.has(n));
-    if (fresh.length === 0) return;
-    for (const n of fresh) seen.add(n);
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      for (const n of fresh) next.add(n);
-      return next;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [awpClasses]);
-
 
   // Persist selected class to localStorage whenever it changes.
   useEffect(() => {
