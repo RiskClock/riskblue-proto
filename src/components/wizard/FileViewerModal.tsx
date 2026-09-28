@@ -2781,6 +2781,7 @@ export const FileViewerModal = ({
 // ============================================================================
 
 export interface DevicesApi {
+  beta?: boolean;
   planName: string | null;
   productsById: Map<string, PlanEditorProduct>;
   choices: (cls: string) => PlanEditorProduct[];
