@@ -1779,6 +1779,7 @@ export const FileViewerModal = ({
     }
     if (activeTab === "plans") return false;
     if (activeTab === "floor-plans") return true;
+    if (activeTab === "plans" && !activePlan && !newPlanOpen) return true;
     if (!effectiveRowKey) return false;
     if (effectiveRowKey === i.awp_class_name) return true;
     return instanceRowKey(i) === effectiveRowKey;
@@ -1957,6 +1958,7 @@ export const FileViewerModal = ({
       >
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="truncate flex items-center gap-2 min-w-0">
+            <span className="h-3 w-3 rounded-full bg-primary shrink-0" />
             <span className="truncate">{fileName}</span>
 <Button
               type="button"
@@ -2271,8 +2273,14 @@ export const FileViewerModal = ({
                 </TabsContent>
                 <TabsContent value="plans" forceMount className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0 data-[state=inactive]:hidden">
                    {!newPlanOpen && <PlansPanel
-                    plans={drawingPlans.plans}
-                    activePlanId={activePlanId}
+                     plans={drawingPlans.plans}
+                     activePlanId={activePlanId}
+                     onDeletePlan={(id) => {
+                       if (confirm("Delete this plan?")) {
+                         drawingPlans.deletePlan(id);
+                         if (activePlanId === id) setActivePlanId(null);
+                       }
+                     }}
                     onSelectPlan={setActivePlanId}
                      onNewPlan={() => { setActivePlanId(null); setNewPlanOpen(true); }}
                       onDeletePlan={async (id) => {
@@ -2951,13 +2959,13 @@ const PlansPanel = ({
   activePlanId: string | null;
   onTogglePlan: (id: string) => void;
   onNewPlan: () => void;
+  onDeletePlan: (id: string) => void;
   deviceNames: (p: DrawingPlan) => { name: string; count: number }[];
 }) => (
   <div className="flex-1 flex flex-col min-h-0">
-    <div className="px-3 py-2 flex items-center justify-between gap-2 border-b">
-      
-      <Button size="sm" variant="outline" className="w-full h-8 text-xs mb-2" onClick={onNewPlan}>
-        <Plus className="h-3.5 w-3.5" /> New Plan
+    <div className="px-3 py-2 border-b">
+      <Button size="sm" variant="outline" className="w-full h-8 text-xs" onClick={onNewPlan}>
+        <Plus className="h-3.5 w-3.5 mr-1" /> New Plan
       </Button>
     </div>
     <div className="flex-1 overflow-y-auto">
@@ -2976,16 +2984,34 @@ const PlansPanel = ({
             onClick={() => onTogglePlan(p.id)}
             className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm border-b hover:bg-muted/50 ${active ? "bg-primary/10" : ""}`}
           >
+            
+            <input
+              type="radio"
+              checked={active}
+              onChange={() => onTogglePlan(p.id)}
+              onClick={(e) => e.stopPropagation()}
+              className="h-3.5 w-3.5 shrink-0"
+            />
             <Layers className={`h-4 w-4 shrink-0 ${active ? "text-primary" : "text-muted-foreground"}`} />
+            
             <span className="min-w-0 flex-1">
               <span className={`block truncate ${active ? "font-semibold" : ""}`}>{p.name}</span>
+            
                {devices.length > 0 && <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">{devices.map(({ name, count }) => <li key={name} className="truncate">{name} ×{count}</li>)}</ul>}
             </span>
              <span className="text-xs text-muted-foreground shrink-0" title={devices.map(({ name, count }) => `${name} ×${count}`).join("\n")}>{devices.length} {devices.length === 1 ? "device" : "devices"}</span>
             <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded ${active ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
               {active ? "Showing" : "Show"}
             </span>
-          </button>
+          
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onDeletePlan(p.id); }}
+              className="shrink-0 text-muted-foreground hover:text-destructive p-1 rounded hover:bg-muted/80"
+            >
+              <XIcon className="h-3.5 w-3.5" />
+            </button>
+            </button>
         );
       })}
     </div>
@@ -3107,7 +3133,19 @@ const DetectionsPanel = ({
               <div key={row.key} className="border-b last:border-b-0 min-w-0">
                 <div
                   className={`flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50 min-w-0 ${isSelected ? "bg-muted/40" : ""}`}
-                  onClick={() => onSelectRow(c.name, row.key)}
+                  onClick={() => {
+                    onSelectRow(c.name, row.key);
+                    if (row.items.length > 0) {
+                      const bboxes = row.items.map(i => ({ nx: i.nx, ny: i.ny, nw: 0, nh: 0 }));
+                      const minX = Math.min(...bboxes.map(b => b.nx));
+                      const minY = Math.min(...bboxes.map(b => b.ny));
+                      const maxX = Math.max(...bboxes.map(b => b.nx));
+                      const maxY = Math.max(...bboxes.map(b => b.ny));
+                      const rot = (rotationByPage[effectivePage] ?? 0);
+                      const groupRect = { nx: minX, ny: minY, nw: maxX - minX, nh: maxY - minY };
+                      viewerApiRef.current?.fitToRect?.(rot === 0 ? groupRect : rotateNormalizedRect(groupRect, rot), { paddingRatio: 0.3, animate: true });
+                    }
+                  }}
                 >
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     <input
