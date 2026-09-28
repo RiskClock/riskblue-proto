@@ -532,6 +532,7 @@ export const FileViewerModal = ({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [draftPlanVisual, setDraftPlanVisual] = useState<{ color: string; ids: Set<string> } | null>(null);
   const [hoveredPlanIds, setHoveredPlanIds] = useState<Set<string>>(new Set());
+  const handleDraftVisualChange = useCallback((color: string, ids: Set<string>) => setDraftPlanVisual({ color, ids }), []);
   const { user } = useAuth();
   const drawingPlans = useDrawingPlans(persistKey, isOpen && !!awpClasses);
   const editingEnabled = sidebarEnabled && !viewingMode;
@@ -1766,7 +1767,7 @@ export const FileViewerModal = ({
   // OverlayLayer multiplies by the rendered page size so the browser's native
   // layout keeps the boxes in sync on any resize or zoom level.
   const floorPlanOverlays: OverlayInput[] = useMemo(() => {
-    if (readOnly) return [];
+    if (readOnly || activeTab !== "floor-plans") return [];
     if (!floorPlans || floorPlans.length === 0) return [];
     const out: OverlayInput[] = [];
     for (const fp of floorPlans) {
@@ -1793,13 +1794,13 @@ export const FileViewerModal = ({
       });
     }
     return out;
-  }, [floorPlans, floorPlanOverrides, currentPage, editingPlan, readOnly]);
+  }, [floorPlans, floorPlanOverrides, currentPage, editingPlan, readOnly, activeTab]);
 
 
   // Unit-plan indicator dots inside a level bbox. Not tied to any specific
   // unit reference. Filled dot, no border, no label. Click to delete.
   const unitMarkerOverlays: OverlayInput[] = useMemo(() => {
-    if (readOnly) return [];
+    if (readOnly || activeTab !== "floor-plans") return [];
     if (hiddenClasses.has(UNIT_MARKER_CLASS)) return [];
     const uc = floorPlanTypeColor("unit_floor_plan");
     return instances
@@ -1817,7 +1818,7 @@ export const FileViewerModal = ({
         color: uc,
         variant: "dot" as const,
       }));
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, readOnly, hiddenClasses]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, readOnly, hiddenClasses, activeTab]);
 
   const overlays = [
     ...detectionOverlays,
@@ -2244,7 +2245,7 @@ export const FileViewerModal = ({
                     saving={savingNewPlan}
                      onCancel={() => { setNewPlanOpen(false); setDraftPlanVisual(null); setHoveredPlanIds(new Set()); }}
                      onHoverInstances={(ids) => setHoveredPlanIds(new Set(ids))}
-                    onVisualChange={(color, ids) => setDraftPlanVisual({ color, ids })}
+                     onVisualChange={handleDraftVisualChange}
                     onSave={async (value) => {
                       setSavingNewPlan(true);
                       try {
