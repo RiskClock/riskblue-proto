@@ -1289,13 +1289,16 @@ export default function WaterMitigationPlan() {
       return result;
     }
     const result: Record<string, string[]> = {};
+    const fromDrawing = isDrawingPlan(plan);
     editorClasses.forEach((item) => {
       const catalogId = item.id.split("::")[0];
-      const assigned = plan.product_assignments[item.id] ?? plan.product_assignments[catalogId];
+      const assigned = fromDrawing
+        ? devicesForAssignment(item.id, catalogId)
+        : plan.product_assignments[item.id] ?? plan.product_assignments[catalogId];
       result[item.id] = (Array.isArray(assigned) ? assigned : []).filter((id) => item.products.some((product) => product.id === id));
     });
     return result;
-  }, [planEditor, editorClasses, newPlanProductAssignments]);
+  }, [planEditor, editorClasses, newPlanProductAssignments, riskDeviceAssignments]);
 
   /** Catalog pricing per product, used as placeholders in the plan pricing editor. */
   const pricingDefaults = useMemo(() => {
