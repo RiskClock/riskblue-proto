@@ -535,6 +535,7 @@ export const FileViewerModal = ({
   const [newPlanOpen, setNewPlanOpen] = useState(false);
   const [savingNewPlan, setSavingNewPlan] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [draftPlanVisual, setDraftPlanVisual] = useState<{ color: string; ids: Set<string> } | null>(null);
   const { user } = useAuth();
   const drawingPlans = useDrawingPlans(persistKey, isOpen && !!awpClasses);
   const editingEnabled = sidebarEnabled && !viewingMode;
@@ -1724,6 +1725,7 @@ export const FileViewerModal = ({
       : selectedClass;
   const isInstanceVisible = (i: DrawingInstanceRow): boolean => {
     if (!awpClasses) return !hiddenClasses.has(i.awp_class_name);
+    if (newPlanOpen) return true;
     if (activePlan) {
       return activePlan.included_instance_ids.includes(i.id);
     }
@@ -1751,13 +1753,13 @@ export const FileViewerModal = ({
           bbox: [i.nx, i.ny, 0, 0] as [number, number, number, number],
           coordSpace: "normalized" as const,
           page: singlePageOnly ? currentPage : sheetId ? 1 : i.page_index,
-          color: activePlan?.color || awpClassColorForType(i.awp_class_name, pipeType, diameter),
+          color: activePlan?.color || (draftPlanVisual?.ids.has(i.id) ? draftPlanVisual.color : awpClassColorForType(i.awp_class_name, pipeType, diameter)),
           label: instanceLabel(i),
-          innerDot: !!activePlan?.included_instance_ids.includes(i.id),
+          innerDot: !!activePlan?.included_instance_ids.includes(i.id) || !!draftPlanVisual?.ids.has(i.id),
         };
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly, hiddenClasses, effectiveRowKey, activePlan]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly, hiddenClasses, effectiveRowKey, activePlan, newPlanOpen, draftPlanVisual]);
 
   // Floor-plan bbox overlays. Survey agent returns `xy_width_height_pct` as
   // [left, top, width, height] percentages (0..100) of the visible page.
@@ -2252,11 +2254,13 @@ export const FileViewerModal = ({
                     saving={savingNewPlan}
                     onCancel={() => setNewPlanOpen(false)}
                     onHoverInstance={setHoveredInstanceId}
+                    onVisualChange={(color, ids) => setDraftPlanVisual({ color, ids })}
                     onSave={async (value) => {
                       setSavingNewPlan(true);
                       try {
                         const id = await drawingPlans.createPlan(value, user?.id ?? null);
                         setNewPlanOpen(false);
+                        setDraftPlanVisual(null);
                         if (id) setActivePlanId(id);
                       } catch (e) {
                         toast({ title: "Could not create plan", description: getUserFriendlyError(e), variant: "destructive" });
@@ -2939,6 +2943,7 @@ const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, savin
   onCancel: () => void;
   onSave: (value: { name: string; description: string; color: string; includedInstanceIds: string[]; baseQuantities: Record<string, number> }) => void;
   onHoverInstance: (id: string | null) => void;
+  onVisualChange: (color: string, ids: Set<string>) => void;
 }) => {
   const [name, setName] = useState(defaultName);
   const [description, setDescription] = useState("");
