@@ -2993,7 +2993,7 @@ const PlansPanel = ({ plans, activePlanId, onSelectPlan, onNewPlan, onDeletePlan
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction disabled={deleting} onClick={(e) => { e.preventDefault(); if (!deleteTarget) return; setDeleting(true); void onDeletePlan(deleteTarget.id).then(() => setDeleteTarget(null)).finally(() => setDeleting(false)); }}>
+            <AlertDialogAction disabled={deleting} onClick={(e) => { e.preventDefault(); if (!deleteTarget) return; setDeleting(true); void onDeletePlan(deleteTarget.id).then(() => setDeleteTarget(null)).catch(() => undefined).finally(() => setDeleting(false)); }}>
               {deleting ? "Deleting…" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
