@@ -642,6 +642,8 @@ export const FileViewerModal = ({
     if (typeof window === "undefined") return;
     window.localStorage.setItem(ACTIVE_TAB_STORAGE_KEY, activeTab);
   }, [activeTab]);
+  // While creating/editing a plan the canvas is read-only: clicks toggle risks.
+  const planDraftMode = activeTab === "plans" && newPlanOpen;
   const [confirmExit, setConfirmExit] = useState<null | {
     kind: "tab" | "close";
     next: () => void;
@@ -1523,7 +1525,7 @@ export const FileViewerModal = ({
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [isOpen, editingEnabled, selectedInstanceId]);
+  }, [isOpen, editingEnabled, planDraftMode, selectedInstanceId]);
 
   // ---- Undo / redo --------------------------------------------------------
   /** Apply a stored position to a marker (used by move undo/redo). */
