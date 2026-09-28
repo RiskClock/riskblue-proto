@@ -2200,21 +2200,21 @@ export const FileViewerModal = ({
                     onFocusInstance={focusInstance}
                   />
                 </TabsContent>
-                <TabsContent value="plans" className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0 data-[state=inactive]:hidden">
+                <TabsContent value="plans" forceMount className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0 data-[state=inactive]:hidden">
                    {!newPlanOpen && <PlansPanel
                     plans={drawingPlans.plans}
                     activePlanId={activePlanId}
                     onTogglePlan={(id) => setActivePlanId((prev) => (prev === id ? null : id))}
-                    onNewPlan={() => setNewPlanOpen(true)}
-                    deviceNames={(plan) => {
-                      const ids = new Set<string>();
+                     onNewPlan={() => { setActivePlanId(null); setNewPlanOpen(true); }}
+                     deviceNames={(plan) => {
+                       const counts = new Map<string, number>();
                       instances.filter((i) => plan.included_instance_ids.includes(i.id)).forEach((i) => {
                         const entry = drawingPlans.catalogFor(i.awp_class_name);
                         if (!entry) return;
                         const { pipeType, diameter } = instanceMeta(i);
-                        drawingPlans.assignedDevicesFor(assignmentKeyFor(entry.id, i.awp_class_name, pipeType, diameter), entry.id).forEach((id) => ids.add(id));
+                         drawingPlans.assignedDevicesFor(assignmentKeyFor(entry.id, i.awp_class_name, pipeType, diameter), entry.id).forEach((id) => counts.set(id, (counts.get(id) ?? 0) + 1));
                       });
-                      return [...ids].map((id) => drawingPlans.productsById.get(id)?.name || id);
+                       return [...counts].map(([id, count]) => ({ name: drawingPlans.productsById.get(id)?.name || id, count }));
                     }}
                    />}
                   {newPlanOpen && <InlinePlanEditor
@@ -2868,7 +2868,7 @@ const PlansPanel = ({
   activePlanId: string | null;
   onTogglePlan: (id: string) => void;
   onNewPlan: () => void;
-  deviceNames: (p: DrawingPlan) => string[];
+  deviceNames: (p: DrawingPlan) => { name: string; count: number }[];
 }) => (
   <div className="flex-1 flex flex-col min-h-0">
     <div className="px-3 py-2 flex items-center justify-between gap-2 border-b">
@@ -2896,9 +2896,9 @@ const PlansPanel = ({
             <Layers className={`h-4 w-4 shrink-0 ${active ? "text-primary" : "text-muted-foreground"}`} />
             <span className="min-w-0 flex-1">
               <span className={`block truncate ${active ? "font-semibold" : ""}`}>{p.name}</span>
-              {devices.length > 0 && <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">{devices.map((name) => <li key={name} className="truncate">{name} ×1</li>)}</ul>}
+               {devices.length > 0 && <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">{devices.map(({ name, count }) => <li key={name} className="truncate">{name} ×{count}</li>)}</ul>}
             </span>
-            <span className="text-xs text-muted-foreground shrink-0" title={devices.join("\n")}>{devices.length} {devices.length === 1 ? "device" : "devices"}</span>
+             <span className="text-xs text-muted-foreground shrink-0" title={devices.map(({ name, count }) => `${name} ×${count}`).join("\n")}>{devices.length} {devices.length === 1 ? "device" : "devices"}</span>
             <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded ${active ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
               {active ? "Showing" : "Show"}
             </span>
