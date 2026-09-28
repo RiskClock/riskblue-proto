@@ -1789,7 +1789,7 @@ export const FileViewerModal = ({
         page: currentPage,
         shape: "rect" as const,
 
-         color: floorPlanTypeColor(((floorPlanOverrides ?? {})[fp.plan_id] as any)?.type || fp.type),
+        color: floorPlanTypeColor(((floorPlanOverrides ?? {})[fp.plan_id] as any)?.type || fp.type),
         label: labelBase,
       });
     }
@@ -2084,15 +2084,15 @@ export const FileViewerModal = ({
                 onValueChange={(v) => {
                   const target = v as "floor-plans" | "detections" | "plans";
                   if (target === activeTab) return;
-                   guardThen("tab", () => {
-                     if (target === "detections" && awpClasses) {
-                       const rows = buildDetectionRows(awpClasses, instancesByClassThisFile);
-                       const row = rows.find((r) => r.key === selectedRowKey) || rows.find((r) => r.cls.name === selectedClass) || rows[0];
-                       if (row) { setSelectedClass(row.cls.name); setSelectedRowKey(row.key); }
-                     }
-                     setHoveredPlanIds(new Set());
-                     setActiveTab(target);
-                   });
+                  guardThen("tab", () => {
+                    if (target === "detections" && awpClasses) {
+                      const rows = buildDetectionRows(awpClasses, instancesByClassThisFile);
+                      const row = rows.find((r) => r.key === selectedRowKey) || rows.find((r) => r.cls.name === selectedClass) || rows[0];
+                      if (row) { setSelectedClass(row.cls.name); setSelectedRowKey(row.key); }
+                    }
+                    setHoveredPlanIds(new Set());
+                    setActiveTab(target);
+                  });
                 }}
                 className="flex-1 flex flex-col min-h-0"
               >
@@ -2234,7 +2234,7 @@ export const FileViewerModal = ({
                    />}
                   {newPlanOpen && <InlinePlanEditor
                     defaultName={`Plan ${drawingPlans.plans.length + 1}`}
-                    instances={instances.filter((i) => i.awp_class_name !== UNIT_MARKER_CLASS)}
+                    instances={[...instancesByClassThisFile.values()].flat().filter((i) => i.awp_class_name !== UNIT_MARKER_CLASS)}
                     classes={awpClasses}
                      numberByInstanceId={numberByInstanceId}
                      instanceLabel={instanceLabel}
