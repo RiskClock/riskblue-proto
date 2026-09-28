@@ -64,7 +64,7 @@ import { PlanEditorModal, ProductPickerOption, isSizeMatch, type PlanEditorClass
 import { useDrawingPlans, assignmentKeyFor, parsePipeSizeMm, type DrawingPlan } from "@/components/wizard/useDrawingPlans";
 import { isSubtypeSplitClass, subtypeAbbr, expandSubtypeLabelWithSuffix } from "@/lib/awpSubtypeLabels";
 import { tagStyle } from "@/lib/tagColor";
-import { Search, Plus, Layers } from "lucide-react";
+import { Search, Layers } from "lucide-react";
 
 /** Row key for an instance: class, or class::type::diameter for split classes. */
 function instanceRowKey(i: { awp_class_name: string; metadata?: unknown }): string {
@@ -2042,11 +2042,21 @@ export const FileViewerModal = ({
               }
               onPlacingChange={setIsPlacingLabels}
             />
+            {sidebarEnabled && awpClasses && !readOnly && (
+              <div className="absolute bottom-4 right-4 z-30 flex items-center gap-1 rounded-full border bg-background/95 p-1 shadow-md">
+                <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full" onClick={undo} disabled={viewingMode || past.length === 0} aria-label="Undo" title="Undo">
+                  <Undo2 className="h-4 w-4" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full" onClick={redo} disabled={viewingMode || future.length === 0} aria-label="Redo" title="Redo">
+                  <Redo2 className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
 
 
           {sidebarEnabled && awpClasses ? (
-            <div className="w-80 flex-shrink-0 border rounded-lg flex flex-col min-h-0 relative">
+            <div className="w-[480px] flex-shrink-0 border rounded-lg flex flex-col min-h-0 relative">
               {isPlacingLabels && (
                 <div
                   className="absolute inset-0 z-20 flex items-center justify-center bg-background/60 backdrop-blur-[1px] rounded-lg"
@@ -2069,16 +2079,16 @@ export const FileViewerModal = ({
               <Tabs
                 value={activeTab}
                 onValueChange={(v) => {
-                  const target = v as "floor-plans" | "detections";
+                  const target = v as "floor-plans" | "detections" | "plans";
                   if (target === activeTab) return;
                   guardThen("tab", () => setActiveTab(target));
                 }}
                 className="flex-1 flex flex-col min-h-0"
               >
-                <TabsList className="mx-2 mt-2 mb-2 grid grid-cols-2">
-
+                <TabsList className="mx-2 mt-2 mb-2 grid grid-cols-3">
                   <TabsTrigger value="floor-plans">Floor Plans</TabsTrigger>
                   <TabsTrigger value="detections">Detections</TabsTrigger>
+                  <TabsTrigger value="plans">Plans</TabsTrigger>
                 </TabsList>
                 <TabsContent
                   value="floor-plans"
@@ -2184,24 +2194,27 @@ export const FileViewerModal = ({
                     futureLen={future.length}
                     floorPlans={floorPlans}
                     floorPlanOverrides={floorPlanOverrides ?? {}}
-                    hiddenClasses={hiddenClasses}
-                    toggleClassHidden={(name) => {
-                      updateHiddenClasses((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(name)) next.delete(name);
-                        else {
-                          next.add(name);
-                          if (selectedClass === name) {
-                            const firstVisible = (awpClasses || []).find(
-                              (c) => !next.has(c.name),
-                            );
-                            setSelectedClass(firstVisible?.name ?? null);
-                          }
-                        }
-                        return next;
-                      });
+                    selectedRowKey={effectiveRowKey}
+                    onSelectRow={(cls, key) => {
+                      setSelectedClass(cls);
+                      setSelectedRowKey(key);
+                      setActivePlanId(null);
                     }}
+                    devices={devicesApi}
                     onFocusInstance={focusInstance}
+                  />
+                </TabsContent>
+                <TabsContent value="plans" className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0 data-[state=inactive]:hidden">
+                  <PlansPanel
+                    plans={drawingPlans.plans}
+                    activePlanId={activePlanId}
+                    onTogglePlan={(id) => setActivePlanId((prev) => (prev === id ? null : id))}
+                    onNewPlan={() => setNewPlanOpen(true)}
+                    deviceCount={(plan) =>
+                      Object.entries(plan.product_assignments || {})
+                        .filter(([k, v]) => !k.startsWith("__") && Array.isArray(v))
+                        .reduce((n, [, v]) => n + (v as string[]).length, 0)
+                    }
                   />
                 </TabsContent>
               </Tabs>
