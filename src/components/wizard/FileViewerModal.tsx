@@ -531,6 +531,9 @@ export const FileViewerModal = ({
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [newPlanOpen, setNewPlanOpen] = useState(false);
   const [savingNewPlan, setSavingNewPlan] = useState(false);
+  // Plan being edited in the inline editor (null = creating a new plan).
+  const [editPlanId, setEditPlanId] = useState<string | null>(null);
+  const planToggleRef = useRef<((id: string) => void) | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [draftPlanVisual, setDraftPlanVisual] = useState<{ color: string; ids: Set<string> } | null>(null);
   const [hoveredPlanIds, setHoveredPlanIds] = useState<Set<string>>(new Set());
@@ -1502,7 +1505,7 @@ export const FileViewerModal = ({
   const deleteRef = useRef(handleDeleteFromList);
   deleteRef.current = handleDeleteFromList;
   useEffect(() => {
-    if (!isOpen || !editingEnabled || !selectedInstanceId) return;
+    if (!isOpen || !editingEnabled || planDraftMode || !selectedInstanceId) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Delete" && e.key !== "Backspace") return;
       const t = e.target as HTMLElement | null;
