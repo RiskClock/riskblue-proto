@@ -322,6 +322,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
           label: ov.label,
           variant: ov.variant,
           innerDot: ov.innerDot,
+          emphasized: ov.emphasized,
         });
         byPage.set(p.pageNum, arr);
       }

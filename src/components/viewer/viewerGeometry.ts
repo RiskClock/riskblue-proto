@@ -74,6 +74,8 @@ export interface OverlayInput {
   variant?: "dot";
   /** Draw a smaller filled center marker, used for plan-included instances. */
   innerDot?: boolean;
+  /** Emphasize this marker alongside other matching markers on sidebar hover. */
+  emphasized?: boolean;
   /**
    * Optional irregular polygon outline in normalized (0..1) page space. Only
    * meaningful for `shape: "rect"` overlays; `bbox` should carry the envelope.
@@ -91,6 +93,7 @@ export interface NormalizedOverlay {
   label?: string;
   variant?: "dot";
   innerDot?: boolean;
+  emphasized?: boolean;
 }
 
 /** Detect whether a 4-tuple looks like [x, y, w, h] (all <= 1) vs [x1, y1, x2, y2]. */

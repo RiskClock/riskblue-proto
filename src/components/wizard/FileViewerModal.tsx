@@ -39,7 +39,7 @@ import { X as XIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
-import { awpClassColor, awpClassColorForType, floorPlanTypeColor, readableTextOn, softBgFrom } from "@/lib/awpColor";
+import { awpClassColor, awpClassColorForType, drawingRiskColors, floorPlanTypeColor, readableTextOn, softBgFrom } from "@/lib/awpColor";
 
 
 import {
@@ -1715,6 +1715,12 @@ export const FileViewerModal = ({
   const activePlan = activePlanId
     ? drawingPlans.plans.find((p) => p.id === activePlanId) ?? null
     : null;
+  const drawingColors = useMemo(() => {
+    const keys = instances
+      .filter((i) => i.file_id === parentFileId && i.page_index === effectivePage && i.awp_class_name !== UNIT_MARKER_CLASS)
+      .map(instanceRowKey);
+    return drawingRiskColors(keys);
+  }, [instances, parentFileId, effectivePage]);
   // Row that drives canvas visibility. Falls back to the whole selected class.
   const effectiveRowKey =
     selectedRowKey && selectedClass && rowClassOf(selectedRowKey) === selectedClass
@@ -1752,14 +1758,15 @@ export const FileViewerModal = ({
           coordSpace: "normalized" as const,
           page: singlePageOnly ? currentPage : sheetId ? 1 : i.page_index,
           color: activeTab === "plans" && newPlanOpen
-            ? (hoveredPlanIds.has(i.id) ? draftPlanVisual?.color : "hsl(var(--muted-foreground))")
-            : activeTab === "plans" && activePlan?.color || awpClassColorForType(i.awp_class_name, pipeType, diameter),
+            ? "hsl(var(--muted-foreground))"
+            : (activeTab === "plans" && activePlan?.color) || drawingColors.get(instanceRowKey(i)) || awpClassColorForType(i.awp_class_name, pipeType, diameter),
+          emphasized: activeTab === "plans" && newPlanOpen && hoveredPlanIds.has(i.id),
           label: instanceLabel(i),
           innerDot: activeTab === "plans" && (newPlanOpen ? !!draftPlanVisual?.ids.has(i.id) : !!activePlan?.included_instance_ids.includes(i.id)),
         };
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly, hiddenClasses, effectiveRowKey, activePlan, activeTab, newPlanOpen, draftPlanVisual, hoveredPlanIds]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly, hiddenClasses, effectiveRowKey, activePlan, activeTab, newPlanOpen, draftPlanVisual, hoveredPlanIds, drawingColors]);
 
   // Floor-plan bbox overlays. Survey agent returns `xy_width_height_pct` as
   // [left, top, width, height] percentages (0..100) of the visible page.
@@ -2206,6 +2213,7 @@ export const FileViewerModal = ({
                     floorPlans={floorPlans}
                     floorPlanOverrides={floorPlanOverrides ?? {}}
                     selectedRowKey={effectiveRowKey}
+                    drawingColors={drawingColors}
                     onSelectRow={(cls, key) => {
                       setSelectedClass(cls);
                       setSelectedRowKey(key);
@@ -2704,6 +2712,7 @@ interface DetectionsPanelProps {
   floorPlans?: ParsedFloorPlan[];
   floorPlanOverrides?: Record<string, any>;
   selectedRowKey: string | null;
+  drawingColors: Map<string, string>;
   onSelectRow: (className: string, rowKey: string) => void;
   devices: DevicesApi;
   onFocusInstance?: (i: DrawingInstanceRow) => void;
@@ -3013,6 +3022,7 @@ const DetectionsPanel = ({
   floorPlans,
   floorPlanOverrides = {},
   selectedRowKey,
+  drawingColors,
   onSelectRow,
   devices,
   onFocusInstance,
@@ -3033,7 +3043,7 @@ const DetectionsPanel = ({
             const isSelected = selectedRowKey === row.key || (selectedRowKey === c.name && rows.find((r) => r.cls.name === c.name)?.key === row.key);
             const isExpanded = expanded.has(row.key);
             const firstPipeType = row.type;
-            const color = row.type || row.diam ? awpClassColorForType(c.name, firstPipeType, row.diam) : awpClassColor(c.name);
+            const color = drawingColors.get(row.key) || (row.type || row.diam ? awpClassColorForType(c.name, firstPipeType, row.diam) : awpClassColor(c.name));
             return (
               <div key={row.key} className="border-b last:border-b-0 min-w-0">
                 <div
@@ -3099,7 +3109,7 @@ const DetectionsPanel = ({
                         const iMeta = (i.metadata && typeof i.metadata === "object" ? (i.metadata as any) : {}) as Record<string, any>;
                         const iPipeType = typeof iMeta.pipe_type === "string" ? iMeta.pipe_type.trim() : "";
                         const iDiameter = typeof iMeta.pipe_diameter === "string" ? iMeta.pipe_diameter.trim() : "";
-                        const dotColor = awpClassColorForType(c.name, iPipeType, iDiameter);
+                        const dotColor = drawingColors.get(instanceRowKey(i)) || awpClassColorForType(c.name, iPipeType, iDiameter);
                         return (
                           <div
                             key={i.id}
