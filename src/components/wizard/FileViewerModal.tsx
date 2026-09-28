@@ -2896,7 +2896,7 @@ const PlansPanel = ({
             <Layers className={`h-4 w-4 shrink-0 ${active ? "text-primary" : "text-muted-foreground"}`} />
             <span className="min-w-0 flex-1">
               <span className={`block truncate ${active ? "font-semibold" : ""}`}>{p.name}</span>
-              {devices.length > 0 && <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{devices.map((name) => `${name} ×1`).join(", ")}</span>}
+              {devices.length > 0 && <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">{devices.map((name) => <li key={name} className="truncate">{name} ×1</li>)}</ul>}
             </span>
             <span className="text-xs text-muted-foreground shrink-0" title={devices.join("\n")}>{devices.length} {devices.length === 1 ? "device" : "devices"}</span>
             <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded ${active ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
@@ -2911,7 +2911,7 @@ const PlansPanel = ({
 
 const randomPlanColor = () => awpClassColor(`plan-${Date.now()}-${Math.random()}`);
 
-const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, saving, onCancel, onSave, onHoverInstance, onVisualChange }: {
+const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, saving, onCancel, onSave, onHoverInstances, onVisualChange, numberByInstanceId, instanceLabel, floorPlans, floorPlanOverrides, effectivePage }: {
   defaultName: string;
   instances: DrawingInstanceRow[];
   classes: AwpClassOption[];
@@ -2919,8 +2919,13 @@ const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, savin
   saving: boolean;
   onCancel: () => void;
   onSave: (value: { name: string; description: string; color: string; includedInstanceIds: string[]; baseQuantities: Record<string, number> }) => void;
-  onHoverInstance: (id: string | null) => void;
+  onHoverInstances: (ids: string[]) => void;
   onVisualChange: (color: string, ids: Set<string>) => void;
+  numberByInstanceId: Map<string, number>;
+  instanceLabel: (instance: DrawingInstanceRow) => string;
+  floorPlans: ParsedFloorPlan[];
+  floorPlanOverrides: Record<string, any>;
+  effectivePage: number;
 }) => {
   const [name, setName] = useState(defaultName);
   const [description, setDescription] = useState("");
@@ -2933,28 +2938,42 @@ const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, savin
     instances.forEach((instance) => map.set(instance.awp_class_name, [...(map.get(instance.awp_class_name) || []), instance]));
     return map;
   }, [instances]);
+  const rows = useMemo(() => buildDetectionRows(classes, byClass).filter((row) => row.items.length > 0), [classes, byClass]);
   const toggleIds = (ids: string[], checked: boolean) => setSelected((prev) => {
     const next = new Set(prev); ids.forEach((id) => checked ? next.add(id) : next.delete(id)); return next;
   });
   useEffect(() => onVisualChange(color, selected), [color, selected, onVisualChange]);
   return (
-    <div className="absolute inset-0 z-10 flex flex-col bg-background">
+    <div className="flex-1 min-h-0 flex flex-col bg-background">
       <div className="space-y-2 border-b p-3">
         <div className="flex gap-2"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Plan name" /><input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-10 w-12 rounded border p-1" aria-label="Plan color" /></div>
         <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Plan description" className="min-h-16" />
       </div>
       {baseProducts.length > 0 && <div className="border-b p-3"><p className="mb-2 text-sm font-semibold">Essential Components</p><div className="space-y-1">{baseProducts.map((p) => <div key={p.id} className="flex items-center gap-2 text-xs"><span className="flex-1 truncate">{p.name}</span><Input type="number" min={0} className="h-7 w-16" value={baseQuantities[p.id] || 0} onChange={(e) => setBaseQuantities((q) => ({ ...q, [p.id]: Math.max(0, Number(e.target.value) || 0) }))} /></div>)}</div></div>}
       <div className="flex-1 overflow-y-auto">
-        {classes.map((cls) => {
-          const items = byClass.get(cls.name) || []; if (!items.length) return null;
+        {rows.map((row) => {
+          const items = row.items;
           const checked = items.filter((i) => selected.has(i.id)).length;
-          return <div key={cls.name} className="border-b" onMouseEnter={() => onHoverInstance(items[0]?.id || null)} onMouseLeave={() => onHoverInstance(null)}>
-            <div className="flex items-center gap-2 px-3 py-2 text-sm">
-              <Checkbox checked={checked === items.length} indeterminate={checked > 0 && checked < items.length} onCheckedChange={(v) => toggleIds(items.map((i) => i.id), v === true)} style={{ borderColor: color, backgroundColor: checked ? color : undefined }} />
-              <span className="flex-1 font-medium">{cls.prefix || cls.name.slice(0, 3).toUpperCase()}</span><span className="text-xs text-muted-foreground">{checked}/{items.length}</span>
-              <button onClick={() => setExpanded((prev) => { const next = new Set(prev); next.has(cls.name) ? next.delete(cls.name) : next.add(cls.name); return next; })}>{expanded.has(cls.name) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</button>
+          const isExpanded = expanded.has(row.key);
+          return <div key={row.key} className="border-b" onMouseEnter={() => onHoverInstances(items.map((i) => i.id))} onMouseLeave={() => onHoverInstances([])}>
+            <div className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50">
+              <Checkbox checked={checked === items.length ? true : checked > 0 ? "indeterminate" : false} onCheckedChange={(v) => toggleIds(items.map((i) => i.id), v === true)} style={{ borderColor: color, backgroundColor: checked ? color : undefined }} aria-label={`Select ${row.fullName}`} />
+              <Tooltip><TooltipTrigger asChild><span className="shrink-0 font-mono text-xs font-medium">{row.label}</span></TooltipTrigger><TooltipContent side="left">{row.fullName}</TooltipContent></Tooltip>
+              {row.diam && <Badge variant="outline" className="h-5 px-1.5 text-[10px]">{row.diam}</Badge>}
+              {row.type && <Badge variant="outline" className="h-5 max-w-28 truncate px-1.5 text-[10px]">{subtypeAbbr(row.cls.name, row.type) || row.type}</Badge>}
+              <span className="flex-1 text-right text-xs text-muted-foreground">{checked}/{items.length}</span>
+              <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setExpanded((prev) => { const next = new Set(prev); next.has(row.key) ? next.delete(row.key) : next.add(row.key); return next; })} aria-label={isExpanded ? "Collapse" : "Expand"}>{isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</Button>
             </div>
-            {expanded.has(cls.name) && <div className="bg-muted/20 px-8 py-1">{items.map((i) => <label key={i.id} className="flex items-center gap-2 py-1 text-xs" onMouseEnter={() => onHoverInstance(i.id)}><Checkbox checked={selected.has(i.id)} onCheckedChange={(v) => toggleIds([i.id], v === true)} style={{ borderColor: color, backgroundColor: selected.has(i.id) ? color : undefined }} /><span>{i.awp_class_name}</span></label>)}</div>}
+            {isExpanded && <div className="bg-muted/20 px-8 py-1">{items.slice().sort((a, b) => (numberByInstanceId.get(a.id) ?? 0) - (numberByInstanceId.get(b.id) ?? 0)).map((i) => {
+              const containingPlan = findContainingPlan(floorPlans, i.nx, i.ny, floorPlanOverrides);
+              const planLabel = containingPlan ? getEffectiveLabel(containingPlan, floorPlanOverrides) : null;
+              const planColor = containingPlan ? floorPlanTypeColor(getEffectiveType(containingPlan, floorPlanOverrides)) : null;
+              return <label key={i.id} className="flex items-center gap-2 py-1 text-xs hover:bg-muted/50" onMouseEnter={() => onHoverInstances([i.id])} onMouseLeave={() => onHoverInstances(items.map((item) => item.id))}>
+                <Checkbox checked={selected.has(i.id)} onCheckedChange={(v) => toggleIds([i.id], v === true)} style={{ borderColor: color, backgroundColor: selected.has(i.id) ? color : undefined }} />
+                <span className="min-w-0 flex-1 truncate font-mono">{instanceLabel(i)}{i.page_index !== effectivePage ? ` (p.${i.page_index})` : ""}</span>
+                {planLabel && planColor && <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium max-w-[80px] truncate border" style={{ backgroundColor: softBgFrom(planColor), color: planColor, borderColor: planColor }} title={`In ${planLabel}`}>{planLabel}</span>}
+              </label>;
+            })}</div>}
           </div>;
         })}
       </div>
