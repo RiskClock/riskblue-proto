@@ -2291,8 +2291,15 @@ export const FileViewerModal = ({
                    {!newPlanOpen && <PlansPanel
                      plans={drawingPlans.plans}
                      activePlanId={activePlanId}
-                     onSelectPlan={setActivePlanId}
-                     onNewPlan={() => { setActivePlanId(null); setNewPlanOpen(true); }}
+                     onSelectPlan={(id) => {
+                       setActivePlanId(id);
+                       const plan = drawingPlans.plans.find((p) => p.id === id);
+                       if (!plan) return;
+                       const ids = new Set(plan.included_instance_ids);
+                       focusInstances(instances.filter((i) => ids.has(i.id) && i.file_id === parentFileId));
+                     }}
+                     onNewPlan={() => { setActivePlanId(null); setEditPlanId(null); setNewPlanOpen(true); }}
+                     onEditPlan={(id) => { setActivePlanId(id); setEditPlanId(id); setNewPlanOpen(true); }}
                       onDeletePlan={async (id) => {
                         const fallbackId = drawingPlans.plans.find((plan) => plan.id !== id)?.id ?? null;
                         try {
@@ -2316,6 +2323,9 @@ export const FileViewerModal = ({
                     }}
                    />}
                   {newPlanOpen && <InlinePlanEditor
+                    key={editPlanId ?? "new"}
+                    initialPlan={editPlanId ? drawingPlans.plans.find((p) => p.id === editPlanId) ?? null : null}
+                    toggleRef={planToggleRef}
                     defaultName={`Plan ${drawingPlans.plans.length + 1}`}
                     instances={instances.filter((i) => i.awp_class_name !== UNIT_MARKER_CLASS)}
                     classes={awpClasses}
@@ -2326,7 +2336,7 @@ export const FileViewerModal = ({
                      effectivePage={effectivePage}
                     baseProducts={drawingPlans.baseProducts}
                     saving={savingNewPlan}
-                     onCancel={() => { setNewPlanOpen(false); setDraftPlanVisual(null); setHoveredPlanIds(new Set()); }}
+                     onCancel={() => { setNewPlanOpen(false); setEditPlanId(null); setDraftPlanVisual(null); setHoveredPlanIds(new Set()); }}
                      onHoverInstances={(ids) => setHoveredPlanIds(new Set(ids))}
                      onVisualChange={handleDraftVisualChange}
                       onFocusInstances={focusInstances}
@@ -2334,13 +2344,16 @@ export const FileViewerModal = ({
                     onSave={async (value) => {
                       setSavingNewPlan(true);
                       try {
-                        const id = await drawingPlans.createPlan(value, user?.id ?? null);
+                        const id = editPlanId
+                          ? (await drawingPlans.updatePlan(editPlanId, value), editPlanId)
+                          : await drawingPlans.createPlan(value, user?.id ?? null);
                         setNewPlanOpen(false);
+                        setEditPlanId(null);
                          setDraftPlanVisual(null);
                          setHoveredPlanIds(new Set());
                         if (id) setActivePlanId(id);
                       } catch (e) {
-                        toast({ title: "Could not create plan", description: getUserFriendlyError(e), variant: "destructive" });
+                        toast({ title: editPlanId ? "Could not save plan" : "Could not create plan", description: getUserFriendlyError(e), variant: "destructive" });
                       } finally {
                         setSavingNewPlan(false);
                       }
