@@ -2913,7 +2913,10 @@ const PlansPanel = ({
             className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm border-b hover:bg-muted/50 ${active ? "bg-primary/10" : ""}`}
           >
             <Layers className={`h-4 w-4 shrink-0 ${active ? "text-primary" : "text-muted-foreground"}`} />
-            <span className={`flex-1 min-w-0 truncate ${active ? "font-semibold" : ""}`}>{p.name}</span>
+            <span className="min-w-0 flex-1">
+              <span className={`block truncate ${active ? "font-semibold" : ""}`}>{p.name}</span>
+              {devices.length > 0 && <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{devices.map((name) => `${name} ×1`).join(", ")}</span>}
+            </span>
             <span className="text-xs text-muted-foreground shrink-0" title={devices.join("\n")}>{devices.length} {devices.length === 1 ? "device" : "devices"}</span>
             <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded ${active ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
               {active ? "Showing" : "Show"}
