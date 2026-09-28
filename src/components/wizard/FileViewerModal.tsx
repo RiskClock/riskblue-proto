@@ -501,22 +501,19 @@ export const FileViewerModal = ({
     }
   }, [viewingMode]);
 
-  // Internal-only master switch for annotation labels + leader lines.
-  const [showLabels, setShowLabels] = useState<boolean>(() => {
-    try {
-      const stored = localStorage.getItem("drawing-viewer:show-labels");
-      return stored === null ? true : stored === "1";
-    } catch {
-      return true;
-    }
-  });
-  useEffect(() => {
-    try {
-      localStorage.setItem("drawing-viewer:show-labels", showLabels ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
-  }, [showLabels]);
+  // Master switch for annotation labels + leader lines. Hidden by default;
+  // the toolbar toggle still lets users turn them on for the session.
+  const [showLabels, setShowLabels] = useState<boolean>(false);
+
+  // Detections list: selected row (class or class+subtype/diameter) drives
+  // single-row visibility on the canvas.
+  const [selectedRowKey, setSelectedRowKey] = useState<string | null>(null);
+  // Plans tab: when set, the canvas shows only annotations covered by the plan.
+  const [activePlanId, setActivePlanId] = useState<string | null>(null);
+  const [newPlanOpen, setNewPlanOpen] = useState(false);
+  const [savingNewPlan, setSavingNewPlan] = useState(false);
+  const { user } = useAuth();
+  const drawingPlans = useDrawingPlans(persistKey, isOpen && !!awpClasses);
   const editingEnabled = sidebarEnabled && !viewingMode;
 
 
@@ -543,16 +540,13 @@ export const FileViewerModal = ({
     if (stored && awpClasses?.some((c) => c.name === stored)) return stored;
     return awpClasses?.[0]?.name ?? null;
   });
-  // Internal expanded set, used only when parent doesn't provide one.
-  const [localExpanded, setLocalExpanded] = useState<Set<string>>(
-    () => new Set((awpClasses || []).map((c) => c.name)),
-  );
-  const expanded = expandedClasses ?? localExpanded;
+  // Expanded rows (keyed by row key). All rows start collapsed.
+  const [expanded, setLocalExpanded] = useState<Set<string>>(() => new Set());
   const setExpanded = (updater: (prev: Set<string>) => Set<string>) => {
-    const next = updater(expanded);
-    if (onExpandedClassesChange) onExpandedClassesChange(next);
-    else setLocalExpanded(next);
+    setLocalExpanded((prev) => updater(prev));
   };
+  void expandedClasses;
+  void onExpandedClassesChange;
 
   // ---- Hidden annotation classes (per project, persisted) -----------------
   const hiddenKey = persistKey
@@ -606,10 +600,10 @@ export const FileViewerModal = ({
   const editingPlanRef = useRef<EditingPlanState | null>(null);
   useEffect(() => { editingPlanRef.current = editingPlan; }, [editingPlan]);
   const ACTIVE_TAB_STORAGE_KEY = "fileViewer.activeTab";
-  const [activeTab, setActiveTab] = useState<"floor-plans" | "detections">(() => {
+  const [activeTab, setActiveTab] = useState<"floor-plans" | "detections" | "plans">(() => {
     if (typeof window === "undefined") return "floor-plans";
     const stored = window.localStorage.getItem(ACTIVE_TAB_STORAGE_KEY);
-    return stored === "detections" || stored === "floor-plans" ? stored : "floor-plans";
+    return stored === "detections" || stored === "floor-plans" || stored === "plans" ? stored : "floor-plans";
   });
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1718,6 +1712,28 @@ export const FileViewerModal = ({
   //  - singlePageOnly = full PDF rendered at a specific page → use currentPage
   //  - sheetId (and !singlePageOnly) = per-sheet single-page raster → always 1
   //  - otherwise (full multi-page navigation) → instance's page_index
+  const activePlan = activePlanId
+    ? drawingPlans.plans.find((p) => p.id === activePlanId) ?? null
+    : null;
+  // Row that drives canvas visibility. Falls back to the whole selected class.
+  const effectiveRowKey =
+    selectedRowKey && selectedClass && rowClassOf(selectedRowKey) === selectedClass
+      ? selectedRowKey
+      : selectedClass;
+  const isInstanceVisible = (i: DrawingInstanceRow): boolean => {
+    if (!awpClasses) return !hiddenClasses.has(i.awp_class_name);
+    if (activePlan) {
+      const entry = drawingPlans.catalogFor(i.awp_class_name);
+      if (!entry) return false;
+      const { pipeType, diameter } = instanceMeta(i);
+      const key = assignmentKeyFor(entry.id, i.awp_class_name, pipeType, diameter);
+      return drawingPlans.assignedFor(activePlan, key, entry.id).length > 0;
+    }
+    if (!effectiveRowKey) return false;
+    if (effectiveRowKey === i.awp_class_name) return true;
+    return instanceRowKey(i) === effectiveRowKey;
+  };
+
   const instanceOverlays: OverlayInput[] = useMemo(() => {
     if (readOnly) return [];
     const allowed = awpClasses ? new Set(awpClasses.map((c) => c.name)) : null;
@@ -1726,7 +1742,7 @@ export const FileViewerModal = ({
         (i) =>
           i.file_id === parentFileId &&
           i.page_index === effectivePage &&
-          !hiddenClasses.has(i.awp_class_name) &&
+          isInstanceVisible(i) &&
           (!allowed || allowed.has(i.awp_class_name)),
       )
       .map((i) => {
