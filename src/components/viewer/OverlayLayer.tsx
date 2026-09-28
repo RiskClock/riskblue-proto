@@ -225,6 +225,7 @@ interface CircleInfo {
   /** Dot variant: filled disc, no border, no label. */
   isDot?: boolean;
   innerDot?: boolean;
+  emphasized?: boolean;
 }
 
 // NOTE: Label-placement geometry (candidate generation, rbush spatial
