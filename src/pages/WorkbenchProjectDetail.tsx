@@ -2946,12 +2946,12 @@ const isChildPlanType = (t: string) =>
 
   const PLAN_TYPE_META: Record<string, { color: string; singular: string; plural: string }> = {
     level_floor_plan: {
-      color: awpClassColor("Level Floor Plan"),
+      color: floorPlanTypeColor("level_floor_plan"),
       singular: "level floor plan",
       plural: "level floor plans",
     },
     unit_floor_plan: {
-      color: awpClassColor("Unit Floor Plan"),
+      color: floorPlanTypeColor("unit_floor_plan"),
       singular: "unit floor plan",
       plural: "unit floor plans",
     },
@@ -2961,7 +2961,7 @@ const isChildPlanType = (t: string) =>
       plural: "schematic level rows",
     },
     typical_detail_block: {
-      color: awpClassColor("typical_detail_block"),
+      color: floorPlanTypeColor("typical_detail_block"),
       singular: "typical detail block",
       plural: "typical detail blocks",
     },
