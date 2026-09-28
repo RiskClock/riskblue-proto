@@ -20,7 +20,6 @@ import {
   Plus,
   Radar,
   Redo2,
-  Tag,
   Undo2,
   ListRestart,
 } from "lucide-react";
@@ -522,10 +521,6 @@ export const FileViewerModal = ({
       /* ignore */
     }
   }, [viewingMode]);
-
-  // Master switch for annotation labels + leader lines. Hidden by default;
-  // the toolbar toggle still lets users turn them on for the session.
-  const [showLabels, setShowLabels] = useState<boolean>(false);
 
   // Detections list: selected row (class or class+subtype/diameter) drives
   // single-row visibility on the canvas.
@@ -1915,25 +1910,6 @@ export const FileViewerModal = ({
             >
               {viewingMode ? "View Mode" : "Enable View Mode"}
             </Button>
-            {isInternal && (
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant={showLabels ? "secondary" : "outline"}
-                    size="sm"
-                    className="h-7 px-2 flex-shrink-0"
-                    onClick={() => setShowLabels((v) => !v)}
-                  >
-                    <Tag className={`h-3.5 w-3.5 ${showLabels ? "" : "opacity-50"}`} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  {showLabels ? "Hide annotation labels" : "Show annotation labels"}
-                </TooltipContent>
-              </Tooltip>
-            )}
             {titleAccessory}
           </DialogTitle>
         </DialogHeader>
@@ -1951,7 +1927,7 @@ export const FileViewerModal = ({
               onRotate={handleRotate}
               onDownload={() => setDownloadDialogOpen(true)}
 
-              showLabels={showLabels}
+              showLabels={false}
               onPageChange={singlePageOnly ? () => {} : setCurrentPage}
               hidePageNav={singlePageOnly}
               overlays={overlays}
