@@ -98,7 +98,9 @@ export function softBgFrom(hex: string, alpha = 0.18): string {
  */
 export function floorPlanTypeColor(type?: string | null): string {
   const t = (type || "unknown").trim();
-  if (t === "unit_floor_plan") return awpClassColor("Unit Floor Plan");
-  if (t === "level_floor_plan") return awpClassColor("Level Floor Plan");
-  return awpClassColor(t);
+  if (t === "unit_floor_plan" || t === "Unit Floor Plan") return "#f92ad5";
+  if (t === "level_floor_plan" || t === "Level Floor Plan") return "#39b52e";
+  if (t === "typical_detail_block") return "#D48D0B";
+  // Preserve the pre-change hash palette for other floor-plan types.
+  return hslToHex(hashStr(t.toLowerCase()) % 360, 70, 45);
 }

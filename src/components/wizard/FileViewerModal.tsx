@@ -39,7 +39,7 @@ import { X as XIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
-import { awpClassColor, awpClassColorForType, readableTextOn, softBgFrom } from "@/lib/awpColor";
+import { awpClassColor, awpClassColorForType, floorPlanTypeColor, readableTextOn, softBgFrom } from "@/lib/awpColor";
 
 
 import {
@@ -531,6 +531,7 @@ export const FileViewerModal = ({
   const [savingNewPlan, setSavingNewPlan] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [draftPlanVisual, setDraftPlanVisual] = useState<{ color: string; ids: Set<string> } | null>(null);
+  const [hoveredPlanIds, setHoveredPlanIds] = useState<Set<string>>(new Set());
   const { user } = useAuth();
   const drawingPlans = useDrawingPlans(persistKey, isOpen && !!awpClasses);
   const editingEnabled = sidebarEnabled && !viewingMode;
@@ -1720,10 +1721,11 @@ export const FileViewerModal = ({
       : selectedClass;
   const isInstanceVisible = (i: DrawingInstanceRow): boolean => {
     if (!awpClasses) return !hiddenClasses.has(i.awp_class_name);
-    if (newPlanOpen) return true;
-    if (activePlan) {
+    if (activeTab === "plans" && newPlanOpen) return true;
+    if (activeTab === "plans" && activePlan) {
       return activePlan.included_instance_ids.includes(i.id);
     }
+    if (activeTab === "floor-plans") return true;
     if (!effectiveRowKey) return false;
     if (effectiveRowKey === i.awp_class_name) return true;
     return instanceRowKey(i) === effectiveRowKey;
@@ -1748,13 +1750,15 @@ export const FileViewerModal = ({
           bbox: [i.nx, i.ny, 0, 0] as [number, number, number, number],
           coordSpace: "normalized" as const,
           page: singlePageOnly ? currentPage : sheetId ? 1 : i.page_index,
-          color: activePlan?.color || (draftPlanVisual?.ids.has(i.id) ? draftPlanVisual.color : awpClassColorForType(i.awp_class_name, pipeType, diameter)),
+          color: activeTab === "plans" && newPlanOpen
+            ? (hoveredPlanIds.has(i.id) ? draftPlanVisual?.color : "hsl(var(--muted-foreground))")
+            : activeTab === "plans" && activePlan?.color || awpClassColorForType(i.awp_class_name, pipeType, diameter),
           label: instanceLabel(i),
-          innerDot: !!activePlan?.included_instance_ids.includes(i.id) || !!draftPlanVisual?.ids.has(i.id),
+          innerDot: activeTab === "plans" && (newPlanOpen ? !!draftPlanVisual?.ids.has(i.id) : !!activePlan?.included_instance_ids.includes(i.id)),
         };
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly, hiddenClasses, effectiveRowKey, activePlan, newPlanOpen, draftPlanVisual]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly, hiddenClasses, effectiveRowKey, activePlan, activeTab, newPlanOpen, draftPlanVisual, hoveredPlanIds]);
 
   // Floor-plan bbox overlays. Survey agent returns `xy_width_height_pct` as
   // [left, top, width, height] percentages (0..100) of the visible page.
@@ -1784,16 +1788,7 @@ export const FileViewerModal = ({
         page: currentPage,
         shape: "rect" as const,
 
-        color: (() => {
-          const t = ((floorPlanOverrides ?? {})[fp.plan_id] as any)?.type || fp.type || "unknown";
-          return awpClassColor(
-            t === "unit_floor_plan"
-              ? "Unit Floor Plan"
-              : t === "level_floor_plan"
-                ? "Level Floor Plan"
-                : t,
-          );
-        })(),
+         color: floorPlanTypeColor(((floorPlanOverrides ?? {})[fp.plan_id] as any)?.type || fp.type),
         label: labelBase,
       });
     }
@@ -1806,7 +1801,7 @@ export const FileViewerModal = ({
   const unitMarkerOverlays: OverlayInput[] = useMemo(() => {
     if (readOnly) return [];
     if (hiddenClasses.has(UNIT_MARKER_CLASS)) return [];
-    const uc = awpClassColor("Unit Floor Plan");
+    const uc = floorPlanTypeColor("unit_floor_plan");
     return instances
       .filter(
         (i) =>
@@ -2012,15 +2007,7 @@ export const FileViewerModal = ({
                     : prev,
                 )
               }
-              editorColor={
-                editingPlan
-                  ? awpClassColor(
-                      editingPlan.type === "unit_floor_plan"
-                        ? "Unit Floor Plan"
-                        : "Level Floor Plan",
-                    )
-                  : undefined
-              }
+              editorColor={editingPlan ? floorPlanTypeColor(editingPlan.type) : undefined}
               onPlacingChange={setIsPlacingLabels}
             />
             {sidebarEnabled && awpClasses && !readOnly && (
@@ -2082,7 +2069,15 @@ export const FileViewerModal = ({
                 onValueChange={(v) => {
                   const target = v as "floor-plans" | "detections" | "plans";
                   if (target === activeTab) return;
-                  guardThen("tab", () => setActiveTab(target));
+                   guardThen("tab", () => {
+                     if (target === "detections" && awpClasses) {
+                       const rows = buildDetectionRows(awpClasses, instancesByClassThisFile);
+                       const row = rows.find((r) => r.key === selectedRowKey) || rows.find((r) => r.cls.name === selectedClass) || rows[0];
+                       if (row) { setSelectedClass(row.cls.name); setSelectedRowKey(row.key); }
+                     }
+                     setHoveredPlanIds(new Set());
+                     setActiveTab(target);
+                   });
                 }}
                 className="flex-1 flex flex-col min-h-0"
               >
@@ -2206,7 +2201,7 @@ export const FileViewerModal = ({
                   />
                 </TabsContent>
                 <TabsContent value="plans" className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0 data-[state=inactive]:hidden">
-                  <PlansPanel
+                   {!newPlanOpen && <PlansPanel
                     plans={drawingPlans.plans}
                     activePlanId={activePlanId}
                     onTogglePlan={(id) => setActivePlanId((prev) => (prev === id ? null : id))}
@@ -2221,22 +2216,28 @@ export const FileViewerModal = ({
                       });
                       return [...ids].map((id) => drawingPlans.productsById.get(id)?.name || id);
                     }}
-                  />
+                   />}
                   {newPlanOpen && <InlinePlanEditor
                     defaultName={`Plan ${drawingPlans.plans.length + 1}`}
                     instances={instances.filter((i) => i.awp_class_name !== UNIT_MARKER_CLASS)}
                     classes={awpClasses}
+                     numberByInstanceId={numberByInstanceId}
+                     instanceLabel={instanceLabel}
+                     floorPlans={floorPlans ?? []}
+                     floorPlanOverrides={floorPlanOverrides ?? {}}
+                     effectivePage={effectivePage}
                     baseProducts={drawingPlans.baseProducts}
                     saving={savingNewPlan}
-                    onCancel={() => { setNewPlanOpen(false); setDraftPlanVisual(null); }}
-                    onHoverInstance={setHoveredInstanceId}
+                     onCancel={() => { setNewPlanOpen(false); setDraftPlanVisual(null); setHoveredPlanIds(new Set()); }}
+                     onHoverInstances={(ids) => setHoveredPlanIds(new Set(ids))}
                     onVisualChange={(color, ids) => setDraftPlanVisual({ color, ids })}
                     onSave={async (value) => {
                       setSavingNewPlan(true);
                       try {
                         const id = await drawingPlans.createPlan(value, user?.id ?? null);
                         setNewPlanOpen(false);
-                        setDraftPlanVisual(null);
+                         setDraftPlanVisual(null);
+                         setHoveredPlanIds(new Set());
                         if (id) setActivePlanId(id);
                       } catch (e) {
                         toast({ title: "Could not create plan", description: getUserFriendlyError(e), variant: "destructive" });
@@ -3090,7 +3091,7 @@ const DetectionsPanel = ({
                                 : effT === "level_floor_plan"
                                   ? "Level Floor Plan"
                                   : effT || "unknown";
-                              const cc = awpClassColor(ct);
+                               const cc = floorPlanTypeColor(effT);
                               return (
                                 <span
                                   className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium max-w-[80px] truncate border"
@@ -3434,13 +3435,7 @@ size="sm"
           const effUnits: string[] = ovr.units ?? fp.referenced_unit_ids;
           const effType: string =
             (typeof ovr.type === "string" && ovr.type) ? ovr.type : fp.type;
-          const color = awpClassColor(
-            effType === "unit_floor_plan"
-              ? "Unit Floor Plan"
-              : effType === "level_floor_plan"
-                ? "Level Floor Plan"
-                : effType || "unknown",
-          );
+           const color = floorPlanTypeColor(effType);
           const fallbackLabel = getEffectiveLabel(fp, overrides) ||
             floorPlanDisplayLabel({ ...fp, floors: effFloors });
           const isUnit = effType === "unit_floor_plan" || effType === "typical_detail_block";
@@ -3675,7 +3670,7 @@ const LevelUnitsSection = ({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
 
-  const uc = awpClassColor("Unit Floor Plan");
+  const uc = floorPlanTypeColor("unit_floor_plan");
 
   // Counts per unique ref in current units.
   const counts = useMemo(() => {
