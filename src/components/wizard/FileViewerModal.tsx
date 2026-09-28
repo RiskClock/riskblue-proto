@@ -2252,7 +2252,7 @@ export const FileViewerModal = ({
                     classes={awpClasses}
                     baseProducts={drawingPlans.baseProducts}
                     saving={savingNewPlan}
-                    onCancel={() => setNewPlanOpen(false)}
+                    onCancel={() => { setNewPlanOpen(false); setDraftPlanVisual(null); }}
                     onHoverInstance={setHoveredInstanceId}
                     onVisualChange={(color, ids) => setDraftPlanVisual({ color, ids })}
                     onSave={async (value) => {
@@ -2934,7 +2934,7 @@ const PlansPanel = ({
 
 const randomPlanColor = () => awpClassColor(`plan-${Date.now()}-${Math.random()}`);
 
-const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, saving, onCancel, onSave, onHoverInstance }: {
+const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, saving, onCancel, onSave, onHoverInstance, onVisualChange }: {
   defaultName: string;
   instances: DrawingInstanceRow[];
   classes: AwpClassOption[];
@@ -2959,6 +2959,7 @@ const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, savin
   const toggleIds = (ids: string[], checked: boolean) => setSelected((prev) => {
     const next = new Set(prev); ids.forEach((id) => checked ? next.add(id) : next.delete(id)); return next;
   });
+  useEffect(() => onVisualChange(color, selected), [color, selected, onVisualChange]);
   return (
     <div className="absolute inset-0 z-10 flex flex-col bg-background">
       <div className="space-y-2 border-b p-3">
