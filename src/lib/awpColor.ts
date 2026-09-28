@@ -32,7 +32,9 @@ function hslToHex(h: number, s: number, l: number): string {
 
 export function awpClassColor(name: string): string {
   const key = name.trim().toLowerCase();
-  const hue = ((hashStr(key) * 0.6180339887) % 1) * 360;
+  // A 53-bit hash loses its fractional part when multiplied by phi in JS.
+  // Use its low 32 bits so modulo 1 still carries meaningful precision.
+  const hue = (((hashStr(key) % 4294967296) * 0.6180339887) % 1) * 360;
   return hslToHex(hue, 70, 50);
 }
 
@@ -53,7 +55,7 @@ export function awpClassColorForType(
     .filter(Boolean);
   if (attributes.length === 0) return awpClassColor(name);
   const key = [name, ...attributes].join("::").toLowerCase();
-  const hue = ((hashStr(key) * 0.6180339887) % 1) * 360;
+  const hue = (((hashStr(key) % 4294967296) * 0.6180339887) % 1) * 360;
   return hslToHex(hue, 70, 50);
 }
 
