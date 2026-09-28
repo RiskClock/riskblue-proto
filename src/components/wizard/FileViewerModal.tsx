@@ -2240,6 +2240,8 @@ export const FileViewerModal = ({
                 </TabsContent>
                 <TabsContent value="detections" className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0 data-[state=inactive]:hidden">
                   <DetectionsPanel
+                     rotationByPage={rotationByPage}
+                     viewerApiRef={viewerApiRef}
                     awpClasses={awpClasses}
                     selectedClass={selectedClass}
                     setSelectedClass={setSelectedClass}
@@ -2757,6 +2759,9 @@ export interface DevicesApi {
 }
 
 interface DetectionsPanelProps {
+  rotationByPage: Record<number, number>;
+  effectivePage: number;
+  viewerApiRef: React.RefObject<any>;
   awpClasses: AwpClassOption[];
   selectedClass: string | null;
   setSelectedClass: (n: string | null) => void;
@@ -3092,6 +3097,8 @@ const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, savin
 };
 
 const DetectionsPanel = ({
+  rotationByPage,
+  viewerApiRef,
   awpClasses,
   expanded,
   setExpanded,
