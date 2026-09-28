@@ -230,12 +230,13 @@ export function useDrawingPlans(projectId: string | null | undefined, enabled: b
     [products, productsById],
   );
 
-    const deletePlan = useCallback(
+  const deletePlan = useCallback(
     async (planId: string) => {
       const { error } = await supabase
         .from("project_mitigation_plans")
         .delete()
-        .eq("id", planId);
+        .eq("id", planId)
+        .eq("project_id", projectId!);
       if (error) throw error;
       await queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
     },

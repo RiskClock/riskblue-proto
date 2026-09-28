@@ -1779,7 +1779,6 @@ export const FileViewerModal = ({
     }
     if (activeTab === "plans") return false;
     if (activeTab === "floor-plans") return true;
-    if (activeTab === "plans" && !activePlan && !newPlanOpen) return true;
     if (!effectiveRowKey) return false;
     if (effectiveRowKey === i.awp_class_name) return true;
     return instanceRowKey(i) === effectiveRowKey;
@@ -2277,13 +2276,7 @@ export const FileViewerModal = ({
                    {!newPlanOpen && <PlansPanel
                      plans={drawingPlans.plans}
                      activePlanId={activePlanId}
-                     onDeletePlan={(id) => {
-                       if (confirm("Delete this plan?")) {
-                         drawingPlans.deletePlan(id);
-                         if (activePlanId === id) setActivePlanId(null);
-                       }
-                     }}
-                    onSelectPlan={setActivePlanId}
+                     onSelectPlan={setActivePlanId}
                      onNewPlan={() => { setActivePlanId(null); setNewPlanOpen(true); }}
                       onDeletePlan={async (id) => {
                         const fallbackId = drawingPlans.plans.find((plan) => plan.id !== id)?.id ?? null;
@@ -2953,79 +2946,67 @@ const DeviceButton = ({ row, devices }: { row: DetectionRowModel; devices: Devic
   );
 };
 
-const PlansPanel = ({
-  plans,
-  activePlanId,
-  onTogglePlan,
-  onNewPlan,
-  deviceNames,
-}: {
+const PlansPanel = ({ plans, activePlanId, onSelectPlan, onNewPlan, onDeletePlan, deviceNames }: {
   plans: DrawingPlan[];
   activePlanId: string | null;
-  onTogglePlan: (id: string) => void;
+  onSelectPlan: (id: string) => void;
   onNewPlan: () => void;
-  onDeletePlan: (id: string) => void;
+  onDeletePlan: (id: string) => Promise<void>;
   deviceNames: (p: DrawingPlan) => { name: string; count: number }[];
-}) => (
-  <div className="flex-1 flex flex-col min-h-0">
-    <div className="px-3 py-2 border-b">
-      <Button size="sm" variant="outline" className="w-full h-8 text-xs" onClick={onNewPlan}>
-        <Plus className="h-3.5 w-3.5 mr-1" /> New Plan
-      </Button>
+}) => {
+  const [deleteTarget, setDeleteTarget] = useState<DrawingPlan | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      <div className="p-3 border-b">
+        <Button size="sm" variant="outline" className="w-full h-8 text-xs" onClick={onNewPlan}>
+          <Plus className="h-3.5 w-3.5 mr-1" /> Create New Plan
+        </Button>
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        {plans.length === 0 && <div className="px-3 py-8 text-center text-sm text-muted-foreground">No plans yet. Create one to select the risks it mitigates.</div>}
+        <RadioGroup value={activePlanId ?? undefined} onValueChange={onSelectPlan} className="gap-0">
+          {plans.map((p) => {
+            const active = p.id === activePlanId;
+            const devices = deviceNames(p);
+            return (
+              <div key={p.id} onClick={() => onSelectPlan(p.id)} className={`w-full flex items-start gap-2 px-3 py-2 text-left text-sm border-b cursor-pointer hover:bg-muted/50 ${active ? "bg-primary/10" : ""}`}>
+                <RadioGroupItem value={p.id} className="mt-0.5 shrink-0" aria-label={`Show ${p.name}`} onClick={(e) => e.stopPropagation()} />
+                <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: p.color || awpClassColor(p.name) }} />
+                <span className="min-w-0 flex-1">
+                  <span className={`block truncate ${active ? "font-semibold" : ""}`}>{p.name}</span>
+                  {devices.length > 0 && <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">{devices.map(({ name, count }) => <li key={name} className="truncate">{name} ×{count}</li>)}</ul>}
+                </span>
+                <span className="text-xs text-muted-foreground shrink-0" title={devices.map(({ name, count }) => `${name} ×${count}`).join("\n")}>{devices.length} {devices.length === 1 ? "device" : "devices"}</span>
+                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" aria-label={`Delete ${p.name}`} onClick={(e) => { e.stopPropagation(); setDeleteTarget(p); }}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            );
+          })}
+        </RadioGroup>
+      </div>
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open && !deleting) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete plan?</AlertDialogTitle>
+            <AlertDialogDescription>{deleteTarget ? `“${deleteTarget.name}” will be permanently deleted.` : "This plan will be permanently deleted."}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={deleting} onClick={(e) => { e.preventDefault(); if (!deleteTarget) return; setDeleting(true); void onDeletePlan(deleteTarget.id).then(() => setDeleteTarget(null)).finally(() => setDeleting(false)); }}>
+              {deleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
-    <div className="flex-1 overflow-y-auto">
-      {plans.length === 0 && (
-        <div className="px-3 py-8 text-center text-sm text-muted-foreground">
-          No plans yet. Create one to select the risks it mitigates.
-        </div>
-      )}
-      {plans.map((p) => {
-        const active = p.id === activePlanId;
-        const devices = deviceNames(p);
-        return (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => onTogglePlan(p.id)}
-            className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm border-b hover:bg-muted/50 ${active ? "bg-primary/10" : ""}`}
-          >
-            
-            <input
-              type="radio"
-              checked={active}
-              onChange={() => onTogglePlan(p.id)}
-              onClick={(e) => e.stopPropagation()}
-              className="h-3.5 w-3.5 shrink-0"
-            />
-            <Layers className={`h-4 w-4 shrink-0 ${active ? "text-primary" : "text-muted-foreground"}`} />
-            
-            <span className="min-w-0 flex-1">
-              <span className={`block truncate ${active ? "font-semibold" : ""}`}>{p.name}</span>
-            
-               {devices.length > 0 && <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">{devices.map(({ name, count }) => <li key={name} className="truncate">{name} ×{count}</li>)}</ul>}
-            </span>
-             <span className="text-xs text-muted-foreground shrink-0" title={devices.map(({ name, count }) => `${name} ×${count}`).join("\n")}>{devices.length} {devices.length === 1 ? "device" : "devices"}</span>
-            <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded ${active ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
-              {active ? "Showing" : "Show"}
-            </span>
-          
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onDeletePlan(p.id); }}
-              className="shrink-0 text-muted-foreground hover:text-destructive p-1 rounded hover:bg-muted/80"
-            >
-              <XIcon className="h-3.5 w-3.5" />
-            </button>
-            </button>
-        );
-      })}
-    </div>
-  </div>
-);
+  );
+};
 
 const randomPlanColor = () => awpClassColor(`plan-${Date.now()}-${Math.random()}`);
 
-const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, saving, onCancel, onSave, onHoverInstances, onVisualChange, numberByInstanceId, instanceLabel, floorPlans, floorPlanOverrides, effectivePage }: {
+const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, saving, onCancel, onSave, onHoverInstances, onVisualChange, onFocusInstances, onFocusInstance, numberByInstanceId, instanceLabel, floorPlans, floorPlanOverrides, effectivePage }: {
   defaultName: string;
   instances: DrawingInstanceRow[];
   classes: AwpClassOption[];
@@ -3035,6 +3016,8 @@ const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, savin
   onSave: (value: { name: string; description: string; color: string; includedInstanceIds: string[]; baseQuantities: Record<string, number> }) => void;
   onHoverInstances: (ids: string[]) => void;
   onVisualChange: (color: string, ids: Set<string>) => void;
+  onFocusInstances: (instances: DrawingInstanceRow[]) => void;
+  onFocusInstance: (instance: DrawingInstanceRow) => void;
   numberByInstanceId: Map<string, number>;
   instanceLabel: (instance: DrawingInstanceRow) => string;
   floorPlans: ParsedFloorPlan[];
@@ -3070,23 +3053,23 @@ const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, savin
           const checked = items.filter((i) => selected.has(i.id)).length;
           const isExpanded = expanded.has(row.key);
           return <div key={row.key} className="border-b" onMouseEnter={() => onHoverInstances(items.map((i) => i.id))} onMouseLeave={() => onHoverInstances([])}>
-            <div className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50">
-              <Checkbox checked={checked === items.length ? true : checked > 0 ? "indeterminate" : false} onCheckedChange={(v) => toggleIds(items.map((i) => i.id), v === true)} style={{ borderColor: color, backgroundColor: checked ? color : undefined }} aria-label={`Select ${row.fullName}`} />
+            <div className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 cursor-pointer" onClick={() => onFocusInstances(items)}>
+              <Checkbox checked={checked === items.length ? true : checked > 0 ? "indeterminate" : false} onCheckedChange={(v) => toggleIds(items.map((i) => i.id), v === true)} onClick={(e) => e.stopPropagation()} style={{ borderColor: color, backgroundColor: checked ? color : undefined }} aria-label={`Select ${row.fullName}`} />
               <Tooltip><TooltipTrigger asChild><span className="shrink-0 font-mono text-xs font-medium">{row.label}</span></TooltipTrigger><TooltipContent side="left">{row.fullName}</TooltipContent></Tooltip>
               {row.diam && <Badge variant="outline" className="h-5 px-1.5 text-[10px]">{row.diam}</Badge>}
               {row.type && <Badge variant="outline" className="h-5 max-w-28 truncate px-1.5 text-[10px]">{subtypeAbbr(row.cls.name, row.type) || row.type}</Badge>}
               <span className="flex-1 text-right text-xs text-muted-foreground">{checked}/{items.length}</span>
-              <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setExpanded((prev) => { const next = new Set(prev); next.has(row.key) ? next.delete(row.key) : next.add(row.key); return next; })} aria-label={isExpanded ? "Collapse" : "Expand"}>{isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</Button>
+              <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={(e) => { e.stopPropagation(); setExpanded((prev) => { const next = new Set(prev); next.has(row.key) ? next.delete(row.key) : next.add(row.key); return next; }); }} aria-label={isExpanded ? "Collapse" : "Expand"}>{isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</Button>
             </div>
             {isExpanded && <div className="bg-muted/20 px-8 py-1">{items.slice().sort((a, b) => (numberByInstanceId.get(a.id) ?? 0) - (numberByInstanceId.get(b.id) ?? 0)).map((i) => {
               const containingPlan = findContainingPlan(floorPlans, i.nx, i.ny, floorPlanOverrides);
               const planLabel = containingPlan ? getEffectiveLabel(containingPlan, floorPlanOverrides) : null;
               const planColor = containingPlan ? floorPlanTypeColor(getEffectiveType(containingPlan, floorPlanOverrides)) : null;
-              return <label key={i.id} className="flex items-center gap-2 py-1 text-xs hover:bg-muted/50" onMouseEnter={() => onHoverInstances([i.id])} onMouseLeave={() => onHoverInstances(items.map((item) => item.id))}>
-                <Checkbox checked={selected.has(i.id)} onCheckedChange={(v) => toggleIds([i.id], v === true)} style={{ borderColor: color, backgroundColor: selected.has(i.id) ? color : undefined }} />
+              return <div key={i.id} className="flex items-center gap-2 py-1 text-xs hover:bg-muted/50 cursor-pointer" onClick={() => onFocusInstance(i)} onMouseEnter={() => onHoverInstances([i.id])} onMouseLeave={() => onHoverInstances(items.map((item) => item.id))}>
+                <Checkbox checked={selected.has(i.id)} onCheckedChange={(v) => toggleIds([i.id], v === true)} onClick={(e) => e.stopPropagation()} style={{ borderColor: color, backgroundColor: selected.has(i.id) ? color : undefined }} />
                 <span className="min-w-0 flex-1 truncate font-mono">{instanceLabel(i)}{i.page_index !== effectivePage ? ` (p.${i.page_index})` : ""}</span>
                 {planLabel && planColor && <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium max-w-[80px] truncate border" style={{ backgroundColor: softBgFrom(planColor), color: planColor, borderColor: planColor }} title={`In ${planLabel}`}>{planLabel}</span>}
-              </label>;
+              </div>;
             })}</div>}
           </div>;
         })}
