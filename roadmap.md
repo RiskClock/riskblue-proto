@@ -21,3 +21,7 @@
 - [ ] Store project-wide risk-type device assignments and allow assignment without plans.
 - [ ] Replace New Plan modal with inline plan editor, per-instance selection, plan colors, and derived devices.
 - [ ] Verify drawing modal behavior, persistence, compatibility, and preview errors.
+- [ ] Restore original floor-plan box colors and ensure Detections shows only its selected risk row.
+- [ ] Keep New Plan under Plans across tab switches, match detection rows and location badges, show partial dashes, and highlight all hovered risk instances.
+- [ ] Grey unhovered plan annotations uniformly and list plan devices on separate lines with quantities.
+- [ ] Explain unchanged exact golden-ratio HSL hash and its possible hue collisions.
