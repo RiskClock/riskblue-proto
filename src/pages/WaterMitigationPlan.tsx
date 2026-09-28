@@ -93,6 +93,8 @@ interface Plan {
   /** classId -> product ids, plus `__base` (productId -> quantity) and `__configured`. */
   product_assignments: Record<string, string[] | boolean | Record<string, number> | PricingOverrides>;
   sort_order: number;
+  /** Drawing-modal plans: the risk instances this plan mitigates. */
+  included_instance_ids: string[];
 }
 
 interface ControlRow {
@@ -368,7 +370,7 @@ export default function WaterMitigationPlan() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("projects")
-        .select("id, name, tenant_id, project_data, currency_code")
+        .select("id, name, tenant_id, project_data, currency_code, risk_device_assignments")
         .eq("id", projectId!)
         .single();
       if (error) throw error;
@@ -548,7 +550,7 @@ export default function WaterMitigationPlan() {
     queryFn: async (): Promise<Plan[]> => {
       const { data, error } = await supabase
         .from("project_mitigation_plans")
-        .select("id, name, summary, control_counts, excluded_instances, product_assignments, sort_order")
+        .select("id, name, summary, control_counts, excluded_instances, product_assignments, sort_order, included_instance_ids")
         .eq("project_id", projectId!)
         .order("sort_order");
       if (error) throw error;
@@ -557,10 +559,30 @@ export default function WaterMitigationPlan() {
         control_counts: (p.control_counts || {}) as Record<string, number>,
         excluded_instances: (p.excluded_instances || {}) as Record<string, string[]>,
         product_assignments: (p.product_assignments || {}) as Plan["product_assignments"],
+        included_instance_ids: Array.isArray(p.included_instance_ids) ? (p.included_instance_ids as string[]) : [],
       }));
     },
     enabled: !!projectId && canEdit,
   });
+
+  /**
+   * Project-wide risk→device assignments made in the drawing modal.
+   * Plans created there derive their products from these, scoped to the
+   * risk instances the plan includes.
+   */
+  const riskDeviceAssignments = useMemo(
+    () => (((project as any)?.risk_device_assignments || {}) as Record<string, string[]>),
+    [project],
+  );
+
+  /** A plan built in the drawing modal (it carries selected risk instances). */
+  const isDrawingPlan = (plan: Plan) => (plan.included_instance_ids?.length ?? 0) > 0;
+
+  const devicesForAssignment = (assignmentId: string | null, catalogId: string | null): string[] => {
+    const value = (assignmentId ? riskDeviceAssignments[assignmentId] : undefined)
+      ?? (catalogId ? riskDeviceAssignments[catalogId] : undefined);
+    return Array.isArray(value) ? value : [];
+  };
 
   const overrideMap = useMemo(() => {
     const m = new Map<string, any>();
