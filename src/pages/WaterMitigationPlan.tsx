@@ -2756,10 +2756,13 @@ actions and posts its own recap.`;
           excludedIds={
             (() => {
               const activePlan = plans.find((p) => p.id === viewer.planId) ??
-                ({ excluded_instances: {}, product_assignments: {} } as unknown as Plan);
-              const ids = excludedFor(activePlan, viewer.controlId);
+                ({ excluded_instances: {}, product_assignments: {}, included_instance_ids: [] } as unknown as Plan);
+              const ids = isDrawingPlan(activePlan) ? new Set<string>() : excludedFor(activePlan, viewer.controlId);
               viewerData.instances.forEach((instance) => {
-                if (!planUsesProductForClass(activePlan, viewer.controlId, instance.catalogId, instance.assignmentId)) ids.add(instance.id);
+                if (
+                  !planUsesProductForClass(activePlan, viewer.controlId, instance.catalogId, instance.assignmentId) ||
+                  !planCoversInstance(activePlan, instance.id, viewer.controlId)
+                ) ids.add(instance.id);
               });
               return ids;
             })()
