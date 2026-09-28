@@ -93,6 +93,8 @@ interface Plan {
   /** classId -> product ids, plus `__base` (productId -> quantity) and `__configured`. */
   product_assignments: Record<string, string[] | boolean | Record<string, number> | PricingOverrides>;
   sort_order: number;
+  /** Drawing-modal plans: the risk instances this plan mitigates. */
+  included_instance_ids: string[];
 }
 
 interface ControlRow {
@@ -368,7 +370,7 @@ export default function WaterMitigationPlan() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("projects")
-        .select("id, name, tenant_id, project_data, currency_code")
+        .select("id, name, tenant_id, project_data, currency_code, risk_device_assignments")
         .eq("id", projectId!)
         .single();
       if (error) throw error;
@@ -548,7 +550,7 @@ export default function WaterMitigationPlan() {
     queryFn: async (): Promise<Plan[]> => {
       const { data, error } = await supabase
         .from("project_mitigation_plans")
-        .select("id, name, summary, control_counts, excluded_instances, product_assignments, sort_order")
+        .select("id, name, summary, control_counts, excluded_instances, product_assignments, sort_order, included_instance_ids")
         .eq("project_id", projectId!)
         .order("sort_order");
       if (error) throw error;
@@ -557,10 +559,30 @@ export default function WaterMitigationPlan() {
         control_counts: (p.control_counts || {}) as Record<string, number>,
         excluded_instances: (p.excluded_instances || {}) as Record<string, string[]>,
         product_assignments: (p.product_assignments || {}) as Plan["product_assignments"],
+        included_instance_ids: Array.isArray(p.included_instance_ids) ? (p.included_instance_ids as string[]) : [],
       }));
     },
     enabled: !!projectId && canEdit,
   });
+
+  /**
+   * Project-wide risk→device assignments made in the drawing modal.
+   * Plans created there derive their products from these, scoped to the
+   * risk instances the plan includes.
+   */
+  const riskDeviceAssignments = useMemo(
+    () => (((project as any)?.risk_device_assignments || {}) as Record<string, string[]>),
+    [project],
+  );
+
+  /** A plan built in the drawing modal (it carries selected risk instances). */
+  const isDrawingPlan = (plan: Plan) => (plan.included_instance_ids?.length ?? 0) > 0;
+
+  const devicesForAssignment = (assignmentId: string | null, catalogId: string | null): string[] => {
+    const value = (assignmentId ? riskDeviceAssignments[assignmentId] : undefined)
+      ?? (catalogId ? riskDeviceAssignments[catalogId] : undefined);
+    return Array.isArray(value) ? value : [];
+  };
 
   const overrideMap = useMemo(() => {
     const m = new Map<string, any>();
@@ -994,6 +1016,7 @@ export default function WaterMitigationPlan() {
       summary: source ? source.summary : "",
       control_counts: source && (options?.riskClasses ?? true) ? source.control_counts : {},
       excluded_instances: source && (options?.riskClasses ?? true) ? source.excluded_instances : {},
+      included_instance_ids: source && (options?.riskClasses ?? true) ? (source.included_instance_ids || []) : [],
       product_assignments: assignments,
       sort_order: nextOrder,
       created_by: user?.id ?? null,
@@ -1029,30 +1052,49 @@ export default function WaterMitigationPlan() {
 
   const planUsesProductForClass = (plan: Plan, productId: string, catalogId: string | null, assignmentId?: string | null) => {
     if (!catalogId) return false;
+    if (isDrawingPlan(plan)) {
+      return devicesForAssignment(assignmentId ?? null, catalogId).includes(productId);
+    }
     const assigned = plan.product_assignments[assignmentId || catalogId] ?? plan.product_assignments[catalogId];
     return Array.isArray(assigned) && assigned.includes(productId);
+  };
+
+  /** Instances a plan actually covers (drawing plans list them explicitly). */
+  const planCoversInstance = (plan: Plan, instanceId: string, controlId: string) => {
+    if (isDrawingPlan(plan)) return plan.included_instance_ids.includes(instanceId);
+    return !excludedFor(plan, controlId).has(instanceId);
   };
 
   const countForSpace = (plan: Plan, controlId: string, space: string) => {
     const cell = spaceBreakdown.get(controlId)?.get(space);
     if (!cell) return 0;
-    const ex = excludedFor(plan, controlId);
-    return cell.legacyIds.filter((catalogId) => planUsesProductForClass(plan, controlId, catalogId)).length
-      + cell.instances.filter((i) => planUsesProductForClass(plan, controlId, i.catalogId, i.assignmentId) && !ex.has(i.id)).length;
+    const legacy = isDrawingPlan(plan)
+      ? 0
+      : cell.legacyIds.filter((catalogId) => planUsesProductForClass(plan, controlId, catalogId)).length;
+    return legacy
+      + cell.instances.filter(
+        (i) => planUsesProductForClass(plan, controlId, i.catalogId, i.assignmentId) && planCoversInstance(plan, i.id, controlId),
+      ).length;
   };
 
   const countFor = (plan: Plan, controlId: string) => {
     const fixed = controlRows.find((r) => r.id === controlId)?.fixedQuantity;
     if (typeof fixed === "number") {
-      return Object.values(plan.product_assignments || {}).some((value) => Array.isArray(value) && value.includes(controlId)) ? fixed : 0;
+      const usedInPlan = isDrawingPlan(plan)
+        ? Object.values(riskDeviceAssignments).some((value) => Array.isArray(value) && value.includes(controlId))
+        : Object.values(plan.product_assignments || {}).some((value) => Array.isArray(value) && value.includes(controlId));
+      return usedInPlan ? fixed : 0;
     }
     const spaces = spaceBreakdown.get(controlId);
     if (!spaces) return 0;
-    const ex = excludedFor(plan, controlId);
     let n = 0;
     spaces.forEach((cell) => {
-      n += cell.legacyIds.filter((catalogId) => planUsesProductForClass(plan, controlId, catalogId)).length;
-      n += cell.instances.filter((i) => planUsesProductForClass(plan, controlId, i.catalogId, i.assignmentId) && !ex.has(i.id)).length;
+      if (!isDrawingPlan(plan)) {
+        n += cell.legacyIds.filter((catalogId) => planUsesProductForClass(plan, controlId, catalogId)).length;
+      }
+      n += cell.instances.filter(
+        (i) => planUsesProductForClass(plan, controlId, i.catalogId, i.assignmentId) && planCoversInstance(plan, i.id, controlId),
+      ).length;
     });
     return n;
   };
@@ -1067,17 +1109,23 @@ export default function WaterMitigationPlan() {
   const baseCountFor = (plan: Plan, productId: string) => Math.max(0, Number(baseQuantitiesFor(plan)[productId] || 0));
 
   /** Only controls picked in at least one plan appear in the breakdown. */
-  const visibleControlRows = useMemo(
-    () =>
-      controlRows.filter((row) =>
+  const visibleControlRows = useMemo(() => {
+    const drawingProductIds = new Set<string>();
+    if (plans.some((plan) => (plan.included_instance_ids?.length ?? 0) > 0)) {
+      Object.values(riskDeviceAssignments).forEach((ids) => {
+        if (Array.isArray(ids)) ids.forEach((id) => drawingProductIds.add(id));
+      });
+    }
+    return controlRows.filter(
+      (row) =>
+        drawingProductIds.has(row.id) ||
         plans.some((plan) =>
           Object.entries(plan.product_assignments || {}).some(
             ([key, value]) => key !== "__base" && Array.isArray(value) && value.includes(row.id),
           ),
         ),
-      ),
-    [controlRows, plans],
-  );
+    );
+  }, [controlRows, plans, riskDeviceAssignments]);
 
   const visibleBaseRows = useMemo(
     () => baseRows.filter((row) => plans.some((plan) => baseCountFor(plan, row.id) > 0)),
@@ -1241,13 +1289,16 @@ export default function WaterMitigationPlan() {
       return result;
     }
     const result: Record<string, string[]> = {};
+    const fromDrawing = isDrawingPlan(plan);
     editorClasses.forEach((item) => {
       const catalogId = item.id.split("::")[0];
-      const assigned = plan.product_assignments[item.id] ?? plan.product_assignments[catalogId];
+      const assigned = fromDrawing
+        ? devicesForAssignment(item.id, catalogId)
+        : plan.product_assignments[item.id] ?? plan.product_assignments[catalogId];
       result[item.id] = (Array.isArray(assigned) ? assigned : []).filter((id) => item.products.some((product) => product.id === id));
     });
     return result;
-  }, [planEditor, editorClasses, newPlanProductAssignments]);
+  }, [planEditor, editorClasses, newPlanProductAssignments, riskDeviceAssignments]);
 
   /** Catalog pricing per product, used as placeholders in the plan pricing editor. */
   const pricingDefaults = useMemo(() => {
@@ -1308,6 +1359,17 @@ export default function WaterMitigationPlan() {
       } as any).eq("id", plan.id);
       if (error) toast.error(getUserFriendlyError(error));
       else {
+        // Plans created in the drawing modal read their devices from the
+        // project-wide risk assignments, so keep those in step.
+        if (isDrawingPlan(plan)) {
+          const nextDevices = { ...riskDeviceAssignments, ...value.assignments };
+          const { error: deviceError } = await supabase
+            .from("projects")
+            .update({ risk_device_assignments: nextDevices } as any)
+            .eq("id", projectId);
+          if (deviceError) toast.error(getUserFriendlyError(deviceError));
+          else await queryClient.invalidateQueries({ queryKey: ["wmp-project", projectId] });
+        }
         await logPlanChange("update", `Updated plan "${value.name}"`, plan.id, { name: value.name, product_assignments: productAssignments });
         setPlanEditor(null);
       }
@@ -1320,6 +1382,36 @@ export default function WaterMitigationPlan() {
     if (!canEdit) return;
     const plan = plans.find((p) => p.id === planId);
     if (!plan) return;
+
+    // Drawing-modal plans track the risk instances they cover directly.
+    if (isDrawingPlan(plan)) {
+      const included = new Set(plan.included_instance_ids);
+      const turningOffDrawing = included.has(instanceId);
+      turningOffDrawing ? included.delete(instanceId) : included.add(instanceId);
+      const nextIds = [...included];
+      queryClient.setQueryData(["wmp-plans", projectId], (old: Plan[] | undefined) =>
+        (old || []).map((p) => (p.id === planId ? { ...p, included_instance_ids: nextIds } : p)),
+      );
+      const { error: drawingError } = await supabase
+        .from("project_mitigation_plans")
+        .update({ included_instance_ids: nextIds } as any)
+        .eq("id", planId);
+      if (drawingError) {
+        toast.error(getUserFriendlyError(drawingError));
+        queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
+        return;
+      }
+      const name = controlRows.find((c) => c.id === controlId)?.name || "control";
+      const saved = await logPlanChange(
+        turningOffDrawing ? "control_off" : "control_on",
+        `${turningOffDrawing ? "Removed" : "Added"} ${name} at 1 location in "${plan.name}"`,
+        planId,
+        { controlId, instanceId },
+      );
+      if (!saved) toast.warning("The control was updated, but its change history could not be recorded.");
+      return;
+    }
+
     const cur = new Set((plan.excluded_instances || {})[controlId] || []);
     const turningOff = !cur.has(instanceId);
     cur.has(instanceId) ? cur.delete(instanceId) : cur.add(instanceId);
@@ -2679,10 +2771,13 @@ actions and posts its own recap.`;
           excludedIds={
             (() => {
               const activePlan = plans.find((p) => p.id === viewer.planId) ??
-                ({ excluded_instances: {}, product_assignments: {} } as unknown as Plan);
-              const ids = excludedFor(activePlan, viewer.controlId);
+                ({ excluded_instances: {}, product_assignments: {}, included_instance_ids: [] } as unknown as Plan);
+              const ids = isDrawingPlan(activePlan) ? new Set<string>() : excludedFor(activePlan, viewer.controlId);
               viewerData.instances.forEach((instance) => {
-                if (!planUsesProductForClass(activePlan, viewer.controlId, instance.catalogId, instance.assignmentId)) ids.add(instance.id);
+                if (
+                  !planUsesProductForClass(activePlan, viewer.controlId, instance.catalogId, instance.assignmentId) ||
+                  !planCoversInstance(activePlan, instance.id, viewer.controlId)
+                ) ids.add(instance.id);
               });
               return ids;
             })()

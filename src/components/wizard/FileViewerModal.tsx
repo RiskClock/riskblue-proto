@@ -2324,12 +2324,20 @@ export const FileViewerModal = ({
                       }}
                      deviceNames={(plan) => {
                        const counts = new Map<string, number>();
-                      instances.filter((i) => plan.included_instance_ids.includes(i.id)).forEach((i) => {
-                        const entry = drawingPlans.catalogFor(i.awp_class_name);
-                        if (!entry) return;
-                        const { pipeType, diameter } = instanceMeta(i);
-                         drawingPlans.assignedDevicesFor(assignmentKeyFor(entry.id, i.awp_class_name, pipeType, diameter), entry.id).forEach((id) => counts.set(id, (counts.get(id) ?? 0) + 1));
-                      });
+                       // Older Plan Builder plans store their devices per class
+                       // instead of listing the risk instances they cover.
+                       const legacy = plan.included_instance_ids.length === 0;
+                       const included = new Set(plan.included_instance_ids);
+                       instances.filter((i) => legacy || included.has(i.id)).forEach((i) => {
+                         const entry = drawingPlans.catalogFor(i.awp_class_name);
+                         if (!entry) return;
+                         const { pipeType, diameter } = instanceMeta(i);
+                         const key = assignmentKeyFor(entry.id, i.awp_class_name, pipeType, diameter);
+                         const ids = legacy
+                           ? drawingPlans.assignedFor(plan, key, entry.id)
+                           : drawingPlans.assignedDevicesFor(key, entry.id);
+                         ids.forEach((id) => counts.set(id, (counts.get(id) ?? 0) + 1));
+                       });
                        return [...counts].map(([id, count]) => ({ name: drawingPlans.productsById.get(id)?.name || id, count }));
                     }}
                    />}
