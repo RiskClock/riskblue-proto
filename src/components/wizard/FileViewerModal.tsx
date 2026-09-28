@@ -2234,7 +2234,7 @@ export const FileViewerModal = ({
                    />}
                   {newPlanOpen && <InlinePlanEditor
                     defaultName={`Plan ${drawingPlans.plans.length + 1}`}
-                    instances={[...instancesByClassThisFile.values()].flat().filter((i) => i.awp_class_name !== UNIT_MARKER_CLASS)}
+                    instances={instances.filter((i) => i.awp_class_name !== UNIT_MARKER_CLASS)}
                     classes={awpClasses}
                      numberByInstanceId={numberByInstanceId}
                      instanceLabel={instanceLabel}
