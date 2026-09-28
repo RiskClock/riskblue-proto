@@ -2973,11 +2973,12 @@ const DeviceButton = ({ row, devices }: { row: DetectionRowModel; devices: Devic
   );
 };
 
-const PlansPanel = ({ plans, activePlanId, onSelectPlan, onNewPlan, onDeletePlan, deviceNames }: {
+const PlansPanel = ({ plans, activePlanId, onSelectPlan, onNewPlan, onEditPlan, onDeletePlan, deviceNames }: {
   plans: DrawingPlan[];
   activePlanId: string | null;
   onSelectPlan: (id: string) => void;
   onNewPlan: () => void;
+  onEditPlan: (id: string) => void;
   onDeletePlan: (id: string) => Promise<void>;
   deviceNames: (p: DrawingPlan) => { name: string; count: number }[];
 }) => {
@@ -3005,6 +3006,9 @@ const PlansPanel = ({ plans, activePlanId, onSelectPlan, onNewPlan, onDeletePlan
                   {devices.length > 0 && <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">{devices.map(({ name, count }) => <li key={name} className="truncate">{name} ×{count}</li>)}</ul>}
                 </span>
                 <span className="text-xs text-muted-foreground shrink-0" title={devices.map(({ name, count }) => `${name} ×${count}`).join("\n")}>{devices.length} {devices.length === 1 ? "device" : "devices"}</span>
+                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground" aria-label={`Edit ${p.name}`} title="Edit plan" onClick={(e) => { e.stopPropagation(); onEditPlan(p.id); }}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
                 <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" aria-label={`Delete ${p.name}`} onClick={(e) => { e.stopPropagation(); setDeleteTarget(p); }}>
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
@@ -3033,7 +3037,9 @@ const PlansPanel = ({ plans, activePlanId, onSelectPlan, onNewPlan, onDeletePlan
 
 const randomPlanColor = () => awpClassColor(`plan-${Date.now()}-${Math.random()}`);
 
-const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, saving, onCancel, onSave, onHoverInstances, onVisualChange, onFocusInstances, onFocusInstance, numberByInstanceId, instanceLabel, floorPlans, floorPlanOverrides, effectivePage }: {
+const InlinePlanEditor = ({ initialPlan, toggleRef, defaultName, instances, classes, baseProducts, saving, onCancel, onSave, onHoverInstances, onVisualChange, onFocusInstances, onFocusInstance, numberByInstanceId, instanceLabel, floorPlans, floorPlanOverrides, effectivePage }: {
+  initialPlan: DrawingPlan | null;
+  toggleRef: React.MutableRefObject<((id: string) => void) | null>;
   defaultName: string;
   instances: DrawingInstanceRow[];
   classes: AwpClassOption[];
@@ -3051,10 +3057,10 @@ const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, savin
   floorPlanOverrides: Record<string, any>;
   effectivePage: number;
 }) => {
-  const [name, setName] = useState(defaultName);
-  const [description, setDescription] = useState("");
-  const [color, setColor] = useState(randomPlanColor);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [name, setName] = useState(initialPlan?.name ?? defaultName);
+  const [description, setDescription] = useState(initialPlan?.summary ?? "");
+  const [color, setColor] = useState(() => initialPlan?.color || randomPlanColor());
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(initialPlan?.included_instance_ids ?? []));
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [baseQuantities, setBaseQuantities] = useState<Record<string, number>>({});
   const byClass = useMemo(() => {
@@ -3067,6 +3073,18 @@ const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, savin
     const next = new Set(prev); ids.forEach((id) => checked ? next.add(id) : next.delete(id)); return next;
   });
   useEffect(() => onVisualChange(color, selected), [color, selected, onVisualChange]);
+  const [baseInit] = useState(() => {
+    const base = (initialPlan?.product_assignments as any)?.__base;
+    return base && typeof base === "object" ? base as Record<string, number> : null;
+  });
+  useEffect(() => { if (baseInit) setBaseQuantities(baseInit); }, [baseInit]);
+  // Clicking a marker on the drawing toggles that instance.
+  useEffect(() => {
+    toggleRef.current = (id) => setSelected((prev) => {
+      const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next;
+    });
+    return () => { toggleRef.current = null; };
+  }, [toggleRef]);
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-background">
       <div className="space-y-2 border-b p-3">
