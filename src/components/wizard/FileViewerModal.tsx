@@ -2993,7 +2993,7 @@ const DetectionsPanel = ({
           )}
           {rows.map((row) => {
             const c = row.cls;
-            const isSelected = selectedRowKey === row.key || (selectedRowKey === c.name && rows.filter((r) => r.cls.name === c.name)[0]?.key === row.key && row.key === c.name);
+            const isSelected = selectedRowKey === row.key || (selectedRowKey === c.name && rows.find((r) => r.cls.name === c.name)?.key === row.key);
             const isExpanded = expanded.has(row.key);
             const firstPipeType = row.type;
             const color = row.type ? awpClassColorForType(c.name, firstPipeType) : awpClassColor(c.name);
