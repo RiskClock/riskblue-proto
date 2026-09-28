@@ -39,7 +39,7 @@ import { X as XIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
-import { awpClassColor, awpClassColorForType, readableTextOn, softBgFrom } from "@/lib/awpColor";
+import { awpClassColor, awpClassColorForType, floorPlanTypeColor, readableTextOn, softBgFrom } from "@/lib/awpColor";
 
 
 import {
@@ -531,6 +531,8 @@ export const FileViewerModal = ({
   const [savingNewPlan, setSavingNewPlan] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [draftPlanVisual, setDraftPlanVisual] = useState<{ color: string; ids: Set<string> } | null>(null);
+  const [hoveredPlanIds, setHoveredPlanIds] = useState<Set<string>>(new Set());
+  const handleDraftVisualChange = useCallback((color: string, ids: Set<string>) => setDraftPlanVisual({ color, ids }), []);
   const { user } = useAuth();
   const drawingPlans = useDrawingPlans(persistKey, isOpen && !!awpClasses);
   const editingEnabled = sidebarEnabled && !viewingMode;
@@ -1720,10 +1722,11 @@ export const FileViewerModal = ({
       : selectedClass;
   const isInstanceVisible = (i: DrawingInstanceRow): boolean => {
     if (!awpClasses) return !hiddenClasses.has(i.awp_class_name);
-    if (newPlanOpen) return true;
-    if (activePlan) {
+    if (activeTab === "plans" && newPlanOpen) return true;
+    if (activeTab === "plans" && activePlan) {
       return activePlan.included_instance_ids.includes(i.id);
     }
+    if (activeTab === "floor-plans") return true;
     if (!effectiveRowKey) return false;
     if (effectiveRowKey === i.awp_class_name) return true;
     return instanceRowKey(i) === effectiveRowKey;
@@ -1748,13 +1751,15 @@ export const FileViewerModal = ({
           bbox: [i.nx, i.ny, 0, 0] as [number, number, number, number],
           coordSpace: "normalized" as const,
           page: singlePageOnly ? currentPage : sheetId ? 1 : i.page_index,
-          color: activePlan?.color || (draftPlanVisual?.ids.has(i.id) ? draftPlanVisual.color : awpClassColorForType(i.awp_class_name, pipeType, diameter)),
+          color: activeTab === "plans" && newPlanOpen
+            ? (hoveredPlanIds.has(i.id) ? draftPlanVisual?.color : "hsl(var(--muted-foreground))")
+            : activeTab === "plans" && activePlan?.color || awpClassColorForType(i.awp_class_name, pipeType, diameter),
           label: instanceLabel(i),
-          innerDot: !!activePlan?.included_instance_ids.includes(i.id) || !!draftPlanVisual?.ids.has(i.id),
+          innerDot: activeTab === "plans" && (newPlanOpen ? !!draftPlanVisual?.ids.has(i.id) : !!activePlan?.included_instance_ids.includes(i.id)),
         };
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly, hiddenClasses, effectiveRowKey, activePlan, newPlanOpen, draftPlanVisual]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly, hiddenClasses, effectiveRowKey, activePlan, activeTab, newPlanOpen, draftPlanVisual, hoveredPlanIds]);
 
   // Floor-plan bbox overlays. Survey agent returns `xy_width_height_pct` as
   // [left, top, width, height] percentages (0..100) of the visible page.
@@ -1762,7 +1767,7 @@ export const FileViewerModal = ({
   // OverlayLayer multiplies by the rendered page size so the browser's native
   // layout keeps the boxes in sync on any resize or zoom level.
   const floorPlanOverlays: OverlayInput[] = useMemo(() => {
-    if (readOnly) return [];
+    if (readOnly || activeTab !== "floor-plans") return [];
     if (!floorPlans || floorPlans.length === 0) return [];
     const out: OverlayInput[] = [];
     for (const fp of floorPlans) {
@@ -1784,29 +1789,20 @@ export const FileViewerModal = ({
         page: currentPage,
         shape: "rect" as const,
 
-        color: (() => {
-          const t = ((floorPlanOverrides ?? {})[fp.plan_id] as any)?.type || fp.type || "unknown";
-          return awpClassColor(
-            t === "unit_floor_plan"
-              ? "Unit Floor Plan"
-              : t === "level_floor_plan"
-                ? "Level Floor Plan"
-                : t,
-          );
-        })(),
+        color: floorPlanTypeColor(((floorPlanOverrides ?? {})[fp.plan_id] as any)?.type || fp.type),
         label: labelBase,
       });
     }
     return out;
-  }, [floorPlans, floorPlanOverrides, currentPage, editingPlan, readOnly]);
+  }, [floorPlans, floorPlanOverrides, currentPage, editingPlan, readOnly, activeTab]);
 
 
   // Unit-plan indicator dots inside a level bbox. Not tied to any specific
   // unit reference. Filled dot, no border, no label. Click to delete.
   const unitMarkerOverlays: OverlayInput[] = useMemo(() => {
-    if (readOnly) return [];
+    if (readOnly || activeTab !== "floor-plans") return [];
     if (hiddenClasses.has(UNIT_MARKER_CLASS)) return [];
-    const uc = awpClassColor("Unit Floor Plan");
+    const uc = floorPlanTypeColor("unit_floor_plan");
     return instances
       .filter(
         (i) =>
@@ -1822,7 +1818,7 @@ export const FileViewerModal = ({
         color: uc,
         variant: "dot" as const,
       }));
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, readOnly, hiddenClasses]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, readOnly, hiddenClasses, activeTab]);
 
   const overlays = [
     ...detectionOverlays,
@@ -1847,6 +1843,20 @@ export const FileViewerModal = ({
     }
     return m;
   }, [instances, parentFileId, effectivePage, awpClasses]);
+
+  // A class may split into several attribute rows after its instances load.
+  // Always keep the radio selection aligned with one actual row.
+  useEffect(() => {
+    if (!isOpen || activeTab !== "detections" || !awpClasses?.length) return;
+    const rows = buildDetectionRows(awpClasses, instancesByClassThisFile);
+    const row = rows.find((r) => r.key === selectedRowKey)
+      || rows.find((r) => r.cls.name === selectedClass)
+      || rows[0];
+    if (row && row.key !== selectedRowKey) {
+      setSelectedClass(row.cls.name);
+      setSelectedRowKey(row.key);
+    }
+  }, [isOpen, activeTab, awpClasses, instancesByClassThisFile, selectedClass, selectedRowKey]);
 
   // ---- Devices (Plan Builder products) -----------------------------------
   const devicesApi: DevicesApi = {
@@ -2012,15 +2022,7 @@ export const FileViewerModal = ({
                     : prev,
                 )
               }
-              editorColor={
-                editingPlan
-                  ? awpClassColor(
-                      editingPlan.type === "unit_floor_plan"
-                        ? "Unit Floor Plan"
-                        : "Level Floor Plan",
-                    )
-                  : undefined
-              }
+              editorColor={editingPlan ? floorPlanTypeColor(editingPlan.type) : undefined}
               onPlacingChange={setIsPlacingLabels}
             />
             {sidebarEnabled && awpClasses && !readOnly && (
@@ -2082,7 +2084,15 @@ export const FileViewerModal = ({
                 onValueChange={(v) => {
                   const target = v as "floor-plans" | "detections" | "plans";
                   if (target === activeTab) return;
-                  guardThen("tab", () => setActiveTab(target));
+                  guardThen("tab", () => {
+                    if (target === "detections" && awpClasses) {
+                      const rows = buildDetectionRows(awpClasses, instancesByClassThisFile);
+                      const row = rows.find((r) => r.key === selectedRowKey) || rows.find((r) => r.cls.name === selectedClass) || rows[0];
+                      if (row) { setSelectedClass(row.cls.name); setSelectedRowKey(row.key); }
+                    }
+                    setHoveredPlanIds(new Set());
+                    setActiveTab(target);
+                  });
                 }}
                 className="flex-1 flex flex-col min-h-0"
               >
@@ -2205,38 +2215,44 @@ export const FileViewerModal = ({
                     onFocusInstance={focusInstance}
                   />
                 </TabsContent>
-                <TabsContent value="plans" className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0 data-[state=inactive]:hidden">
-                  <PlansPanel
+                <TabsContent value="plans" forceMount className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0 data-[state=inactive]:hidden">
+                   {!newPlanOpen && <PlansPanel
                     plans={drawingPlans.plans}
                     activePlanId={activePlanId}
                     onTogglePlan={(id) => setActivePlanId((prev) => (prev === id ? null : id))}
-                    onNewPlan={() => setNewPlanOpen(true)}
-                    deviceNames={(plan) => {
-                      const ids = new Set<string>();
+                     onNewPlan={() => { setActivePlanId(null); setNewPlanOpen(true); }}
+                     deviceNames={(plan) => {
+                       const counts = new Map<string, number>();
                       instances.filter((i) => plan.included_instance_ids.includes(i.id)).forEach((i) => {
                         const entry = drawingPlans.catalogFor(i.awp_class_name);
                         if (!entry) return;
                         const { pipeType, diameter } = instanceMeta(i);
-                        drawingPlans.assignedDevicesFor(assignmentKeyFor(entry.id, i.awp_class_name, pipeType, diameter), entry.id).forEach((id) => ids.add(id));
+                         drawingPlans.assignedDevicesFor(assignmentKeyFor(entry.id, i.awp_class_name, pipeType, diameter), entry.id).forEach((id) => counts.set(id, (counts.get(id) ?? 0) + 1));
                       });
-                      return [...ids].map((id) => drawingPlans.productsById.get(id)?.name || id);
+                       return [...counts].map(([id, count]) => ({ name: drawingPlans.productsById.get(id)?.name || id, count }));
                     }}
-                  />
+                   />}
                   {newPlanOpen && <InlinePlanEditor
                     defaultName={`Plan ${drawingPlans.plans.length + 1}`}
                     instances={instances.filter((i) => i.awp_class_name !== UNIT_MARKER_CLASS)}
                     classes={awpClasses}
+                     numberByInstanceId={numberByInstanceId}
+                     instanceLabel={instanceLabel}
+                     floorPlans={floorPlans ?? []}
+                     floorPlanOverrides={floorPlanOverrides ?? {}}
+                     effectivePage={effectivePage}
                     baseProducts={drawingPlans.baseProducts}
                     saving={savingNewPlan}
-                    onCancel={() => { setNewPlanOpen(false); setDraftPlanVisual(null); }}
-                    onHoverInstance={setHoveredInstanceId}
-                    onVisualChange={(color, ids) => setDraftPlanVisual({ color, ids })}
+                     onCancel={() => { setNewPlanOpen(false); setDraftPlanVisual(null); setHoveredPlanIds(new Set()); }}
+                     onHoverInstances={(ids) => setHoveredPlanIds(new Set(ids))}
+                     onVisualChange={handleDraftVisualChange}
                     onSave={async (value) => {
                       setSavingNewPlan(true);
                       try {
                         const id = await drawingPlans.createPlan(value, user?.id ?? null);
                         setNewPlanOpen(false);
-                        setDraftPlanVisual(null);
+                         setDraftPlanVisual(null);
+                         setHoveredPlanIds(new Set());
                         if (id) setActivePlanId(id);
                       } catch (e) {
                         toast({ title: "Could not create plan", description: getUserFriendlyError(e), variant: "destructive" });
@@ -2867,7 +2883,7 @@ const PlansPanel = ({
   activePlanId: string | null;
   onTogglePlan: (id: string) => void;
   onNewPlan: () => void;
-  deviceNames: (p: DrawingPlan) => string[];
+  deviceNames: (p: DrawingPlan) => { name: string; count: number }[];
 }) => (
   <div className="flex-1 flex flex-col min-h-0">
     <div className="px-3 py-2 flex items-center justify-between gap-2 border-b">
@@ -2895,9 +2911,9 @@ const PlansPanel = ({
             <Layers className={`h-4 w-4 shrink-0 ${active ? "text-primary" : "text-muted-foreground"}`} />
             <span className="min-w-0 flex-1">
               <span className={`block truncate ${active ? "font-semibold" : ""}`}>{p.name}</span>
-              {devices.length > 0 && <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{devices.map((name) => `${name} ×1`).join(", ")}</span>}
+               {devices.length > 0 && <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">{devices.map(({ name, count }) => <li key={name} className="truncate">{name} ×{count}</li>)}</ul>}
             </span>
-            <span className="text-xs text-muted-foreground shrink-0" title={devices.join("\n")}>{devices.length} {devices.length === 1 ? "device" : "devices"}</span>
+             <span className="text-xs text-muted-foreground shrink-0" title={devices.map(({ name, count }) => `${name} ×${count}`).join("\n")}>{devices.length} {devices.length === 1 ? "device" : "devices"}</span>
             <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded ${active ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
               {active ? "Showing" : "Show"}
             </span>
@@ -2910,7 +2926,7 @@ const PlansPanel = ({
 
 const randomPlanColor = () => awpClassColor(`plan-${Date.now()}-${Math.random()}`);
 
-const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, saving, onCancel, onSave, onHoverInstance, onVisualChange }: {
+const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, saving, onCancel, onSave, onHoverInstances, onVisualChange, numberByInstanceId, instanceLabel, floorPlans, floorPlanOverrides, effectivePage }: {
   defaultName: string;
   instances: DrawingInstanceRow[];
   classes: AwpClassOption[];
@@ -2918,8 +2934,13 @@ const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, savin
   saving: boolean;
   onCancel: () => void;
   onSave: (value: { name: string; description: string; color: string; includedInstanceIds: string[]; baseQuantities: Record<string, number> }) => void;
-  onHoverInstance: (id: string | null) => void;
+  onHoverInstances: (ids: string[]) => void;
   onVisualChange: (color: string, ids: Set<string>) => void;
+  numberByInstanceId: Map<string, number>;
+  instanceLabel: (instance: DrawingInstanceRow) => string;
+  floorPlans: ParsedFloorPlan[];
+  floorPlanOverrides: Record<string, any>;
+  effectivePage: number;
 }) => {
   const [name, setName] = useState(defaultName);
   const [description, setDescription] = useState("");
@@ -2932,28 +2953,42 @@ const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, savin
     instances.forEach((instance) => map.set(instance.awp_class_name, [...(map.get(instance.awp_class_name) || []), instance]));
     return map;
   }, [instances]);
+  const rows = useMemo(() => buildDetectionRows(classes, byClass).filter((row) => row.items.length > 0), [classes, byClass]);
   const toggleIds = (ids: string[], checked: boolean) => setSelected((prev) => {
     const next = new Set(prev); ids.forEach((id) => checked ? next.add(id) : next.delete(id)); return next;
   });
   useEffect(() => onVisualChange(color, selected), [color, selected, onVisualChange]);
   return (
-    <div className="absolute inset-0 z-10 flex flex-col bg-background">
+    <div className="flex-1 min-h-0 flex flex-col bg-background">
       <div className="space-y-2 border-b p-3">
         <div className="flex gap-2"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Plan name" /><input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-10 w-12 rounded border p-1" aria-label="Plan color" /></div>
         <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Plan description" className="min-h-16" />
       </div>
       {baseProducts.length > 0 && <div className="border-b p-3"><p className="mb-2 text-sm font-semibold">Essential Components</p><div className="space-y-1">{baseProducts.map((p) => <div key={p.id} className="flex items-center gap-2 text-xs"><span className="flex-1 truncate">{p.name}</span><Input type="number" min={0} className="h-7 w-16" value={baseQuantities[p.id] || 0} onChange={(e) => setBaseQuantities((q) => ({ ...q, [p.id]: Math.max(0, Number(e.target.value) || 0) }))} /></div>)}</div></div>}
       <div className="flex-1 overflow-y-auto">
-        {classes.map((cls) => {
-          const items = byClass.get(cls.name) || []; if (!items.length) return null;
+        {rows.map((row) => {
+          const items = row.items;
           const checked = items.filter((i) => selected.has(i.id)).length;
-          return <div key={cls.name} className="border-b" onMouseEnter={() => onHoverInstance(items[0]?.id || null)} onMouseLeave={() => onHoverInstance(null)}>
-            <div className="flex items-center gap-2 px-3 py-2 text-sm">
-              <Checkbox checked={checked === items.length} indeterminate={checked > 0 && checked < items.length} onCheckedChange={(v) => toggleIds(items.map((i) => i.id), v === true)} style={{ borderColor: color, backgroundColor: checked ? color : undefined }} />
-              <span className="flex-1 font-medium">{cls.prefix || cls.name.slice(0, 3).toUpperCase()}</span><span className="text-xs text-muted-foreground">{checked}/{items.length}</span>
-              <button onClick={() => setExpanded((prev) => { const next = new Set(prev); next.has(cls.name) ? next.delete(cls.name) : next.add(cls.name); return next; })}>{expanded.has(cls.name) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</button>
+          const isExpanded = expanded.has(row.key);
+          return <div key={row.key} className="border-b" onMouseEnter={() => onHoverInstances(items.map((i) => i.id))} onMouseLeave={() => onHoverInstances([])}>
+            <div className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50">
+              <Checkbox checked={checked === items.length ? true : checked > 0 ? "indeterminate" : false} onCheckedChange={(v) => toggleIds(items.map((i) => i.id), v === true)} style={{ borderColor: color, backgroundColor: checked ? color : undefined }} aria-label={`Select ${row.fullName}`} />
+              <Tooltip><TooltipTrigger asChild><span className="shrink-0 font-mono text-xs font-medium">{row.label}</span></TooltipTrigger><TooltipContent side="left">{row.fullName}</TooltipContent></Tooltip>
+              {row.diam && <Badge variant="outline" className="h-5 px-1.5 text-[10px]">{row.diam}</Badge>}
+              {row.type && <Badge variant="outline" className="h-5 max-w-28 truncate px-1.5 text-[10px]">{subtypeAbbr(row.cls.name, row.type) || row.type}</Badge>}
+              <span className="flex-1 text-right text-xs text-muted-foreground">{checked}/{items.length}</span>
+              <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setExpanded((prev) => { const next = new Set(prev); next.has(row.key) ? next.delete(row.key) : next.add(row.key); return next; })} aria-label={isExpanded ? "Collapse" : "Expand"}>{isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</Button>
             </div>
-            {expanded.has(cls.name) && <div className="bg-muted/20 px-8 py-1">{items.map((i) => <label key={i.id} className="flex items-center gap-2 py-1 text-xs" onMouseEnter={() => onHoverInstance(i.id)}><Checkbox checked={selected.has(i.id)} onCheckedChange={(v) => toggleIds([i.id], v === true)} style={{ borderColor: color, backgroundColor: selected.has(i.id) ? color : undefined }} /><span>{i.awp_class_name}</span></label>)}</div>}
+            {isExpanded && <div className="bg-muted/20 px-8 py-1">{items.slice().sort((a, b) => (numberByInstanceId.get(a.id) ?? 0) - (numberByInstanceId.get(b.id) ?? 0)).map((i) => {
+              const containingPlan = findContainingPlan(floorPlans, i.nx, i.ny, floorPlanOverrides);
+              const planLabel = containingPlan ? getEffectiveLabel(containingPlan, floorPlanOverrides) : null;
+              const planColor = containingPlan ? floorPlanTypeColor(getEffectiveType(containingPlan, floorPlanOverrides)) : null;
+              return <label key={i.id} className="flex items-center gap-2 py-1 text-xs hover:bg-muted/50" onMouseEnter={() => onHoverInstances([i.id])} onMouseLeave={() => onHoverInstances(items.map((item) => item.id))}>
+                <Checkbox checked={selected.has(i.id)} onCheckedChange={(v) => toggleIds([i.id], v === true)} style={{ borderColor: color, backgroundColor: selected.has(i.id) ? color : undefined }} />
+                <span className="min-w-0 flex-1 truncate font-mono">{instanceLabel(i)}{i.page_index !== effectivePage ? ` (p.${i.page_index})` : ""}</span>
+                {planLabel && planColor && <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium max-w-[80px] truncate border" style={{ backgroundColor: softBgFrom(planColor), color: planColor, borderColor: planColor }} title={`In ${planLabel}`}>{planLabel}</span>}
+              </label>;
+            })}</div>}
           </div>;
         })}
       </div>
@@ -3085,12 +3120,7 @@ const DetectionsPanel = ({
                             </span>
                             {planLabel && (() => {
                               const effT = getEffectiveType(containingPlan!, floorPlanOverrides);
-                              const ct = effT === "unit_floor_plan"
-                                ? "Unit Floor Plan"
-                                : effT === "level_floor_plan"
-                                  ? "Level Floor Plan"
-                                  : effT || "unknown";
-                              const cc = awpClassColor(ct);
+                               const cc = floorPlanTypeColor(effT);
                               return (
                                 <span
                                   className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium max-w-[80px] truncate border"
@@ -3434,13 +3464,7 @@ size="sm"
           const effUnits: string[] = ovr.units ?? fp.referenced_unit_ids;
           const effType: string =
             (typeof ovr.type === "string" && ovr.type) ? ovr.type : fp.type;
-          const color = awpClassColor(
-            effType === "unit_floor_plan"
-              ? "Unit Floor Plan"
-              : effType === "level_floor_plan"
-                ? "Level Floor Plan"
-                : effType || "unknown",
-          );
+           const color = floorPlanTypeColor(effType);
           const fallbackLabel = getEffectiveLabel(fp, overrides) ||
             floorPlanDisplayLabel({ ...fp, floors: effFloors });
           const isUnit = effType === "unit_floor_plan" || effType === "typical_detail_block";
@@ -3675,7 +3699,7 @@ const LevelUnitsSection = ({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
 
-  const uc = awpClassColor("Unit Floor Plan");
+  const uc = floorPlanTypeColor("unit_floor_plan");
 
   // Counts per unique ref in current units.
   const counts = useMemo(() => {

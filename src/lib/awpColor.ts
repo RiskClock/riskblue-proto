@@ -32,7 +32,9 @@ function hslToHex(h: number, s: number, l: number): string {
 
 export function awpClassColor(name: string): string {
   const key = name.trim().toLowerCase();
-  const hue = ((hashStr(key) * 0.6180339887) % 1) * 360;
+  // A 53-bit hash loses its fractional part when multiplied by phi in JS.
+  // Use its low 32 bits so modulo 1 still carries meaningful precision.
+  const hue = (((hashStr(key) % 4294967296) * 0.6180339887) % 1) * 360;
   return hslToHex(hue, 70, 50);
 }
 
@@ -53,7 +55,7 @@ export function awpClassColorForType(
     .filter(Boolean);
   if (attributes.length === 0) return awpClassColor(name);
   const key = [name, ...attributes].join("::").toLowerCase();
-  const hue = ((hashStr(key) * 0.6180339887) % 1) * 360;
+  const hue = (((hashStr(key) % 4294967296) * 0.6180339887) % 1) * 360;
   return hslToHex(hue, 70, 50);
 }
 
@@ -98,7 +100,9 @@ export function softBgFrom(hex: string, alpha = 0.18): string {
  */
 export function floorPlanTypeColor(type?: string | null): string {
   const t = (type || "unknown").trim();
-  if (t === "unit_floor_plan") return awpClassColor("Unit Floor Plan");
-  if (t === "level_floor_plan") return awpClassColor("Level Floor Plan");
-  return awpClassColor(t);
+  if (t === "unit_floor_plan" || t === "Unit Floor Plan") return "#f92ad5";
+  if (t === "level_floor_plan" || t === "Level Floor Plan") return "#39b52e";
+  if (t === "typical_detail_block") return "#D48D0B";
+  // Preserve the pre-change hash palette for other floor-plan types.
+  return hslToHex(hashStr(t.toLowerCase()) % 360, 70, 45);
 }
