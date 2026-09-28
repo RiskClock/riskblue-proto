@@ -1812,7 +1812,13 @@ export const FileViewerModal = ({
             ? "hsl(var(--muted-foreground))"
             : (activeTab === "plans" && activePlan?.color) || drawingColors.get(instanceRowKey(i)) || awpClassColorForType(i.awp_class_name, pipeType, diameter),
           emphasized: activeTab === "plans" && newPlanOpen && hoveredPlanIds.has(i.id),
-          label: instanceLabel(i),
+          // Labels are hidden; this text only appears when hovering the marker.
+          label: (() => {
+            const cls = awpClasses?.find((c) => c.name === i.awp_class_name);
+            const base = cls?.label || i.awp_class_name;
+            const typeLabel = pipeType ? expandSubtypeLabelWithSuffix(i.awp_class_name, pipeType) : "";
+            return [base, typeLabel, diameter].filter(Boolean).join(" ");
+          })(),
           innerDot: activeTab === "plans" && (newPlanOpen ? !!draftPlanVisual?.ids.has(i.id) : !!activePlan?.included_instance_ids.includes(i.id)),
         };
       });
@@ -2033,9 +2039,13 @@ export const FileViewerModal = ({
               initialFit="page"
               minScale={0.8}
               maxScale={8}
-              onCanvasClick={editingEnabled ? handleCanvasClick : undefined}
-              onOverlayClick={editingEnabled ? handleOverlayClick : undefined}
-              onOverlayDrag={editingEnabled ? handleOverlayDrag : undefined}
+              onCanvasClick={editingEnabled && !planDraftMode ? handleCanvasClick : undefined}
+              onOverlayClick={
+                planDraftMode
+                  ? (id: string) => { if (id.startsWith("inst-")) planToggleRef.current?.(id.slice(5)); }
+                  : editingEnabled ? handleOverlayClick : undefined
+              }
+              onOverlayDrag={editingEnabled && !planDraftMode ? handleOverlayDrag : undefined}
               viewingMode={viewingMode}
               onActivePageRenderedSizeChange={setRenderedPageSize}
               onApiReady={(api) => (viewerApiRef.current = api)}
@@ -2089,10 +2099,9 @@ export const FileViewerModal = ({
                 <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setHistoryOpen(true)} aria-label="Changes" title="Changes">
                   <ListRestart className="h-4 w-4" />
                 </Button>
-                <Button size="icon" variant="outline" className="h-8 w-8" onClick={undo} disabled={viewingMode || past.length === 0} aria-label="Undo" title="Undo">
-                  <Undo2 className="h-4 w-4" />
-                </Button>
-                <Button size="icon" variant="outline" className="h-8 w-8" onClick={redo} disabled={viewingMode || future.length === 0} aria-label="Redo" title="Redo">
+                <Button size="icon" variant="outline" className="h-8 w-8" onClick={undo} disabled={viewingMode || planDraftMode || past.length === 0} aria-label="Undo" title="Undo">
+...
+                <Button size="icon" variant="outline" className="h-8 w-8" onClick={redo} disabled={viewingMode || planDraftMode || future.length === 0} aria-label="Redo" title="Redo">
                   <Redo2 className="h-4 w-4" />
                 </Button>
               </div>

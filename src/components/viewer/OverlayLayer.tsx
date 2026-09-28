@@ -1187,13 +1187,17 @@ export const OverlayLayer = ({
    * a placement pass).
    */
   const focusFallbackCircle = useMemo(() => {
-    if (!showLabels) return null;
+    // With labels hidden, show the label only for the marker under the cursor.
+    if (!showLabels) {
+      if (!localHoverId) return null;
+      return circles.find((c) => c.id === localHoverId && !!c.label) ?? null;
+    }
     const focusId = effectiveHoverId || selectedId;
     if (!focusId) return null;
     if (!suppressedIds.has(focusId) && !lowDetailIds.has(focusId)) return null;
     if (placedLabels.some((p) => p.id === focusId)) return null;
     return circles.find((c) => c.id === focusId && !!c.label) ?? null;
-  }, [showLabels, effectiveHoverId, selectedId, suppressedIds, lowDetailIds, placedLabels, circles]);
+  }, [showLabels, localHoverId, effectiveHoverId, selectedId, suppressedIds, lowDetailIds, placedLabels, circles]);
 
 
   // After labels render, measure their actual bounding boxes and snap every
