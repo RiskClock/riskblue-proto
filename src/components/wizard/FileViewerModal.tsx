@@ -2753,7 +2753,6 @@ export interface DevicesApi {
 
 interface DetectionsPanelProps {
   rotationByPage: Record<number, number>;
-  effectivePage: number;
   viewerApiRef: React.RefObject<any>;
   awpClasses: AwpClassOption[];
   selectedClass: string | null;
@@ -3131,7 +3130,7 @@ const DetectionsPanel = ({
                       const minY = Math.min(...bboxes.map(b => b.ny));
                       const maxX = Math.max(...bboxes.map(b => b.nx));
                       const maxY = Math.max(...bboxes.map(b => b.ny));
-                      const rot = (rotationByPage[effectivePage] ?? 0);
+                      const rot = (rotationByPage[effectivePage] ?? 0) as 0 | 90 | 180 | 270;
                       const groupRect = { nx: minX, ny: minY, nw: maxX - minX, nh: maxY - minY };
                       viewerApiRef.current?.fitToRect?.(rot === 0 ? groupRect : rotateNormalizedRect(groupRect, rot), { paddingRatio: 0.3, animate: true });
                     }
