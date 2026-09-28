@@ -2100,7 +2100,8 @@ export const FileViewerModal = ({
                   <ListRestart className="h-4 w-4" />
                 </Button>
                 <Button size="icon" variant="outline" className="h-8 w-8" onClick={undo} disabled={viewingMode || planDraftMode || past.length === 0} aria-label="Undo" title="Undo">
-...
+                  <Undo2 className="h-4 w-4" />
+                </Button>
                 <Button size="icon" variant="outline" className="h-8 w-8" onClick={redo} disabled={viewingMode || planDraftMode || future.length === 0} aria-label="Redo" title="Redo">
                   <Redo2 className="h-4 w-4" />
                 </Button>
