@@ -531,6 +531,9 @@ export const FileViewerModal = ({
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [newPlanOpen, setNewPlanOpen] = useState(false);
   const [savingNewPlan, setSavingNewPlan] = useState(false);
+  // Plan being edited in the inline editor (null = creating a new plan).
+  const [editPlanId, setEditPlanId] = useState<string | null>(null);
+  const planToggleRef = useRef<((id: string) => void) | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [draftPlanVisual, setDraftPlanVisual] = useState<{ color: string; ids: Set<string> } | null>(null);
   const [hoveredPlanIds, setHoveredPlanIds] = useState<Set<string>>(new Set());
@@ -639,6 +642,8 @@ export const FileViewerModal = ({
     if (typeof window === "undefined") return;
     window.localStorage.setItem(ACTIVE_TAB_STORAGE_KEY, activeTab);
   }, [activeTab]);
+  // While creating/editing a plan the canvas is read-only: clicks toggle risks.
+  const planDraftMode = activeTab === "plans" && newPlanOpen;
   const [confirmExit, setConfirmExit] = useState<null | {
     kind: "tab" | "close";
     next: () => void;
@@ -1502,7 +1507,7 @@ export const FileViewerModal = ({
   const deleteRef = useRef(handleDeleteFromList);
   deleteRef.current = handleDeleteFromList;
   useEffect(() => {
-    if (!isOpen || !editingEnabled || !selectedInstanceId) return;
+    if (!isOpen || !editingEnabled || planDraftMode || !selectedInstanceId) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Delete" && e.key !== "Backspace") return;
       const t = e.target as HTMLElement | null;
@@ -1520,7 +1525,7 @@ export const FileViewerModal = ({
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [isOpen, editingEnabled, selectedInstanceId]);
+  }, [isOpen, editingEnabled, planDraftMode, selectedInstanceId]);
 
   // ---- Undo / redo --------------------------------------------------------
   /** Apply a stored position to a marker (used by move undo/redo). */
@@ -1807,7 +1812,13 @@ export const FileViewerModal = ({
             ? "hsl(var(--muted-foreground))"
             : (activeTab === "plans" && activePlan?.color) || drawingColors.get(instanceRowKey(i)) || awpClassColorForType(i.awp_class_name, pipeType, diameter),
           emphasized: activeTab === "plans" && newPlanOpen && hoveredPlanIds.has(i.id),
-          label: instanceLabel(i),
+          // Labels are hidden; this text only appears when hovering the marker.
+          label: (() => {
+            const cls = awpClasses?.find((c) => c.name === i.awp_class_name);
+            const base = cls?.label || i.awp_class_name;
+            const typeLabel = pipeType ? expandSubtypeLabelWithSuffix(i.awp_class_name, pipeType) : "";
+            return [base, typeLabel, diameter].filter(Boolean).join(" ");
+          })(),
           innerDot: activeTab === "plans" && (newPlanOpen ? !!draftPlanVisual?.ids.has(i.id) : !!activePlan?.included_instance_ids.includes(i.id)),
         };
       });
@@ -2028,9 +2039,13 @@ export const FileViewerModal = ({
               initialFit="page"
               minScale={0.8}
               maxScale={8}
-              onCanvasClick={editingEnabled ? handleCanvasClick : undefined}
-              onOverlayClick={editingEnabled ? handleOverlayClick : undefined}
-              onOverlayDrag={editingEnabled ? handleOverlayDrag : undefined}
+              onCanvasClick={editingEnabled && !planDraftMode ? handleCanvasClick : undefined}
+              onOverlayClick={
+                planDraftMode
+                  ? (id: string) => { if (id.startsWith("inst-")) planToggleRef.current?.(id.slice(5)); }
+                  : editingEnabled ? handleOverlayClick : undefined
+              }
+              onOverlayDrag={editingEnabled && !planDraftMode ? handleOverlayDrag : undefined}
               viewingMode={viewingMode}
               onActivePageRenderedSizeChange={setRenderedPageSize}
               onApiReady={(api) => (viewerApiRef.current = api)}
@@ -2084,10 +2099,10 @@ export const FileViewerModal = ({
                 <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setHistoryOpen(true)} aria-label="Changes" title="Changes">
                   <ListRestart className="h-4 w-4" />
                 </Button>
-                <Button size="icon" variant="outline" className="h-8 w-8" onClick={undo} disabled={viewingMode || past.length === 0} aria-label="Undo" title="Undo">
+                <Button size="icon" variant="outline" className="h-8 w-8" onClick={undo} disabled={viewingMode || planDraftMode || past.length === 0} aria-label="Undo" title="Undo">
                   <Undo2 className="h-4 w-4" />
                 </Button>
-                <Button size="icon" variant="outline" className="h-8 w-8" onClick={redo} disabled={viewingMode || future.length === 0} aria-label="Redo" title="Redo">
+                <Button size="icon" variant="outline" className="h-8 w-8" onClick={redo} disabled={viewingMode || planDraftMode || future.length === 0} aria-label="Redo" title="Redo">
                   <Redo2 className="h-4 w-4" />
                 </Button>
               </div>
@@ -2276,8 +2291,15 @@ export const FileViewerModal = ({
                    {!newPlanOpen && <PlansPanel
                      plans={drawingPlans.plans}
                      activePlanId={activePlanId}
-                     onSelectPlan={setActivePlanId}
-                     onNewPlan={() => { setActivePlanId(null); setNewPlanOpen(true); }}
+                     onSelectPlan={(id) => {
+                       setActivePlanId(id);
+                       const plan = drawingPlans.plans.find((p) => p.id === id);
+                       if (!plan) return;
+                       const ids = new Set(plan.included_instance_ids);
+                       focusInstances(instances.filter((i) => ids.has(i.id) && i.file_id === parentFileId));
+                     }}
+                     onNewPlan={() => { setActivePlanId(null); setEditPlanId(null); setNewPlanOpen(true); }}
+                     onEditPlan={(id) => { setActivePlanId(id); setEditPlanId(id); setNewPlanOpen(true); }}
                       onDeletePlan={async (id) => {
                         const fallbackId = drawingPlans.plans.find((plan) => plan.id !== id)?.id ?? null;
                         try {
@@ -2301,6 +2323,9 @@ export const FileViewerModal = ({
                     }}
                    />}
                   {newPlanOpen && <InlinePlanEditor
+                    key={editPlanId ?? "new"}
+                    initialPlan={editPlanId ? drawingPlans.plans.find((p) => p.id === editPlanId) ?? null : null}
+                    toggleRef={planToggleRef}
                     defaultName={`Plan ${drawingPlans.plans.length + 1}`}
                     instances={instances.filter((i) => i.awp_class_name !== UNIT_MARKER_CLASS)}
                     classes={awpClasses}
@@ -2311,7 +2336,7 @@ export const FileViewerModal = ({
                      effectivePage={effectivePage}
                     baseProducts={drawingPlans.baseProducts}
                     saving={savingNewPlan}
-                     onCancel={() => { setNewPlanOpen(false); setDraftPlanVisual(null); setHoveredPlanIds(new Set()); }}
+                     onCancel={() => { setNewPlanOpen(false); setEditPlanId(null); setDraftPlanVisual(null); setHoveredPlanIds(new Set()); }}
                      onHoverInstances={(ids) => setHoveredPlanIds(new Set(ids))}
                      onVisualChange={handleDraftVisualChange}
                       onFocusInstances={focusInstances}
@@ -2319,13 +2344,16 @@ export const FileViewerModal = ({
                     onSave={async (value) => {
                       setSavingNewPlan(true);
                       try {
-                        const id = await drawingPlans.createPlan(value, user?.id ?? null);
+                        const id = editPlanId
+                          ? (await drawingPlans.updatePlan(editPlanId, value), editPlanId)
+                          : await drawingPlans.createPlan(value, user?.id ?? null);
                         setNewPlanOpen(false);
+                        setEditPlanId(null);
                          setDraftPlanVisual(null);
                          setHoveredPlanIds(new Set());
                         if (id) setActivePlanId(id);
                       } catch (e) {
-                        toast({ title: "Could not create plan", description: getUserFriendlyError(e), variant: "destructive" });
+                        toast({ title: editPlanId ? "Could not save plan" : "Could not create plan", description: getUserFriendlyError(e), variant: "destructive" });
                       } finally {
                         setSavingNewPlan(false);
                       }
@@ -2945,11 +2973,12 @@ const DeviceButton = ({ row, devices }: { row: DetectionRowModel; devices: Devic
   );
 };
 
-const PlansPanel = ({ plans, activePlanId, onSelectPlan, onNewPlan, onDeletePlan, deviceNames }: {
+const PlansPanel = ({ plans, activePlanId, onSelectPlan, onNewPlan, onEditPlan, onDeletePlan, deviceNames }: {
   plans: DrawingPlan[];
   activePlanId: string | null;
   onSelectPlan: (id: string) => void;
   onNewPlan: () => void;
+  onEditPlan: (id: string) => void;
   onDeletePlan: (id: string) => Promise<void>;
   deviceNames: (p: DrawingPlan) => { name: string; count: number }[];
 }) => {
@@ -2977,6 +3006,9 @@ const PlansPanel = ({ plans, activePlanId, onSelectPlan, onNewPlan, onDeletePlan
                   {devices.length > 0 && <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">{devices.map(({ name, count }) => <li key={name} className="truncate">{name} ×{count}</li>)}</ul>}
                 </span>
                 <span className="text-xs text-muted-foreground shrink-0" title={devices.map(({ name, count }) => `${name} ×${count}`).join("\n")}>{devices.length} {devices.length === 1 ? "device" : "devices"}</span>
+                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground" aria-label={`Edit ${p.name}`} title="Edit plan" onClick={(e) => { e.stopPropagation(); onEditPlan(p.id); }}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
                 <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" aria-label={`Delete ${p.name}`} onClick={(e) => { e.stopPropagation(); setDeleteTarget(p); }}>
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
@@ -3005,7 +3037,9 @@ const PlansPanel = ({ plans, activePlanId, onSelectPlan, onNewPlan, onDeletePlan
 
 const randomPlanColor = () => awpClassColor(`plan-${Date.now()}-${Math.random()}`);
 
-const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, saving, onCancel, onSave, onHoverInstances, onVisualChange, onFocusInstances, onFocusInstance, numberByInstanceId, instanceLabel, floorPlans, floorPlanOverrides, effectivePage }: {
+const InlinePlanEditor = ({ initialPlan, toggleRef, defaultName, instances, classes, baseProducts, saving, onCancel, onSave, onHoverInstances, onVisualChange, onFocusInstances, onFocusInstance, numberByInstanceId, instanceLabel, floorPlans, floorPlanOverrides, effectivePage }: {
+  initialPlan: DrawingPlan | null;
+  toggleRef: import("react").MutableRefObject<((id: string) => void) | null>;
   defaultName: string;
   instances: DrawingInstanceRow[];
   classes: AwpClassOption[];
@@ -3023,10 +3057,10 @@ const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, savin
   floorPlanOverrides: Record<string, any>;
   effectivePage: number;
 }) => {
-  const [name, setName] = useState(defaultName);
-  const [description, setDescription] = useState("");
-  const [color, setColor] = useState(randomPlanColor);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [name, setName] = useState(initialPlan?.name ?? defaultName);
+  const [description, setDescription] = useState(initialPlan?.summary ?? "");
+  const [color, setColor] = useState(() => initialPlan?.color || randomPlanColor());
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(initialPlan?.included_instance_ids ?? []));
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [baseQuantities, setBaseQuantities] = useState<Record<string, number>>({});
   const byClass = useMemo(() => {
@@ -3039,6 +3073,18 @@ const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, savin
     const next = new Set(prev); ids.forEach((id) => checked ? next.add(id) : next.delete(id)); return next;
   });
   useEffect(() => onVisualChange(color, selected), [color, selected, onVisualChange]);
+  const [baseInit] = useState(() => {
+    const base = (initialPlan?.product_assignments as any)?.__base;
+    return base && typeof base === "object" ? base as Record<string, number> : null;
+  });
+  useEffect(() => { if (baseInit) setBaseQuantities(baseInit); }, [baseInit]);
+  // Clicking a marker on the drawing toggles that instance.
+  useEffect(() => {
+    toggleRef.current = (id) => setSelected((prev) => {
+      const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next;
+    });
+    return () => { toggleRef.current = null; };
+  }, [toggleRef]);
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-background">
       <div className="space-y-2 border-b p-3">

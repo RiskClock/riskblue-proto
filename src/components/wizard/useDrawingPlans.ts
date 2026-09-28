@@ -243,5 +243,25 @@ export function useDrawingPlans(projectId: string | null | undefined, enabled: b
     [projectId, queryClient],
   );
 
-  return { plans, catalogFor, productChoices, productsById, assignedFor, assignedDevicesFor, saveAssignment, createPlan, deletePlan, baseProducts, ready: !!catalog };
+  const updatePlan = useCallback(
+    async (planId: string, value: { name: string; description: string; baseQuantities: Record<string, number>; color: string; includedInstanceIds: string[] }) => {
+      const existing = plans.find((p) => p.id === planId);
+      const { error } = await supabase
+        .from("project_mitigation_plans")
+        .update({
+          name: value.name,
+          summary: value.description,
+          color: value.color,
+          included_instance_ids: value.includedInstanceIds,
+          product_assignments: { ...(existing?.product_assignments ?? {}), __base: value.baseQuantities, __configured: true },
+        } as any)
+        .eq("id", planId)
+        .eq("project_id", projectId!);
+      if (error) throw error;
+      await queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
+    },
+    [plans, projectId, queryClient],
+  );
+
+  return { plans, catalogFor, productChoices, productsById, assignedFor, assignedDevicesFor, saveAssignment, createPlan, updatePlan, deletePlan, baseProducts, ready: !!catalog };
 }
