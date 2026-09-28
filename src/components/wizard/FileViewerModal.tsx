@@ -1843,6 +1843,20 @@ export const FileViewerModal = ({
     return m;
   }, [instances, parentFileId, effectivePage, awpClasses]);
 
+  // A class may split into several attribute rows after its instances load.
+  // Always keep the radio selection aligned with one actual row.
+  useEffect(() => {
+    if (!isOpen || activeTab !== "detections" || !awpClasses?.length) return;
+    const rows = buildDetectionRows(awpClasses, instancesByClassThisFile);
+    const row = rows.find((r) => r.key === selectedRowKey)
+      || rows.find((r) => r.cls.name === selectedClass)
+      || rows[0];
+    if (row && row.key !== selectedRowKey) {
+      setSelectedClass(row.cls.name);
+      setSelectedRowKey(row.key);
+    }
+  }, [isOpen, activeTab, awpClasses, instancesByClassThisFile, selectedClass, selectedRowKey]);
+
   // ---- Devices (Plan Builder products) -----------------------------------
   const devicesApi: DevicesApi = {
     planName: null,
@@ -3105,11 +3119,6 @@ const DetectionsPanel = ({
                             </span>
                             {planLabel && (() => {
                               const effT = getEffectiveType(containingPlan!, floorPlanOverrides);
-                              const ct = effT === "unit_floor_plan"
-                                ? "Unit Floor Plan"
-                                : effT === "level_floor_plan"
-                                  ? "Level Floor Plan"
-                                  : effT || "unknown";
                                const cc = floorPlanTypeColor(effT);
                               return (
                                 <span
