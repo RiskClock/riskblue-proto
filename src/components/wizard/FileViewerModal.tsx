@@ -2705,6 +2705,16 @@ export const FileViewerModal = ({
 // Sub-components
 // ============================================================================
 
+export interface DevicesApi {
+  planName: string | null;
+  productsById: Map<string, PlanEditorProduct>;
+  choices: (cls: string) => PlanEditorProduct[];
+  assigned: (cls: string, type: string, diam: string) => string[];
+  save: (cls: string, type: string, diam: string, ids: string[]) => Promise<void>;
+  canEdit: boolean;
+  mapped: (cls: string) => boolean;
+}
+
 interface DetectionsPanelProps {
   awpClasses: AwpClassOption[];
   selectedClass: string | null;
@@ -2715,25 +2725,21 @@ interface DetectionsPanelProps {
   numberByInstanceId: Map<string, number>;
   effectivePage: number;
   instanceLabel: (i: DrawingInstanceRow) => string;
-  /** Instance hovered on the canvas or in the other list. */
   hoveredInstanceId?: string | null;
   onHoverInstance?: (id: string | null) => void;
   handleDeleteFromList: (id: string) => void;
-  /** Read-only viewing mode: hide destructive/edit affordances. */
   viewingMode?: boolean;
   loadingInstances: boolean;
-  undo: () => void;
-  redo: () => void;
-  pastLen: number;
-  futureLen: number;
+  undo?: () => void;
+  redo?: () => void;
+  pastLen?: number;
+  futureLen?: number;
   withHeader?: boolean;
   floorPlans?: ParsedFloorPlan[];
   floorPlanOverrides?: Record<string, any>;
-  /** Classes whose annotations are hidden on the canvas. */
-  hiddenClasses: Set<string>;
-  toggleClassHidden: (name: string) => void;
-  /** Toggles the read-only viewing mode from the list header. */
-  onToggleViewingMode?: () => void;
+  selectedRowKey: string | null;
+  onSelectRow: (className: string, rowKey: string) => void;
+  devices: DevicesApi;
   onFocusInstance?: (i: DrawingInstanceRow) => void;
 }
 
@@ -2760,10 +2766,202 @@ const findContainingPlan = (
 };
 
 
+interface DetectionRowModel {
+  key: string;
+  cls: AwpClassOption;
+  type: string;
+  diam: string;
+  label: string;
+  fullName: string;
+  items: DrawingInstanceRow[];
+  count: number;
+  analysisCount: number;
+}
+
+function buildDetectionRows(
+  awpClasses: AwpClassOption[],
+  byClass: Map<string, DrawingInstanceRow[]>,
+): DetectionRowModel[] {
+  const rows: DetectionRowModel[] = [];
+  for (const c of awpClasses) {
+    const list = byClass.get(c.name) || [];
+    const prefix = c.prefix ?? c.name.slice(0, 3).toUpperCase();
+    const baseName = c.label || c.name;
+    if (!isSubtypeSplitClass(c.name) || list.length === 0) {
+      rows.push({ key: c.name, cls: c, type: "", diam: "", label: prefix, fullName: baseName, items: list, count: list.length + c.analysisCount, analysisCount: c.analysisCount });
+      continue;
+    }
+    const groups = new Map<string, DrawingInstanceRow[]>();
+    for (const i of list) {
+      const k = instanceRowKey(i);
+      const arr = groups.get(k) || [];
+      arr.push(i);
+      groups.set(k, arr);
+    }
+    const entries = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }));
+    entries.forEach(([key, items], idx) => {
+      const [, type = "", diam = ""] = key.split("::");
+      const abbr = type ? subtypeAbbr(c.name, type) || type : "";
+      const attrs = [abbr, diam].filter(Boolean).join(" ");
+      const full = [baseName, type ? expandSubtypeLabelWithSuffix(c.name, type) : "", diam].filter(Boolean).join(" ");
+      const analysisCount = idx === 0 ? c.analysisCount : 0;
+      rows.push({
+        key,
+        cls: c,
+        type,
+        diam,
+        label: attrs ? `${prefix} · ${attrs}` : `${prefix} · (untyped)`,
+        fullName: full,
+        items,
+        count: items.length + analysisCount,
+        analysisCount,
+      });
+    });
+  }
+  return rows;
+}
+
+const DeviceButton = ({ row, devices }: { row: DetectionRowModel; devices: DevicesApi }) => {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  if (!devices.mapped(row.cls.name)) return null;
+  const selected = devices.assigned(row.cls.name, row.type, row.diam);
+  const choices = devices.choices(row.cls.name);
+  const q = search.trim().toLowerCase();
+  const filtered = choices.filter((p) =>
+    `${p.code || ""} ${p.name} ${p.controlName || ""}`.toLowerCase().includes(q),
+  );
+  const pipeMm = parsePipeSizeMm(row.diam);
+  const suggested = filtered.filter((p) => isSizeMatch(p, pipeMm));
+  const others = filtered.filter((p) => !isSizeMatch(p, pipeMm));
+  const toggle = (id: string) => {
+    const next = selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id];
+    void devices.save(row.cls.name, row.type, row.diam, next);
+  };
+  const names = selected.map((id) => {
+    const p = devices.productsById.get(id);
+    return p ? `${p.code ? `${p.code} ` : ""}${p.name}`.trim() : id;
+  });
+  const disabled = !devices.canEdit;
+  const trigger = selected.length > 0 ? (
+    <span className="inline-flex items-center gap-1">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-medium cursor-default">
+            {selected.length} {selected.length === 1 ? "Device" : "Devices"}
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent side="left" className="max-w-xs">
+          <ul className="space-y-0.5 text-xs">
+            {names.map((n) => <li key={n}>{n}</li>)}
+          </ul>
+        </TooltipContent>
+      </Tooltip>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="ghost" size="sm" className="h-6 px-1.5 text-[11px] text-primary" disabled={disabled} onClick={(e) => e.stopPropagation()}>
+          Edit
+        </Button>
+      </PopoverTrigger>
+    </span>
+  ) : (
+    <PopoverTrigger asChild>
+      <Button type="button" variant="ghost" size="sm" className="h-6 px-1.5 text-[11px] text-primary" disabled={disabled} onClick={(e) => e.stopPropagation()}>
+        <Plus className="h-3 w-3" /> Add Device
+      </Button>
+    </PopoverTrigger>
+  );
+  return (
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); setSearch(""); }}>
+      <span onClick={(e) => e.stopPropagation()} title={disabled ? "Create a plan in the Plans tab first" : undefined}>{trigger}</span>
+      <PopoverContent align="end" className="w-80 p-0" onClick={(e) => e.stopPropagation()}>
+        {devices.planName && (
+          <div className="border-b px-3 py-1.5 text-[11px] text-muted-foreground">
+            Plan: <span className="font-medium text-foreground">{devices.planName}</span>
+          </div>
+        )}
+        <div className="relative border-b p-2">
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search product, ID or type" className="h-8 pl-8 text-sm" />
+        </div>
+        {selected.length > 0 && (
+          <div className="flex flex-wrap gap-1 border-b p-2">
+            {selected.map((id, idx) => (
+              <Badge key={id} variant="outline" className="gap-1 pr-1 font-normal" style={tagStyle(names[idx])}>
+                <span>{devices.productsById.get(id)?.code || devices.productsById.get(id)?.name || "Product"}</span>
+                <button type="button" className="rounded-full hover:bg-background/50" aria-label={`Remove ${names[idx]}`} onClick={() => toggle(id)}>
+                  <XIcon className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))}
+          </div>
+        )}
+        <div className="max-h-64 overflow-y-auto overscroll-contain p-1" onWheel={(e) => e.stopPropagation()}>
+          {suggested.length > 0 && (
+            <>
+              <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Suggested for {pipeMm}mm</div>
+              {suggested.map((p) => <ProductPickerOption key={p.id} product={p} checked={selected.includes(p.id)} onToggle={() => toggle(p.id)} />)}
+              {others.length > 0 && <div className="my-1 border-t" />}
+            </>
+          )}
+          {others.map((p) => <ProductPickerOption key={p.id} product={p} checked={selected.includes(p.id)} onToggle={() => toggle(p.id)} />)}
+          {filtered.length === 0 && <div className="px-3 py-4 text-sm text-muted-foreground">No mapped products.</div>}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+const PlansPanel = ({
+  plans,
+  activePlanId,
+  onTogglePlan,
+  onNewPlan,
+  deviceCount,
+}: {
+  plans: DrawingPlan[];
+  activePlanId: string | null;
+  onTogglePlan: (id: string) => void;
+  onNewPlan: () => void;
+  deviceCount: (p: DrawingPlan) => number;
+}) => (
+  <div className="flex-1 flex flex-col min-h-0">
+    <div className="px-3 py-2 flex items-center justify-between gap-2 border-b">
+      <p className="text-xs text-muted-foreground">Click a plan to show only its annotations.</p>
+      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onNewPlan}>
+        <Plus className="h-3.5 w-3.5" /> New Plan
+      </Button>
+    </div>
+    <div className="flex-1 overflow-y-auto">
+      {plans.length === 0 && (
+        <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+          No plans yet. Create one to assign devices.
+        </div>
+      )}
+      {plans.map((p) => {
+        const active = p.id === activePlanId;
+        const n = deviceCount(p);
+        return (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => onTogglePlan(p.id)}
+            className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm border-b hover:bg-muted/50 ${active ? "bg-primary/10" : ""}`}
+          >
+            <Layers className={`h-4 w-4 shrink-0 ${active ? "text-primary" : "text-muted-foreground"}`} />
+            <span className={`flex-1 min-w-0 truncate ${active ? "font-semibold" : ""}`}>{p.name}</span>
+            <span className="text-xs text-muted-foreground shrink-0">{n} {n === 1 ? "device" : "devices"}</span>
+            <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded ${active ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
+              {active ? "Showing" : "Show"}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  </div>
+);
+
 const DetectionsPanel = ({
   awpClasses,
-  selectedClass,
-  setSelectedClass,
   expanded,
   setExpanded,
   instancesByClassThisFile,
@@ -2775,47 +2973,17 @@ const DetectionsPanel = ({
   handleDeleteFromList,
   viewingMode = false,
   loadingInstances,
-  undo,
-  redo,
-  pastLen,
-  futureLen,
-  withHeader,
   floorPlans,
   floorPlanOverrides = {},
-  hiddenClasses,
-  toggleClassHidden,
-  onToggleViewingMode,
+  selectedRowKey,
+  onSelectRow,
+  devices,
   onFocusInstance,
 }: DetectionsPanelProps) => {
   const showPlanBadges = (floorPlans?.length ?? 0) > 0;
-  const allExpanded =
-    awpClasses.length > 0 && awpClasses.every((c) => expanded.has(c.name));
+  const rows = useMemo(() => buildDetectionRows(awpClasses, instancesByClassThisFile), [awpClasses, instancesByClassThisFile]);
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className={`px-3 py-2 ${withHeader ? "border-b" : ""} flex items-center justify-between gap-2`}>
-        <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={undo} disabled={viewingMode || pastLen === 0} aria-label="Undo" title="Undo">
-            <Undo2 className="h-3.5 w-3.5" />
-          </Button>
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={redo} disabled={viewingMode || futureLen === 0} aria-label="Redo" title="Redo">
-            <Redo2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-        <div className="flex items-center gap-1">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 px-2 text-[11px]"
-            onClick={() =>
-              setExpanded(() =>
-                allExpanded ? new Set<string>() : new Set(awpClasses.map((c) => c.name)),
-              )
-            }
-          >
-            {allExpanded ? "Collapse All" : "Expand All"}
-          </Button>
-        </div>
-      </div>
       <div className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
         <div className="py-1 w-full min-w-0">
           {loadingInstances && (
@@ -2823,56 +2991,44 @@ const DetectionsPanel = ({
               <Loader2 className="h-3 w-3 animate-spin" /> Loading markers…
             </div>
           )}
-          {awpClasses.map((c) => {
-            const subList = instancesByClassThisFile.get(c.name) || [];
-            const userCount = subList.length;
-            const total = c.analysisCount + userCount;
-            const isSelected = selectedClass === c.name;
-            const isExpanded = expanded.has(c.name);
-            const color = awpClassColor(c.name);
-            const isHidden = hiddenClasses.has(c.name);
+          {rows.map((row) => {
+            const c = row.cls;
+            const isSelected = selectedRowKey === row.key || (selectedRowKey === c.name && rows.filter((r) => r.cls.name === c.name)[0]?.key === row.key && row.key === c.name);
+            const isExpanded = expanded.has(row.key);
+            const firstPipeType = row.type;
+            const color = row.type ? awpClassColorForType(c.name, firstPipeType) : awpClassColor(c.name);
             return (
-              <div key={c.name} className="border-b last:border-b-0 min-w-0">
+              <div key={row.key} className="border-b last:border-b-0 min-w-0">
                 <div
                   className={`flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50 min-w-0 ${isSelected ? "bg-muted/40" : ""}`}
-                  onClick={() => { if (!isHidden) setSelectedClass(c.name); }}
+                  onClick={() => onSelectRow(c.name, row.key)}
                 >
-                  <div className={isHidden ? "flex items-center gap-2 flex-1 min-w-0 opacity-40" : "flex items-center gap-2 flex-1 min-w-0"}>
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
                     <input
                       type="radio"
                       checked={isSelected}
-                      disabled={isHidden}
-                      onChange={() => setSelectedClass(c.name)}
-                      onClick={(e) => { e.stopPropagation(); if (!isHidden) setSelectedClass(c.name); }}
+                      onChange={() => onSelectRow(c.name, row.key)}
+                      onClick={(e) => e.stopPropagation()}
                       className="h-3.5 w-3.5 shrink-0"
                     />
                     <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                    <span className="font-mono text-xs text-muted-foreground shrink-0">{c.prefix ?? "-"}</span>
-                    <span className="flex-1 min-w-0 truncate" title={c.label || c.name}>{c.label || c.name}</span>
-                    <span className="text-xs tabular-nums text-muted-foreground shrink-0">{total}</span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="flex-1 min-w-0 truncate font-mono text-xs">{row.label}</span>
+                      </TooltipTrigger>
+                      <TooltipContent side="left">{row.fullName}</TooltipContent>
+                    </Tooltip>
+                    <span className="text-xs tabular-nums text-muted-foreground shrink-0">{row.count}</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleClassHidden(c.name);
-                    }}
-                    className={
-                      isHidden
-                        ? "shrink-0 text-[11px] font-medium px-2 py-0.5 rounded border bg-primary text-primary-foreground hover:bg-primary/90"
-                        : "shrink-0 text-[11px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded hover:bg-muted"
-                    }
-                  >
-                    {isHidden ? "Show" : "Hide"}
-                  </button>
+                  <DeviceButton row={row} devices={devices} />
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       setExpanded((prev) => {
                         const next = new Set(prev);
-                        if (next.has(c.name)) next.delete(c.name);
-                        else next.add(c.name);
+                        if (next.has(row.key)) next.delete(row.key);
+                        else next.add(row.key);
                         return next;
                       });
                     }}
@@ -2884,13 +3040,13 @@ const DetectionsPanel = ({
                 </div>
                 {isExpanded && (
                   <div className="px-8 py-1 space-y-1 bg-muted/20">
-                    {c.analysisCount > 0 && (
-                      <div className="text-[11px] text-muted-foreground">{c.analysisCount} from analysis</div>
+                    {row.analysisCount > 0 && (
+                      <div className="text-[11px] text-muted-foreground">{row.analysisCount} from analysis</div>
                     )}
-                    {subList.length === 0 && c.analysisCount === 0 && (
+                    {row.items.length === 0 && row.analysisCount === 0 && (
                       <div className="text-[11px] text-muted-foreground italic">No instances yet.</div>
                     )}
-                    {subList
+                    {row.items
                       .slice()
                       .sort((a, b) => (numberByInstanceId.get(a.id) ?? 0) - (numberByInstanceId.get(b.id) ?? 0))
                       .map((i) => {
@@ -2907,11 +3063,14 @@ const DetectionsPanel = ({
                         return (
                           <div
                             key={i.id}
-                            className={`flex items-center gap-2 text-[11px] rounded px-1 -mx-1 ${isHidden ? "opacity-40" : "cursor-pointer hover:bg-muted/60"} ${
-                              hoveredInstanceId === i.id && !isHidden ? "bg-muted font-semibold" : ""
+                            className={`flex items-center gap-2 text-[11px] rounded px-1 -mx-1 cursor-pointer hover:bg-muted/60 ${
+                              hoveredInstanceId === i.id ? "bg-muted font-semibold" : ""
                             }`}
-                            onClick={() => { if (!isHidden) onFocusInstance?.(i); }}
-                            onMouseEnter={() => { if (!isHidden) onHoverInstance?.(i.id); }}
+                            onClick={() => {
+                              if (!isSelected) onSelectRow(c.name, row.key);
+                              onFocusInstance?.(i);
+                            }}
+                            onMouseEnter={() => onHoverInstance?.(i.id)}
                             onMouseLeave={() => onHoverInstance?.(null)}
                           >
                             <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
@@ -2930,11 +3089,7 @@ const DetectionsPanel = ({
                               return (
                                 <span
                                   className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium max-w-[80px] truncate border"
-                                  style={{
-                                    backgroundColor: softBgFrom(cc),
-                                    color: cc,
-                                    borderColor: cc,
-                                  }}
+                                  style={{ backgroundColor: softBgFrom(cc), color: cc, borderColor: cc }}
                                   title={`In ${planLabel}`}
                                 >
                                   {planLabel}
@@ -2943,7 +3098,7 @@ const DetectionsPanel = ({
                             })()}
                             <button
                               onClick={(e) => { e.stopPropagation(); handleDeleteFromList(i.id); }}
-                              disabled={viewingMode || isHidden}
+                              disabled={viewingMode}
                               className="shrink-0 text-muted-foreground hover:text-destructive px-1 disabled:opacity-40 disabled:pointer-events-none"
                               aria-label="Remove marker"
                             >
