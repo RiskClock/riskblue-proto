@@ -143,14 +143,14 @@ function nominalPipeInches(pipeSizeMm?: number | null): number | null {
 }
 
 /** Products whose diameter matches the common nominal trade size come first. */
-function isSizeMatch(product: PlanEditorProduct, pipeSizeMm?: number | null) {
+export function isSizeMatch(product: PlanEditorProduct, pipeSizeMm?: number | null) {
   if (!pipeSizeMm || product.pipeDiameterInches === null || product.pipeDiameterInches === undefined) return false;
   const nominalInches = nominalPipeInches(pipeSizeMm);
   if (nominalInches !== null) return Math.abs(Number(product.pipeDiameterInches) - nominalInches) <= SIZE_TOLERANCE_INCHES;
   return Math.abs(Number(product.pipeDiameterInches) * 25.4 - pipeSizeMm) <= SIZE_TOLERANCE_MM;
 }
 
-function ProductPickerOption({ product, checked, onToggle }: { product: PlanEditorProduct; checked: boolean; onToggle: () => void }) {
+export function ProductPickerOption({ product, checked, onToggle }: { product: PlanEditorProduct; checked: boolean; onToggle: () => void }) {
   const size = diameterLabel(product.pipeDiameterInches);
   return (
     <div
