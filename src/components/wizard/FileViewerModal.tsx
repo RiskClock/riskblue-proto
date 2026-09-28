@@ -2800,7 +2800,7 @@ function buildDetectionRows(
     entries.forEach(([key, items], idx) => {
       const [, type = "", diam = ""] = key.split("::");
       const abbr = type ? subtypeAbbr(c.name, type) || type : "";
-      const attrs = [abbr, diam].filter(Boolean).join(" ");
+      const attrs = [diam, abbr].filter(Boolean).join(" ");
       const full = [baseName, type ? expandSubtypeLabelWithSuffix(c.name, type) : "", diam].filter(Boolean).join(" ");
       const analysisCount = idx === 0 ? c.analysisCount : 0;
       rows.push({
@@ -2808,7 +2808,7 @@ function buildDetectionRows(
         cls: c,
         type,
         diam,
-        label: attrs ? `${prefix} · ${attrs}` : `${prefix} · (untyped)`,
+        label: prefix,
         fullName: full,
         items,
         count: items.length + analysisCount,
@@ -2845,8 +2845,8 @@ const DeviceButton = ({ row, devices }: { row: DetectionRowModel; devices: Devic
     <span className="inline-flex items-center gap-1">
       <Tooltip>
         <TooltipTrigger asChild>
-          <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-medium cursor-default">
-            {selected.length} {selected.length === 1 ? "Device" : "Devices"}
+          <Badge variant="outline" className="h-5 max-w-32 truncate px-1.5 text-[10px] font-medium cursor-default">
+            {selected.length === 1 ? names[0] : `${selected.length} Devices`}
           </Badge>
         </TooltipTrigger>
         <TooltipContent side="left" className="max-w-xs">
@@ -2870,13 +2870,8 @@ const DeviceButton = ({ row, devices }: { row: DetectionRowModel; devices: Devic
   );
   return (
     <Popover open={open} onOpenChange={(o) => { setOpen(o); setSearch(""); }}>
-      <span onClick={(e) => e.stopPropagation()} title={disabled ? "Create a plan in the Plans tab first" : undefined}>{trigger}</span>
+      <span onClick={(e) => e.stopPropagation()}>{trigger}</span>
       <PopoverContent align="end" className="w-80 p-0" onClick={(e) => e.stopPropagation()}>
-        {devices.planName && (
-          <div className="border-b px-3 py-1.5 text-[11px] text-muted-foreground">
-            Plan: <span className="font-medium text-foreground">{devices.planName}</span>
-          </div>
-        )}
         <div className="relative border-b p-2">
           <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search product, ID or type" className="h-8 pl-8 text-sm" />
