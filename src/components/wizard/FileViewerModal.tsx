@@ -1725,11 +1725,7 @@ export const FileViewerModal = ({
   const isInstanceVisible = (i: DrawingInstanceRow): boolean => {
     if (!awpClasses) return !hiddenClasses.has(i.awp_class_name);
     if (activePlan) {
-      const entry = drawingPlans.catalogFor(i.awp_class_name);
-      if (!entry) return false;
-      const { pipeType, diameter } = instanceMeta(i);
-      const key = assignmentKeyFor(entry.id, i.awp_class_name, pipeType, diameter);
-      return drawingPlans.assignedFor(activePlan, key, entry.id).length > 0;
+      return activePlan.included_instance_ids.includes(i.id);
     }
     if (!effectiveRowKey) return false;
     if (effectiveRowKey === i.awp_class_name) return true;
@@ -1748,19 +1744,20 @@ export const FileViewerModal = ({
           (!allowed || allowed.has(i.awp_class_name)),
       )
       .map((i) => {
-        const { pipeType } = instanceMeta(i);
+        const { pipeType, diameter } = instanceMeta(i);
         return {
           id: `inst-${i.id}`,
           // bbox width/height = 0 so the centroid is exactly the click point
           bbox: [i.nx, i.ny, 0, 0] as [number, number, number, number],
           coordSpace: "normalized" as const,
           page: singlePageOnly ? currentPage : sheetId ? 1 : i.page_index,
-          color: awpClassColorForType(i.awp_class_name, pipeType),
+          color: activePlan?.color || awpClassColorForType(i.awp_class_name, pipeType, diameter),
           label: instanceLabel(i),
+          innerDot: !!activePlan?.included_instance_ids.includes(i.id),
         };
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly, hiddenClasses, effectiveRowKey, activePlan, drawingPlans.catalogFor, drawingPlans.assignedFor]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly, hiddenClasses, effectiveRowKey, activePlan]);
 
   // Floor-plan bbox overlays. Survey agent returns `xy_width_height_pct` as
   // [left, top, width, height] percentages (0..100) of the visible page.
@@ -1855,24 +1852,22 @@ export const FileViewerModal = ({
   }, [instances, parentFileId, effectivePage, awpClasses]);
 
   // ---- Devices (Plan Builder products) -----------------------------------
-  const devicePlan: DrawingPlan | null =
-    activePlan ?? drawingPlans.plans[0] ?? null;
   const devicesApi: DevicesApi = {
-    planName: devicePlan?.name ?? null,
+    planName: null,
     productsById: drawingPlans.productsById,
     choices: (cls) => drawingPlans.productChoices(cls),
     assigned: (cls, type, diam) => {
       const entry = drawingPlans.catalogFor(cls);
-      if (!entry || !devicePlan) return [];
-      return drawingPlans.assignedFor(devicePlan, assignmentKeyFor(entry.id, cls, type, diam), entry.id);
+      if (!entry) return [];
+      return drawingPlans.assignedDevicesFor(assignmentKeyFor(entry.id, cls, type, diam), entry.id);
     },
-    canEdit: !!devicePlan && !readOnly,
+    canEdit: !readOnly,
     mapped: (cls) => !!drawingPlans.catalogFor(cls),
     save: async (cls, type, diam, ids) => {
       const entry = drawingPlans.catalogFor(cls);
-      if (!entry || !devicePlan) return;
+      if (!entry) return;
       try {
-        await drawingPlans.saveAssignment(devicePlan, assignmentKeyFor(entry.id, cls, type, diam), ids);
+        await drawingPlans.saveAssignment(assignmentKeyFor(entry.id, cls, type, diam), ids);
       } catch (e) {
         toast({ title: "Could not save devices", description: getUserFriendlyError(e), variant: "destructive" });
       }
