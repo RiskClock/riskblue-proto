@@ -1108,17 +1108,23 @@ export default function WaterMitigationPlan() {
   const baseCountFor = (plan: Plan, productId: string) => Math.max(0, Number(baseQuantitiesFor(plan)[productId] || 0));
 
   /** Only controls picked in at least one plan appear in the breakdown. */
-  const visibleControlRows = useMemo(
-    () =>
-      controlRows.filter((row) =>
+  const visibleControlRows = useMemo(() => {
+    const drawingProductIds = new Set<string>();
+    if (plans.some((plan) => (plan.included_instance_ids?.length ?? 0) > 0)) {
+      Object.values(riskDeviceAssignments).forEach((ids) => {
+        if (Array.isArray(ids)) ids.forEach((id) => drawingProductIds.add(id));
+      });
+    }
+    return controlRows.filter(
+      (row) =>
+        drawingProductIds.has(row.id) ||
         plans.some((plan) =>
           Object.entries(plan.product_assignments || {}).some(
             ([key, value]) => key !== "__base" && Array.isArray(value) && value.includes(row.id),
           ),
         ),
-      ),
-    [controlRows, plans],
-  );
+    );
+  }, [controlRows, plans, riskDeviceAssignments]);
 
   const visibleBaseRows = useMemo(
     () => baseRows.filter((row) => plans.some((plan) => baseCountFor(plan, row.id) > 0)),
