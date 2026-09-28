@@ -67,6 +67,7 @@ import { isSubtypeSplitClass, subtypeAbbr, expandSubtypeLabelWithSuffix } from "
 import { tagStyle } from "@/lib/tagColor";
 import { Search } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useBetaAccess } from "@/hooks/useBetaAccess";
 
 /** Row key for an instance: class, or class::type::diameter for split classes. */
 function instanceRowKey(i: { awp_class_name: string; metadata?: unknown }): string {
@@ -633,11 +634,15 @@ export const FileViewerModal = ({
   const editingPlanRef = useRef<EditingPlanState | null>(null);
   useEffect(() => { editingPlanRef.current = editingPlan; }, [editingPlan]);
   const ACTIVE_TAB_STORAGE_KEY = "fileViewer.activeTab";
+  const { hasBetaAccess } = useBetaAccess();
   const [activeTab, setActiveTab] = useState<"floor-plans" | "detections" | "plans">(() => {
     if (typeof window === "undefined") return "floor-plans";
     const stored = window.localStorage.getItem(ACTIVE_TAB_STORAGE_KEY);
     return stored === "detections" || stored === "floor-plans" || stored === "plans" ? stored : "floor-plans";
   });
+  useEffect(() => {
+    if (!hasBetaAccess && activeTab === "plans") setActiveTab("floor-plans");
+  }, [hasBetaAccess, activeTab]);
   useEffect(() => {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(ACTIVE_TAB_STORAGE_KEY, activeTab);
@@ -1924,6 +1929,7 @@ export const FileViewerModal = ({
 
   // ---- Devices (Plan Builder products) -----------------------------------
   const devicesApi: DevicesApi = {
+    beta: hasBetaAccess,
     planName: null,
     productsById: drawingPlans.productsById,
     choices: (cls) => drawingPlans.productChoices(cls),
@@ -2165,10 +2171,15 @@ export const FileViewerModal = ({
                 }}
                 className="flex-1 flex flex-col min-h-0"
               >
-                <TabsList className="mx-2 mt-2 mb-2 grid grid-cols-3">
+                <TabsList className={`mx-2 mt-2 mb-2 grid ${hasBetaAccess ? "grid-cols-3" : "grid-cols-2"}`}>
                   <TabsTrigger value="floor-plans">Floor Plans</TabsTrigger>
                   <TabsTrigger value="detections">Detections</TabsTrigger>
-                  <TabsTrigger value="plans">Plans</TabsTrigger>
+                  {hasBetaAccess && (
+                    <TabsTrigger value="plans" className="gap-1.5">
+                      Plans
+                      <span className="rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0 text-[9px] font-semibold uppercase tracking-wide text-primary">Beta</span>
+                    </TabsTrigger>
+                  )}
                 </TabsList>
                 <TabsContent
                   value="floor-plans"
@@ -2770,6 +2781,7 @@ export const FileViewerModal = ({
 // ============================================================================
 
 export interface DevicesApi {
+  beta?: boolean;
   planName: string | null;
   productsById: Map<string, PlanEditorProduct>;
   choices: (cls: string) => PlanEditorProduct[];
@@ -3201,7 +3213,7 @@ const DetectionsPanel = ({
                     {row.type && <Badge variant="outline" className="h-5 max-w-28 truncate px-1.5 text-[10px]">{subtypeAbbr(c.name, row.type) || row.type}</Badge>}
                     <span className="text-xs tabular-nums text-muted-foreground shrink-0">{row.count}</span>
                   </div>
-                  <DeviceButton row={row} devices={devices} />
+                  {devices.beta && <DeviceButton row={row} devices={devices} />}
                   <button
                     type="button"
                     onClick={(e) => {
