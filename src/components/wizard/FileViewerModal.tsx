@@ -58,6 +58,25 @@ import {
   getEffectiveType,
 } from "@/lib/surveyFloorPlans";
 import { ManagePlanOrderModal } from "@/components/wizard/ManagePlanOrderModal";
+import { useAuth } from "@/contexts/AuthContext";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { PlanEditorModal, ProductPickerOption, isSizeMatch, type PlanEditorClass, type PlanEditorProduct } from "@/components/wizard/PlanEditorModal";
+import { useDrawingPlans, assignmentKeyFor, parsePipeSizeMm, type DrawingPlan } from "@/components/wizard/useDrawingPlans";
+import { isSubtypeSplitClass, subtypeAbbr, expandSubtypeLabelWithSuffix } from "@/lib/awpSubtypeLabels";
+import { tagStyle } from "@/lib/tagColor";
+import { Search, Plus, Layers } from "lucide-react";
+
+/** Row key for an instance: class, or class::type::diameter for split classes. */
+function instanceRowKey(i: { awp_class_name: string; metadata?: unknown }): string {
+  if (!isSubtypeSplitClass(i.awp_class_name)) return i.awp_class_name;
+  const meta = (i.metadata && typeof i.metadata === "object" ? i.metadata : {}) as Record<string, unknown>;
+  const t = typeof meta.pipe_type === "string" ? meta.pipe_type.trim() : "";
+  const d = typeof meta.pipe_diameter === "string" ? meta.pipe_diameter.trim() : "";
+  return `${i.awp_class_name}::${t}::${d}`;
+}
+function rowClassOf(rowKey: string): string {
+  return rowKey.split("::")[0];
+}
 import { AnnotationMetadataPopover } from "@/components/wizard/AnnotationMetadataPopover";
 import { SUBTYPED_CLASSES } from "@/components/CreateProjectModal";
 import {
@@ -1757,7 +1776,8 @@ export const FileViewerModal = ({
           label: instanceLabel(i),
         };
       });
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly, hiddenClasses]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly, hiddenClasses, effectiveRowKey, activePlan, drawingPlans.catalogFor, drawingPlans.assignedFor]);
 
   // Floor-plan bbox overlays. Survey agent returns `xy_width_height_pct` as
   // [left, top, width, height] percentages (0..100) of the visible page.
