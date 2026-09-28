@@ -39,7 +39,7 @@ import { X as XIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
-import { awpClassColor, awpClassColorForType, floorPlanTypeColor, readableTextOn, softBgFrom } from "@/lib/awpColor";
+import { awpClassColor, awpClassColorForType, drawingRiskColors, floorPlanTypeColor, readableTextOn, softBgFrom } from "@/lib/awpColor";
 
 
 import {
@@ -1715,6 +1715,12 @@ export const FileViewerModal = ({
   const activePlan = activePlanId
     ? drawingPlans.plans.find((p) => p.id === activePlanId) ?? null
     : null;
+  const drawingColors = useMemo(() => {
+    const keys = instances
+      .filter((i) => i.file_id === parentFileId && i.page_index === effectivePage && i.awp_class_name !== UNIT_MARKER_CLASS)
+      .map(instanceRowKey);
+    return drawingRiskColors(keys);
+  }, [instances, parentFileId, effectivePage]);
   // Row that drives canvas visibility. Falls back to the whole selected class.
   const effectiveRowKey =
     selectedRowKey && selectedClass && rowClassOf(selectedRowKey) === selectedClass
@@ -1753,13 +1759,13 @@ export const FileViewerModal = ({
           page: singlePageOnly ? currentPage : sheetId ? 1 : i.page_index,
           color: activeTab === "plans" && newPlanOpen
             ? (hoveredPlanIds.has(i.id) ? draftPlanVisual?.color : "hsl(var(--muted-foreground))")
-            : activeTab === "plans" && activePlan?.color || awpClassColorForType(i.awp_class_name, pipeType, diameter),
+            : (activeTab === "plans" && activePlan?.color) || drawingColors.get(instanceRowKey(i)) || awpClassColorForType(i.awp_class_name, pipeType, diameter),
           label: instanceLabel(i),
           innerDot: activeTab === "plans" && (newPlanOpen ? !!draftPlanVisual?.ids.has(i.id) : !!activePlan?.included_instance_ids.includes(i.id)),
         };
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly, hiddenClasses, effectiveRowKey, activePlan, activeTab, newPlanOpen, draftPlanVisual, hoveredPlanIds]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly, hiddenClasses, effectiveRowKey, activePlan, activeTab, newPlanOpen, draftPlanVisual, hoveredPlanIds, drawingColors]);
 
   // Floor-plan bbox overlays. Survey agent returns `xy_width_height_pct` as
   // [left, top, width, height] percentages (0..100) of the visible page.
@@ -2206,6 +2212,7 @@ export const FileViewerModal = ({
                     floorPlans={floorPlans}
                     floorPlanOverrides={floorPlanOverrides ?? {}}
                     selectedRowKey={effectiveRowKey}
+                    drawingColors={drawingColors}
                     onSelectRow={(cls, key) => {
                       setSelectedClass(cls);
                       setSelectedRowKey(key);
