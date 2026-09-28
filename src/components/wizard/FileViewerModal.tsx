@@ -2077,15 +2077,35 @@ export const FileViewerModal = ({
               onPlacingChange={setIsPlacingLabels}
             />
             {sidebarEnabled && awpClasses && !readOnly && (
-              <div className="absolute bottom-4 right-4 z-30 flex items-center gap-1 rounded-full border bg-background/95 p-1 shadow-md">
-                <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full" onClick={undo} disabled={viewingMode || past.length === 0} aria-label="Undo" title="Undo">
+              <div className="absolute bottom-4 right-4 z-30 flex items-center gap-1 rounded-md border bg-background/95 p-1 shadow-md">
+                <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setHistoryOpen(true)} aria-label="Changes" title="Changes">
+                  <ListRestart className="h-4 w-4" />
+                </Button>
+                <Button size="icon" variant="outline" className="h-8 w-8" onClick={undo} disabled={viewingMode || past.length === 0} aria-label="Undo" title="Undo">
                   <Undo2 className="h-4 w-4" />
                 </Button>
-                <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full" onClick={redo} disabled={viewingMode || future.length === 0} aria-label="Redo" title="Redo">
+                <Button size="icon" variant="outline" className="h-8 w-8" onClick={redo} disabled={viewingMode || future.length === 0} aria-label="Redo" title="Redo">
                   <Redo2 className="h-4 w-4" />
                 </Button>
               </div>
             )}
+            <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+              <DialogContent className="max-w-md">
+                <DialogHeader><DialogTitle>Changes this session</DialogTitle></DialogHeader>
+                <ScrollArea className="max-h-80">
+                  {past.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No changes yet.</p> : (
+                    <ol className="space-y-1 pr-3">
+                      {past.slice().reverse().map((action, index) => (
+                        <li key={`${action.type}-${index}`} className="rounded-md border px-3 py-2 text-sm">
+                          <span className="font-medium capitalize">{action.type}</span>{" "}
+                          <span className="text-muted-foreground">{action.type === "move" ? "annotation" : instanceLabel(action.instance)}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </ScrollArea>
+              </DialogContent>
+            </Dialog>
           </div>
 
 
