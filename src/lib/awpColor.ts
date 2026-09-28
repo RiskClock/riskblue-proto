@@ -59,6 +59,28 @@ export function awpClassColorForType(
   return hslToHex(hue, 70, 50);
 }
 
+/** Assign contrasting hues among the risk rows visible on one drawing. */
+export function drawingRiskColors(keys: string[]): Map<string, string> {
+  const unique = [...new Set(keys)].sort();
+  const assigned: number[] = [];
+  const result = new Map<string, string>();
+  for (const key of unique) {
+    const base = ((hashStr(key.trim().toLowerCase()) % 4294967296) * 0.6180339887) % 1;
+    let best = base;
+    let bestGap = -1;
+    for (let step = 0; step < 72; step++) {
+      const candidate = (base + step * 0.6180339887) % 1;
+      const gap = assigned.length
+        ? Math.min(...assigned.map((hue) => Math.min(Math.abs(candidate - hue), 1 - Math.abs(candidate - hue))))
+        : 1;
+      if (gap > bestGap) { best = candidate; bestGap = gap; }
+    }
+    assigned.push(best);
+    result.set(key, hslToHex(best * 360, 70, 50));
+  }
+  return result;
+}
+
 /**
  * Pick a readable text color (white or dark charcoal) for a given hex
  * background using WCAG relative-luminance contrast.
