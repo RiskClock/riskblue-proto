@@ -230,5 +230,18 @@ export function useDrawingPlans(projectId: string | null | undefined, enabled: b
     [products, productsById],
   );
 
-  return { plans, catalogFor, productChoices, productsById, assignedFor, assignedDevicesFor, saveAssignment, createPlan, baseProducts, ready: !!catalog };
+  const deletePlan = useCallback(
+    async (planId: string) => {
+      const { error } = await supabase
+        .from("project_mitigation_plans")
+        .delete()
+        .eq("id", planId)
+        .eq("project_id", projectId!);
+      if (error) throw error;
+      await queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
+    },
+    [projectId, queryClient],
+  );
+
+  return { plans, catalogFor, productChoices, productsById, assignedFor, assignedDevicesFor, saveAssignment, createPlan, deletePlan, baseProducts, ready: !!catalog };
 }

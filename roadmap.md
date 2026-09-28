@@ -25,3 +25,5 @@
 - [x] Keep New Plan under Plans across tab switches, match detection rows and location badges, show partial dashes, and highlight all hovered risk instances.
 - [x] Grey unhovered plan annotations uniformly and list plan devices on separate lines with quantities.
 - [x] Explain golden-ratio HSL hashing and address nearby hue collisions on each drawing.
+- [x] Refine drawing plan radio selection, zoom navigation, deletion, color markers, and create action.
+- [x] Match schematic-level-row file badges to their drawing box color.

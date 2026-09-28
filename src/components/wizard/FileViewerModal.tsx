@@ -20,6 +20,7 @@ import {
   Plus,
   Radar,
   Redo2,
+  Trash2,
   Undo2,
   ListRestart,
 } from "lucide-react";
@@ -64,7 +65,8 @@ import { ProductPickerOption, isSizeMatch, type PlanEditorProduct } from "@/comp
 import { useDrawingPlans, assignmentKeyFor, parsePipeSizeMm, type DrawingPlan } from "@/components/wizard/useDrawingPlans";
 import { isSubtypeSplitClass, subtypeAbbr, expandSubtypeLabelWithSuffix } from "@/lib/awpSubtypeLabels";
 import { tagStyle } from "@/lib/tagColor";
-import { Search, Layers } from "lucide-react";
+import { Search } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 /** Row key for an instance: class, or class::type::diameter for split classes. */
 function instanceRowKey(i: { awp_class_name: string; metadata?: unknown }): string {
@@ -536,6 +538,13 @@ export const FileViewerModal = ({
   const { user } = useAuth();
   const drawingPlans = useDrawingPlans(persistKey, isOpen && !!awpClasses);
   const editingEnabled = sidebarEnabled && !viewingMode;
+
+  useEffect(() => {
+    if (newPlanOpen || drawingPlans.plans.length === 0) return;
+    if (!drawingPlans.plans.some((plan) => plan.id === activePlanId)) {
+      setActivePlanId(drawingPlans.plans[0].id);
+    }
+  }, [activePlanId, drawingPlans.plans, newPlanOpen]);
 
 
   const storageKey = persistKey ? `workbench-awp-class:${persistKey}` : null;
@@ -1563,6 +1572,42 @@ export const FileViewerModal = ({
     [singlePageOnly, sheetId, currentPage, rotationByPage, pulseInstance],
   );
 
+  const focusInstances = useCallback(
+    (targets: DrawingInstanceRow[]) => {
+      if (targets.length === 0) return;
+      const targetPage = targets.some((item) => item.page_index === effectivePage)
+        ? effectivePage
+        : targets[0].page_index;
+      const pageTargets = targets.filter((item) => item.page_index === targetPage);
+      const needsPageChange = !singlePageOnly && !sheetId && targetPage !== currentPage;
+      if (needsPageChange) setCurrentPage(targetPage);
+      const run = () => {
+        const xs = pageTargets.map((item) => item.nx);
+        const ys = pageTargets.map((item) => item.ny);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        const margin = 0.015;
+        const base = {
+          nx: Math.max(0, minX - margin),
+          ny: Math.max(0, minY - margin),
+          nw: Math.max(0.01, Math.min(1, maxX - minX + margin * 2)),
+          nh: Math.max(0.01, Math.min(1, maxY - minY + margin * 2)),
+        };
+        const rot = (rotationByPage[targetPage] ?? 0) as 0 | 90 | 180 | 270;
+        viewerApiRef.current?.fitToRect?.(rot === 0 ? base : rotateNormalizedRect(base, rot), {
+          paddingRatio: 0.18,
+          maxScale: 4,
+          animate: true,
+        });
+      };
+      if (needsPageChange) setTimeout(() => requestAnimationFrame(run), 120);
+      else requestAnimationFrame(run);
+    },
+    [currentPage, effectivePage, rotationByPage, sheetId, singlePageOnly],
+  );
+
 
 
   const undo = async () => {
@@ -1732,6 +1777,7 @@ export const FileViewerModal = ({
     if (activeTab === "plans" && activePlan) {
       return activePlan.included_instance_ids.includes(i.id);
     }
+    if (activeTab === "plans") return false;
     if (activeTab === "floor-plans") return true;
     if (!effectiveRowKey) return false;
     if (effectiveRowKey === i.awp_class_name) return true;
@@ -1911,6 +1957,7 @@ export const FileViewerModal = ({
       >
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="truncate flex items-center gap-2 min-w-0">
+            <span className="h-3 w-3 rounded-full bg-primary shrink-0" />
             <span className="truncate">{fileName}</span>
 <Button
               type="button"
@@ -2192,6 +2239,8 @@ export const FileViewerModal = ({
                 </TabsContent>
                 <TabsContent value="detections" className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0 data-[state=inactive]:hidden">
                   <DetectionsPanel
+                     rotationByPage={rotationByPage}
+                     viewerApiRef={viewerApiRef}
                     awpClasses={awpClasses}
                     selectedClass={selectedClass}
                     setSelectedClass={setSelectedClass}
@@ -2225,10 +2274,21 @@ export const FileViewerModal = ({
                 </TabsContent>
                 <TabsContent value="plans" forceMount className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0 data-[state=inactive]:hidden">
                    {!newPlanOpen && <PlansPanel
-                    plans={drawingPlans.plans}
-                    activePlanId={activePlanId}
-                    onTogglePlan={(id) => setActivePlanId((prev) => (prev === id ? null : id))}
+                     plans={drawingPlans.plans}
+                     activePlanId={activePlanId}
+                     onSelectPlan={setActivePlanId}
                      onNewPlan={() => { setActivePlanId(null); setNewPlanOpen(true); }}
+                      onDeletePlan={async (id) => {
+                        const fallbackId = drawingPlans.plans.find((plan) => plan.id !== id)?.id ?? null;
+                        try {
+                          await drawingPlans.deletePlan(id);
+                          if (activePlanId === id) setActivePlanId(fallbackId);
+                          toast({ title: "Plan deleted" });
+                        } catch (e) {
+                          toast({ title: "Could not delete plan", description: getUserFriendlyError(e), variant: "destructive" });
+                          throw e;
+                        }
+                      }}
                      deviceNames={(plan) => {
                        const counts = new Map<string, number>();
                       instances.filter((i) => plan.included_instance_ids.includes(i.id)).forEach((i) => {
@@ -2254,6 +2314,8 @@ export const FileViewerModal = ({
                      onCancel={() => { setNewPlanOpen(false); setDraftPlanVisual(null); setHoveredPlanIds(new Set()); }}
                      onHoverInstances={(ids) => setHoveredPlanIds(new Set(ids))}
                      onVisualChange={handleDraftVisualChange}
+                      onFocusInstances={focusInstances}
+                      onFocusInstance={focusInstance}
                     onSave={async (value) => {
                       setSavingNewPlan(true);
                       try {
@@ -2690,6 +2752,8 @@ export interface DevicesApi {
 }
 
 interface DetectionsPanelProps {
+  rotationByPage: Record<number, number>;
+  viewerApiRef: React.RefObject<any>;
   awpClasses: AwpClassOption[];
   selectedClass: string | null;
   setSelectedClass: (n: string | null) => void;
@@ -2881,61 +2945,67 @@ const DeviceButton = ({ row, devices }: { row: DetectionRowModel; devices: Devic
   );
 };
 
-const PlansPanel = ({
-  plans,
-  activePlanId,
-  onTogglePlan,
-  onNewPlan,
-  deviceNames,
-}: {
+const PlansPanel = ({ plans, activePlanId, onSelectPlan, onNewPlan, onDeletePlan, deviceNames }: {
   plans: DrawingPlan[];
   activePlanId: string | null;
-  onTogglePlan: (id: string) => void;
+  onSelectPlan: (id: string) => void;
   onNewPlan: () => void;
+  onDeletePlan: (id: string) => Promise<void>;
   deviceNames: (p: DrawingPlan) => { name: string; count: number }[];
-}) => (
-  <div className="flex-1 flex flex-col min-h-0">
-    <div className="px-3 py-2 flex items-center justify-between gap-2 border-b">
-      <p className="text-xs text-muted-foreground">Click a plan to show only its annotations.</p>
-      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onNewPlan}>
-        <Plus className="h-3.5 w-3.5" /> New Plan
-      </Button>
+}) => {
+  const [deleteTarget, setDeleteTarget] = useState<DrawingPlan | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      <div className="p-3 border-b">
+        <Button size="sm" variant="outline" className="w-full h-8 text-xs" onClick={onNewPlan}>
+          <Plus className="h-3.5 w-3.5 mr-1" /> Create New Plan
+        </Button>
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        {plans.length === 0 && <div className="px-3 py-8 text-center text-sm text-muted-foreground">No plans yet. Create one to select the risks it mitigates.</div>}
+        <RadioGroup value={activePlanId ?? undefined} onValueChange={onSelectPlan} className="gap-0">
+          {plans.map((p) => {
+            const active = p.id === activePlanId;
+            const devices = deviceNames(p);
+            return (
+              <div key={p.id} onClick={() => onSelectPlan(p.id)} className={`w-full flex items-start gap-2 px-3 py-2 text-left text-sm border-b cursor-pointer hover:bg-muted/50 ${active ? "bg-primary/10" : ""}`}>
+                <RadioGroupItem value={p.id} className="mt-0.5 shrink-0" aria-label={`Show ${p.name}`} onClick={(e) => e.stopPropagation()} />
+                <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: p.color || awpClassColor(p.name) }} />
+                <span className="min-w-0 flex-1">
+                  <span className={`block truncate ${active ? "font-semibold" : ""}`}>{p.name}</span>
+                  {devices.length > 0 && <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">{devices.map(({ name, count }) => <li key={name} className="truncate">{name} ×{count}</li>)}</ul>}
+                </span>
+                <span className="text-xs text-muted-foreground shrink-0" title={devices.map(({ name, count }) => `${name} ×${count}`).join("\n")}>{devices.length} {devices.length === 1 ? "device" : "devices"}</span>
+                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" aria-label={`Delete ${p.name}`} onClick={(e) => { e.stopPropagation(); setDeleteTarget(p); }}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            );
+          })}
+        </RadioGroup>
+      </div>
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open && !deleting) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete plan?</AlertDialogTitle>
+            <AlertDialogDescription>{deleteTarget ? `“${deleteTarget.name}” will be permanently deleted.` : "This plan will be permanently deleted."}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={deleting} onClick={(e) => { e.preventDefault(); if (!deleteTarget) return; setDeleting(true); void onDeletePlan(deleteTarget.id).then(() => setDeleteTarget(null)).catch(() => undefined).finally(() => setDeleting(false)); }}>
+              {deleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
-    <div className="flex-1 overflow-y-auto">
-      {plans.length === 0 && (
-        <div className="px-3 py-8 text-center text-sm text-muted-foreground">
-          No plans yet. Create one to select the risks it mitigates.
-        </div>
-      )}
-      {plans.map((p) => {
-        const active = p.id === activePlanId;
-        const devices = deviceNames(p);
-        return (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => onTogglePlan(p.id)}
-            className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm border-b hover:bg-muted/50 ${active ? "bg-primary/10" : ""}`}
-          >
-            <Layers className={`h-4 w-4 shrink-0 ${active ? "text-primary" : "text-muted-foreground"}`} />
-            <span className="min-w-0 flex-1">
-              <span className={`block truncate ${active ? "font-semibold" : ""}`}>{p.name}</span>
-               {devices.length > 0 && <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">{devices.map(({ name, count }) => <li key={name} className="truncate">{name} ×{count}</li>)}</ul>}
-            </span>
-             <span className="text-xs text-muted-foreground shrink-0" title={devices.map(({ name, count }) => `${name} ×${count}`).join("\n")}>{devices.length} {devices.length === 1 ? "device" : "devices"}</span>
-            <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded ${active ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
-              {active ? "Showing" : "Show"}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  </div>
-);
+  );
+};
 
 const randomPlanColor = () => awpClassColor(`plan-${Date.now()}-${Math.random()}`);
 
-const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, saving, onCancel, onSave, onHoverInstances, onVisualChange, numberByInstanceId, instanceLabel, floorPlans, floorPlanOverrides, effectivePage }: {
+const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, saving, onCancel, onSave, onHoverInstances, onVisualChange, onFocusInstances, onFocusInstance, numberByInstanceId, instanceLabel, floorPlans, floorPlanOverrides, effectivePage }: {
   defaultName: string;
   instances: DrawingInstanceRow[];
   classes: AwpClassOption[];
@@ -2945,6 +3015,8 @@ const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, savin
   onSave: (value: { name: string; description: string; color: string; includedInstanceIds: string[]; baseQuantities: Record<string, number> }) => void;
   onHoverInstances: (ids: string[]) => void;
   onVisualChange: (color: string, ids: Set<string>) => void;
+  onFocusInstances: (instances: DrawingInstanceRow[]) => void;
+  onFocusInstance: (instance: DrawingInstanceRow) => void;
   numberByInstanceId: Map<string, number>;
   instanceLabel: (instance: DrawingInstanceRow) => string;
   floorPlans: ParsedFloorPlan[];
@@ -2980,23 +3052,23 @@ const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, savin
           const checked = items.filter((i) => selected.has(i.id)).length;
           const isExpanded = expanded.has(row.key);
           return <div key={row.key} className="border-b" onMouseEnter={() => onHoverInstances(items.map((i) => i.id))} onMouseLeave={() => onHoverInstances([])}>
-            <div className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50">
-              <Checkbox checked={checked === items.length ? true : checked > 0 ? "indeterminate" : false} onCheckedChange={(v) => toggleIds(items.map((i) => i.id), v === true)} style={{ borderColor: color, backgroundColor: checked ? color : undefined }} aria-label={`Select ${row.fullName}`} />
+            <div className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 cursor-pointer" onClick={() => onFocusInstances(items)}>
+              <Checkbox checked={checked === items.length ? true : checked > 0 ? "indeterminate" : false} onCheckedChange={(v) => toggleIds(items.map((i) => i.id), v === true)} onClick={(e) => e.stopPropagation()} style={{ borderColor: color, backgroundColor: checked ? color : undefined }} aria-label={`Select ${row.fullName}`} />
               <Tooltip><TooltipTrigger asChild><span className="shrink-0 font-mono text-xs font-medium">{row.label}</span></TooltipTrigger><TooltipContent side="left">{row.fullName}</TooltipContent></Tooltip>
               {row.diam && <Badge variant="outline" className="h-5 px-1.5 text-[10px]">{row.diam}</Badge>}
               {row.type && <Badge variant="outline" className="h-5 max-w-28 truncate px-1.5 text-[10px]">{subtypeAbbr(row.cls.name, row.type) || row.type}</Badge>}
               <span className="flex-1 text-right text-xs text-muted-foreground">{checked}/{items.length}</span>
-              <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setExpanded((prev) => { const next = new Set(prev); next.has(row.key) ? next.delete(row.key) : next.add(row.key); return next; })} aria-label={isExpanded ? "Collapse" : "Expand"}>{isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</Button>
+              <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={(e) => { e.stopPropagation(); setExpanded((prev) => { const next = new Set(prev); next.has(row.key) ? next.delete(row.key) : next.add(row.key); return next; }); }} aria-label={isExpanded ? "Collapse" : "Expand"}>{isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</Button>
             </div>
             {isExpanded && <div className="bg-muted/20 px-8 py-1">{items.slice().sort((a, b) => (numberByInstanceId.get(a.id) ?? 0) - (numberByInstanceId.get(b.id) ?? 0)).map((i) => {
               const containingPlan = findContainingPlan(floorPlans, i.nx, i.ny, floorPlanOverrides);
               const planLabel = containingPlan ? getEffectiveLabel(containingPlan, floorPlanOverrides) : null;
               const planColor = containingPlan ? floorPlanTypeColor(getEffectiveType(containingPlan, floorPlanOverrides)) : null;
-              return <label key={i.id} className="flex items-center gap-2 py-1 text-xs hover:bg-muted/50" onMouseEnter={() => onHoverInstances([i.id])} onMouseLeave={() => onHoverInstances(items.map((item) => item.id))}>
-                <Checkbox checked={selected.has(i.id)} onCheckedChange={(v) => toggleIds([i.id], v === true)} style={{ borderColor: color, backgroundColor: selected.has(i.id) ? color : undefined }} />
+              return <div key={i.id} className="flex items-center gap-2 py-1 text-xs hover:bg-muted/50 cursor-pointer" onClick={() => onFocusInstance(i)} onMouseEnter={() => onHoverInstances([i.id])} onMouseLeave={() => onHoverInstances(items.map((item) => item.id))}>
+                <Checkbox checked={selected.has(i.id)} onCheckedChange={(v) => toggleIds([i.id], v === true)} onClick={(e) => e.stopPropagation()} style={{ borderColor: color, backgroundColor: selected.has(i.id) ? color : undefined }} />
                 <span className="min-w-0 flex-1 truncate font-mono">{instanceLabel(i)}{i.page_index !== effectivePage ? ` (p.${i.page_index})` : ""}</span>
                 {planLabel && planColor && <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium max-w-[80px] truncate border" style={{ backgroundColor: softBgFrom(planColor), color: planColor, borderColor: planColor }} title={`In ${planLabel}`}>{planLabel}</span>}
-              </label>;
+              </div>;
             })}</div>}
           </div>;
         })}
@@ -3007,6 +3079,8 @@ const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, savin
 };
 
 const DetectionsPanel = ({
+  rotationByPage,
+  viewerApiRef,
   awpClasses,
   expanded,
   setExpanded,
@@ -3048,7 +3122,19 @@ const DetectionsPanel = ({
               <div key={row.key} className="border-b last:border-b-0 min-w-0">
                 <div
                   className={`flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50 min-w-0 ${isSelected ? "bg-muted/40" : ""}`}
-                  onClick={() => onSelectRow(c.name, row.key)}
+                  onClick={() => {
+                    onSelectRow(c.name, row.key);
+                    if (row.items.length > 0) {
+                      const bboxes = row.items.map(i => ({ nx: i.nx, ny: i.ny, nw: 0, nh: 0 }));
+                      const minX = Math.min(...bboxes.map(b => b.nx));
+                      const minY = Math.min(...bboxes.map(b => b.ny));
+                      const maxX = Math.max(...bboxes.map(b => b.nx));
+                      const maxY = Math.max(...bboxes.map(b => b.ny));
+                      const rot = (rotationByPage[effectivePage] ?? 0) as 0 | 90 | 180 | 270;
+                      const groupRect = { nx: minX, ny: minY, nw: maxX - minX, nh: maxY - minY };
+                      viewerApiRef.current?.fitToRect?.(rot === 0 ? groupRect : rotateNormalizedRect(groupRect, rot), { paddingRatio: 0.3, animate: true });
+                    }
+                  }}
                 >
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     <input

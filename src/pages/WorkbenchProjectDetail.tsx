@@ -2956,7 +2956,7 @@ const isChildPlanType = (t: string) =>
       plural: "unit floor plans",
     },
     schematic_level_row: {
-      color: awpClassColor("schematic_level_row"),
+      color: floorPlanTypeColor("schematic_level_row"),
       singular: "schematic level row",
       plural: "schematic level rows",
     },
