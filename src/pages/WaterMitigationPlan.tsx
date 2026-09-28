@@ -1367,6 +1367,36 @@ export default function WaterMitigationPlan() {
     if (!canEdit) return;
     const plan = plans.find((p) => p.id === planId);
     if (!plan) return;
+
+    // Drawing-modal plans track the risk instances they cover directly.
+    if (isDrawingPlan(plan)) {
+      const included = new Set(plan.included_instance_ids);
+      const turningOffDrawing = included.has(instanceId);
+      turningOffDrawing ? included.delete(instanceId) : included.add(instanceId);
+      const nextIds = [...included];
+      queryClient.setQueryData(["wmp-plans", projectId], (old: Plan[] | undefined) =>
+        (old || []).map((p) => (p.id === planId ? { ...p, included_instance_ids: nextIds } : p)),
+      );
+      const { error: drawingError } = await supabase
+        .from("project_mitigation_plans")
+        .update({ included_instance_ids: nextIds } as any)
+        .eq("id", planId);
+      if (drawingError) {
+        toast.error(getUserFriendlyError(drawingError));
+        queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
+        return;
+      }
+      const name = controlRows.find((c) => c.id === controlId)?.name || "control";
+      const saved = await logPlanChange(
+        turningOffDrawing ? "control_off" : "control_on",
+        `${turningOffDrawing ? "Removed" : "Added"} ${name} at 1 location in "${plan.name}"`,
+        planId,
+        { controlId, instanceId },
+      );
+      if (!saved) toast.warning("The control was updated, but its change history could not be recorded.");
+      return;
+    }
+
     const cur = new Set((plan.excluded_instances || {})[controlId] || []);
     const turningOff = !cur.has(instanceId);
     cur.has(instanceId) ? cur.delete(instanceId) : cur.add(instanceId);
