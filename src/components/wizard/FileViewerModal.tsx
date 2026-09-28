@@ -1871,6 +1871,62 @@ export const FileViewerModal = ({
     return m;
   }, [instances, parentFileId, effectivePage, awpClasses]);
 
+  // ---- Devices (Plan Builder products) -----------------------------------
+  const devicePlan: DrawingPlan | null =
+    activePlan ?? drawingPlans.plans[0] ?? null;
+  const devicesApi: DevicesApi = {
+    planName: devicePlan?.name ?? null,
+    productsById: drawingPlans.productsById,
+    choices: (cls) => drawingPlans.productChoices(cls),
+    assigned: (cls, type, diam) => {
+      const entry = drawingPlans.catalogFor(cls);
+      if (!entry || !devicePlan) return [];
+      return drawingPlans.assignedFor(devicePlan, assignmentKeyFor(entry.id, cls, type, diam), entry.id);
+    },
+    canEdit: !!devicePlan && !readOnly,
+    mapped: (cls) => !!drawingPlans.catalogFor(cls),
+    save: async (cls, type, diam, ids) => {
+      const entry = drawingPlans.catalogFor(cls);
+      if (!entry || !devicePlan) return;
+      try {
+        await drawingPlans.saveAssignment(devicePlan, assignmentKeyFor(entry.id, cls, type, diam), ids);
+      } catch (e) {
+        toast({ title: "Could not save devices", description: getUserFriendlyError(e), variant: "destructive" });
+      }
+    },
+  };
+
+  // Classes offered in the New Plan modal, built from every marker in the project.
+  const newPlanClasses = useMemo<PlanEditorClass[]>(() => {
+    const map = new Map<string, PlanEditorClass>();
+    for (const i of instances) {
+      if (i.awp_class_name === UNIT_MARKER_CLASS) continue;
+      const entry = drawingPlans.catalogFor(i.awp_class_name);
+      if (!entry) continue;
+      const { pipeType, diameter } = instanceMeta(i);
+      const key = assignmentKeyFor(entry.id, i.awp_class_name, pipeType, diameter);
+      const cur = map.get(key);
+      if (cur) { cur.count += 1; continue; }
+      const split = key !== entry.id;
+      const prefix = prefixByClass.get(i.awp_class_name) || entry.prefix || i.awp_class_name;
+      const code = split ? `${prefix}-${subtypeAbbr(i.awp_class_name, pipeType) || pipeType || "?"}${diameter ? ` ${diameter}` : ""}` : prefix;
+      const name = split
+        ? `${i.awp_class_name}${pipeType ? ` ${expandSubtypeLabelWithSuffix(i.awp_class_name, pipeType)}` : ""}${diameter ? ` ${diameter}` : ""}`
+        : i.awp_class_name;
+      map.set(key, {
+        id: key,
+        name,
+        code,
+        kind: entry.kind,
+        count: 1,
+        pipeSizeMm: parsePipeSizeMm(diameter),
+        products: drawingPlans.productChoices(i.awp_class_name),
+      });
+    }
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instances, drawingPlans.catalogFor, drawingPlans.productChoices, prefixByClass]);
+
   return (
     <Dialog
       open={isOpen}
@@ -2215,6 +2271,29 @@ export const FileViewerModal = ({
                         .filter(([k, v]) => !k.startsWith("__") && Array.isArray(v))
                         .reduce((n, [, v]) => n + (v as string[]).length, 0)
                     }
+                  />
+                  <PlanEditorModal
+                    open={newPlanOpen}
+                    mode="create"
+                    initialName={`Plan ${drawingPlans.plans.length + 1}`}
+                    initialDescription=""
+                    initialAssignments={{}}
+                    classes={newPlanClasses}
+                    baseProducts={drawingPlans.baseProducts}
+                    saving={savingNewPlan}
+                    onOpenChange={setNewPlanOpen}
+                    onSave={async (value) => {
+                      setSavingNewPlan(true);
+                      try {
+                        const id = await drawingPlans.createPlan(value as any, user?.id ?? null);
+                        setNewPlanOpen(false);
+                        if (id) setActivePlanId(id);
+                      } catch (e) {
+                        toast({ title: "Could not create plan", description: getUserFriendlyError(e), variant: "destructive" });
+                      } finally {
+                        setSavingNewPlan(false);
+                      }
+                    }}
                   />
                 </TabsContent>
               </Tabs>
