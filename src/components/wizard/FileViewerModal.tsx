@@ -61,7 +61,7 @@ import {
 import { ManagePlanOrderModal } from "@/components/wizard/ManagePlanOrderModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ProductPickerOption, isSizeMatch, type PlanEditorClass, type PlanEditorProduct } from "@/components/wizard/PlanEditorModal";
+import { ProductPickerOption, isSizeMatch, type PlanEditorProduct } from "@/components/wizard/PlanEditorModal";
 import { useDrawingPlans, assignmentKeyFor, parsePipeSizeMm, type DrawingPlan } from "@/components/wizard/useDrawingPlans";
 import { isSubtypeSplitClass, subtypeAbbr, expandSubtypeLabelWithSuffix } from "@/lib/awpSubtypeLabels";
 import { tagStyle } from "@/lib/tagColor";
@@ -1874,37 +1874,6 @@ export const FileViewerModal = ({
     },
   };
 
-  // Classes offered in the New Plan modal, built from every marker in the project.
-  const newPlanClasses = useMemo<PlanEditorClass[]>(() => {
-    const map = new Map<string, PlanEditorClass>();
-    for (const i of instances) {
-      if (i.awp_class_name === UNIT_MARKER_CLASS) continue;
-      const entry = drawingPlans.catalogFor(i.awp_class_name);
-      if (!entry) continue;
-      const { pipeType, diameter } = instanceMeta(i);
-      const key = assignmentKeyFor(entry.id, i.awp_class_name, pipeType, diameter);
-      const cur = map.get(key);
-      if (cur) { cur.count += 1; continue; }
-      const split = key !== entry.id;
-      const prefix = prefixByClass.get(i.awp_class_name) || entry.prefix || i.awp_class_name;
-      const code = split ? `${prefix}-${subtypeAbbr(i.awp_class_name, pipeType) || pipeType || "?"}${diameter ? ` ${diameter}` : ""}` : prefix;
-      const name = split
-        ? `${i.awp_class_name}${pipeType ? ` ${expandSubtypeLabelWithSuffix(i.awp_class_name, pipeType)}` : ""}${diameter ? ` ${diameter}` : ""}`
-        : i.awp_class_name;
-      map.set(key, {
-        id: key,
-        name,
-        code,
-        kind: entry.kind,
-        count: 1,
-        pipeSizeMm: parsePipeSizeMm(diameter),
-        products: drawingPlans.productChoices(i.awp_class_name),
-      });
-    }
-    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [instances, drawingPlans.catalogFor, drawingPlans.productChoices, prefixByClass]);
-
   return (
     <Dialog
       open={isOpen}
@@ -2956,7 +2925,7 @@ const PlansPanel = ({
   </div>
 );
 
-const randomPlanColor = () => `hsl(${Math.floor(Math.random() * 360)} 70% 50%)`;
+const randomPlanColor = () => awpClassColor(`plan-${Date.now()}-${Math.random()}`);
 
 const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, saving, onCancel, onSave, onHoverInstance }: {
   defaultName: string;
@@ -2985,7 +2954,7 @@ const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, savin
   return (
     <div className="absolute inset-0 z-10 flex flex-col bg-background">
       <div className="space-y-2 border-b p-3">
-        <div className="flex gap-2"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Plan name" /><input type="color" value={color.startsWith("#") ? color : "#3388cc"} onChange={(e) => setColor(e.target.value)} className="h-10 w-12 rounded border p-1" aria-label="Plan color" /></div>
+        <div className="flex gap-2"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Plan name" /><input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-10 w-12 rounded border p-1" aria-label="Plan color" /></div>
         <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Plan description" className="min-h-16" />
       </div>
       {baseProducts.length > 0 && <div className="border-b p-3"><p className="mb-2 text-sm font-semibold">Essential Components</p><div className="space-y-1">{baseProducts.map((p) => <div key={p.id} className="flex items-center gap-2 text-xs"><span className="flex-1 truncate">{p.name}</span><Input type="number" min={0} className="h-7 w-16" value={baseQuantities[p.id] || 0} onChange={(e) => setBaseQuantities((q) => ({ ...q, [p.id]: Math.max(0, Number(e.target.value) || 0) }))} /></div>)}</div></div>}
@@ -3044,7 +3013,7 @@ const DetectionsPanel = ({
             const isSelected = selectedRowKey === row.key || (selectedRowKey === c.name && rows.find((r) => r.cls.name === c.name)?.key === row.key);
             const isExpanded = expanded.has(row.key);
             const firstPipeType = row.type;
-            const color = row.type ? awpClassColorForType(c.name, firstPipeType) : awpClassColor(c.name);
+            const color = row.type || row.diam ? awpClassColorForType(c.name, firstPipeType, row.diam) : awpClassColor(c.name);
             return (
               <div key={row.key} className="border-b last:border-b-0 min-w-0">
                 <div
@@ -3062,10 +3031,12 @@ const DetectionsPanel = ({
                     <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="flex-1 min-w-0 truncate font-mono text-xs">{row.label}</span>
+                        <span className="shrink-0 font-mono text-xs">{row.label}</span>
                       </TooltipTrigger>
                       <TooltipContent side="left">{row.fullName}</TooltipContent>
                     </Tooltip>
+                    {row.diam && <Badge variant="outline" className="h-5 px-1.5 text-[10px]">{row.diam}</Badge>}
+                    {row.type && <Badge variant="outline" className="h-5 max-w-28 truncate px-1.5 text-[10px]">{subtypeAbbr(c.name, row.type) || row.type}</Badge>}
                     <span className="text-xs tabular-nums text-muted-foreground shrink-0">{row.count}</span>
                   </div>
                   <DeviceButton row={row} devices={devices} />
@@ -3107,7 +3078,8 @@ const DetectionsPanel = ({
                           : null;
                         const iMeta = (i.metadata && typeof i.metadata === "object" ? (i.metadata as any) : {}) as Record<string, any>;
                         const iPipeType = typeof iMeta.pipe_type === "string" ? iMeta.pipe_type.trim() : "";
-                        const dotColor = awpClassColorForType(c.name, iPipeType);
+                        const iDiameter = typeof iMeta.pipe_diameter === "string" ? iMeta.pipe_diameter.trim() : "";
+                        const dotColor = awpClassColorForType(c.name, iPipeType, iDiameter);
                         return (
                           <div
                             key={i.id}
