@@ -1051,30 +1051,49 @@ export default function WaterMitigationPlan() {
 
   const planUsesProductForClass = (plan: Plan, productId: string, catalogId: string | null, assignmentId?: string | null) => {
     if (!catalogId) return false;
+    if (isDrawingPlan(plan)) {
+      return devicesForAssignment(assignmentId ?? null, catalogId).includes(productId);
+    }
     const assigned = plan.product_assignments[assignmentId || catalogId] ?? plan.product_assignments[catalogId];
     return Array.isArray(assigned) && assigned.includes(productId);
+  };
+
+  /** Instances a plan actually covers (drawing plans list them explicitly). */
+  const planCoversInstance = (plan: Plan, instanceId: string, controlId: string) => {
+    if (isDrawingPlan(plan)) return plan.included_instance_ids.includes(instanceId);
+    return !excludedFor(plan, controlId).has(instanceId);
   };
 
   const countForSpace = (plan: Plan, controlId: string, space: string) => {
     const cell = spaceBreakdown.get(controlId)?.get(space);
     if (!cell) return 0;
-    const ex = excludedFor(plan, controlId);
-    return cell.legacyIds.filter((catalogId) => planUsesProductForClass(plan, controlId, catalogId)).length
-      + cell.instances.filter((i) => planUsesProductForClass(plan, controlId, i.catalogId, i.assignmentId) && !ex.has(i.id)).length;
+    const legacy = isDrawingPlan(plan)
+      ? 0
+      : cell.legacyIds.filter((catalogId) => planUsesProductForClass(plan, controlId, catalogId)).length;
+    return legacy
+      + cell.instances.filter(
+        (i) => planUsesProductForClass(plan, controlId, i.catalogId, i.assignmentId) && planCoversInstance(plan, i.id, controlId),
+      ).length;
   };
 
   const countFor = (plan: Plan, controlId: string) => {
     const fixed = controlRows.find((r) => r.id === controlId)?.fixedQuantity;
     if (typeof fixed === "number") {
-      return Object.values(plan.product_assignments || {}).some((value) => Array.isArray(value) && value.includes(controlId)) ? fixed : 0;
+      const usedInPlan = isDrawingPlan(plan)
+        ? Object.values(riskDeviceAssignments).some((value) => Array.isArray(value) && value.includes(controlId))
+        : Object.values(plan.product_assignments || {}).some((value) => Array.isArray(value) && value.includes(controlId));
+      return usedInPlan ? fixed : 0;
     }
     const spaces = spaceBreakdown.get(controlId);
     if (!spaces) return 0;
-    const ex = excludedFor(plan, controlId);
     let n = 0;
     spaces.forEach((cell) => {
-      n += cell.legacyIds.filter((catalogId) => planUsesProductForClass(plan, controlId, catalogId)).length;
-      n += cell.instances.filter((i) => planUsesProductForClass(plan, controlId, i.catalogId, i.assignmentId) && !ex.has(i.id)).length;
+      if (!isDrawingPlan(plan)) {
+        n += cell.legacyIds.filter((catalogId) => planUsesProductForClass(plan, controlId, catalogId)).length;
+      }
+      n += cell.instances.filter(
+        (i) => planUsesProductForClass(plan, controlId, i.catalogId, i.assignmentId) && planCoversInstance(plan, i.id, controlId),
+      ).length;
     });
     return n;
   };
