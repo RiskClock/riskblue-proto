@@ -1359,6 +1359,17 @@ export default function WaterMitigationPlan() {
       } as any).eq("id", plan.id);
       if (error) toast.error(getUserFriendlyError(error));
       else {
+        // Plans created in the drawing modal read their devices from the
+        // project-wide risk assignments, so keep those in step.
+        if (isDrawingPlan(plan)) {
+          const nextDevices = { ...riskDeviceAssignments, ...value.assignments };
+          const { error: deviceError } = await supabase
+            .from("projects")
+            .update({ risk_device_assignments: nextDevices } as any)
+            .eq("id", projectId);
+          if (deviceError) toast.error(getUserFriendlyError(deviceError));
+          else await queryClient.invalidateQueries({ queryKey: ["wmp-project", projectId] });
+        }
         await logPlanChange("update", `Updated plan "${value.name}"`, plan.id, { name: value.name, product_assignments: productAssignments });
         setPlanEditor(null);
       }
