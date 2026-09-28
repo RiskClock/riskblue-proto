@@ -2059,11 +2059,13 @@ export type Database = {
       }
       project_mitigation_plans: {
         Row: {
+          color: string | null
           control_counts: Json
           created_at: string
           created_by: string | null
           excluded_instances: Json
           id: string
+          included_instance_ids: Json
           name: string
           product_assignments: Json
           project_id: string
@@ -2072,11 +2074,13 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          color?: string | null
           control_counts?: Json
           created_at?: string
           created_by?: string | null
           excluded_instances?: Json
           id?: string
+          included_instance_ids?: Json
           name?: string
           product_assignments?: Json
           project_id: string
@@ -2085,11 +2089,13 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          color?: string | null
           control_counts?: Json
           created_at?: string
           created_by?: string | null
           excluded_instances?: Json
           id?: string
+          included_instance_ids?: Json
           name?: string
           product_assignments?: Json
           project_id?: string
@@ -2169,6 +2175,7 @@ export type Database = {
           public_share_token: string | null
           report_file_name: string | null
           report_file_path: string | null
+          risk_device_assignments: Json
           selected_awp_class_names: string[]
           selected_awp_subtypes: Json
           selected_other_classes: string[]
@@ -2214,6 +2221,7 @@ export type Database = {
           public_share_token?: string | null
           report_file_name?: string | null
           report_file_path?: string | null
+          risk_device_assignments?: Json
           selected_awp_class_names?: string[]
           selected_awp_subtypes?: Json
           selected_other_classes?: string[]
@@ -2259,6 +2267,7 @@ export type Database = {
           public_share_token?: string | null
           report_file_name?: string | null
           report_file_path?: string | null
+          risk_device_assignments?: Json
           selected_awp_class_names?: string[]
           selected_awp_subtypes?: Json
           selected_other_classes?: string[]

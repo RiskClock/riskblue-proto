@@ -15,3 +15,9 @@
 - [x] Move Product Catalog into the main header beside Projects for system admins.
 - [x] Confirm mixed pricing is annualized and label totals as yearly only when recurring pricing applies.
 - [x] Verify the updated navigation, labels, and cost display in the live preview.
+- [ ] Restyle drawing Changes/Undo/Redo controls and add session change-history dialog.
+- [ ] Make annotation outlines opaque and adopt golden-ratio HSL colors with attribute-aware keys.
+- [ ] Keep detection rows collapsed and render diameter-first attribute badges.
+- [ ] Store project-wide risk-type device assignments and allow assignment without plans.
+- [ ] Replace New Plan modal with inline plan editor, per-instance selection, plan colors, and derived devices.
+- [ ] Verify drawing modal behavior, persistence, compatibility, and preview errors.

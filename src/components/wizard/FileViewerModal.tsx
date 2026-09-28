@@ -20,8 +20,8 @@ import {
   Plus,
   Radar,
   Redo2,
-  Tag,
   Undo2,
+  ListRestart,
 } from "lucide-react";
 
 import { DrawingViewer } from "@/components/viewer";
@@ -60,7 +60,7 @@ import {
 import { ManagePlanOrderModal } from "@/components/wizard/ManagePlanOrderModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { PlanEditorModal, ProductPickerOption, isSizeMatch, type PlanEditorClass, type PlanEditorProduct } from "@/components/wizard/PlanEditorModal";
+import { ProductPickerOption, isSizeMatch, type PlanEditorProduct } from "@/components/wizard/PlanEditorModal";
 import { useDrawingPlans, assignmentKeyFor, parsePipeSizeMm, type DrawingPlan } from "@/components/wizard/useDrawingPlans";
 import { isSubtypeSplitClass, subtypeAbbr, expandSubtypeLabelWithSuffix } from "@/lib/awpSubtypeLabels";
 import { tagStyle } from "@/lib/tagColor";
@@ -90,6 +90,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 
 
 interface SystemDetection {
@@ -520,10 +522,6 @@ export const FileViewerModal = ({
     }
   }, [viewingMode]);
 
-  // Master switch for annotation labels + leader lines. Hidden by default;
-  // the toolbar toggle still lets users turn them on for the session.
-  const [showLabels, setShowLabels] = useState<boolean>(false);
-
   // Detections list: selected row (class or class+subtype/diameter) drives
   // single-row visibility on the canvas.
   const [selectedRowKey, setSelectedRowKey] = useState<string | null>(null);
@@ -531,6 +529,8 @@ export const FileViewerModal = ({
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [newPlanOpen, setNewPlanOpen] = useState(false);
   const [savingNewPlan, setSavingNewPlan] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [draftPlanVisual, setDraftPlanVisual] = useState<{ color: string; ids: Set<string> } | null>(null);
   const { user } = useAuth();
   const drawingPlans = useDrawingPlans(persistKey, isOpen && !!awpClasses);
   const editingEnabled = sidebarEnabled && !viewingMode;
@@ -925,14 +925,13 @@ export const FileViewerModal = ({
 
 
 
-  // Reset history on open. Selected class is re-synced from localStorage.
-  // Expansion state is NOT reset - it should persist across modal opens
-  // (and, when a parent provides expandedClasses, across page sessions too).
+  // Reset session history and collapse every detection row whenever opened.
   const wasOpenRef = useRef(false);
   useEffect(() => {
     if (isOpen && !wasOpenRef.current) {
       setPast([]);
       setFuture([]);
+      setLocalExpanded(new Set());
       // Preselect takes priority over stored class so cell-click force-selects.
       if (preselectClass && awpClasses?.some((c) => c.name === preselectClass)) {
         setSelectedClass(preselectClass);
@@ -947,26 +946,6 @@ export const FileViewerModal = ({
     }
     wasOpenRef.current = isOpen;
   }, [isOpen, awpClasses, readStoredClass, preselectClass]);
-
-  // Auto-expand newly-arriving classes so they default to expanded.
-  // Track which class names we've already auto-expanded so user-collapsed
-  // classes don't get re-expanded on every render when the awpClasses prop
-  // reference changes.
-  const autoExpandedRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (!awpClasses || awpClasses.length === 0) return;
-    const seen = autoExpandedRef.current;
-    const fresh = awpClasses.map((c) => c.name).filter((n) => !seen.has(n));
-    if (fresh.length === 0) return;
-    for (const n of fresh) seen.add(n);
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      for (const n of fresh) next.add(n);
-      return next;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [awpClasses]);
-
 
   // Persist selected class to localStorage whenever it changes.
   useEffect(() => {
@@ -1741,12 +1720,9 @@ export const FileViewerModal = ({
       : selectedClass;
   const isInstanceVisible = (i: DrawingInstanceRow): boolean => {
     if (!awpClasses) return !hiddenClasses.has(i.awp_class_name);
+    if (newPlanOpen) return true;
     if (activePlan) {
-      const entry = drawingPlans.catalogFor(i.awp_class_name);
-      if (!entry) return false;
-      const { pipeType, diameter } = instanceMeta(i);
-      const key = assignmentKeyFor(entry.id, i.awp_class_name, pipeType, diameter);
-      return drawingPlans.assignedFor(activePlan, key, entry.id).length > 0;
+      return activePlan.included_instance_ids.includes(i.id);
     }
     if (!effectiveRowKey) return false;
     if (effectiveRowKey === i.awp_class_name) return true;
@@ -1765,19 +1741,20 @@ export const FileViewerModal = ({
           (!allowed || allowed.has(i.awp_class_name)),
       )
       .map((i) => {
-        const { pipeType } = instanceMeta(i);
+        const { pipeType, diameter } = instanceMeta(i);
         return {
           id: `inst-${i.id}`,
           // bbox width/height = 0 so the centroid is exactly the click point
           bbox: [i.nx, i.ny, 0, 0] as [number, number, number, number],
           coordSpace: "normalized" as const,
           page: singlePageOnly ? currentPage : sheetId ? 1 : i.page_index,
-          color: awpClassColorForType(i.awp_class_name, pipeType),
+          color: activePlan?.color || (draftPlanVisual?.ids.has(i.id) ? draftPlanVisual.color : awpClassColorForType(i.awp_class_name, pipeType, diameter)),
           label: instanceLabel(i),
+          innerDot: !!activePlan?.included_instance_ids.includes(i.id) || !!draftPlanVisual?.ids.has(i.id),
         };
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly, hiddenClasses, effectiveRowKey, activePlan, drawingPlans.catalogFor, drawingPlans.assignedFor]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly, hiddenClasses, effectiveRowKey, activePlan, newPlanOpen, draftPlanVisual]);
 
   // Floor-plan bbox overlays. Survey agent returns `xy_width_height_pct` as
   // [left, top, width, height] percentages (0..100) of the visible page.
@@ -1872,60 +1849,27 @@ export const FileViewerModal = ({
   }, [instances, parentFileId, effectivePage, awpClasses]);
 
   // ---- Devices (Plan Builder products) -----------------------------------
-  const devicePlan: DrawingPlan | null =
-    activePlan ?? drawingPlans.plans[0] ?? null;
   const devicesApi: DevicesApi = {
-    planName: devicePlan?.name ?? null,
+    planName: null,
     productsById: drawingPlans.productsById,
     choices: (cls) => drawingPlans.productChoices(cls),
     assigned: (cls, type, diam) => {
       const entry = drawingPlans.catalogFor(cls);
-      if (!entry || !devicePlan) return [];
-      return drawingPlans.assignedFor(devicePlan, assignmentKeyFor(entry.id, cls, type, diam), entry.id);
+      if (!entry) return [];
+      return drawingPlans.assignedDevicesFor(assignmentKeyFor(entry.id, cls, type, diam), entry.id);
     },
-    canEdit: !!devicePlan && !readOnly,
+    canEdit: !readOnly,
     mapped: (cls) => !!drawingPlans.catalogFor(cls),
     save: async (cls, type, diam, ids) => {
       const entry = drawingPlans.catalogFor(cls);
-      if (!entry || !devicePlan) return;
+      if (!entry) return;
       try {
-        await drawingPlans.saveAssignment(devicePlan, assignmentKeyFor(entry.id, cls, type, diam), ids);
+        await drawingPlans.saveAssignment(assignmentKeyFor(entry.id, cls, type, diam), ids);
       } catch (e) {
         toast({ title: "Could not save devices", description: getUserFriendlyError(e), variant: "destructive" });
       }
     },
   };
-
-  // Classes offered in the New Plan modal, built from every marker in the project.
-  const newPlanClasses = useMemo<PlanEditorClass[]>(() => {
-    const map = new Map<string, PlanEditorClass>();
-    for (const i of instances) {
-      if (i.awp_class_name === UNIT_MARKER_CLASS) continue;
-      const entry = drawingPlans.catalogFor(i.awp_class_name);
-      if (!entry) continue;
-      const { pipeType, diameter } = instanceMeta(i);
-      const key = assignmentKeyFor(entry.id, i.awp_class_name, pipeType, diameter);
-      const cur = map.get(key);
-      if (cur) { cur.count += 1; continue; }
-      const split = key !== entry.id;
-      const prefix = prefixByClass.get(i.awp_class_name) || entry.prefix || i.awp_class_name;
-      const code = split ? `${prefix}-${subtypeAbbr(i.awp_class_name, pipeType) || pipeType || "?"}${diameter ? ` ${diameter}` : ""}` : prefix;
-      const name = split
-        ? `${i.awp_class_name}${pipeType ? ` ${expandSubtypeLabelWithSuffix(i.awp_class_name, pipeType)}` : ""}${diameter ? ` ${diameter}` : ""}`
-        : i.awp_class_name;
-      map.set(key, {
-        id: key,
-        name,
-        code,
-        kind: entry.kind,
-        count: 1,
-        pipeSizeMm: parsePipeSizeMm(diameter),
-        products: drawingPlans.productChoices(i.awp_class_name),
-      });
-    }
-    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [instances, drawingPlans.catalogFor, drawingPlans.productChoices, prefixByClass]);
 
   return (
     <Dialog
@@ -1966,25 +1910,6 @@ export const FileViewerModal = ({
             >
               {viewingMode ? "View Mode" : "Enable View Mode"}
             </Button>
-            {isInternal && (
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant={showLabels ? "secondary" : "outline"}
-                    size="sm"
-                    className="h-7 px-2 flex-shrink-0"
-                    onClick={() => setShowLabels((v) => !v)}
-                  >
-                    <Tag className={`h-3.5 w-3.5 ${showLabels ? "" : "opacity-50"}`} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  {showLabels ? "Hide annotation labels" : "Show annotation labels"}
-                </TooltipContent>
-              </Tooltip>
-            )}
             {titleAccessory}
           </DialogTitle>
         </DialogHeader>
@@ -2002,7 +1927,7 @@ export const FileViewerModal = ({
               onRotate={handleRotate}
               onDownload={() => setDownloadDialogOpen(true)}
 
-              showLabels={showLabels}
+              showLabels={false}
               onPageChange={singlePageOnly ? () => {} : setCurrentPage}
               hidePageNav={singlePageOnly}
               overlays={overlays}
@@ -2099,15 +2024,35 @@ export const FileViewerModal = ({
               onPlacingChange={setIsPlacingLabels}
             />
             {sidebarEnabled && awpClasses && !readOnly && (
-              <div className="absolute bottom-4 right-4 z-30 flex items-center gap-1 rounded-full border bg-background/95 p-1 shadow-md">
-                <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full" onClick={undo} disabled={viewingMode || past.length === 0} aria-label="Undo" title="Undo">
+              <div className="absolute bottom-4 right-4 z-30 flex items-center gap-1 rounded-md border bg-background/95 p-1 shadow-md">
+                <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setHistoryOpen(true)} aria-label="Changes" title="Changes">
+                  <ListRestart className="h-4 w-4" />
+                </Button>
+                <Button size="icon" variant="outline" className="h-8 w-8" onClick={undo} disabled={viewingMode || past.length === 0} aria-label="Undo" title="Undo">
                   <Undo2 className="h-4 w-4" />
                 </Button>
-                <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full" onClick={redo} disabled={viewingMode || future.length === 0} aria-label="Redo" title="Redo">
+                <Button size="icon" variant="outline" className="h-8 w-8" onClick={redo} disabled={viewingMode || future.length === 0} aria-label="Redo" title="Redo">
                   <Redo2 className="h-4 w-4" />
                 </Button>
               </div>
             )}
+            <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+              <DialogContent className="max-w-md">
+                <DialogHeader><DialogTitle>Changes this session</DialogTitle></DialogHeader>
+                <ScrollArea className="max-h-80">
+                  {past.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No changes yet.</p> : (
+                    <ol className="space-y-1 pr-3">
+                      {past.slice().reverse().map((action, index) => (
+                        <li key={`${action.type}-${index}`} className="rounded-md border px-3 py-2 text-sm">
+                          <span className="font-medium capitalize">{action.type}</span>{" "}
+                          <span className="text-muted-foreground">{action.type === "move" ? "annotation" : instanceLabel(action.instance)}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </ScrollArea>
+              </DialogContent>
+            </Dialog>
           </div>
 
 
@@ -2266,27 +2211,32 @@ export const FileViewerModal = ({
                     activePlanId={activePlanId}
                     onTogglePlan={(id) => setActivePlanId((prev) => (prev === id ? null : id))}
                     onNewPlan={() => setNewPlanOpen(true)}
-                    deviceCount={(plan) =>
-                      Object.entries(plan.product_assignments || {})
-                        .filter(([k, v]) => !k.startsWith("__") && Array.isArray(v))
-                        .reduce((n, [, v]) => n + (v as string[]).length, 0)
-                    }
+                    deviceNames={(plan) => {
+                      const ids = new Set<string>();
+                      instances.filter((i) => plan.included_instance_ids.includes(i.id)).forEach((i) => {
+                        const entry = drawingPlans.catalogFor(i.awp_class_name);
+                        if (!entry) return;
+                        const { pipeType, diameter } = instanceMeta(i);
+                        drawingPlans.assignedDevicesFor(assignmentKeyFor(entry.id, i.awp_class_name, pipeType, diameter), entry.id).forEach((id) => ids.add(id));
+                      });
+                      return [...ids].map((id) => drawingPlans.productsById.get(id)?.name || id);
+                    }}
                   />
-                  <PlanEditorModal
-                    open={newPlanOpen}
-                    mode="create"
-                    initialName={`Plan ${drawingPlans.plans.length + 1}`}
-                    initialDescription=""
-                    initialAssignments={{}}
-                    classes={newPlanClasses}
+                  {newPlanOpen && <InlinePlanEditor
+                    defaultName={`Plan ${drawingPlans.plans.length + 1}`}
+                    instances={instances.filter((i) => i.awp_class_name !== UNIT_MARKER_CLASS)}
+                    classes={awpClasses}
                     baseProducts={drawingPlans.baseProducts}
                     saving={savingNewPlan}
-                    onOpenChange={setNewPlanOpen}
+                    onCancel={() => { setNewPlanOpen(false); setDraftPlanVisual(null); }}
+                    onHoverInstance={setHoveredInstanceId}
+                    onVisualChange={(color, ids) => setDraftPlanVisual({ color, ids })}
                     onSave={async (value) => {
                       setSavingNewPlan(true);
                       try {
-                        const id = await drawingPlans.createPlan(value as any, user?.id ?? null);
+                        const id = await drawingPlans.createPlan(value, user?.id ?? null);
                         setNewPlanOpen(false);
+                        setDraftPlanVisual(null);
                         if (id) setActivePlanId(id);
                       } catch (e) {
                         toast({ title: "Could not create plan", description: getUserFriendlyError(e), variant: "destructive" });
@@ -2294,7 +2244,7 @@ export const FileViewerModal = ({
                         setSavingNewPlan(false);
                       }
                     }}
-                  />
+                  />}
                 </TabsContent>
               </Tabs>
               </div>
@@ -2802,7 +2752,7 @@ function buildDetectionRows(
     entries.forEach(([key, items], idx) => {
       const [, type = "", diam = ""] = key.split("::");
       const abbr = type ? subtypeAbbr(c.name, type) || type : "";
-      const attrs = [abbr, diam].filter(Boolean).join(" ");
+      const attrs = [diam, abbr].filter(Boolean).join(" ");
       const full = [baseName, type ? expandSubtypeLabelWithSuffix(c.name, type) : "", diam].filter(Boolean).join(" ");
       const analysisCount = idx === 0 ? c.analysisCount : 0;
       rows.push({
@@ -2810,7 +2760,7 @@ function buildDetectionRows(
         cls: c,
         type,
         diam,
-        label: attrs ? `${prefix} · ${attrs}` : `${prefix} · (untyped)`,
+        label: prefix,
         fullName: full,
         items,
         count: items.length + analysisCount,
@@ -2847,8 +2797,8 @@ const DeviceButton = ({ row, devices }: { row: DetectionRowModel; devices: Devic
     <span className="inline-flex items-center gap-1">
       <Tooltip>
         <TooltipTrigger asChild>
-          <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-medium cursor-default">
-            {selected.length} {selected.length === 1 ? "Device" : "Devices"}
+          <Badge variant="outline" className="h-5 max-w-32 truncate px-1.5 text-[10px] font-medium cursor-default">
+            {selected.length === 1 ? names[0] : `${selected.length} Devices`}
           </Badge>
         </TooltipTrigger>
         <TooltipContent side="left" className="max-w-xs">
@@ -2872,13 +2822,8 @@ const DeviceButton = ({ row, devices }: { row: DetectionRowModel; devices: Devic
   );
   return (
     <Popover open={open} onOpenChange={(o) => { setOpen(o); setSearch(""); }}>
-      <span onClick={(e) => e.stopPropagation()} title={disabled ? "Create a plan in the Plans tab first" : undefined}>{trigger}</span>
+      <span onClick={(e) => e.stopPropagation()}>{trigger}</span>
       <PopoverContent align="end" className="w-80 p-0" onClick={(e) => e.stopPropagation()}>
-        {devices.planName && (
-          <div className="border-b px-3 py-1.5 text-[11px] text-muted-foreground">
-            Plan: <span className="font-medium text-foreground">{devices.planName}</span>
-          </div>
-        )}
         <div className="relative border-b p-2">
           <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search product, ID or type" className="h-8 pl-8 text-sm" />
@@ -2916,13 +2861,13 @@ const PlansPanel = ({
   activePlanId,
   onTogglePlan,
   onNewPlan,
-  deviceCount,
+  deviceNames,
 }: {
   plans: DrawingPlan[];
   activePlanId: string | null;
   onTogglePlan: (id: string) => void;
   onNewPlan: () => void;
-  deviceCount: (p: DrawingPlan) => number;
+  deviceNames: (p: DrawingPlan) => string[];
 }) => (
   <div className="flex-1 flex flex-col min-h-0">
     <div className="px-3 py-2 flex items-center justify-between gap-2 border-b">
@@ -2934,12 +2879,12 @@ const PlansPanel = ({
     <div className="flex-1 overflow-y-auto">
       {plans.length === 0 && (
         <div className="px-3 py-8 text-center text-sm text-muted-foreground">
-          No plans yet. Create one to assign devices.
+          No plans yet. Create one to select the risks it mitigates.
         </div>
       )}
       {plans.map((p) => {
         const active = p.id === activePlanId;
-        const n = deviceCount(p);
+        const devices = deviceNames(p);
         return (
           <button
             key={p.id}
@@ -2948,8 +2893,11 @@ const PlansPanel = ({
             className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm border-b hover:bg-muted/50 ${active ? "bg-primary/10" : ""}`}
           >
             <Layers className={`h-4 w-4 shrink-0 ${active ? "text-primary" : "text-muted-foreground"}`} />
-            <span className={`flex-1 min-w-0 truncate ${active ? "font-semibold" : ""}`}>{p.name}</span>
-            <span className="text-xs text-muted-foreground shrink-0">{n} {n === 1 ? "device" : "devices"}</span>
+            <span className="min-w-0 flex-1">
+              <span className={`block truncate ${active ? "font-semibold" : ""}`}>{p.name}</span>
+              {devices.length > 0 && <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{devices.map((name) => `${name} ×1`).join(", ")}</span>}
+            </span>
+            <span className="text-xs text-muted-foreground shrink-0" title={devices.join("\n")}>{devices.length} {devices.length === 1 ? "device" : "devices"}</span>
             <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded ${active ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
               {active ? "Showing" : "Show"}
             </span>
@@ -2959,6 +2907,60 @@ const PlansPanel = ({
     </div>
   </div>
 );
+
+const randomPlanColor = () => awpClassColor(`plan-${Date.now()}-${Math.random()}`);
+
+const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, saving, onCancel, onSave, onHoverInstance, onVisualChange }: {
+  defaultName: string;
+  instances: DrawingInstanceRow[];
+  classes: AwpClassOption[];
+  baseProducts: PlanEditorProduct[];
+  saving: boolean;
+  onCancel: () => void;
+  onSave: (value: { name: string; description: string; color: string; includedInstanceIds: string[]; baseQuantities: Record<string, number> }) => void;
+  onHoverInstance: (id: string | null) => void;
+  onVisualChange: (color: string, ids: Set<string>) => void;
+}) => {
+  const [name, setName] = useState(defaultName);
+  const [description, setDescription] = useState("");
+  const [color, setColor] = useState(randomPlanColor);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [baseQuantities, setBaseQuantities] = useState<Record<string, number>>({});
+  const byClass = useMemo(() => {
+    const map = new Map<string, DrawingInstanceRow[]>();
+    instances.forEach((instance) => map.set(instance.awp_class_name, [...(map.get(instance.awp_class_name) || []), instance]));
+    return map;
+  }, [instances]);
+  const toggleIds = (ids: string[], checked: boolean) => setSelected((prev) => {
+    const next = new Set(prev); ids.forEach((id) => checked ? next.add(id) : next.delete(id)); return next;
+  });
+  useEffect(() => onVisualChange(color, selected), [color, selected, onVisualChange]);
+  return (
+    <div className="absolute inset-0 z-10 flex flex-col bg-background">
+      <div className="space-y-2 border-b p-3">
+        <div className="flex gap-2"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Plan name" /><input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-10 w-12 rounded border p-1" aria-label="Plan color" /></div>
+        <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Plan description" className="min-h-16" />
+      </div>
+      {baseProducts.length > 0 && <div className="border-b p-3"><p className="mb-2 text-sm font-semibold">Essential Components</p><div className="space-y-1">{baseProducts.map((p) => <div key={p.id} className="flex items-center gap-2 text-xs"><span className="flex-1 truncate">{p.name}</span><Input type="number" min={0} className="h-7 w-16" value={baseQuantities[p.id] || 0} onChange={(e) => setBaseQuantities((q) => ({ ...q, [p.id]: Math.max(0, Number(e.target.value) || 0) }))} /></div>)}</div></div>}
+      <div className="flex-1 overflow-y-auto">
+        {classes.map((cls) => {
+          const items = byClass.get(cls.name) || []; if (!items.length) return null;
+          const checked = items.filter((i) => selected.has(i.id)).length;
+          return <div key={cls.name} className="border-b" onMouseEnter={() => onHoverInstance(items[0]?.id || null)} onMouseLeave={() => onHoverInstance(null)}>
+            <div className="flex items-center gap-2 px-3 py-2 text-sm">
+              <Checkbox checked={checked === items.length} indeterminate={checked > 0 && checked < items.length} onCheckedChange={(v) => toggleIds(items.map((i) => i.id), v === true)} style={{ borderColor: color, backgroundColor: checked ? color : undefined }} />
+              <span className="flex-1 font-medium">{cls.prefix || cls.name.slice(0, 3).toUpperCase()}</span><span className="text-xs text-muted-foreground">{checked}/{items.length}</span>
+              <button onClick={() => setExpanded((prev) => { const next = new Set(prev); next.has(cls.name) ? next.delete(cls.name) : next.add(cls.name); return next; })}>{expanded.has(cls.name) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</button>
+            </div>
+            {expanded.has(cls.name) && <div className="bg-muted/20 px-8 py-1">{items.map((i) => <label key={i.id} className="flex items-center gap-2 py-1 text-xs" onMouseEnter={() => onHoverInstance(i.id)}><Checkbox checked={selected.has(i.id)} onCheckedChange={(v) => toggleIds([i.id], v === true)} style={{ borderColor: color, backgroundColor: selected.has(i.id) ? color : undefined }} /><span>{i.awp_class_name}</span></label>)}</div>}
+          </div>;
+        })}
+      </div>
+      <div className="flex justify-end gap-2 border-t p-3"><Button variant="outline" onClick={onCancel}>Cancel</Button><Button disabled={saving || !name.trim()} onClick={() => onSave({ name: name.trim(), description, color, includedInstanceIds: [...selected], baseQuantities })}>{saving ? "Saving…" : "Save Plan"}</Button></div>
+    </div>
+  );
+};
 
 const DetectionsPanel = ({
   awpClasses,
@@ -2996,7 +2998,7 @@ const DetectionsPanel = ({
             const isSelected = selectedRowKey === row.key || (selectedRowKey === c.name && rows.find((r) => r.cls.name === c.name)?.key === row.key);
             const isExpanded = expanded.has(row.key);
             const firstPipeType = row.type;
-            const color = row.type ? awpClassColorForType(c.name, firstPipeType) : awpClassColor(c.name);
+            const color = row.type || row.diam ? awpClassColorForType(c.name, firstPipeType, row.diam) : awpClassColor(c.name);
             return (
               <div key={row.key} className="border-b last:border-b-0 min-w-0">
                 <div
@@ -3014,10 +3016,12 @@ const DetectionsPanel = ({
                     <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="flex-1 min-w-0 truncate font-mono text-xs">{row.label}</span>
+                        <span className="shrink-0 font-mono text-xs">{row.label}</span>
                       </TooltipTrigger>
                       <TooltipContent side="left">{row.fullName}</TooltipContent>
                     </Tooltip>
+                    {row.diam && <Badge variant="outline" className="h-5 px-1.5 text-[10px]">{row.diam}</Badge>}
+                    {row.type && <Badge variant="outline" className="h-5 max-w-28 truncate px-1.5 text-[10px]">{subtypeAbbr(c.name, row.type) || row.type}</Badge>}
                     <span className="text-xs tabular-nums text-muted-foreground shrink-0">{row.count}</span>
                   </div>
                   <DeviceButton row={row} devices={devices} />
@@ -3059,7 +3063,8 @@ const DetectionsPanel = ({
                           : null;
                         const iMeta = (i.metadata && typeof i.metadata === "object" ? (i.metadata as any) : {}) as Record<string, any>;
                         const iPipeType = typeof iMeta.pipe_type === "string" ? iMeta.pipe_type.trim() : "";
-                        const dotColor = awpClassColorForType(c.name, iPipeType);
+                        const iDiameter = typeof iMeta.pipe_diameter === "string" ? iMeta.pipe_diameter.trim() : "";
+                        const dotColor = awpClassColorForType(c.name, iPipeType, iDiameter);
                         return (
                           <div
                             key={i.id}

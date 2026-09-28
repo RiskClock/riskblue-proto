@@ -7,8 +7,11 @@ import { isSubtypeSplitClass } from "@/lib/awpSubtypeLabels";
 export interface DrawingPlan {
   id: string;
   name: string;
+  summary: string | null;
   sort_order: number;
   product_assignments: Record<string, unknown>;
+  color: string | null;
+  included_instance_ids: string[];
 }
 
 export const parsePipeSizeMm = (label?: string | null): number | null => {
@@ -42,14 +45,20 @@ export function useDrawingPlans(projectId: string | null | undefined, enabled: b
   const queryClient = useQueryClient();
   const on = !!projectId && enabled;
 
-  const { data: tenantId = null } = useQuery({
+  const { data: projectSettings } = useQuery({
     queryKey: ["drawing-plans-tenant", projectId],
     queryFn: async () => {
-      const { data } = await supabase.from("projects").select("tenant_id").eq("id", projectId!).maybeSingle();
-      return ((data as any)?.tenant_id as string | null) ?? null;
+      const { data, error } = await supabase.from("projects").select("tenant_id, risk_device_assignments").eq("id", projectId!).maybeSingle();
+      if (error) throw error;
+      return {
+        tenantId: ((data as any)?.tenant_id as string | null) ?? null,
+        riskDeviceAssignments: (((data as any)?.risk_device_assignments || {}) as Record<string, string[]>),
+      };
     },
     enabled: on,
   });
+  const tenantId = projectSettings?.tenantId ?? null;
+  const riskDeviceAssignments = projectSettings?.riskDeviceAssignments ?? {};
 
   const { data: catalog } = useQuery({
     queryKey: ["wmp-catalog"],
@@ -96,13 +105,14 @@ export function useDrawingPlans(projectId: string | null | undefined, enabled: b
     queryFn: async () => {
       const { data, error } = await supabase
         .from("project_mitigation_plans")
-        .select("id, name, product_assignments, sort_order")
+        .select("id, name, summary, product_assignments, sort_order, color, included_instance_ids")
         .eq("project_id", projectId!)
         .order("sort_order");
       if (error) throw error;
       return (data || []).map((p: any) => ({
         ...p,
         product_assignments: (p.product_assignments || {}) as Record<string, unknown>,
+        included_instance_ids: Array.isArray(p.included_instance_ids) ? p.included_instance_ids : [],
       })) as DrawingPlan[];
     },
     enabled: on,
@@ -167,26 +177,30 @@ export function useDrawingPlans(projectId: string | null | undefined, enabled: b
   }, []);
 
   const saveAssignment = useCallback(
-    async (plan: DrawingPlan, key: string, productIds: string[]) => {
-      const next = { ...(plan.product_assignments || {}), [key]: productIds, __configured: true };
-      // Optimistic cache update so the list reflects the change immediately.
-      queryClient.setQueryData<DrawingPlan[]>(["wmp-plans", projectId], (prev) =>
-        (prev || []).map((p) => (p.id === plan.id ? { ...p, product_assignments: next } : p)),
+    async (key: string, productIds: string[]) => {
+      const next = { ...riskDeviceAssignments, [key]: productIds };
+      queryClient.setQueryData(["drawing-plans-tenant", projectId], (prev: any) =>
+        prev ? { ...prev, riskDeviceAssignments: next } : prev,
       );
       const { error } = await supabase
-        .from("project_mitigation_plans")
-        .update({ product_assignments: next } as any)
-        .eq("id", plan.id);
+        .from("projects")
+        .update({ risk_device_assignments: next } as any)
+        .eq("id", projectId!);
       if (error) {
-        await queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
+        await queryClient.invalidateQueries({ queryKey: ["drawing-plans-tenant", projectId] });
         throw error;
       }
     },
-    [projectId, queryClient],
+    [projectId, queryClient, riskDeviceAssignments],
   );
 
+  const assignedDevicesFor = useCallback((key: string, catalogId: string): string[] => {
+    const value = riskDeviceAssignments[key] ?? riskDeviceAssignments[catalogId];
+    return Array.isArray(value) ? value : [];
+  }, [riskDeviceAssignments]);
+
   const createPlan = useCallback(
-    async (value: { name: string; description: string; assignments: Record<string, string[]>; baseQuantities: Record<string, number>; pricing: unknown }, userId: string | null) => {
+    async (value: { name: string; description: string; baseQuantities: Record<string, number>; color: string; includedInstanceIds: string[] }, userId: string | null) => {
       const nextOrder = plans.length ? Math.max(...plans.map((p) => p.sort_order ?? 0)) + 1 : 0;
       const { data, error } = await supabase
         .from("project_mitigation_plans")
@@ -196,7 +210,9 @@ export function useDrawingPlans(projectId: string | null | undefined, enabled: b
           summary: value.description,
           control_counts: {},
           excluded_instances: {},
-          product_assignments: { ...value.assignments, __base: value.baseQuantities, __pricing: value.pricing, __configured: true },
+          product_assignments: { __base: value.baseQuantities, __configured: true },
+          color: value.color,
+          included_instance_ids: value.includedInstanceIds,
           sort_order: nextOrder,
           created_by: userId,
         } as any)
@@ -214,5 +230,5 @@ export function useDrawingPlans(projectId: string | null | undefined, enabled: b
     [products, productsById],
   );
 
-  return { plans, catalogFor, productChoices, productsById, assignedFor, saveAssignment, createPlan, baseProducts, ready: !!catalog };
+  return { plans, catalogFor, productChoices, productsById, assignedFor, assignedDevicesFor, saveAssignment, createPlan, baseProducts, ready: !!catalog };
 }

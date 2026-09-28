@@ -321,6 +321,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
           color: ov.color,
           label: ov.label,
           variant: ov.variant,
+          innerDot: ov.innerDot,
         });
         byPage.set(p.pageNum, arr);
       }

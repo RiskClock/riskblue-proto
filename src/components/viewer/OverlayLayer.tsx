@@ -224,6 +224,7 @@ interface CircleInfo {
   hovered: boolean;
   /** Dot variant: filled disc, no border, no label. */
   isDot?: boolean;
+  innerDot?: boolean;
 }
 
 // NOTE: Label-placement geometry (candidate generation, rbush spatial
@@ -517,7 +518,7 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
     (selected ? CIRCLE_BORDER_PX_SCREEN + 2 : hovered ? CIRCLE_BORDER_PX_SCREEN + 1 : CIRCLE_BORDER_PX_SCREEN) *
     exportScale;
   const strokePxPage = strokePxScreen / Math.max(0.0001, viewScale);
-  const borderAlpha = hovered || selected ? 1 : 0.5;
+  const borderAlpha = 1;
 
   return (
     <div
@@ -570,6 +571,22 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
             style={{ vectorEffect: "non-scaling-stroke", strokeWidth: strokePxPage }}
           />
         </svg>
+      ) : null}
+      {!c.isDot && c.innerDot ? (
+        <span
+          aria-hidden
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "50%",
+            width: "32%",
+            height: "32%",
+            transform: "translate(-50%, -50%)",
+            borderRadius: "9999px",
+            backgroundColor: c.color,
+            pointerEvents: "none",
+          }}
+        />
       ) : null}
     </div>
   );
@@ -657,6 +674,7 @@ export const OverlayLayer = ({
           // memo (which would rebuild every derived structure downstream).
           hovered: false,
           isDot,
+          innerDot: !!o.innerDot,
         };
       });
   }, [overlays, pageSize.width, pageSize.height, defaultColor, exportScale]);
