@@ -15,13 +15,13 @@
 - [x] Move Product Catalog into the main header beside Projects for system admins.
 - [x] Confirm mixed pricing is annualized and label totals as yearly only when recurring pricing applies.
 - [x] Verify the updated navigation, labels, and cost display in the live preview.
-- [ ] Restyle drawing Changes/Undo/Redo controls and add session change-history dialog.
-- [ ] Make annotation outlines opaque and adopt golden-ratio HSL colors with attribute-aware keys.
-- [ ] Keep detection rows collapsed and render diameter-first attribute badges.
-- [ ] Store project-wide risk-type device assignments and allow assignment without plans.
-- [ ] Replace New Plan modal with inline plan editor, per-instance selection, plan colors, and derived devices.
-- [ ] Verify drawing modal behavior, persistence, compatibility, and preview errors.
-- [ ] Restore original floor-plan box colors and ensure Detections shows only its selected risk row.
-- [ ] Keep New Plan under Plans across tab switches, match detection rows and location badges, show partial dashes, and highlight all hovered risk instances.
-- [ ] Grey unhovered plan annotations uniformly and list plan devices on separate lines with quantities.
-- [ ] Explain unchanged exact golden-ratio HSL hash and its possible hue collisions.
+- [x] Restyle drawing Changes/Undo/Redo controls and add session change-history dialog.
+- [x] Make annotation outlines opaque and adopt golden-ratio HSL colors with attribute-aware keys.
+- [x] Keep detection rows collapsed and render diameter-first attribute badges.
+- [x] Store project-wide risk-type device assignments and allow assignment without plans.
+- [x] Replace New Plan modal with inline plan editor, per-instance selection, plan colors, and derived devices.
+- [x] Verify drawing modal behavior, persistence, compatibility, and preview errors.
+- [x] Restore original floor-plan box colors and ensure Detections shows only its selected risk row.
+- [x] Keep New Plan under Plans across tab switches, match detection rows and location badges, show partial dashes, and highlight all hovered risk instances.
+- [x] Grey unhovered plan annotations uniformly and list plan devices on separate lines with quantities.
+- [x] Explain golden-ratio HSL hashing and address nearby hue collisions on each drawing.
