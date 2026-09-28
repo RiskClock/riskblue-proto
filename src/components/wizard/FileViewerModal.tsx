@@ -2711,6 +2711,7 @@ interface DetectionsPanelProps {
   floorPlans?: ParsedFloorPlan[];
   floorPlanOverrides?: Record<string, any>;
   selectedRowKey: string | null;
+  drawingColors: Map<string, string>;
   onSelectRow: (className: string, rowKey: string) => void;
   devices: DevicesApi;
   onFocusInstance?: (i: DrawingInstanceRow) => void;
@@ -3020,6 +3021,7 @@ const DetectionsPanel = ({
   floorPlans,
   floorPlanOverrides = {},
   selectedRowKey,
+  drawingColors,
   onSelectRow,
   devices,
   onFocusInstance,
@@ -3040,7 +3042,7 @@ const DetectionsPanel = ({
             const isSelected = selectedRowKey === row.key || (selectedRowKey === c.name && rows.find((r) => r.cls.name === c.name)?.key === row.key);
             const isExpanded = expanded.has(row.key);
             const firstPipeType = row.type;
-            const color = row.type || row.diam ? awpClassColorForType(c.name, firstPipeType, row.diam) : awpClassColor(c.name);
+            const color = drawingColors.get(row.key) || (row.type || row.diam ? awpClassColorForType(c.name, firstPipeType, row.diam) : awpClassColor(c.name));
             return (
               <div key={row.key} className="border-b last:border-b-0 min-w-0">
                 <div
@@ -3106,7 +3108,7 @@ const DetectionsPanel = ({
                         const iMeta = (i.metadata && typeof i.metadata === "object" ? (i.metadata as any) : {}) as Record<string, any>;
                         const iPipeType = typeof iMeta.pipe_type === "string" ? iMeta.pipe_type.trim() : "";
                         const iDiameter = typeof iMeta.pipe_diameter === "string" ? iMeta.pipe_diameter.trim() : "";
-                        const dotColor = awpClassColorForType(c.name, iPipeType, iDiameter);
+                        const dotColor = drawingColors.get(instanceRowKey(i)) || awpClassColorForType(c.name, iPipeType, iDiameter);
                         return (
                           <div
                             key={i.id}
