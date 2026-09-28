@@ -2912,13 +2912,13 @@ const PlansPanel = ({
   activePlanId,
   onTogglePlan,
   onNewPlan,
-  deviceCount,
+  deviceNames,
 }: {
   plans: DrawingPlan[];
   activePlanId: string | null;
   onTogglePlan: (id: string) => void;
   onNewPlan: () => void;
-  deviceCount: (p: DrawingPlan) => number;
+  deviceNames: (p: DrawingPlan) => string[];
 }) => (
   <div className="flex-1 flex flex-col min-h-0">
     <div className="px-3 py-2 flex items-center justify-between gap-2 border-b">
@@ -2930,12 +2930,12 @@ const PlansPanel = ({
     <div className="flex-1 overflow-y-auto">
       {plans.length === 0 && (
         <div className="px-3 py-8 text-center text-sm text-muted-foreground">
-          No plans yet. Create one to assign devices.
+          No plans yet. Create one to select the risks it mitigates.
         </div>
       )}
       {plans.map((p) => {
         const active = p.id === activePlanId;
-        const n = deviceCount(p);
+        const devices = deviceNames(p);
         return (
           <button
             key={p.id}
@@ -2945,7 +2945,7 @@ const PlansPanel = ({
           >
             <Layers className={`h-4 w-4 shrink-0 ${active ? "text-primary" : "text-muted-foreground"}`} />
             <span className={`flex-1 min-w-0 truncate ${active ? "font-semibold" : ""}`}>{p.name}</span>
-            <span className="text-xs text-muted-foreground shrink-0">{n} {n === 1 ? "device" : "devices"}</span>
+            <span className="text-xs text-muted-foreground shrink-0" title={devices.join("\n")}>{devices.length} {devices.length === 1 ? "device" : "devices"}</span>
             <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded ${active ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
               {active ? "Showing" : "Show"}
             </span>
@@ -2955,6 +2955,58 @@ const PlansPanel = ({
     </div>
   </div>
 );
+
+const randomPlanColor = () => `hsl(${Math.floor(Math.random() * 360)} 70% 50%)`;
+
+const InlinePlanEditor = ({ defaultName, instances, classes, baseProducts, saving, onCancel, onSave, onHoverInstance }: {
+  defaultName: string;
+  instances: DrawingInstanceRow[];
+  classes: AwpClassOption[];
+  baseProducts: PlanEditorProduct[];
+  saving: boolean;
+  onCancel: () => void;
+  onSave: (value: { name: string; description: string; color: string; includedInstanceIds: string[]; baseQuantities: Record<string, number> }) => void;
+  onHoverInstance: (id: string | null) => void;
+}) => {
+  const [name, setName] = useState(defaultName);
+  const [description, setDescription] = useState("");
+  const [color, setColor] = useState(randomPlanColor);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [baseQuantities, setBaseQuantities] = useState<Record<string, number>>({});
+  const byClass = useMemo(() => {
+    const map = new Map<string, DrawingInstanceRow[]>();
+    instances.forEach((instance) => map.set(instance.awp_class_name, [...(map.get(instance.awp_class_name) || []), instance]));
+    return map;
+  }, [instances]);
+  const toggleIds = (ids: string[], checked: boolean) => setSelected((prev) => {
+    const next = new Set(prev); ids.forEach((id) => checked ? next.add(id) : next.delete(id)); return next;
+  });
+  return (
+    <div className="absolute inset-0 z-10 flex flex-col bg-background">
+      <div className="space-y-2 border-b p-3">
+        <div className="flex gap-2"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Plan name" /><input type="color" value={color.startsWith("#") ? color : "#3388cc"} onChange={(e) => setColor(e.target.value)} className="h-10 w-12 rounded border p-1" aria-label="Plan color" /></div>
+        <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Plan description" className="min-h-16" />
+      </div>
+      {baseProducts.length > 0 && <div className="border-b p-3"><p className="mb-2 text-sm font-semibold">Essential Components</p><div className="space-y-1">{baseProducts.map((p) => <div key={p.id} className="flex items-center gap-2 text-xs"><span className="flex-1 truncate">{p.name}</span><Input type="number" min={0} className="h-7 w-16" value={baseQuantities[p.id] || 0} onChange={(e) => setBaseQuantities((q) => ({ ...q, [p.id]: Math.max(0, Number(e.target.value) || 0) }))} /></div>)}</div></div>}
+      <div className="flex-1 overflow-y-auto">
+        {classes.map((cls) => {
+          const items = byClass.get(cls.name) || []; if (!items.length) return null;
+          const checked = items.filter((i) => selected.has(i.id)).length;
+          return <div key={cls.name} className="border-b" onMouseEnter={() => onHoverInstance(items[0]?.id || null)} onMouseLeave={() => onHoverInstance(null)}>
+            <div className="flex items-center gap-2 px-3 py-2 text-sm">
+              <Checkbox checked={checked === items.length} indeterminate={checked > 0 && checked < items.length} onCheckedChange={(v) => toggleIds(items.map((i) => i.id), v === true)} style={{ borderColor: color, backgroundColor: checked ? color : undefined }} />
+              <span className="flex-1 font-medium">{cls.prefix || cls.name.slice(0, 3).toUpperCase()}</span><span className="text-xs text-muted-foreground">{checked}/{items.length}</span>
+              <button onClick={() => setExpanded((prev) => { const next = new Set(prev); next.has(cls.name) ? next.delete(cls.name) : next.add(cls.name); return next; })}>{expanded.has(cls.name) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</button>
+            </div>
+            {expanded.has(cls.name) && <div className="bg-muted/20 px-8 py-1">{items.map((i) => <label key={i.id} className="flex items-center gap-2 py-1 text-xs" onMouseEnter={() => onHoverInstance(i.id)}><Checkbox checked={selected.has(i.id)} onCheckedChange={(v) => toggleIds([i.id], v === true)} style={{ borderColor: color, backgroundColor: selected.has(i.id) ? color : undefined }} /><span>{i.awp_class_name}</span></label>)}</div>}
+          </div>;
+        })}
+      </div>
+      <div className="flex justify-end gap-2 border-t p-3"><Button variant="outline" onClick={onCancel}>Cancel</Button><Button disabled={saving || !name.trim()} onClick={() => onSave({ name: name.trim(), description, color, includedInstanceIds: [...selected], baseQuantities })}>{saving ? "Saving…" : "Save Plan"}</Button></div>
+    </div>
+  );
+};
 
 const DetectionsPanel = ({
   awpClasses,
