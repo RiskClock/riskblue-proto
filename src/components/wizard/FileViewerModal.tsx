@@ -1758,8 +1758,9 @@ export const FileViewerModal = ({
           coordSpace: "normalized" as const,
           page: singlePageOnly ? currentPage : sheetId ? 1 : i.page_index,
           color: activeTab === "plans" && newPlanOpen
-            ? (hoveredPlanIds.has(i.id) ? draftPlanVisual?.color : "hsl(var(--muted-foreground))")
+            ? "hsl(var(--muted-foreground))"
             : (activeTab === "plans" && activePlan?.color) || drawingColors.get(instanceRowKey(i)) || awpClassColorForType(i.awp_class_name, pipeType, diameter),
+          emphasized: activeTab === "plans" && newPlanOpen && hoveredPlanIds.has(i.id),
           label: instanceLabel(i),
           innerDot: activeTab === "plans" && (newPlanOpen ? !!draftPlanVisual?.ids.has(i.id) : !!activePlan?.included_instance_ids.includes(i.id)),
         };

@@ -429,6 +429,7 @@ interface CircleOverlayProps {
   onHoverChange?: (id: string | null) => void;
   /** LOD suppressed this anchor's label — render it as a solid dot. */
   denseOpaque?: boolean;
+  emphasized?: boolean;
 }
 const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
   const {
@@ -436,6 +437,7 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
     viewScale, pageWidth, pageHeight, dragRef, setDrag, onOverlayClick, onOverlayDrag,
     onHoverChange,
     denseOpaque = false,
+    emphasized = false,
   } = props;
 
   const dotBaseAlpha = draggable ? 0.5 : (hovered || selected ? 0.85 : 0.7);
@@ -465,7 +467,7 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
         borderRadius: "9999px",
         backgroundColor: withAlpha(
           c.color,
-          selected ? 0.45 : hovered ? 0.35 : denseOpaque ? 1 : 0.2,
+          selected ? 0.45 : hovered || emphasized ? 0.35 : denseOpaque ? 1 : 0.2,
         ),
         boxSizing: "border-box",
         pointerEvents: clickable || draggable ? "auto" : "none",
@@ -515,7 +517,7 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
 
   // Hover / selection add 1px on top of the resting baseline.
   const strokePxScreen =
-    (selected ? CIRCLE_BORDER_PX_SCREEN + 2 : hovered ? CIRCLE_BORDER_PX_SCREEN + 1 : CIRCLE_BORDER_PX_SCREEN) *
+    (selected ? CIRCLE_BORDER_PX_SCREEN + 2 : hovered || emphasized ? CIRCLE_BORDER_PX_SCREEN + 1 : CIRCLE_BORDER_PX_SCREEN) *
     exportScale;
   const strokePxPage = strokePxScreen / Math.max(0.0001, viewScale);
   const borderAlpha = 1;
@@ -565,7 +567,7 @@ const CircleOverlay = memo(function CircleOverlay(props: CircleOverlayProps) {
             cy={c.r}
             r={Math.max(0, c.r - strokePxPage / 2)}
             fill="none"
-            stroke={hovered ? HOVER_EMPHASIS_COLOR : withAlpha(c.color, borderAlpha)}
+             stroke={hovered || emphasized ? "hsl(var(--foreground))" : withAlpha(c.color, borderAlpha)}
             strokeWidth={strokePxPage}
             vectorEffect="non-scaling-stroke"
             style={{ vectorEffect: "non-scaling-stroke", strokeWidth: strokePxPage }}
@@ -675,6 +677,7 @@ export const OverlayLayer = ({
           hovered: false,
           isDot,
           innerDot: !!o.innerDot,
+          emphasized: !!o.emphasized,
         };
       });
   }, [overlays, pageSize.width, pageSize.height, defaultColor, exportScale]);
@@ -1342,6 +1345,7 @@ export const OverlayLayer = ({
             key={c.id}
             c={c}
             hovered={effectiveHoverId === c.id}
+            emphasized={c.emphasized}
             selected={selectedId === c.id}
             pulsing={pulsingId === c.id}
             exportScale={exportScale}
