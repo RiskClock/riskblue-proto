@@ -61,7 +61,7 @@ import {
 import { ManagePlanOrderModal } from "@/components/wizard/ManagePlanOrderModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { PlanEditorModal, ProductPickerOption, isSizeMatch, type PlanEditorClass, type PlanEditorProduct } from "@/components/wizard/PlanEditorModal";
+import { ProductPickerOption, isSizeMatch, type PlanEditorClass, type PlanEditorProduct } from "@/components/wizard/PlanEditorModal";
 import { useDrawingPlans, assignmentKeyFor, parsePipeSizeMm, type DrawingPlan } from "@/components/wizard/useDrawingPlans";
 import { isSubtypeSplitClass, subtypeAbbr, expandSubtypeLabelWithSuffix } from "@/lib/awpSubtypeLabels";
 import { tagStyle } from "@/lib/tagColor";
@@ -2264,26 +2264,29 @@ export const FileViewerModal = ({
                     activePlanId={activePlanId}
                     onTogglePlan={(id) => setActivePlanId((prev) => (prev === id ? null : id))}
                     onNewPlan={() => setNewPlanOpen(true)}
-                    deviceCount={(plan) =>
-                      Object.entries(plan.product_assignments || {})
-                        .filter(([k, v]) => !k.startsWith("__") && Array.isArray(v))
-                        .reduce((n, [, v]) => n + (v as string[]).length, 0)
-                    }
+                    deviceNames={(plan) => {
+                      const ids = new Set<string>();
+                      instances.filter((i) => plan.included_instance_ids.includes(i.id)).forEach((i) => {
+                        const entry = drawingPlans.catalogFor(i.awp_class_name);
+                        if (!entry) return;
+                        const { pipeType, diameter } = instanceMeta(i);
+                        drawingPlans.assignedDevicesFor(assignmentKeyFor(entry.id, i.awp_class_name, pipeType, diameter), entry.id).forEach((id) => ids.add(id));
+                      });
+                      return [...ids].map((id) => drawingPlans.productsById.get(id)?.name || id);
+                    }}
                   />
-                  <PlanEditorModal
-                    open={newPlanOpen}
-                    mode="create"
-                    initialName={`Plan ${drawingPlans.plans.length + 1}`}
-                    initialDescription=""
-                    initialAssignments={{}}
-                    classes={newPlanClasses}
+                  {newPlanOpen && <InlinePlanEditor
+                    defaultName={`Plan ${drawingPlans.plans.length + 1}`}
+                    instances={instances.filter((i) => i.awp_class_name !== UNIT_MARKER_CLASS)}
+                    classes={awpClasses}
                     baseProducts={drawingPlans.baseProducts}
                     saving={savingNewPlan}
-                    onOpenChange={setNewPlanOpen}
+                    onCancel={() => setNewPlanOpen(false)}
+                    onHoverInstance={setHoveredInstanceId}
                     onSave={async (value) => {
                       setSavingNewPlan(true);
                       try {
-                        const id = await drawingPlans.createPlan(value as any, user?.id ?? null);
+                        const id = await drawingPlans.createPlan(value, user?.id ?? null);
                         setNewPlanOpen(false);
                         if (id) setActivePlanId(id);
                       } catch (e) {
@@ -2292,7 +2295,7 @@ export const FileViewerModal = ({
                         setSavingNewPlan(false);
                       }
                     }}
-                  />
+                  />}
                 </TabsContent>
               </Tabs>
               </div>
