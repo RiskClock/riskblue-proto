@@ -3039,7 +3039,7 @@ const randomPlanColor = () => awpClassColor(`plan-${Date.now()}-${Math.random()}
 
 const InlinePlanEditor = ({ initialPlan, toggleRef, defaultName, instances, classes, baseProducts, saving, onCancel, onSave, onHoverInstances, onVisualChange, onFocusInstances, onFocusInstance, numberByInstanceId, instanceLabel, floorPlans, floorPlanOverrides, effectivePage }: {
   initialPlan: DrawingPlan | null;
-  toggleRef: React.MutableRefObject<((id: string) => void) | null>;
+  toggleRef: import("react").MutableRefObject<((id: string) => void) | null>;
   defaultName: string;
   instances: DrawingInstanceRow[];
   classes: AwpClassOption[];
