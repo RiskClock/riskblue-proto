@@ -20,6 +20,7 @@ import {
   Plus,
   Radar,
   Redo2,
+  Trash2,
   Undo2,
   ListRestart,
 } from "lucide-react";
@@ -64,7 +65,8 @@ import { ProductPickerOption, isSizeMatch, type PlanEditorProduct } from "@/comp
 import { useDrawingPlans, assignmentKeyFor, parsePipeSizeMm, type DrawingPlan } from "@/components/wizard/useDrawingPlans";
 import { isSubtypeSplitClass, subtypeAbbr, expandSubtypeLabelWithSuffix } from "@/lib/awpSubtypeLabels";
 import { tagStyle } from "@/lib/tagColor";
-import { Search, Layers } from "lucide-react";
+import { Search } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 /** Row key for an instance: class, or class::type::diameter for split classes. */
 function instanceRowKey(i: { awp_class_name: string; metadata?: unknown }): string {
@@ -536,6 +538,13 @@ export const FileViewerModal = ({
   const { user } = useAuth();
   const drawingPlans = useDrawingPlans(persistKey, isOpen && !!awpClasses);
   const editingEnabled = sidebarEnabled && !viewingMode;
+
+  useEffect(() => {
+    if (newPlanOpen || drawingPlans.plans.length === 0) return;
+    if (!drawingPlans.plans.some((plan) => plan.id === activePlanId)) {
+      setActivePlanId(drawingPlans.plans[0].id);
+    }
+  }, [activePlanId, drawingPlans.plans, newPlanOpen]);
 
 
   const storageKey = persistKey ? `workbench-awp-class:${persistKey}` : null;
@@ -1563,6 +1572,42 @@ export const FileViewerModal = ({
     [singlePageOnly, sheetId, currentPage, rotationByPage, pulseInstance],
   );
 
+  const focusInstances = useCallback(
+    (targets: DrawingInstanceRow[]) => {
+      if (targets.length === 0) return;
+      const targetPage = targets.some((item) => item.page_index === effectivePage)
+        ? effectivePage
+        : targets[0].page_index;
+      const pageTargets = targets.filter((item) => item.page_index === targetPage);
+      const needsPageChange = !singlePageOnly && !sheetId && targetPage !== currentPage;
+      if (needsPageChange) setCurrentPage(targetPage);
+      const run = () => {
+        const xs = pageTargets.map((item) => item.nx);
+        const ys = pageTargets.map((item) => item.ny);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        const margin = 0.015;
+        const base = {
+          nx: Math.max(0, minX - margin),
+          ny: Math.max(0, minY - margin),
+          nw: Math.max(0.01, Math.min(1, maxX - minX + margin * 2)),
+          nh: Math.max(0.01, Math.min(1, maxY - minY + margin * 2)),
+        };
+        const rot = (rotationByPage[targetPage] ?? 0) as 0 | 90 | 180 | 270;
+        viewerApiRef.current?.fitToRect?.(rot === 0 ? base : rotateNormalizedRect(base, rot), {
+          paddingRatio: 0.18,
+          maxScale: 4,
+          animate: true,
+        });
+      };
+      if (needsPageChange) setTimeout(() => requestAnimationFrame(run), 120);
+      else requestAnimationFrame(run);
+    },
+    [currentPage, effectivePage, rotationByPage, sheetId, singlePageOnly],
+  );
+
 
 
   const undo = async () => {
@@ -1732,6 +1777,7 @@ export const FileViewerModal = ({
     if (activeTab === "plans" && activePlan) {
       return activePlan.included_instance_ids.includes(i.id);
     }
+    if (activeTab === "plans") return false;
     if (activeTab === "floor-plans") return true;
     if (!effectiveRowKey) return false;
     if (effectiveRowKey === i.awp_class_name) return true;
@@ -2227,8 +2273,19 @@ export const FileViewerModal = ({
                    {!newPlanOpen && <PlansPanel
                     plans={drawingPlans.plans}
                     activePlanId={activePlanId}
-                    onTogglePlan={(id) => setActivePlanId((prev) => (prev === id ? null : id))}
+                    onSelectPlan={setActivePlanId}
                      onNewPlan={() => { setActivePlanId(null); setNewPlanOpen(true); }}
+                      onDeletePlan={async (id) => {
+                        const fallbackId = drawingPlans.plans.find((plan) => plan.id !== id)?.id ?? null;
+                        try {
+                          await drawingPlans.deletePlan(id);
+                          if (activePlanId === id) setActivePlanId(fallbackId);
+                          toast({ title: "Plan deleted" });
+                        } catch (e) {
+                          toast({ title: "Could not delete plan", description: getUserFriendlyError(e), variant: "destructive" });
+                          throw e;
+                        }
+                      }}
                      deviceNames={(plan) => {
                        const counts = new Map<string, number>();
                       instances.filter((i) => plan.included_instance_ids.includes(i.id)).forEach((i) => {
@@ -2254,6 +2311,8 @@ export const FileViewerModal = ({
                      onCancel={() => { setNewPlanOpen(false); setDraftPlanVisual(null); setHoveredPlanIds(new Set()); }}
                      onHoverInstances={(ids) => setHoveredPlanIds(new Set(ids))}
                      onVisualChange={handleDraftVisualChange}
+                      onFocusInstances={focusInstances}
+                      onFocusInstance={focusInstance}
                     onSave={async (value) => {
                       setSavingNewPlan(true);
                       try {
@@ -2896,8 +2955,8 @@ const PlansPanel = ({
 }) => (
   <div className="flex-1 flex flex-col min-h-0">
     <div className="px-3 py-2 flex items-center justify-between gap-2 border-b">
-      <p className="text-xs text-muted-foreground">Click a plan to show only its annotations.</p>
-      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onNewPlan}>
+      
+      <Button size="sm" variant="outline" className="w-full h-8 text-xs mb-2" onClick={onNewPlan}>
         <Plus className="h-3.5 w-3.5" /> New Plan
       </Button>
     </div>
