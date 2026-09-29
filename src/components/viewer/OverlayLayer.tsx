@@ -309,7 +309,7 @@ interface RectOverlayProps {
 }
 const RectOverlay = memo(function RectOverlay({ r, hovered, exportScale, viewScale, fullSizeLabels }: RectOverlayProps) {
   const s = Math.max(0.0001, viewScale);
-  const borderPxScreen = (hovered ? 3 : 2) * exportScale;
+  const borderPxScreen = (hovered ? 2.5 : 1.5) * exportScale;
   // Border thickness is expressed in page units so it scales with zoom, the
   // same way the previous CSS border did.
   const borderPxPage = borderPxScreen;

@@ -571,8 +571,9 @@ export const FileViewerModal = ({
         return null;
       }
     })();
+    if (stored === ALL_CLASSES_KEY) return stored;
     if (stored && awpClasses?.some((c) => c.name === stored)) return stored;
-    return awpClasses?.[0]?.name ?? null;
+    return ALL_CLASSES_KEY;
   });
   // Expanded rows (keyed by row key). All rows start collapsed.
   const [expanded, setLocalExpanded] = useState<Set<string>>(() => new Set());
