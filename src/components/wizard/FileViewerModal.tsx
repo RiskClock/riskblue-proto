@@ -3187,6 +3187,47 @@ const DetectionsPanel = ({
               <Loader2 className="h-3 w-3 animate-spin" /> Loading markers…
             </div>
           )}
+          {(() => {
+            const allItems = rows.flatMap((r) => r.items);
+            const isAllSelected = selectedRowKey == null;
+            return (
+              <div className="border-b min-w-0">
+                <div
+                  className={`flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50 min-w-0 ${isAllSelected ? "bg-muted/40" : ""}`}
+                  onClick={() => {
+                    onSelectRow(ALL_CLASSES_KEY, ALL_CLASSES_KEY);
+                    if (allItems.length > 0) {
+                      const minX = Math.min(...allItems.map((i) => i.nx));
+                      const minY = Math.min(...allItems.map((i) => i.ny));
+                      const maxX = Math.max(...allItems.map((i) => i.nx));
+                      const maxY = Math.max(...allItems.map((i) => i.ny));
+                      const rot = (rotationByPage[effectivePage] ?? 0) as 0 | 90 | 180 | 270;
+                      const margin = 0.015;
+                      const groupRect = {
+                        nx: Math.max(0, minX - margin),
+                        ny: Math.max(0, minY - margin),
+                        nw: Math.max(0.01, Math.min(1, maxX - minX + margin * 2)),
+                        nh: Math.max(0.01, Math.min(1, maxY - minY + margin * 2)),
+                      };
+                      requestAnimationFrame(() => {
+                        viewerApiRef.current?.fitToRect?.(rot === 0 ? groupRect : rotateNormalizedRect(groupRect, rot), { paddingRatio: 0.3, maxScale: 4, animate: true });
+                      });
+                    }
+                  }}
+                >
+                  <input
+                    type="radio"
+                    checked={isAllSelected}
+                    onChange={() => onSelectRow(ALL_CLASSES_KEY, ALL_CLASSES_KEY)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="h-3.5 w-3.5 shrink-0"
+                  />
+                  <span className="flex-1 min-w-0 text-xs font-medium">All classes</span>
+                  <span className="text-xs tabular-nums text-muted-foreground shrink-0">{allItems.length}</span>
+                </div>
+              </div>
+            );
+          })()}
           {rows.map((row) => {
             const c = row.cls;
             const isSelected = selectedRowKey === row.key || (selectedRowKey === c.name && rows.find((r) => r.cls.name === c.name)?.key === row.key);
