@@ -586,36 +586,17 @@ export const FileViewerModal = ({
   void expandedClasses;
   void onExpandedClassesChange;
 
-  // ---- Hidden annotation classes (per project, persisted) -----------------
-  const hiddenKey = persistKey
-    ? `drawing-viewer:hidden-classes:${persistKey}`
-    : null;
-  const [hiddenClasses, setHiddenClasses] = useState<Set<string>>(() => {
-    if (!hiddenKey || typeof window === "undefined") return new Set();
+  // Legacy per-project hidden-class preferences (from an older UI with
+  // per-class toggle buttons) are no longer honored. Clear any stale entry
+  // so it can never suppress classes on the canvas again.
+  useEffect(() => {
+    if (!persistKey || typeof window === "undefined") return;
     try {
-      const raw = window.localStorage.getItem(hiddenKey);
-      const arr = raw ? (JSON.parse(raw) as string[]) : [];
-      return new Set(Array.isArray(arr) ? arr : []);
+      window.localStorage.removeItem(`drawing-viewer:hidden-classes:${persistKey}`);
     } catch {
-      return new Set();
+      /* ignore */
     }
-  });
-  const updateHiddenClasses = useCallback(
-    (updater: (prev: Set<string>) => Set<string>) => {
-      setHiddenClasses((prev) => {
-        const next = updater(prev);
-        if (hiddenKey) {
-          try {
-            window.localStorage.setItem(hiddenKey, JSON.stringify([...next]));
-          } catch {
-            /* ignore */
-          }
-        }
-        return next;
-      });
-    },
-    [hiddenKey],
-  );
+  }, [persistKey]);
   const [instances, setInstances] = useState<DrawingInstanceRow[]>([]);
   const [loadingInstances, setLoadingInstances] = useState(false);
   const [past, setPast] = useState<HistoryAction[]>([]);
