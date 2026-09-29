@@ -462,7 +462,13 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
         fitPage,
         fitToOverlay: doFitOverlay,
         fitToRect: (rect, opts) => {
-          if (!activePage || pageCssSize.width === 0) return;
+          // Early clicks can land before the page raster/measurement is ready.
+          // Stash the request and replay it once layout reports a size.
+          if (!activePage || pageCssSize.width === 0 || viewportSize.width === 0) {
+            pendingFitRectRef.current = { rect, opts };
+            return;
+          }
+          pendingFitRectRef.current = null;
           fitToOverlay(rect, pageCssSize, viewportSize, {
             paddingRatio: opts?.paddingRatio ?? 0.3,
             minScale,
