@@ -450,6 +450,29 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
     }, [rotation, pageCssSize.width, pageCssSize.height]);
 
 
+    // A fit-to-rect requested before layout was ready, replayed below.
+    const pendingFitRectRef = useRef<{
+      rect: { nx: number; ny: number; nw: number; nh: number };
+      opts?: { paddingRatio?: number; maxScale?: number; animate?: boolean };
+    } | null>(null);
+    useEffect(() => {
+      const pending = pendingFitRectRef.current;
+      if (!pending) return;
+      if (!activePage || pageCssSize.width === 0 || viewportSize.width === 0) return;
+      pendingFitRectRef.current = null;
+      const id = requestAnimationFrame(() => {
+        fitToOverlay(pending.rect, pageCssSize, viewportSize, {
+          paddingRatio: pending.opts?.paddingRatio ?? 0.3,
+          minScale,
+          maxScale: pending.opts?.maxScale ?? Math.min(maxScale, 4),
+          animate: pending.opts?.animate,
+        });
+      });
+      return () => cancelAnimationFrame(id);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activePage?.pageNum, pageCssSize.width, pageCssSize.height, viewportSize.width, viewportSize.height]);
+
+
     // Imperative API. Depend on primitive scalars so the object identity is
     // stable across renders that don't actually change layout (avoids
     // re-running consumer effects keyed on the api). `reset` returns to the
