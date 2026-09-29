@@ -1867,7 +1867,7 @@ export const FileViewerModal = ({
         color: uc,
         variant: "dot" as const,
       }));
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, readOnly, hiddenClasses, activeTab]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, readOnly, activeTab]);
 
   const overlays = [
     ...detectionOverlays,
