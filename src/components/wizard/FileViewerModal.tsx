@@ -618,20 +618,12 @@ export const FileViewerModal = ({
   const [editingPlan, setEditingPlan] = useState<EditingPlanState | null>(null);
   const editingPlanRef = useRef<EditingPlanState | null>(null);
   useEffect(() => { editingPlanRef.current = editingPlan; }, [editingPlan]);
-  const ACTIVE_TAB_STORAGE_KEY = "fileViewer.activeTab";
   const { hasBetaAccess } = useBetaAccess();
-  const [activeTab, setActiveTab] = useState<"floor-plans" | "detections" | "plans">(() => {
-    if (typeof window === "undefined") return "floor-plans";
-    const stored = window.localStorage.getItem(ACTIVE_TAB_STORAGE_KEY);
-    return stored === "detections" || stored === "floor-plans" || stored === "plans" ? stored : "floor-plans";
-  });
+  // Always default to the first tab when a drawing opens.
+  const [activeTab, setActiveTab] = useState<"floor-plans" | "detections" | "plans">("floor-plans");
   useEffect(() => {
     if (!hasBetaAccess && activeTab === "plans") setActiveTab("floor-plans");
   }, [hasBetaAccess, activeTab]);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(ACTIVE_TAB_STORAGE_KEY, activeTab);
-  }, [activeTab]);
   // While creating/editing a plan the canvas is read-only: clicks toggle risks.
   const planDraftMode = activeTab === "plans" && newPlanOpen;
   const [confirmExit, setConfirmExit] = useState<null | {
