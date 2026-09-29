@@ -3191,14 +3191,23 @@ const DetectionsPanel = ({
                   onClick={() => {
                     onSelectRow(c.name, row.key);
                     if (row.items.length > 0) {
-                      const bboxes = row.items.map(i => ({ nx: i.nx, ny: i.ny, nw: 0, nh: 0 }));
-                      const minX = Math.min(...bboxes.map(b => b.nx));
-                      const minY = Math.min(...bboxes.map(b => b.ny));
-                      const maxX = Math.max(...bboxes.map(b => b.nx));
-                      const maxY = Math.max(...bboxes.map(b => b.ny));
+                      const minX = Math.min(...row.items.map(i => i.nx));
+                      const minY = Math.min(...row.items.map(i => i.ny));
+                      const maxX = Math.max(...row.items.map(i => i.nx));
+                      const maxY = Math.max(...row.items.map(i => i.ny));
                       const rot = (rotationByPage[effectivePage] ?? 0) as 0 | 90 | 180 | 270;
-                      const groupRect = { nx: minX, ny: minY, nw: maxX - minX, nh: maxY - minY };
-                      viewerApiRef.current?.fitToRect?.(rot === 0 ? groupRect : rotateNormalizedRect(groupRect, rot), { paddingRatio: 0.3, animate: true });
+                      // Single markers (and perfectly aligned ones) have zero
+                      // width/height; pad so the fit math has a real box.
+                      const margin = 0.015;
+                      const groupRect = {
+                        nx: Math.max(0, minX - margin),
+                        ny: Math.max(0, minY - margin),
+                        nw: Math.max(0.01, Math.min(1, maxX - minX + margin * 2)),
+                        nh: Math.max(0.01, Math.min(1, maxY - minY + margin * 2)),
+                      };
+                      requestAnimationFrame(() => {
+                        viewerApiRef.current?.fitToRect?.(rot === 0 ? groupRect : rotateNormalizedRect(groupRect, rot), { paddingRatio: 0.3, maxScale: 4, animate: true });
+                      });
                     }
                   }}
                 >
