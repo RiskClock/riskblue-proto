@@ -1795,7 +1795,7 @@ export const FileViewerModal = ({
           coordSpace: "normalized" as const,
           page: singlePageOnly ? currentPage : sheetId ? 1 : i.page_index,
           color: activeTab === "plans" && newPlanOpen
-            ? "hsl(var(--muted-foreground))"
+            ? (draftPlanVisual?.ids.has(i.id) ? draftPlanVisual.color : "hsl(var(--muted-foreground))")
             : (activeTab === "plans" && activePlan?.color) || drawingColors.get(instanceRowKey(i)) || awpClassColorForType(i.awp_class_name, pipeType, diameter),
           emphasized: activeTab === "plans" && newPlanOpen && hoveredPlanIds.has(i.id),
           // Labels are hidden; this text only appears when hovering the marker.
@@ -1955,7 +1955,6 @@ export const FileViewerModal = ({
       >
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="truncate flex items-center gap-2 min-w-0">
-            <span className="h-3 w-3 rounded-full bg-primary shrink-0" />
             <span className="truncate">{fileName}</span>
 <Button
               type="button"
