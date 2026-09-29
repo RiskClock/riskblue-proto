@@ -59,26 +59,35 @@ export function awpClassColorForType(
   return hslToHex(hue, 70, 50);
 }
 
-/** Assign contrasting hues among the risk rows visible on one drawing. */
+/**
+ * Assign maximally-separated hues among the risk rows visible on one drawing.
+ * Hues are spread evenly around the wheel (guaranteed 360/n separation) rather
+ * than hashed independently, which is what made pairs look alike. The starting
+ * offset and the row→slot mapping are both derived from the key set, so colors
+ * stay stable for the same drawing while neighbouring rows land far apart.
+ */
 export function drawingRiskColors(keys: string[]): Map<string, string> {
   const unique = [...new Set(keys)].sort();
-  const assigned: number[] = [];
+  const n = unique.length;
   const result = new Map<string, string>();
-  for (const key of unique) {
-    const base = ((hashStr(key.trim().toLowerCase()) % 4294967296) * 0.6180339887) % 1;
-    let best = base;
-    let bestGap = -1;
-    for (let step = 0; step < 72; step++) {
-      const candidate = (base + step * 0.6180339887) % 1;
-      const gap = assigned.length
-        ? Math.min(...assigned.map((hue) => Math.min(Math.abs(candidate - hue), 1 - Math.abs(candidate - hue))))
-        : 1;
-      if (gap > bestGap) { best = candidate; bestGap = gap; }
-    }
-    assigned.push(best);
-    result.set(key, hslToHex(best * 360, 70, 50));
-  }
+  if (n === 0) return result;
+  const offset = ((hashStr(unique.join("|").toLowerCase()) % 4294967296) * 0.6180339887) % 1;
+  // Walk the evenly-spaced slots in golden-angle order so adjacent list rows
+  // receive hues from opposite sides of the wheel.
+  const stride = Math.max(1, Math.round(n * 0.6180339887));
+  const step = gcd(stride, n) === 1 ? stride : 1;
+  // Alternate lightness slightly to further separate close hues.
+  unique.forEach((key, index) => {
+    const slot = (index * step) % n;
+    const hue = ((offset + slot / n) % 1) * 360;
+    const lightness = index % 2 === 0 ? 47 : 57;
+    result.set(key, hslToHex(hue, 72, lightness));
+  });
   return result;
+}
+
+function gcd(a: number, b: number): number {
+  return b === 0 ? a : gcd(b, a % b);
 }
 
 /**
