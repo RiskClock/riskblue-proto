@@ -963,9 +963,10 @@ export const FileViewerModal = ({
       } else {
         const stored = readStoredClass();
         const next =
-          stored && awpClasses?.some((c) => c.name === stored)
+          stored === ALL_CLASSES_KEY ||
+          (stored && awpClasses?.some((c) => c.name === stored))
             ? stored
-            : awpClasses?.[0]?.name ?? null;
+            : ALL_CLASSES_KEY;
         setSelectedClass(next);
       }
     }
@@ -984,7 +985,7 @@ export const FileViewerModal = ({
 
   useEffect(() => {
     if (isOpen && awpClasses && awpClasses.length > 0 && !selectedClass) {
-      setSelectedClass(awpClasses[0].name);
+      setSelectedClass(ALL_CLASSES_KEY);
     }
   }, [isOpen, awpClasses, selectedClass]);
 
@@ -1246,7 +1247,7 @@ export const FileViewerModal = ({
   const handleCanvasClick = async (nx: number, ny: number) => {
     if (Date.now() < suppressCanvasClickUntilRef.current) return;
     if (!sidebarEnabled) return;
-    if (!selectedClass) return;
+    if (!selectedClass || selectedClass === ALL_CLASSES_KEY) return;
     const row = await dbInsert({
       awp_class_name: selectedClass,
       nx,
@@ -1781,10 +1782,13 @@ export const FileViewerModal = ({
     return drawingRiskColors(keys);
   }, [instances, parentFileId, effectivePage]);
   // Row that drives canvas visibility. Falls back to the whole selected class.
+  // "All classes" maps to null so every instance stays visible.
   const effectiveRowKey =
-    selectedRowKey && selectedClass && rowClassOf(selectedRowKey) === selectedClass
-      ? selectedRowKey
-      : selectedClass;
+    selectedClass === ALL_CLASSES_KEY
+      ? null
+      : selectedRowKey && selectedClass && rowClassOf(selectedRowKey) === selectedClass
+        ? selectedRowKey
+        : selectedClass;
   const isInstanceVisible = (i: DrawingInstanceRow): boolean => {
     if (!awpClasses) return !hiddenClasses.has(i.awp_class_name);
     if (activeTab === "plans" && newPlanOpen) return true;
@@ -1793,7 +1797,7 @@ export const FileViewerModal = ({
     }
     if (activeTab === "plans") return false;
     if (activeTab === "floor-plans") return true;
-    if (!effectiveRowKey) return false;
+    if (!effectiveRowKey) return !hiddenClasses.has(i.awp_class_name);
     if (effectiveRowKey === i.awp_class_name) return true;
     return instanceRowKey(i) === effectiveRowKey;
   };
@@ -1840,7 +1844,7 @@ export const FileViewerModal = ({
   // OverlayLayer multiplies by the rendered page size so the browser's native
   // layout keeps the boxes in sync on any resize or zoom level.
   const floorPlanOverlays: OverlayInput[] = useMemo(() => {
-    if (readOnly || activeTab !== "floor-plans") return [];
+    if (readOnly || (activeTab !== "floor-plans" && activeTab !== "detections")) return [];
     if (!floorPlans || floorPlans.length === 0) return [];
     const out: OverlayInput[] = [];
     for (const fp of floorPlans) {
@@ -1873,7 +1877,7 @@ export const FileViewerModal = ({
   // Unit-plan indicator dots inside a level bbox. Not tied to any specific
   // unit reference. Filled dot, no border, no label. Click to delete.
   const unitMarkerOverlays: OverlayInput[] = useMemo(() => {
-    if (readOnly || activeTab !== "floor-plans") return [];
+    if (readOnly || (activeTab !== "floor-plans" && activeTab !== "detections")) return [];
     if (hiddenClasses.has(UNIT_MARKER_CLASS)) return [];
     const uc = floorPlanTypeColor("unit_floor_plan");
     return instances
@@ -1921,6 +1925,7 @@ export const FileViewerModal = ({
   // Always keep the radio selection aligned with one actual row.
   useEffect(() => {
     if (!isOpen || activeTab !== "detections" || !awpClasses?.length) return;
+    if (selectedClass === ALL_CLASSES_KEY) return;
     const rows = buildDetectionRows(awpClasses, instancesByClassThisFile);
     const row = rows.find((r) => r.key === selectedRowKey)
       || rows.find((r) => r.cls.name === selectedClass)
@@ -2164,7 +2169,7 @@ export const FileViewerModal = ({
                   const target = v as "floor-plans" | "detections" | "plans";
                   if (target === activeTab) return;
                   guardThen("tab", () => {
-                    if (target === "detections" && awpClasses) {
+                    if (target === "detections" && awpClasses && selectedClass !== ALL_CLASSES_KEY) {
                       const rows = buildDetectionRows(awpClasses, instancesByClassThisFile);
                       const row = rows.find((r) => r.key === selectedRowKey) || rows.find((r) => r.cls.name === selectedClass) || rows[0];
                       if (row) { setSelectedClass(row.cls.name); setSelectedRowKey(row.key); }
