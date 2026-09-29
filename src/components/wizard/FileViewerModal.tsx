@@ -3619,27 +3619,27 @@ size="sm"
 
       {scoutReview && (
         <div className="mx-2 mb-2 shrink-0 rounded-md border border-primary/40 bg-primary/5 p-2 space-y-2">
-          <div className="text-[11px] text-foreground">
+          <div className="text-sm text-foreground">
             Scout found{" "}
             <span className="font-medium">{scoutReview.after}</span> floor plan
             {scoutReview.after === 1 ? "" : "s"} on this page (was{" "}
             {scoutReview.before}). Review below.
           </div>
           {(scoutReview.warnings?.length ?? 0) > 0 && (
-            <div className="text-[11px] text-destructive">
+            <div className="text-sm text-destructive">
               These results look unreliable ({scoutReview.warnings!.join("; ")}).
               Check them before keeping.
             </div>
           )}
 
           <div className="flex gap-2">
-            <Button size="sm" className="h-6 text-[11px] flex-1" onClick={onScoutKeep} disabled={scoutBusy}>
+            <Button size="sm" className="h-6 text-sm flex-1" onClick={onScoutKeep} disabled={scoutBusy}>
               Keep
             </Button>
             <Button
               size="sm"
               variant="outline"
-              className="h-6 text-[11px] flex-1"
+              className="h-6 text-sm flex-1"
               onClick={() => void onScoutDiscard?.()}
               disabled={scoutBusy}
             >
@@ -3653,7 +3653,7 @@ size="sm"
 
         {orphaned.length > 0 && (
           <div className="border border-dashed rounded-md p-2 space-y-1 bg-muted/20">
-            <div className="text-[11px] font-medium text-muted-foreground">
+            <div className="text-sm font-medium text-muted-foreground">
               Annotations placed outside floor plan ({orphaned.length})
             </div>
             {renderAnnotations(orphaned)}
@@ -3739,7 +3739,7 @@ size="sm"
                   <select
                     value={displayType}
                     onChange={(e) => onEditingTypeChange?.(e.target.value)}
-                    className="text-[10px] h-7 border rounded px-1 bg-background shrink-0"
+                    className="text-xs h-7 border rounded px-1 bg-background shrink-0"
                   >
                     <option value="level_floor_plan">Level floor plan</option>
                     <option value="unit_floor_plan">Unit floor plan</option>
@@ -3747,7 +3747,7 @@ size="sm"
                     <option value="typical_detail_block">Typical detail block</option>
                   </select>
                 ) : (
-                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground shrink-0">
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground shrink-0">
                     {(displayType || "").replace(/_/g, " ")}
                   </span>
                 )}
@@ -3771,7 +3771,7 @@ size="sm"
                       <Button
                         type="button"
                         size="sm"
-                        className="h-6 px-2 text-[11px]"
+                        className="h-6 px-2 text-sm"
                         onClick={() => void onSaveEdit?.()}
                       >
                         Done
@@ -3780,7 +3780,7 @@ size="sm"
                         type="button"
                         size="sm"
                         variant="ghost"
-                        className="h-6 px-2 text-[11px]"
+                        className="h-6 px-2 text-sm"
                         onClick={() => onCancelEdit?.()}
                       >
                         Cancel
@@ -3792,7 +3792,7 @@ size="sm"
                       type="button"
                       size="sm"
                       variant="outline"
-                      className="h-6 px-2 text-[11px]"
+                      className="h-6 px-2 text-sm"
                       onClick={() => void onEnterEdit(fp)}
                     >
                       Edit Bounding Box
@@ -3812,7 +3812,7 @@ size="sm"
               )}
 
               {isUnit && (
-                <div className="flex items-start gap-1 text-[11px] text-muted-foreground">
+                <div className="flex items-start gap-1 text-sm text-muted-foreground">
                   <span className="font-medium shrink-0">Referenced in:</span>
                   {referencedIn.length === 0 ? (
                     <span className="italic">none</span>
@@ -3821,7 +3821,7 @@ size="sm"
                       {referencedIn.map((r) => (
                         <span
                           key={r}
-                          className="px-1.5 py-0.5 rounded bg-muted text-foreground text-[10px] font-mono"
+                          className="px-1.5 py-0.5 rounded bg-muted text-foreground text-xs font-mono"
                         >
                           {r}
                         </span>
@@ -3832,7 +3832,7 @@ size="sm"
               )}
 
               <div className="space-y-1">
-                <div className="text-[10px] font-medium text-muted-foreground">
+                <div className="text-xs font-medium text-muted-foreground">
                   Annotations ({planAnns.length})
                 </div>
                 {renderAnnotations(planAnns)}
@@ -3967,7 +3967,7 @@ const LevelUnitsSection = ({
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between gap-2">
-        <div className="text-[10px] font-medium text-muted-foreground">
+        <div className="text-xs font-medium text-muted-foreground">
           {`Units / Details (${effUnits.length})`}
         </div>
         {onSaveLevelUnits && (
@@ -3975,7 +3975,7 @@ const LevelUnitsSection = ({
             type="button"
             size="sm"
             variant="ghost"
-            className="h-6 px-1.5 text-[10px] gap-1"
+            className="h-6 px-1.5 text-xs gap-1"
             onClick={() => setOpen((v) => !v)}
           >
             {open ? (
@@ -4008,7 +4008,7 @@ const LevelUnitsSection = ({
             onWheel={(e) => e.stopPropagation()}
           >
             {filtered.length === 0 && !showCreate && (
-              <div className="text-[11px] italic text-muted-foreground px-2 py-2">
+              <div className="text-sm italic text-muted-foreground px-2 py-2">
                 No units or details.
               </div>
             )}
@@ -4033,7 +4033,7 @@ const LevelUnitsSection = ({
                         >
                           <span className="text-xs leading-none">−</span>
                         </button>
-                        <span className="min-w-[1rem] text-center text-[11px] font-medium tabular-nums">
+                        <span className="min-w-[1rem] text-center text-sm font-medium tabular-nums">
                           {count}
                         </span>
                       </>
@@ -4078,7 +4078,7 @@ const LevelUnitsSection = ({
           {effUnits.map((u, idx) => (
             <span
               key={`${u}::${idx}`}
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border"
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium border"
               style={{
                 backgroundColor: softBgFrom(uc),
                 color: uc,
