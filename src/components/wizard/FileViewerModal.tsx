@@ -42,6 +42,9 @@ import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import { awpClassColor, awpClassColorForType, drawingRiskColors, floorPlanTypeColor, readableTextOn, softBgFrom } from "@/lib/awpColor";
 
+// Sentinel selection value for the "All classes" row in the detections list.
+const ALL_CLASSES_KEY = "__all_classes__";
+
 
 import {
   type ParsedFloorPlan,
