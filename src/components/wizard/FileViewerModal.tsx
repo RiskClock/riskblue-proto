@@ -1960,7 +1960,7 @@ export const FileViewerModal = ({
               type="button"
               size="sm"
               variant={viewingMode ? "default" : "outline"}
-              className="h-8 px-2 flex-shrink-0 text-xs"
+              className="h-8 px-2 flex-shrink-0 text-sm"
               aria-pressed={viewingMode}
               onClick={() => {
                 setViewingMode((v) => {
@@ -2157,7 +2157,7 @@ export const FileViewerModal = ({
                   {hasBetaAccess && (
                     <TabsTrigger value="plans" className="gap-1.5">
                       Plans
-                      <span className="rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0 text-[9px] font-semibold uppercase tracking-wide text-primary">Beta</span>
+                      <span className="rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-primary">Beta</span>
                     </TabsTrigger>
                   )}
                 </TabsList>
@@ -3111,8 +3111,8 @@ const InlinePlanEditor = ({ initialPlan, toggleRef, defaultName, instances, clas
             <div className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 cursor-pointer" onClick={() => onFocusInstances(items)}>
               <Checkbox checked={checked === items.length ? true : checked > 0 ? "indeterminate" : false} onCheckedChange={(v) => toggleIds(items.map((i) => i.id), v === true)} onClick={(e) => e.stopPropagation()} style={{ borderColor: color, backgroundColor: checked ? color : undefined }} aria-label={`Select ${row.fullName}`} />
               <Tooltip><TooltipTrigger asChild><span className="shrink-0 font-mono text-sm font-medium">{row.label}</span></TooltipTrigger><TooltipContent side="left">{row.fullName}</TooltipContent></Tooltip>
-                  {row.diam && <Badge variant="outline" className="h-6 px-2 text-xs">{row.diam}</Badge>}
-                  {row.type && <Badge variant="outline" className="h-6 max-w-28 truncate px-2 text-xs">{subtypeAbbr(row.cls.name, row.type) || row.type}</Badge>}
+                  {row.diam && <Badge variant="outline" className="max-w-28 truncate rounded px-1.5 py-0.5 text-xs font-medium">{row.diam}</Badge>}
+                  {row.type && <Badge variant="outline" className="max-w-32 truncate rounded px-1.5 py-0.5 text-xs font-medium">{subtypeAbbr(row.cls.name, row.type) || row.type}</Badge>}
               <span className="flex-1 text-right text-sm text-muted-foreground">{checked}/{items.length}</span>
               <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={(e) => { e.stopPropagation(); setExpanded((prev) => { const next = new Set(prev); next.has(row.key) ? next.delete(row.key) : next.add(row.key); return next; }); }} aria-label={isExpanded ? "Collapse" : "Expand"}>{isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</Button>
             </div>
@@ -3257,8 +3257,8 @@ const DetectionsPanel = ({
                       </TooltipTrigger>
                       <TooltipContent side="left">{row.fullName}</TooltipContent>
                     </Tooltip>
-                    {row.diam && <Badge variant="outline" className="h-6 px-2 text-xs">{row.diam}</Badge>}
-                    {row.type && <Badge variant="outline" className="h-6 max-w-28 truncate px-2 text-xs">{subtypeAbbr(c.name, row.type) || row.type}</Badge>}
+                    {row.diam && <Badge variant="outline" className="max-w-28 truncate rounded px-1.5 py-0.5 text-xs font-medium">{row.diam}</Badge>}
+                    {row.type && <Badge variant="outline" className="max-w-32 truncate rounded px-1.5 py-0.5 text-xs font-medium">{subtypeAbbr(c.name, row.type) || row.type}</Badge>}
                     <span className="text-xs tabular-nums text-muted-foreground shrink-0">{row.count}</span>
                   </div>
                   {devices.beta && <DeviceButton row={row} devices={devices} />}
