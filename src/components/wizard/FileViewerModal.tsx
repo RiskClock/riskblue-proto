@@ -2321,11 +2321,12 @@ export const FileViewerModal = ({
                         const base = plan.product_assignments?.__base;
                         if (base && typeof base === "object" && !Array.isArray(base)) {
                           Object.entries(base as Record<string, unknown>).forEach(([id, quantity]) => {
-                            const count = Math.max(0, Number(quantity) || 0);
+                            const parsed = Number(quantity);
+                            const count = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
                             if (count > 0) counts.set(id, (counts.get(id) ?? 0) + count);
                           });
                         }
-                        return [...counts].map(([id, count]) => ({ id, name: drawingPlans.productsById.get(id)?.name || "Missing product", count, missing: !drawingPlans.productsById.has(id) }));
+                         return [...counts].map(([id, count]) => ({ id, name: drawingPlans.productsById.get(id)?.name || "Missing product", count, missing: !drawingPlans.productsById.has(id) }));
                     }}
                    />}
                   {newPlanOpen && <InlinePlanEditor
@@ -2933,14 +2934,14 @@ const DeviceButton = ({ row, devices }: { row: DetectionRowModel; devices: Devic
         </TooltipContent>
       </Tooltip>
       <PopoverTrigger asChild>
-        <Button type="button" variant="ghost" size="sm" className="h-6 px-1.5 text-[11px] text-primary" disabled={disabled} onClick={(e) => e.stopPropagation()}>
+        <Button type="button" variant="ghost" size="sm" className="h-7 px-1.5 text-sm text-primary" disabled={disabled} onClick={(e) => e.stopPropagation()}>
           Edit
         </Button>
       </PopoverTrigger>
     </span>
   ) : (
     <PopoverTrigger asChild>
-      <Button type="button" variant="ghost" size="sm" className="h-6 px-1.5 text-[11px] text-primary" disabled={disabled} onClick={(e) => e.stopPropagation()}>
+      <Button type="button" variant="ghost" size="sm" className="h-7 px-1.5 text-sm text-primary" disabled={disabled} onClick={(e) => e.stopPropagation()}>
         <Plus className="h-3 w-3" /> Add Device
       </Button>
     </PopoverTrigger>
@@ -2968,7 +2969,7 @@ const DeviceButton = ({ row, devices }: { row: DetectionRowModel; devices: Devic
         <div className="max-h-64 overflow-y-auto overscroll-contain p-1" onWheel={(e) => e.stopPropagation()}>
           {suggested.length > 0 && (
             <>
-              <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Suggested for {pipeMm}mm</div>
+              <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Suggested for {pipeMm}mm</div>
               {suggested.map((p) => <ProductPickerOption key={p.id} product={p} checked={selected.includes(p.id)} onToggle={() => toggle(p.id)} />)}
               {others.length > 0 && <div className="my-1 border-t" />}
             </>
@@ -2995,7 +2996,7 @@ const PlansPanel = ({ plans, activePlanId, onSelectPlan, onNewPlan, onEditPlan, 
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="p-3 border-b">
-        <Button size="sm" variant="outline" className="w-full h-8 text-xs" onClick={onNewPlan}>
+        <Button size="sm" variant="outline" className="w-full h-9 text-sm" onClick={onNewPlan}>
           <Plus className="h-3.5 w-3.5 mr-1" /> Create New Plan
         </Button>
       </div>
@@ -3009,10 +3010,10 @@ const PlansPanel = ({ plans, activePlanId, onSelectPlan, onNewPlan, onEditPlan, 
             return (
               <div key={p.id} onClick={() => onSelectPlan(p.id)} className={`w-full px-3 py-2 text-left text-sm border-b cursor-pointer hover:bg-muted/50 ${active ? "bg-primary/10" : ""}`}>
                 <div className="flex items-center gap-2 min-w-0">
-                <RadioGroupItem value={p.id} className="shrink-0" aria-label={`Show ${p.name}`} onClick={(e) => e.stopPropagation()} />
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: p.color || awpClassColor(p.name) }} />
+                <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: p.color || awpClassColor(p.name) }} />
                 <span className={`min-w-0 flex-1 truncate ${active ? "font-semibold" : ""}`}>{p.name}</span>
                 <span className="text-sm text-muted-foreground shrink-0" title={products.map(({ name, count }) => `${name} ×${count}`).join("\n")}>{productCount} {productCount === 1 ? "product" : "products"}</span>
+                <RadioGroupItem value={p.id} className="sr-only" aria-label={`Show ${p.name}`} onClick={(e) => e.stopPropagation()} />
                 <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground" aria-label={`Edit ${p.name}`} title="Edit plan" onClick={(e) => { e.stopPropagation(); onEditPlan(p.id); }}>
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
@@ -3100,7 +3101,7 @@ const InlinePlanEditor = ({ initialPlan, toggleRef, defaultName, instances, clas
         <div className="flex gap-2"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Plan name" /><input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-10 w-12 rounded border p-1" aria-label="Plan color" /></div>
         <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Plan description" className="min-h-16" />
       </div>
-      {baseProducts.length > 0 && <div className="border-b p-3"><p className="mb-2 text-sm font-semibold">Essential Components</p><div className="space-y-1">{baseProducts.map((p) => <div key={p.id} className="flex items-center gap-2 text-xs"><span className="flex-1 truncate">{p.name}</span><Input type="number" min={0} className="h-7 w-16" value={baseQuantities[p.id] || 0} onChange={(e) => setBaseQuantities((q) => ({ ...q, [p.id]: Math.max(0, Number(e.target.value) || 0) }))} /></div>)}</div></div>}
+      {baseProducts.length > 0 && <div className="border-b p-3"><p className="mb-2 text-sm font-semibold">Essential Components</p><div className="space-y-1">{baseProducts.map((p) => <div key={p.id} className="flex items-center gap-2 text-sm"><span className="flex-1 truncate">{p.name}</span><Input type="number" min={0} className="h-8 w-16" value={baseQuantities[p.id] || 0} onChange={(e) => setBaseQuantities((q) => ({ ...q, [p.id]: Math.max(0, Number(e.target.value) || 0) }))} /></div>)}</div></div>}
       <div className="flex-1 overflow-y-auto">
         {rows.map((row) => {
           const items = row.items;
@@ -3109,20 +3110,20 @@ const InlinePlanEditor = ({ initialPlan, toggleRef, defaultName, instances, clas
           return <div key={row.key} className="border-b" onMouseEnter={() => onHoverInstances(items.map((i) => i.id))} onMouseLeave={() => onHoverInstances([])}>
             <div className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 cursor-pointer" onClick={() => onFocusInstances(items)}>
               <Checkbox checked={checked === items.length ? true : checked > 0 ? "indeterminate" : false} onCheckedChange={(v) => toggleIds(items.map((i) => i.id), v === true)} onClick={(e) => e.stopPropagation()} style={{ borderColor: color, backgroundColor: checked ? color : undefined }} aria-label={`Select ${row.fullName}`} />
-              <Tooltip><TooltipTrigger asChild><span className="shrink-0 font-mono text-xs font-medium">{row.label}</span></TooltipTrigger><TooltipContent side="left">{row.fullName}</TooltipContent></Tooltip>
+              <Tooltip><TooltipTrigger asChild><span className="shrink-0 font-mono text-sm font-medium">{row.label}</span></TooltipTrigger><TooltipContent side="left">{row.fullName}</TooltipContent></Tooltip>
                   {row.diam && <Badge variant="outline" className="h-6 px-2 text-xs">{row.diam}</Badge>}
                   {row.type && <Badge variant="outline" className="h-6 max-w-28 truncate px-2 text-xs">{subtypeAbbr(row.cls.name, row.type) || row.type}</Badge>}
-              <span className="flex-1 text-right text-xs text-muted-foreground">{checked}/{items.length}</span>
+              <span className="flex-1 text-right text-sm text-muted-foreground">{checked}/{items.length}</span>
               <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={(e) => { e.stopPropagation(); setExpanded((prev) => { const next = new Set(prev); next.has(row.key) ? next.delete(row.key) : next.add(row.key); return next; }); }} aria-label={isExpanded ? "Collapse" : "Expand"}>{isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</Button>
             </div>
             {isExpanded && <div className="bg-muted/20 px-8 py-1">{items.slice().sort((a, b) => (numberByInstanceId.get(a.id) ?? 0) - (numberByInstanceId.get(b.id) ?? 0)).map((i) => {
               const containingPlan = findContainingPlan(floorPlans, i.nx, i.ny, floorPlanOverrides);
               const planLabel = containingPlan ? getEffectiveLabel(containingPlan, floorPlanOverrides) : null;
               const planColor = containingPlan ? floorPlanTypeColor(getEffectiveType(containingPlan, floorPlanOverrides)) : null;
-              return <div key={i.id} className="flex items-center gap-2 py-1 text-xs hover:bg-muted/50 cursor-pointer" onClick={() => onFocusInstance(i)} onMouseEnter={() => onHoverInstances([i.id])} onMouseLeave={() => onHoverInstances(items.map((item) => item.id))}>
+              return <div key={i.id} className="flex items-center gap-2 py-1 text-sm hover:bg-muted/50 cursor-pointer" onClick={() => onFocusInstance(i)} onMouseEnter={() => onHoverInstances([i.id])} onMouseLeave={() => onHoverInstances(items.map((item) => item.id))}>
                 <Checkbox checked={selected.has(i.id)} onCheckedChange={(v) => toggleIds([i.id], v === true)} onClick={(e) => e.stopPropagation()} style={{ borderColor: color, backgroundColor: selected.has(i.id) ? color : undefined }} />
                 <span className="min-w-0 flex-1 truncate font-mono">{instanceLabel(i)}{i.page_index !== effectivePage ? ` (p.${i.page_index})` : ""}</span>
-                {planLabel && planColor && <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium max-w-[80px] truncate border" style={{ backgroundColor: softBgFrom(planColor), color: planColor, borderColor: planColor }} title={`In ${planLabel}`}>{planLabel}</span>}
+                {planLabel && planColor && <span className="shrink-0 px-1.5 py-0.5 rounded text-xs font-medium max-w-[100px] truncate border" style={{ backgroundColor: softBgFrom(planColor), color: planColor, borderColor: planColor }} title={`In ${planLabel}`}>{planLabel}</span>}
               </div>;
             })}</div>}
           </div>;
@@ -3202,7 +3203,7 @@ const DetectionsPanel = ({
                     onClick={(e) => e.stopPropagation()}
                     className="h-3.5 w-3.5 shrink-0"
                   />
-                  <span className="flex-1 min-w-0 text-xs font-medium">All classes</span>
+                  <span className="flex-1 min-w-0 text-sm font-medium">All classes</span>
                   <span className="text-xs tabular-nums text-muted-foreground shrink-0">{allItems.length}</span>
                 </div>
               </div>
@@ -3252,7 +3253,7 @@ const DetectionsPanel = ({
                     <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="shrink-0 font-mono text-xs">{row.label}</span>
+                        <span className="shrink-0 font-mono text-sm">{row.label}</span>
                       </TooltipTrigger>
                       <TooltipContent side="left">{row.fullName}</TooltipContent>
                     </Tooltip>
@@ -3281,10 +3282,10 @@ const DetectionsPanel = ({
                 {isExpanded && (
                   <div className="px-8 py-1 space-y-1 bg-muted/20">
                     {row.analysisCount > 0 && (
-                      <div className="text-[11px] text-muted-foreground">{row.analysisCount} from analysis</div>
+                      <div className="text-xs text-muted-foreground">{row.analysisCount} from analysis</div>
                     )}
                     {row.items.length === 0 && row.analysisCount === 0 && (
-                      <div className="text-[11px] text-muted-foreground italic">No instances yet.</div>
+                      <div className="text-xs text-muted-foreground italic">No instances yet.</div>
                     )}
                     {row.items
                       .slice()
@@ -3304,7 +3305,7 @@ const DetectionsPanel = ({
                         return (
                           <div
                             key={i.id}
-                            className={`flex items-center gap-2 text-[11px] rounded px-1 -mx-1 cursor-pointer hover:bg-muted/60 ${
+                            className={`flex items-center gap-2 text-sm rounded px-1 -mx-1 cursor-pointer hover:bg-muted/60 ${
                               hoveredInstanceId === i.id ? "bg-muted font-semibold" : ""
                             }`}
                             onClick={() => {
