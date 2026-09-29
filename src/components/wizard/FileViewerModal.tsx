@@ -1851,7 +1851,6 @@ export const FileViewerModal = ({
   // unit reference. Filled dot, no border, no label. Click to delete.
   const unitMarkerOverlays: OverlayInput[] = useMemo(() => {
     if (readOnly || (activeTab !== "floor-plans" && activeTab !== "detections")) return [];
-    if (hiddenClasses.has(UNIT_MARKER_CLASS)) return [];
     const uc = floorPlanTypeColor("unit_floor_plan");
     return instances
       .filter(
