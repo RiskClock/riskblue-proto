@@ -27,3 +27,6 @@
 - [x] Explain golden-ratio HSL hashing and address nearby hue collisions on each drawing.
 - [x] Refine drawing plan radio selection, zoom navigation, deletion, color markers, and create action.
 - [x] Match schematic-level-row file badges to their drawing box color.
+- [x] Clean up the unavailable 22mm product assignment in 10 Lime Street.
+- [x] Flag missing products, show product IDs in Detections, count all plan products including essentials, and align plan rows.
+- [x] Standardize drawing-window text and match Detections pills to Floor Plans pills; verify in preview.
