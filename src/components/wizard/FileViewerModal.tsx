@@ -42,6 +42,9 @@ import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import { awpClassColor, awpClassColorForType, drawingRiskColors, floorPlanTypeColor, readableTextOn, softBgFrom } from "@/lib/awpColor";
 
+// Sentinel selection value for the "All classes" row in the detections list.
+const ALL_CLASSES_KEY = "__all_classes__";
+
 
 import {
   type ParsedFloorPlan,
@@ -571,8 +574,9 @@ export const FileViewerModal = ({
         return null;
       }
     })();
+    if (stored === ALL_CLASSES_KEY) return stored;
     if (stored && awpClasses?.some((c) => c.name === stored)) return stored;
-    return awpClasses?.[0]?.name ?? null;
+    return ALL_CLASSES_KEY;
   });
   // Expanded rows (keyed by row key). All rows start collapsed.
   const [expanded, setLocalExpanded] = useState<Set<string>>(() => new Set());
@@ -959,9 +963,10 @@ export const FileViewerModal = ({
       } else {
         const stored = readStoredClass();
         const next =
-          stored && awpClasses?.some((c) => c.name === stored)
+          stored === ALL_CLASSES_KEY ||
+          (stored && awpClasses?.some((c) => c.name === stored))
             ? stored
-            : awpClasses?.[0]?.name ?? null;
+            : ALL_CLASSES_KEY;
         setSelectedClass(next);
       }
     }
@@ -980,7 +985,7 @@ export const FileViewerModal = ({
 
   useEffect(() => {
     if (isOpen && awpClasses && awpClasses.length > 0 && !selectedClass) {
-      setSelectedClass(awpClasses[0].name);
+      setSelectedClass(ALL_CLASSES_KEY);
     }
   }, [isOpen, awpClasses, selectedClass]);
 
@@ -1242,7 +1247,7 @@ export const FileViewerModal = ({
   const handleCanvasClick = async (nx: number, ny: number) => {
     if (Date.now() < suppressCanvasClickUntilRef.current) return;
     if (!sidebarEnabled) return;
-    if (!selectedClass) return;
+    if (!selectedClass || selectedClass === ALL_CLASSES_KEY) return;
     const row = await dbInsert({
       awp_class_name: selectedClass,
       nx,
@@ -1777,10 +1782,13 @@ export const FileViewerModal = ({
     return drawingRiskColors(keys);
   }, [instances, parentFileId, effectivePage]);
   // Row that drives canvas visibility. Falls back to the whole selected class.
+  // "All classes" maps to null so every instance stays visible.
   const effectiveRowKey =
-    selectedRowKey && selectedClass && rowClassOf(selectedRowKey) === selectedClass
-      ? selectedRowKey
-      : selectedClass;
+    selectedClass === ALL_CLASSES_KEY
+      ? null
+      : selectedRowKey && selectedClass && rowClassOf(selectedRowKey) === selectedClass
+        ? selectedRowKey
+        : selectedClass;
   const isInstanceVisible = (i: DrawingInstanceRow): boolean => {
     if (!awpClasses) return !hiddenClasses.has(i.awp_class_name);
     if (activeTab === "plans" && newPlanOpen) return true;
@@ -1789,7 +1797,7 @@ export const FileViewerModal = ({
     }
     if (activeTab === "plans") return false;
     if (activeTab === "floor-plans") return true;
-    if (!effectiveRowKey) return false;
+    if (!effectiveRowKey) return !hiddenClasses.has(i.awp_class_name);
     if (effectiveRowKey === i.awp_class_name) return true;
     return instanceRowKey(i) === effectiveRowKey;
   };
@@ -1836,7 +1844,7 @@ export const FileViewerModal = ({
   // OverlayLayer multiplies by the rendered page size so the browser's native
   // layout keeps the boxes in sync on any resize or zoom level.
   const floorPlanOverlays: OverlayInput[] = useMemo(() => {
-    if (readOnly || activeTab !== "floor-plans") return [];
+    if (readOnly || (activeTab !== "floor-plans" && activeTab !== "detections")) return [];
     if (!floorPlans || floorPlans.length === 0) return [];
     const out: OverlayInput[] = [];
     for (const fp of floorPlans) {
@@ -1869,7 +1877,7 @@ export const FileViewerModal = ({
   // Unit-plan indicator dots inside a level bbox. Not tied to any specific
   // unit reference. Filled dot, no border, no label. Click to delete.
   const unitMarkerOverlays: OverlayInput[] = useMemo(() => {
-    if (readOnly || activeTab !== "floor-plans") return [];
+    if (readOnly || (activeTab !== "floor-plans" && activeTab !== "detections")) return [];
     if (hiddenClasses.has(UNIT_MARKER_CLASS)) return [];
     const uc = floorPlanTypeColor("unit_floor_plan");
     return instances
@@ -1917,6 +1925,7 @@ export const FileViewerModal = ({
   // Always keep the radio selection aligned with one actual row.
   useEffect(() => {
     if (!isOpen || activeTab !== "detections" || !awpClasses?.length) return;
+    if (selectedClass === ALL_CLASSES_KEY) return;
     const rows = buildDetectionRows(awpClasses, instancesByClassThisFile);
     const row = rows.find((r) => r.key === selectedRowKey)
       || rows.find((r) => r.cls.name === selectedClass)
@@ -2160,7 +2169,7 @@ export const FileViewerModal = ({
                   const target = v as "floor-plans" | "detections" | "plans";
                   if (target === activeTab) return;
                   guardThen("tab", () => {
-                    if (target === "detections" && awpClasses) {
+                    if (target === "detections" && awpClasses && selectedClass !== ALL_CLASSES_KEY) {
                       const rows = buildDetectionRows(awpClasses, instancesByClassThisFile);
                       const row = rows.find((r) => r.key === selectedRowKey) || rows.find((r) => r.cls.name === selectedClass) || rows[0];
                       if (row) { setSelectedClass(row.cls.name); setSelectedRowKey(row.key); }
@@ -3178,6 +3187,47 @@ const DetectionsPanel = ({
               <Loader2 className="h-3 w-3 animate-spin" /> Loading markers…
             </div>
           )}
+          {(() => {
+            const allItems = rows.flatMap((r) => r.items);
+            const isAllSelected = selectedRowKey == null;
+            return (
+              <div className="border-b min-w-0">
+                <div
+                  className={`flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50 min-w-0 ${isAllSelected ? "bg-muted/40" : ""}`}
+                  onClick={() => {
+                    onSelectRow(ALL_CLASSES_KEY, ALL_CLASSES_KEY);
+                    if (allItems.length > 0) {
+                      const minX = Math.min(...allItems.map((i) => i.nx));
+                      const minY = Math.min(...allItems.map((i) => i.ny));
+                      const maxX = Math.max(...allItems.map((i) => i.nx));
+                      const maxY = Math.max(...allItems.map((i) => i.ny));
+                      const rot = (rotationByPage[effectivePage] ?? 0) as 0 | 90 | 180 | 270;
+                      const margin = 0.015;
+                      const groupRect = {
+                        nx: Math.max(0, minX - margin),
+                        ny: Math.max(0, minY - margin),
+                        nw: Math.max(0.01, Math.min(1, maxX - minX + margin * 2)),
+                        nh: Math.max(0.01, Math.min(1, maxY - minY + margin * 2)),
+                      };
+                      requestAnimationFrame(() => {
+                        viewerApiRef.current?.fitToRect?.(rot === 0 ? groupRect : rotateNormalizedRect(groupRect, rot), { paddingRatio: 0.3, maxScale: 4, animate: true });
+                      });
+                    }
+                  }}
+                >
+                  <input
+                    type="radio"
+                    checked={isAllSelected}
+                    onChange={() => onSelectRow(ALL_CLASSES_KEY, ALL_CLASSES_KEY)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="h-3.5 w-3.5 shrink-0"
+                  />
+                  <span className="flex-1 min-w-0 text-xs font-medium">All classes</span>
+                  <span className="text-xs tabular-nums text-muted-foreground shrink-0">{allItems.length}</span>
+                </div>
+              </div>
+            );
+          })()}
           {rows.map((row) => {
             const c = row.cls;
             const isSelected = selectedRowKey === row.key || (selectedRowKey === c.name && rows.find((r) => r.cls.name === c.name)?.key === row.key);
