@@ -3545,7 +3545,7 @@ const FloorPlansPanel = ({
   return (
     <div className="h-full flex flex-col min-h-0">
       {onScoutPage && (
-        <div className="px-2 pb-2 shrink-0 flex items-center gap-1">
+        <div className="p-3 border-b shrink-0 flex items-center gap-1">
 <Button
             size="sm"
             variant="outline"
