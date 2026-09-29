@@ -2318,7 +2318,14 @@ export const FileViewerModal = ({
                            : drawingPlans.assignedDevicesFor(key, entry.id);
                          ids.forEach((id) => counts.set(id, (counts.get(id) ?? 0) + 1));
                        });
-                       return [...counts].map(([id, count]) => ({ name: drawingPlans.productsById.get(id)?.name || id, count }));
+                        const base = plan.product_assignments?.__base;
+                        if (base && typeof base === "object" && !Array.isArray(base)) {
+                          Object.entries(base as Record<string, unknown>).forEach(([id, quantity]) => {
+                            const count = Math.max(0, Number(quantity) || 0);
+                            if (count > 0) counts.set(id, (counts.get(id) ?? 0) + count);
+                          });
+                        }
+                        return [...counts].map(([id, count]) => ({ id, name: drawingPlans.productsById.get(id)?.name || "Missing product", count, missing: !drawingPlans.productsById.has(id) }));
                     }}
                    />}
                   {newPlanOpen && <InlinePlanEditor
@@ -2907,20 +2914,21 @@ const DeviceButton = ({ row, devices }: { row: DetectionRowModel; devices: Devic
   };
   const names = selected.map((id) => {
     const p = devices.productsById.get(id);
-    return p ? `${p.code ? `${p.code} ` : ""}${p.name}`.trim() : id;
+    return p ? p.code || p.name || "Unnamed product" : "Missing product";
   });
+  const missing = selected.some((id) => !devices.productsById.has(id));
   const disabled = !devices.canEdit;
   const trigger = selected.length > 0 ? (
     <span className="inline-flex items-center gap-1">
       <Tooltip>
         <TooltipTrigger asChild>
-          <Badge variant="outline" className="h-5 max-w-32 truncate px-1.5 text-[10px] font-medium cursor-default">
-            {selected.length === 1 ? names[0] : `${selected.length} Devices`}
+          <Badge variant="outline" className={`h-6 max-w-32 truncate px-2 text-xs font-medium cursor-default ${missing ? "border-destructive bg-destructive/10 text-destructive" : ""}`}>
+            {missing ? "Missing product" : selected.length === 1 ? names[0] : `${selected.length} Products`}
           </Badge>
         </TooltipTrigger>
         <TooltipContent side="left" className="max-w-xs">
           <ul className="space-y-0.5 text-xs">
-            {names.map((n) => <li key={n}>{n}</li>)}
+            {names.map((n, idx) => <li key={selected[idx]} className={!devices.productsById.has(selected[idx]) ? "text-destructive" : ""}>{n}</li>)}
           </ul>
         </TooltipContent>
       </Tooltip>
@@ -2948,11 +2956,11 @@ const DeviceButton = ({ row, devices }: { row: DetectionRowModel; devices: Devic
         {selected.length > 0 && (
           <div className="flex flex-wrap gap-1 border-b p-2">
             {selected.map((id, idx) => (
-              <Badge key={id} variant="outline" className="gap-1 pr-1 font-normal" style={tagStyle(names[idx])}>
-                <span>{devices.productsById.get(id)?.code || devices.productsById.get(id)?.name || "Product"}</span>
-                <button type="button" className="rounded-full hover:bg-background/50" aria-label={`Remove ${names[idx]}`} onClick={() => toggle(id)}>
+              <Badge key={id} variant="outline" className={`gap-1 pr-1 font-normal ${!devices.productsById.has(id) ? "border-destructive bg-destructive/10 text-destructive" : ""}`} style={devices.productsById.has(id) ? tagStyle(names[idx]) : undefined}>
+                <span>{names[idx]}</span>
+                <Button type="button" variant="ghost" size="icon" className="h-5 w-5" aria-label={`Remove ${names[idx]}`} onClick={() => toggle(id)}>
                   <XIcon className="h-3 w-3" />
-                </button>
+                </Button>
               </Badge>
             ))}
           </div>
@@ -2980,7 +2988,7 @@ const PlansPanel = ({ plans, activePlanId, onSelectPlan, onNewPlan, onEditPlan, 
   onNewPlan: () => void;
   onEditPlan: (id: string) => void;
   onDeletePlan: (id: string) => Promise<void>;
-  deviceNames: (p: DrawingPlan) => { name: string; count: number }[];
+  deviceNames: (p: DrawingPlan) => { id: string; name: string; count: number; missing: boolean }[];
 }) => {
   const [deleteTarget, setDeleteTarget] = useState<DrawingPlan | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -2996,22 +3004,23 @@ const PlansPanel = ({ plans, activePlanId, onSelectPlan, onNewPlan, onEditPlan, 
         <RadioGroup value={activePlanId ?? undefined} onValueChange={onSelectPlan} className="gap-0">
           {plans.map((p) => {
             const active = p.id === activePlanId;
-            const devices = deviceNames(p);
+            const products = deviceNames(p);
+            const productCount = products.reduce((sum, product) => sum + product.count, 0);
             return (
-              <div key={p.id} onClick={() => onSelectPlan(p.id)} className={`w-full flex items-start gap-2 px-3 py-2 text-left text-sm border-b cursor-pointer hover:bg-muted/50 ${active ? "bg-primary/10" : ""}`}>
-                <RadioGroupItem value={p.id} className="mt-0.5 shrink-0" aria-label={`Show ${p.name}`} onClick={(e) => e.stopPropagation()} />
-                <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: p.color || awpClassColor(p.name) }} />
-                <span className="min-w-0 flex-1">
-                  <span className={`block truncate ${active ? "font-semibold" : ""}`}>{p.name}</span>
-                  {devices.length > 0 && <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">{devices.map(({ name, count }) => <li key={name} className="truncate">{name} ×{count}</li>)}</ul>}
-                </span>
-                <span className="text-xs text-muted-foreground shrink-0" title={devices.map(({ name, count }) => `${name} ×${count}`).join("\n")}>{devices.length} {devices.length === 1 ? "device" : "devices"}</span>
+              <div key={p.id} onClick={() => onSelectPlan(p.id)} className={`w-full px-3 py-2 text-left text-sm border-b cursor-pointer hover:bg-muted/50 ${active ? "bg-primary/10" : ""}`}>
+                <div className="flex items-center gap-2 min-w-0">
+                <RadioGroupItem value={p.id} className="shrink-0" aria-label={`Show ${p.name}`} onClick={(e) => e.stopPropagation()} />
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: p.color || awpClassColor(p.name) }} />
+                <span className={`min-w-0 flex-1 truncate ${active ? "font-semibold" : ""}`}>{p.name}</span>
+                <span className="text-sm text-muted-foreground shrink-0" title={products.map(({ name, count }) => `${name} ×${count}`).join("\n")}>{productCount} {productCount === 1 ? "product" : "products"}</span>
                 <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground" aria-label={`Edit ${p.name}`} title="Edit plan" onClick={(e) => { e.stopPropagation(); onEditPlan(p.id); }}>
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
                 <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" aria-label={`Delete ${p.name}`} onClick={(e) => { e.stopPropagation(); setDeleteTarget(p); }}>
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
+                </div>
+                {products.length > 0 && <ul className="mt-1 ml-9 space-y-0.5 text-sm text-muted-foreground">{products.map(({ id, name, count, missing }) => <li key={id} className={`truncate ${missing ? "text-destructive font-medium" : ""}`} title={missing ? `Missing product (${id})` : name}>{name} ×{count}</li>)}</ul>}
               </div>
             );
           })}
@@ -3101,8 +3110,8 @@ const InlinePlanEditor = ({ initialPlan, toggleRef, defaultName, instances, clas
             <div className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 cursor-pointer" onClick={() => onFocusInstances(items)}>
               <Checkbox checked={checked === items.length ? true : checked > 0 ? "indeterminate" : false} onCheckedChange={(v) => toggleIds(items.map((i) => i.id), v === true)} onClick={(e) => e.stopPropagation()} style={{ borderColor: color, backgroundColor: checked ? color : undefined }} aria-label={`Select ${row.fullName}`} />
               <Tooltip><TooltipTrigger asChild><span className="shrink-0 font-mono text-xs font-medium">{row.label}</span></TooltipTrigger><TooltipContent side="left">{row.fullName}</TooltipContent></Tooltip>
-              {row.diam && <Badge variant="outline" className="h-5 px-1.5 text-[10px]">{row.diam}</Badge>}
-              {row.type && <Badge variant="outline" className="h-5 max-w-28 truncate px-1.5 text-[10px]">{subtypeAbbr(row.cls.name, row.type) || row.type}</Badge>}
+                  {row.diam && <Badge variant="outline" className="h-6 px-2 text-xs">{row.diam}</Badge>}
+                  {row.type && <Badge variant="outline" className="h-6 max-w-28 truncate px-2 text-xs">{subtypeAbbr(row.cls.name, row.type) || row.type}</Badge>}
               <span className="flex-1 text-right text-xs text-muted-foreground">{checked}/{items.length}</span>
               <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={(e) => { e.stopPropagation(); setExpanded((prev) => { const next = new Set(prev); next.has(row.key) ? next.delete(row.key) : next.add(row.key); return next; }); }} aria-label={isExpanded ? "Collapse" : "Expand"}>{isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</Button>
             </div>
@@ -3247,8 +3256,8 @@ const DetectionsPanel = ({
                       </TooltipTrigger>
                       <TooltipContent side="left">{row.fullName}</TooltipContent>
                     </Tooltip>
-                    {row.diam && <Badge variant="outline" className="h-5 px-1.5 text-[10px]">{row.diam}</Badge>}
-                    {row.type && <Badge variant="outline" className="h-5 max-w-28 truncate px-1.5 text-[10px]">{subtypeAbbr(c.name, row.type) || row.type}</Badge>}
+                    {row.diam && <Badge variant="outline" className="h-6 px-2 text-xs">{row.diam}</Badge>}
+                    {row.type && <Badge variant="outline" className="h-6 max-w-28 truncate px-2 text-xs">{subtypeAbbr(c.name, row.type) || row.type}</Badge>}
                     <span className="text-xs tabular-nums text-muted-foreground shrink-0">{row.count}</span>
                   </div>
                   {devices.beta && <DeviceButton row={row} devices={devices} />}
@@ -3315,7 +3324,7 @@ const DetectionsPanel = ({
                                const cc = floorPlanTypeColor(effT);
                               return (
                                 <span
-                                  className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium max-w-[80px] truncate border"
+                                  className="shrink-0 px-1.5 py-0.5 rounded text-xs font-medium max-w-[100px] truncate border"
                                   style={{ backgroundColor: softBgFrom(cc), color: cc, borderColor: cc }}
                                   title={`In ${planLabel}`}
                                 >
@@ -3552,7 +3561,7 @@ const FloorPlansPanel = ({
           return (
             <div
               key={inst.id}
-              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] border ${
+               className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs border ${
                 hoveredInstanceId === inst.id ? "font-bold brightness-95" : "font-medium"
               }`}
               style={{
