@@ -2313,7 +2313,7 @@ export const FileViewerModal = ({
                          if (!entry) return;
                          const { pipeType, diameter } = instanceMeta(i);
                          const key = assignmentKeyFor(entry.id, i.awp_class_name, pipeType, diameter);
-                         const ids = legacy
+                          const ids = legacy && !plan.product_assignments?.__configured
                            ? drawingPlans.assignedFor(plan, key, entry.id)
                            : drawingPlans.assignedDevicesFor(key, entry.id);
                          ids.forEach((id) => counts.set(id, (counts.get(id) ?? 0) + 1));
@@ -2941,8 +2941,8 @@ const DeviceButton = ({ row, devices }: { row: DetectionRowModel; devices: Devic
     </span>
   ) : (
     <PopoverTrigger asChild>
-      <Button type="button" variant="ghost" size="sm" className="h-7 px-1.5 text-sm text-primary" disabled={disabled} onClick={(e) => e.stopPropagation()}>
-        <Plus className="h-3 w-3" /> Add Device
+        <Button type="button" variant="ghost" size="sm" className="h-7 px-1.5 text-sm text-primary" disabled={disabled} onClick={(e) => e.stopPropagation()}>
+          <Plus className="h-3 w-3" /> Add Device
       </Button>
     </PopoverTrigger>
   );
