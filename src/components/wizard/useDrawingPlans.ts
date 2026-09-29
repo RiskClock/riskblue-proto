@@ -199,6 +199,35 @@ export function useDrawingPlans(projectId: string | null | undefined, enabled: b
     return Array.isArray(value) ? value : [];
   }, [riskDeviceAssignments]);
 
+  /** Records a drawing-plan change in the project activity log (same shape as Plan Builder). */
+  const logPlanEvent = useCallback(
+    async (action: string, summary: string, entityId: string | null, details: Record<string, any> = {}) => {
+      if (!projectId) return;
+      try {
+        const { data: auth } = await supabase.auth.getUser();
+        const u = auth?.user ?? null;
+        const name = (u?.user_metadata as any)?.full_name || (u?.user_metadata as any)?.name || null;
+        await supabase.from("project_audit_events" as any).insert({
+          project_id: projectId,
+          actor_user_id: u?.id ?? null,
+          actor_email: u?.email ?? null,
+          actor_name: name,
+          entity_type: "mitigation_plan",
+          entity_id: entityId,
+          action,
+          summary,
+          details,
+        } as any);
+        await queryClient.invalidateQueries({
+          queryKey: ["project-audit-events", projectId, ["mitigation_plan"]],
+        });
+      } catch {
+        // Activity logging must never block the plan operation.
+      }
+    },
+    [projectId, queryClient],
+  );
+
   const createPlan = useCallback(
     async (value: { name: string; description: string; baseQuantities: Record<string, number>; color: string; includedInstanceIds: string[] }, userId: string | null) => {
       const nextOrder = plans.length ? Math.max(...plans.map((p) => p.sort_order ?? 0)) + 1 : 0;
@@ -219,10 +248,15 @@ export function useDrawingPlans(projectId: string | null | undefined, enabled: b
         .select("id")
         .single();
       if (error) throw error;
+      const newId = (data as any)?.id as string;
+      await logPlanEvent("create", `Created plan "${value.name}"`, newId ?? null, {
+        included_instance_count: value.includedInstanceIds.length,
+        source: "drawing_modal",
+      });
       await queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
-      return (data as any)?.id as string;
+      return newId;
     },
-    [plans, projectId, queryClient],
+    [plans, projectId, queryClient, logPlanEvent],
   );
 
   const baseProducts = useMemo(
@@ -232,15 +266,20 @@ export function useDrawingPlans(projectId: string | null | undefined, enabled: b
 
   const deletePlan = useCallback(
     async (planId: string) => {
+      const existing = plans.find((p) => p.id === planId);
       const { error } = await supabase
         .from("project_mitigation_plans")
         .delete()
         .eq("id", planId)
         .eq("project_id", projectId!);
       if (error) throw error;
+      await logPlanEvent("delete", `Deleted plan "${existing?.name ?? "Untitled"}"`, planId, {
+        included_instance_count: existing?.included_instance_ids?.length ?? 0,
+        source: "drawing_modal",
+      });
       await queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
     },
-    [projectId, queryClient],
+    [plans, projectId, queryClient, logPlanEvent],
   );
 
   const updatePlan = useCallback(
@@ -258,9 +297,14 @@ export function useDrawingPlans(projectId: string | null | undefined, enabled: b
         .eq("id", planId)
         .eq("project_id", projectId!);
       if (error) throw error;
+      await logPlanEvent("update", `Updated plan "${value.name}"`, planId, {
+        renamed_from: existing && existing.name !== value.name ? existing.name : undefined,
+        included_instance_count: value.includedInstanceIds.length,
+        source: "drawing_modal",
+      });
       await queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
     },
-    [plans, projectId, queryClient],
+    [plans, projectId, queryClient, logPlanEvent],
   );
 
   return { plans, catalogFor, productChoices, productsById, assignedFor, assignedDevicesFor, saveAssignment, createPlan, updatePlan, deletePlan, baseProducts, ready: !!catalog };
