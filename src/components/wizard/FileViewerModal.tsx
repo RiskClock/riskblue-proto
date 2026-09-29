@@ -1809,7 +1809,7 @@ export const FileViewerModal = ({
         };
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly, hiddenClasses, effectiveRowKey, activePlan, activeTab, newPlanOpen, draftPlanVisual, hoveredPlanIds, drawingColors]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly, effectiveRowKey, activePlan, activeTab, newPlanOpen, draftPlanVisual, hoveredPlanIds, drawingColors]);
 
   // Floor-plan bbox overlays. Survey agent returns `xy_width_height_pct` as
   // [left, top, width, height] percentages (0..100) of the visible page.
