@@ -1763,14 +1763,14 @@ export const FileViewerModal = ({
         ? selectedRowKey
         : selectedClass;
   const isInstanceVisible = (i: DrawingInstanceRow): boolean => {
-    if (!awpClasses) return !hiddenClasses.has(i.awp_class_name);
+    if (!awpClasses) return true;
     if (activeTab === "plans" && newPlanOpen) return true;
     if (activeTab === "plans" && activePlan) {
       return activePlan.included_instance_ids.includes(i.id);
     }
     if (activeTab === "plans") return false;
     if (activeTab === "floor-plans") return true;
-    if (!effectiveRowKey) return !hiddenClasses.has(i.awp_class_name);
+    if (!effectiveRowKey) return true;
     if (effectiveRowKey === i.awp_class_name) return true;
     return instanceRowKey(i) === effectiveRowKey;
   };
