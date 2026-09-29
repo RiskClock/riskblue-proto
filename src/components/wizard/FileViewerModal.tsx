@@ -586,36 +586,17 @@ export const FileViewerModal = ({
   void expandedClasses;
   void onExpandedClassesChange;
 
-  // ---- Hidden annotation classes (per project, persisted) -----------------
-  const hiddenKey = persistKey
-    ? `drawing-viewer:hidden-classes:${persistKey}`
-    : null;
-  const [hiddenClasses, setHiddenClasses] = useState<Set<string>>(() => {
-    if (!hiddenKey || typeof window === "undefined") return new Set();
+  // Legacy per-project hidden-class preferences (from an older UI with
+  // per-class toggle buttons) are no longer honored. Clear any stale entry
+  // so it can never suppress classes on the canvas again.
+  useEffect(() => {
+    if (!persistKey || typeof window === "undefined") return;
     try {
-      const raw = window.localStorage.getItem(hiddenKey);
-      const arr = raw ? (JSON.parse(raw) as string[]) : [];
-      return new Set(Array.isArray(arr) ? arr : []);
+      window.localStorage.removeItem(`drawing-viewer:hidden-classes:${persistKey}`);
     } catch {
-      return new Set();
+      /* ignore */
     }
-  });
-  const updateHiddenClasses = useCallback(
-    (updater: (prev: Set<string>) => Set<string>) => {
-      setHiddenClasses((prev) => {
-        const next = updater(prev);
-        if (hiddenKey) {
-          try {
-            window.localStorage.setItem(hiddenKey, JSON.stringify([...next]));
-          } catch {
-            /* ignore */
-          }
-        }
-        return next;
-      });
-    },
-    [hiddenKey],
-  );
+  }, [persistKey]);
   const [instances, setInstances] = useState<DrawingInstanceRow[]>([]);
   const [loadingInstances, setLoadingInstances] = useState(false);
   const [past, setPast] = useState<HistoryAction[]>([]);
@@ -637,20 +618,12 @@ export const FileViewerModal = ({
   const [editingPlan, setEditingPlan] = useState<EditingPlanState | null>(null);
   const editingPlanRef = useRef<EditingPlanState | null>(null);
   useEffect(() => { editingPlanRef.current = editingPlan; }, [editingPlan]);
-  const ACTIVE_TAB_STORAGE_KEY = "fileViewer.activeTab";
   const { hasBetaAccess } = useBetaAccess();
-  const [activeTab, setActiveTab] = useState<"floor-plans" | "detections" | "plans">(() => {
-    if (typeof window === "undefined") return "floor-plans";
-    const stored = window.localStorage.getItem(ACTIVE_TAB_STORAGE_KEY);
-    return stored === "detections" || stored === "floor-plans" || stored === "plans" ? stored : "floor-plans";
-  });
+  // Always default to the first tab when a drawing opens.
+  const [activeTab, setActiveTab] = useState<"floor-plans" | "detections" | "plans">("floor-plans");
   useEffect(() => {
     if (!hasBetaAccess && activeTab === "plans") setActiveTab("floor-plans");
   }, [hasBetaAccess, activeTab]);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(ACTIVE_TAB_STORAGE_KEY, activeTab);
-  }, [activeTab]);
   // While creating/editing a plan the canvas is read-only: clicks toggle risks.
   const planDraftMode = activeTab === "plans" && newPlanOpen;
   const [confirmExit, setConfirmExit] = useState<null | {
@@ -1790,14 +1763,14 @@ export const FileViewerModal = ({
         ? selectedRowKey
         : selectedClass;
   const isInstanceVisible = (i: DrawingInstanceRow): boolean => {
-    if (!awpClasses) return !hiddenClasses.has(i.awp_class_name);
+    if (!awpClasses) return true;
     if (activeTab === "plans" && newPlanOpen) return true;
     if (activeTab === "plans" && activePlan) {
       return activePlan.included_instance_ids.includes(i.id);
     }
     if (activeTab === "plans") return false;
     if (activeTab === "floor-plans") return true;
-    if (!effectiveRowKey) return !hiddenClasses.has(i.awp_class_name);
+    if (!effectiveRowKey) return true;
     if (effectiveRowKey === i.awp_class_name) return true;
     return instanceRowKey(i) === effectiveRowKey;
   };
@@ -1836,7 +1809,7 @@ export const FileViewerModal = ({
         };
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly, hiddenClasses, effectiveRowKey, activePlan, activeTab, newPlanOpen, draftPlanVisual, hoveredPlanIds, drawingColors]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, numberByInstanceId, prefixByClass, awpClasses, readOnly, effectiveRowKey, activePlan, activeTab, newPlanOpen, draftPlanVisual, hoveredPlanIds, drawingColors]);
 
   // Floor-plan bbox overlays. Survey agent returns `xy_width_height_pct` as
   // [left, top, width, height] percentages (0..100) of the visible page.
@@ -1878,7 +1851,6 @@ export const FileViewerModal = ({
   // unit reference. Filled dot, no border, no label. Click to delete.
   const unitMarkerOverlays: OverlayInput[] = useMemo(() => {
     if (readOnly || (activeTab !== "floor-plans" && activeTab !== "detections")) return [];
-    if (hiddenClasses.has(UNIT_MARKER_CLASS)) return [];
     const uc = floorPlanTypeColor("unit_floor_plan");
     return instances
       .filter(
@@ -1895,7 +1867,7 @@ export const FileViewerModal = ({
         color: uc,
         variant: "dot" as const,
       }));
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, readOnly, hiddenClasses, activeTab]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, readOnly, activeTab]);
 
   const overlays = [
     ...detectionOverlays,
