@@ -2326,7 +2326,7 @@ export const FileViewerModal = ({
                             if (count > 0) counts.set(id, (counts.get(id) ?? 0) + count);
                           });
                         }
-                         return [...counts].map(([id, count]) => ({ id, name: drawingPlans.productsById.get(id)?.name || "Missing product", count, missing: !drawingPlans.productsById.has(id) }));
+                        return [...counts].map(([id, count]) => ({ id, name: drawingPlans.productsById.get(id)?.name || "Missing product", count, missing: !drawingPlans.productsById.has(id) }));
                     }}
                    />}
                   {newPlanOpen && <InlinePlanEditor
@@ -2923,7 +2923,7 @@ const DeviceButton = ({ row, devices }: { row: DetectionRowModel; devices: Devic
     <span className="inline-flex items-center gap-1">
       <Tooltip>
         <TooltipTrigger asChild>
-          <Badge variant="outline" className={`h-6 max-w-32 truncate px-2 text-xs font-medium cursor-default ${missing ? "border-destructive bg-destructive/10 text-destructive" : ""}`}>
+          <Badge variant="outline" className={`max-w-32 truncate rounded px-1.5 py-0.5 text-xs font-medium cursor-default ${missing ? "border-destructive bg-destructive/10 text-destructive" : ""}`}>
             {missing ? "Missing product" : selected.length === 1 ? names[0] : `${selected.length} Products`}
           </Badge>
         </TooltipTrigger>
@@ -2957,7 +2957,7 @@ const DeviceButton = ({ row, devices }: { row: DetectionRowModel; devices: Devic
         {selected.length > 0 && (
           <div className="flex flex-wrap gap-1 border-b p-2">
             {selected.map((id, idx) => (
-              <Badge key={id} variant="outline" className={`gap-1 pr-1 font-normal ${!devices.productsById.has(id) ? "border-destructive bg-destructive/10 text-destructive" : ""}`} style={devices.productsById.has(id) ? tagStyle(names[idx]) : undefined}>
+              <Badge key={id} variant="outline" className={`gap-1 rounded pr-1 font-normal ${!devices.productsById.has(id) ? "border-destructive bg-destructive/10 text-destructive" : ""}`} style={devices.productsById.has(id) ? tagStyle(names[idx]) : undefined}>
                 <span>{names[idx]}</span>
                 <Button type="button" variant="ghost" size="icon" className="h-5 w-5" aria-label={`Remove ${names[idx]}`} onClick={() => toggle(id)}>
                   <XIcon className="h-3 w-3" />
@@ -3010,10 +3010,10 @@ const PlansPanel = ({ plans, activePlanId, onSelectPlan, onNewPlan, onEditPlan, 
             return (
               <div key={p.id} onClick={() => onSelectPlan(p.id)} className={`w-full px-3 py-2 text-left text-sm border-b cursor-pointer hover:bg-muted/50 ${active ? "bg-primary/10" : ""}`}>
                 <div className="flex items-center gap-2 min-w-0">
+                <RadioGroupItem value={p.id} className="shrink-0" aria-label={`Show ${p.name}`} onClick={(e) => e.stopPropagation()} />
                 <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: p.color || awpClassColor(p.name) }} />
                 <span className={`min-w-0 flex-1 truncate ${active ? "font-semibold" : ""}`}>{p.name}</span>
                 <span className="text-sm text-muted-foreground shrink-0" title={products.map(({ name, count }) => `${name} ×${count}`).join("\n")}>{productCount} {productCount === 1 ? "product" : "products"}</span>
-                <RadioGroupItem value={p.id} className="sr-only" aria-label={`Show ${p.name}`} onClick={(e) => e.stopPropagation()} />
                 <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground" aria-label={`Edit ${p.name}`} title="Edit plan" onClick={(e) => { e.stopPropagation(); onEditPlan(p.id); }}>
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
