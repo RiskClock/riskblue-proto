@@ -12,7 +12,8 @@ import {
   TransformComponent,
   type ReactZoomPanPinchRef,
 } from "react-zoom-pan-pinch";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, ListRestart, Redo2, Undo2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { DocumentSurface } from "./DocumentSurface";
 import { ViewerToolbar } from "./ViewerToolbar";
 import { useDocumentSource, MISSING_SOURCE_ERROR, type DocumentSourceDescriptor } from "./hooks/useDocumentSource";
@@ -750,8 +751,6 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                 onRotate={onRotate}
                 viewingMode={viewingMode}
                 onToggleViewingMode={onToggleViewingMode}
-                historyControls={historyControls}
-
                 pageNav={
                   !hidePageNav && layout === "single-page" && totalPages > 1
                     ? {
@@ -766,6 +765,19 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                     : undefined
                 }
               />
+            </div>
+          )}
+          {showToolbar && toolbarSlot === "top" && historyControls && (
+            <div className="absolute bottom-3 right-3 z-30 flex items-center gap-2 rounded-lg border bg-background/95 backdrop-blur px-2 py-1.5 shadow-md">
+              <Button variant="outline" size="icon" onClick={historyControls.onChanges} aria-label="Changes" title="Changes">
+                <ListRestart className="w-4 h-4" />
+              </Button>
+              <Button variant="outline" size="icon" onClick={historyControls.onUndo} disabled={!historyControls.canUndo} aria-label="Undo" title="Undo">
+                <Undo2 className="w-4 h-4" />
+              </Button>
+              <Button variant="outline" size="icon" onClick={historyControls.onRedo} disabled={!historyControls.canRedo} aria-label="Redo" title="Redo">
+                <Redo2 className="w-4 h-4" />
+              </Button>
             </div>
           )}
         </div>
