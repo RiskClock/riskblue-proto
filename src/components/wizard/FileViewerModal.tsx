@@ -1372,7 +1372,7 @@ export const FileViewerModal = ({
   );
 
   // Now that dbInsert + effectivePage are in scope, install the actual
-  // "Place Unit Floor Plan Marker" implementation into the forward-ref.
+  // Unit/detail marker placement implementation into the forward-ref.
   handleStartUnitMarkerPlacementRef.current = async (planId: string, markerType: "unit" | "detail") => {
     const prev = editingPlanRef.current;
     if (prev) await savePlanEdit();
@@ -1796,7 +1796,7 @@ export const FileViewerModal = ({
             ? (draftPlanVisual?.ids.has(i.id) ? draftPlanVisual.color : "hsl(var(--muted-foreground))")
             : (activeTab === "plans" && activePlan?.color) || drawingColors.get(instanceRowKey(i)) || awpClassColorForType(i.awp_class_name, pipeType, diameter),
           emphasized: activeTab === "plans" && newPlanOpen && hoveredPlanIds.has(i.id),
-          // Labels are hidden; this text only appears when hovering the marker.
+           // Reuse the risk name and attributes for both visible and hover labels.
           label: (() => {
             const cls = awpClasses?.find((c) => c.name === i.awp_class_name);
             const base = cls?.label || i.awp_class_name;
@@ -2701,7 +2701,7 @@ export const FileViewerModal = ({
                 : defs[0].label.toLowerCase();
           const isUnitMarker = inst.awp_class_name === UNIT_MARKER_CLASS;
           const heading = isUnitMarker
-            ? "Unit floor plan marker"
+            ? inst.metadata?.marker_type === "detail" ? "Detail marker" : "Unit floor plan marker"
             : titleSuffix
               ? `${marker} · ${titleSuffix}`
               : marker;
