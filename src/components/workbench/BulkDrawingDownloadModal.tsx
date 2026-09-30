@@ -25,7 +25,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useActivityLogger } from "@/hooks/useActivityLogger";
 import { supabase } from "@/integrations/supabase/client";
-import { awpClassColor, awpClassColorForType } from "@/lib/awpColor";
+import { awpClassColor, awpClassColorForType, floorPlanTypeColor } from "@/lib/awpColor";
 import {
   stampAnnotationsInPlace,
   readPdfPageCount,
@@ -271,7 +271,11 @@ export function BulkDrawingDownloadModal({
               bbox: [Number(row.nx), Number(row.ny), 0, 0],
               coordSpace: "normalized",
               page: pageIdx0 + 1,
-              color: awpClassColor("Unit Floor Plan"),
+              color: floorPlanTypeColor(
+                row.metadata?.marker_type === "detail"
+                  ? "typical_detail_block"
+                  : "unit_floor_plan",
+              ),
               shape: "circle",
               variant: "dot",
             });

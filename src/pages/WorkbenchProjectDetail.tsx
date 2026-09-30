@@ -7632,7 +7632,6 @@ function InstancesReportModal({
         // this page is being shown as a level plan for the space.
         const unitMarkerOverlays: any[] = [];
         if (space !== "__unassigned__" && tier === 0) {
-          const uColor = awpClassColor("Unit Floor Plan");
           // Only show markers that fall inside a level bbox on this page for
           // the current space - otherwise we'd render every marker anywhere
           // on the sheet.
@@ -7658,7 +7657,11 @@ function InstancesReportModal({
                 bbox: [inx, iny, 0, 0] as [number, number, number, number],
                 coordSpace: "normalized" as const,
                 page: pageIdx,
-                color: uColor,
+                color: floorPlanTypeColor(
+                  inst.metadata?.marker_type === "detail"
+                    ? "typical_detail_block"
+                    : "unit_floor_plan",
+                ),
                 shape: "circle" as const,
               });
             }
@@ -7943,7 +7946,6 @@ function InstancesReportModal({
         if (matchedLevel?.bbox) {
           const [bx, by, bw, bh] = matchedLevel.bbox;
           const x0 = bx / 100, y0 = by / 100, x1 = (bx + bw) / 100, y1 = (by + bh) / 100;
-          const uColor = awpClassColor("Unit Floor Plan");
           for (const inst of instances) {
             if (inst.awp_class_name !== "__unit_marker__") continue;
             if (inst.file_id !== fileId || inst.page_index !== pageIdx) continue;
@@ -7955,7 +7957,11 @@ function InstancesReportModal({
               id: `um-${inst.id}`,
               nx: inx,
               ny: iny,
-              color: uColor,
+              color: floorPlanTypeColor(
+                inst.metadata?.marker_type === "detail"
+                  ? "typical_detail_block"
+                  : "unit_floor_plan",
+              ),
               shape: "circle" as const,
             });
           }
