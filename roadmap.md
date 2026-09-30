@@ -30,3 +30,5 @@
 - [x] Clean up the unavailable 22mm product assignment in 10 Lime Street.
 - [x] Flag missing products, show product IDs in Detections, count all plan products including essentials, and align plan rows.
 - [x] Standardize drawing-window text and match Detections pills to Floor Plans pills; verify in preview.
+- [x] Restore drawing annotation labels; align drawing toolbar history controls and detection/plan list styling.
+- [x] Let users choose Unit or Detail marker colors when placing; verify the drawing modal in the preview.

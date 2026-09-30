@@ -19,10 +19,7 @@ import {
   Pencil,
   Plus,
   Radar,
-  Redo2,
   Trash2,
-  Undo2,
-  ListRestart,
 } from "lucide-react";
 
 import { DrawingViewer } from "@/components/viewer";
@@ -882,12 +879,12 @@ export const FileViewerModal = ({
   // are in scope. We forward-declare via a mutable ref so the sidebar can
   // invoke it without running into TDZ ordering issues.
   const handleStartUnitMarkerPlacementRef = useRef<
-    ((planId: string) => Promise<void>) | null
+    ((planId: string, markerType: "unit" | "detail") => Promise<void>) | null
   >(null);
   const handleStartUnitMarkerPlacement = useCallback(
-    async (planId: string) => {
+    async (planId: string, markerType: "unit" | "detail") => {
       const fn = handleStartUnitMarkerPlacementRef.current;
-      if (fn) await fn(planId);
+      if (fn) await fn(planId, markerType);
     },
     [],
   );
@@ -1009,7 +1006,7 @@ export const FileViewerModal = ({
   // ---- DB helpers (do not touch history) -----------------------------------
   const dbInsert = useCallback(
     async (
-      args: { awp_class_name: string; nx: number; ny: number; page_index: number },
+      args: { awp_class_name: string; nx: number; ny: number; page_index: number; metadata?: Record<string, unknown> },
     ): Promise<DrawingInstanceRow | null> => {
       // Persistent numbering: next number = max existing for this
       // (analysis_request, class) + 1. Deletes do NOT renumber, so the next
@@ -1375,8 +1372,8 @@ export const FileViewerModal = ({
   );
 
   // Now that dbInsert + effectivePage are in scope, install the actual
-  // "Place Unit Floor Plan Marker" implementation into the forward-ref.
-  handleStartUnitMarkerPlacementRef.current = async (planId: string) => {
+  // Unit/detail marker placement implementation into the forward-ref.
+  handleStartUnitMarkerPlacementRef.current = async (planId: string, markerType: "unit" | "detail") => {
     const prev = editingPlanRef.current;
     if (prev) await savePlanEdit();
     const plan = (floorPlans ?? []).find((p) => p.plan_id === planId);
@@ -1446,6 +1443,7 @@ export const FileViewerModal = ({
       nx,
       ny,
       page_index: effectivePage,
+      metadata: { marker_type: markerType },
     });
     if (!row) return;
     setInstances((prev) => [...prev, row]);
@@ -1798,7 +1796,7 @@ export const FileViewerModal = ({
             ? (draftPlanVisual?.ids.has(i.id) ? draftPlanVisual.color : "hsl(var(--muted-foreground))")
             : (activeTab === "plans" && activePlan?.color) || drawingColors.get(instanceRowKey(i)) || awpClassColorForType(i.awp_class_name, pipeType, diameter),
           emphasized: activeTab === "plans" && newPlanOpen && hoveredPlanIds.has(i.id),
-          // Labels are hidden; this text only appears when hovering the marker.
+           // Reuse the risk name and attributes for both visible and hover labels.
           label: (() => {
             const cls = awpClasses?.find((c) => c.name === i.awp_class_name);
             const base = cls?.label || i.awp_class_name;
@@ -1847,11 +1845,10 @@ export const FileViewerModal = ({
   }, [floorPlans, floorPlanOverrides, currentPage, editingPlan, readOnly, activeTab]);
 
 
-  // Unit-plan indicator dots inside a level bbox. Not tied to any specific
-  // unit reference. Filled dot, no border, no label. Click to delete.
+  // Legacy markers have no type and remain unit-pink. New detail markers
+  // carry their kind in metadata so the color persists across sessions.
   const unitMarkerOverlays: OverlayInput[] = useMemo(() => {
     if (readOnly || (activeTab !== "floor-plans" && activeTab !== "detections")) return [];
-    const uc = floorPlanTypeColor("unit_floor_plan");
     return instances
       .filter(
         (i) =>
@@ -1864,7 +1861,7 @@ export const FileViewerModal = ({
         bbox: [i.nx, i.ny, 0, 0] as [number, number, number, number],
         coordSpace: "normalized" as const,
         page: singlePageOnly ? currentPage : sheetId ? 1 : i.page_index,
-        color: uc,
+         color: floorPlanTypeColor(i.metadata?.marker_type === "detail" ? "typical_detail_block" : "unit_floor_plan"),
         variant: "dot" as const,
       }));
   }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, readOnly, activeTab]);
@@ -1988,7 +1985,14 @@ export const FileViewerModal = ({
               onRotate={handleRotate}
               onDownload={() => setDownloadDialogOpen(true)}
 
-              showLabels={false}
+              showLabels
+              historyControls={sidebarEnabled && !!awpClasses && !readOnly ? {
+                onChanges: () => setHistoryOpen(true),
+                onUndo: undo,
+                onRedo: redo,
+                canUndo: !viewingMode && !planDraftMode && past.length > 0,
+                canRedo: !viewingMode && !planDraftMode && future.length > 0,
+              } : undefined}
               onPageChange={singlePageOnly ? () => {} : setCurrentPage}
               hidePageNav={singlePageOnly}
               overlays={overlays}
@@ -2080,19 +2084,6 @@ export const FileViewerModal = ({
               editorColor={editingPlan ? floorPlanTypeColor(editingPlan.type) : undefined}
               onPlacingChange={setIsPlacingLabels}
             />
-            {sidebarEnabled && awpClasses && !readOnly && (
-              <div className="absolute bottom-4 right-4 z-30 flex items-center gap-1 rounded-md border bg-background/95 p-1 shadow-md">
-                <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setHistoryOpen(true)} aria-label="Changes" title="Changes">
-                  <ListRestart className="h-4 w-4" />
-                </Button>
-                <Button size="icon" variant="outline" className="h-8 w-8" onClick={undo} disabled={viewingMode || planDraftMode || past.length === 0} aria-label="Undo" title="Undo">
-                  <Undo2 className="h-4 w-4" />
-                </Button>
-                <Button size="icon" variant="outline" className="h-8 w-8" onClick={redo} disabled={viewingMode || planDraftMode || future.length === 0} aria-label="Redo" title="Redo">
-                  <Redo2 className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
             <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
               <DialogContent className="max-w-md">
                 <DialogHeader><DialogTitle>Changes this session</DialogTitle></DialogHeader>
@@ -2710,7 +2701,7 @@ export const FileViewerModal = ({
                 : defs[0].label.toLowerCase();
           const isUnitMarker = inst.awp_class_name === UNIT_MARKER_CLASS;
           const heading = isUnitMarker
-            ? "Unit floor plan marker"
+            ? inst.metadata?.marker_type === "detail" ? "Detail marker" : "Unit floor plan marker"
             : titleSuffix
               ? `${marker} · ${titleSuffix}`
               : marker;
@@ -3101,8 +3092,9 @@ const InlinePlanEditor = ({ initialPlan, toggleRef, defaultName, instances, clas
         <div className="flex gap-2"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Plan name" /><input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-10 w-12 rounded border p-1" aria-label="Plan color" /></div>
         <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Plan description" className="min-h-16" />
       </div>
-      {baseProducts.length > 0 && <div className="border-b p-3"><p className="mb-2 text-sm font-semibold">Essential Components</p><div className="space-y-1">{baseProducts.map((p) => <div key={p.id} className="flex items-center gap-2 text-sm"><span className="flex-1 truncate">{p.name}</span><Input type="number" min={0} className="h-8 w-16" value={baseQuantities[p.id] || 0} onChange={(e) => setBaseQuantities((q) => ({ ...q, [p.id]: Math.max(0, Number(e.target.value) || 0) }))} /></div>)}</div></div>}
       <div className="flex-1 overflow-y-auto">
+         {baseProducts.length > 0 && <div className="border-b p-3"><p className="mb-2 text-sm font-semibold">Essential Components</p><div className="space-y-1">{baseProducts.map((p) => <div key={p.id} className="flex items-center gap-2 text-sm"><span className="flex-1 truncate">{p.name}</span><Input type="number" min={0} className="h-8 w-16" value={baseQuantities[p.id] || 0} onChange={(e) => setBaseQuantities((q) => ({ ...q, [p.id]: Math.max(0, Number(e.target.value) || 0) }))} /></div>)}</div></div>}
+         <h3 className="border-b px-3 py-2 text-sm font-semibold">Risk Classes</h3>
         {rows.map((row) => {
           const items = row.items;
           const checked = items.filter((i) => selected.has(i.id)).length;
@@ -3110,7 +3102,7 @@ const InlinePlanEditor = ({ initialPlan, toggleRef, defaultName, instances, clas
           return <div key={row.key} className="border-b" onMouseEnter={() => onHoverInstances(items.map((i) => i.id))} onMouseLeave={() => onHoverInstances([])}>
             <div className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 cursor-pointer" onClick={() => onFocusInstances(items)}>
               <Checkbox checked={checked === items.length ? true : checked > 0 ? "indeterminate" : false} onCheckedChange={(v) => toggleIds(items.map((i) => i.id), v === true)} onClick={(e) => e.stopPropagation()} style={{ borderColor: color, backgroundColor: checked ? color : undefined }} aria-label={`Select ${row.fullName}`} />
-              <Tooltip><TooltipTrigger asChild><span className="shrink-0 font-mono text-sm font-medium">{row.label}</span></TooltipTrigger><TooltipContent side="left">{row.fullName}</TooltipContent></Tooltip>
+               <Tooltip><TooltipTrigger asChild><span className="shrink-0 text-sm font-medium">{row.label}</span></TooltipTrigger><TooltipContent side="left">{row.fullName}</TooltipContent></Tooltip>
                   {row.diam && <Badge variant="outline" className="max-w-28 truncate rounded px-1.5 py-0.5 text-xs font-medium">{row.diam}</Badge>}
                   {row.type && <Badge variant="outline" className="max-w-32 truncate rounded px-1.5 py-0.5 text-xs font-medium">{subtypeAbbr(row.cls.name, row.type) || row.type}</Badge>}
               <span className="flex-1 text-right text-sm text-muted-foreground">{checked}/{items.length}</span>
@@ -3203,8 +3195,7 @@ const DetectionsPanel = ({
                     onClick={(e) => e.stopPropagation()}
                     className="h-3.5 w-3.5 shrink-0"
                   />
-                  <span className="flex-1 min-w-0 text-sm font-medium">All classes</span>
-                  <span className="text-xs tabular-nums text-muted-foreground shrink-0">{allItems.length}</span>
+                   <span className="flex items-center gap-2 min-w-0 text-sm font-medium">All classes <span className="text-xs tabular-nums text-muted-foreground">{allItems.length}</span></span>
                 </div>
               </div>
             );
@@ -3216,7 +3207,7 @@ const DetectionsPanel = ({
             const firstPipeType = row.type;
             const color = drawingColors.get(row.key) || (row.type || row.diam ? awpClassColorForType(c.name, firstPipeType, row.diam) : awpClassColor(c.name));
             return (
-              <div key={row.key} className="border-b last:border-b-0 min-w-0">
+               <div key={row.key} className={`border-b last:border-b-0 min-w-0 ${row.items.length === 0 ? "text-muted-foreground opacity-50" : ""}`}>
                 <div
                   className={`flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50 min-w-0 ${isSelected ? "bg-muted/40" : ""}`}
                   onClick={() => {
@@ -3253,7 +3244,7 @@ const DetectionsPanel = ({
                     <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="shrink-0 font-mono text-sm">{row.label}</span>
+                         <span className="shrink-0 text-sm">{row.label}</span>
                       </TooltipTrigger>
                       <TooltipContent side="left">{row.fullName}</TooltipContent>
                     </Tooltip>
@@ -3397,7 +3388,7 @@ interface FloorPlansPanelProps {
   ) => Promise<void> | void;
   /** Optional: place a new unit-floor-plan bbox on the current page linked
    *  to an existing unit reference (e.g. "Detail 6"). */
-  onPlaceUnitBbox?: (refId: string) => Promise<void> | void;
+  onPlaceUnitBbox?: (refId: string, markerType: "unit" | "detail") => Promise<void> | void;
   /** Real markers placed on this page (one row per instance). */
   instancesOnPage?: DrawingInstanceRow[];
   numberByInstanceId?: Map<string, number>;
@@ -3888,7 +3879,7 @@ interface LevelUnitsSectionProps {
     createdRefs?: string[],
     removedRefs?: string[],
   ) => Promise<void> | void;
-  onPlaceUnitBbox?: (refId: string) => Promise<void> | void;
+  onPlaceUnitBbox?: (refId: string, markerType: "unit" | "detail") => Promise<void> | void;
 }
 
 const LevelUnitsSection = ({
@@ -4104,7 +4095,7 @@ const LevelUnitsSection = ({
       {onPlaceUnitBbox && (
         <PlaceUnitBboxControl
           planId={fp.plan_id}
-          onPlace={() => void onPlaceUnitBbox(fp.plan_id)}
+           onPlace={(markerType) => void onPlaceUnitBbox(fp.plan_id, markerType)}
         />
       )}
     </div>
@@ -4113,22 +4104,20 @@ const LevelUnitsSection = ({
 
 interface PlaceUnitBboxControlProps {
   planId: string;
-  onPlace: () => void;
+   onPlace: (markerType: "unit" | "detail") => void;
 }
 
 const PlaceUnitBboxControl = ({ onPlace }: PlaceUnitBboxControlProps) => {
+  const [open, setOpen] = useState(false);
   return (
     <div className="pt-1">
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className="h-6 px-2 text-[11px] gap-1"
-        onClick={onPlace}
-      >
-        <Plus className="h-3 w-3" />
-        Place Unit / Detail Marker
-      </Button>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild><Button type="button" size="sm" variant="outline" className="h-6 px-2 text-xs gap-1"><Plus className="h-3 w-3" />Place Unit / Detail Marker</Button></PopoverTrigger>
+        <PopoverContent className="w-40 p-1" align="start">
+          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => { onPlace("unit"); setOpen(false); }}>Unit</Button>
+          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => { onPlace("detail"); setOpen(false); }}>Detail</Button>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 };

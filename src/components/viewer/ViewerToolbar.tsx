@@ -6,7 +6,10 @@ import {
   ChevronRight,
   Download,
   Eye,
+  ListRestart,
   Maximize2,
+  Redo2,
+  Undo2,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -34,6 +37,13 @@ export interface ViewerToolbarProps {
   /** When set, renders the viewing-mode (read-only) eye toggle. */
   viewingMode?: boolean;
   onToggleViewingMode?: () => void;
+  historyControls?: {
+    onChanges: () => void;
+    onUndo: () => void;
+    onRedo: () => void;
+    canUndo: boolean;
+    canRedo: boolean;
+  };
   pageNav?: {
     current: number;
     total: number;
@@ -55,6 +65,7 @@ export const ViewerToolbar = ({
   onRotate,
   viewingMode = false,
   onToggleViewingMode,
+  historyControls,
   pageNav,
 
 }: ViewerToolbarProps) => {
@@ -202,6 +213,13 @@ export const ViewerToolbar = ({
         >
           Fit Detection
         </Button>
+      )}
+      {historyControls && (
+        <>
+          <Button variant="outline" size="icon" onClick={historyControls.onChanges} aria-label="Changes" title="Changes"><ListRestart className="w-4 h-4" /></Button>
+          <Button variant="outline" size="icon" onClick={historyControls.onUndo} disabled={!historyControls.canUndo} aria-label="Undo" title="Undo"><Undo2 className="w-4 h-4" /></Button>
+          <Button variant="outline" size="icon" onClick={historyControls.onRedo} disabled={!historyControls.canRedo} aria-label="Redo" title="Redo"><Redo2 className="w-4 h-4" /></Button>
+        </>
       )}
     </div>
   );

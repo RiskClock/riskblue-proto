@@ -111,6 +111,13 @@ export interface DrawingViewerProps {
   /** Viewing (read-only) mode toggle rendered in the toolbar. */
   viewingMode?: boolean;
   onToggleViewingMode?: () => void;
+  historyControls?: {
+    onChanges: () => void;
+    onUndo: () => void;
+    onRedo: () => void;
+    canUndo: boolean;
+    canRedo: boolean;
+  };
   /** When true, suppress the purple glow indicator (used in report previews). */
   hideRotationIndicator?: boolean;
   /**
@@ -167,6 +174,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
       onRotate,
       viewingMode = false,
       onToggleViewingMode,
+      historyControls,
       hideRotationIndicator = false,
       onPlacingChange,
       showLabels = true,
@@ -742,6 +750,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
                 onRotate={onRotate}
                 viewingMode={viewingMode}
                 onToggleViewingMode={onToggleViewingMode}
+                historyControls={historyControls}
 
                 pageNav={
                   !hidePageNav && layout === "single-page" && totalPages > 1
