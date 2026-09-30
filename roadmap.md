@@ -33,3 +33,4 @@
 - [x] Restore drawing annotation labels; align drawing toolbar history controls and detection/plan list styling.
 - [x] Let users choose Unit or Detail marker colors when placing; verify the drawing modal in the preview.
 - [x] Separate Changes/Undo/Redo into the drawing canvas bottom-right and correct detail-marker colors.
+- [x] Classify existing British Library Tenant Connection markers as detail markers.
