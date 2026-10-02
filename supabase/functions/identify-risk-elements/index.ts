@@ -199,12 +199,17 @@ Deno.serve(async (req) => {
 
         // Resolve a usable cache.
         let cacheName: string | null = (fileRow as any).gemini_cache_id ?? null;
+        let directFile: { fileUri: string; fileMime: string } | null = null;
         const expiresAt = (fileRow as any).gemini_cache_expires_at as string | null;
         const expired = expiresAt ? new Date(expiresAt).getTime() < Date.now() + 30_000 : true;
-        if (!cacheName || expired) {
-          console.log(`[identify-risk-elements] (re)building cache for file=${fileName}`);
+        const rebuild = async () => {
           const rebuilt = await rebuildCache({ ai, admin, fileId, fileName, bucket, storagePath, model: GEMINI_MODEL });
           cacheName = rebuilt.cacheName;
+          directFile = rebuilt.cacheName ? null : { fileUri: rebuilt.fileUri, fileMime: rebuilt.fileMime };
+        };
+        if (!cacheName || expired) {
+          console.log(`[identify-risk-elements] (re)building cache for file=${fileName}`);
+          await rebuild();
         }
 
         const existingResults =
@@ -219,7 +224,8 @@ Deno.serve(async (req) => {
               error: `No prompt_content for class "${className}"`,
             };
           }
-          const callGemini = async (cacheRef: string) => {
+          const callGemini = async () => {
+            const df = directFile as { fileUri: string; fileMime: string } | null;
             // gemini-3.5 rejects systemInstruction alongside cachedContent, so
             // we fold the per-class prompt into the user message instead.
             return await ai.models.generateContent({
@@ -228,6 +234,7 @@ Deno.serve(async (req) => {
                 {
                   role: "user",
                   parts: [
+                    ...(df ? [{ fileData: { fileUri: df.fileUri, mimeType: df.fileMime } }] : []),
                     { text: `Instructions:\n${prompt}` },
                     ...(pageNumbers.length > 0
                       ? [{
@@ -240,34 +247,26 @@ Deno.serve(async (req) => {
                   ],
                 },
               ],
-
-              config: { cachedContent: cacheRef },
+              ...(df ? {} : { config: { cachedContent: cacheName! } }),
             });
           };
 
           try {
             const runStartedAt = Date.now();
             let resp: any;
-            let usedCache = cacheName!;
+            const usedCache = cacheName;
             try {
-              resp = await callGemini(usedCache);
+              resp = await callGemini();
             } catch (err: any) {
               const msg = String(err?.message ?? err);
-              // Most common failure here is a model/cache mismatch (cache was
-              // built for a different model, e.g. legacy gemini-2.5-pro caches
-              // when we are now on gemini-3.5-flash). Rebuild and retry once.
               const looksLikeCacheError =
                 /cache|cached|model|mismatch|not\s*found|invalid/i.test(msg);
-              if (!looksLikeCacheError) throw err;
+              if (directFile || !looksLikeCacheError) throw err;
               console.warn(
                 `[identify-risk-elements][cache-retry] file=${fileName} class=${className} error=${msg} - rebuilding cache and retrying`,
               );
-              const rebuilt = await rebuildCache({
-                ai, admin, fileId, fileName, bucket, storagePath, model: GEMINI_MODEL,
-              });
-              usedCache = rebuilt.cacheName;
-              cacheName = usedCache;
-              resp = await callGemini(usedCache);
+              await rebuild();
+              resp = await callGemini();
             }
             const text: string =
               (resp as any)?.text ??
