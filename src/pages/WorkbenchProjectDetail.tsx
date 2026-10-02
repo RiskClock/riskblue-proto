@@ -40,6 +40,7 @@ import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectMo
 import { BulkDrawingDownloadModal } from "@/components/workbench/BulkDrawingDownloadModal";
 import { ManageFilesModal } from "@/components/workbench/ManageFilesModal";
 import { AskWadePanel } from "@/components/workbench/AskWadePanel";
+import { useIsSystemAdmin } from "@/hooks/useIsSystemAdmin";
 import { ThreatOverviewCard } from "@/components/workbench/ThreatOverviewCard";
 import { SUBTYPED_CLASSES } from "@/components/CreateProjectModal";
 import { expandSubtypeLabel, expandSubtypeLabelWithSuffix, isSubtypeSplitClass, subtypeAbbr } from "@/lib/awpSubtypeLabels";
@@ -361,6 +362,7 @@ export default function WorkbenchProjectDetail() {
   const { tenantId, tenantPath } = useTenant();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const isSystemAdmin = useIsSystemAdmin();
   const { logActivity } = useActivityLogger();
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
   const { isWMSV } = useAccountType();
@@ -4265,6 +4267,8 @@ const isChildPlanType = (t: string) =>
     }
   };
 
+  const gridCols = showMode === "drawing" ? [] : enabledCols;
+
   // -------- Wade (workbench assistant) --------
   const wadeConfirmResolver = useRef<((ok: boolean) => void) | null>(null);
   const askWadeConfirm = useCallback(
@@ -4728,6 +4732,19 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
 
                 <div className="flex-1" />
 
+                {isSystemAdmin && (
+                  <Button
+                    type="button"
+                    variant={wbWadeOpen ? "secondary" : "outline"}
+                    onClick={() => {
+                      setWbWadeOpen(true);
+                      setWbWadeMinimized(false);
+                    }}
+                  >
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    Wade
+                  </Button>
+                )}
                 {analysisRequest && totalFiles > 0 && enabledCols.length > 0 && (
                   (() => {
                     const disabled = processingLock;
@@ -5092,6 +5109,29 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
             <div className="space-y-3">
 
 
+              {pageInfoRows.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-muted-foreground">Show:</span>
+                  <div className="inline-flex rounded-md border bg-card p-0.5">
+                    {(["count", "drawing"] as const).map((m) => (
+                      <Button
+                        key={m}
+                        type="button"
+                        size="sm"
+                        variant={showMode === m ? "secondary" : "ghost"}
+                        className="h-7 px-3"
+                        onClick={() => {
+                          if (m === showMode) return;
+                          setActivePageView(null);
+                          setShowMode(m);
+                        }}
+                      >
+                        {m === "count" ? "Count" : "Drawing"}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {pageInfoRows.length === 0 ? (
                 <div className="text-sm text-muted-foreground text-center py-6 space-y-3">
                   <div>{pageInfoLoading ? "Loading…" : "No files in this request."}</div>
@@ -5103,7 +5143,8 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                   )}
                 </div>
               ) : (
-                <div className="bg-card rounded-lg border relative [&>div]:overflow-visible">
+                <div className={showMode === "drawing" ? "flex gap-3 items-start" : ""}>
+                <div className={`bg-card rounded-lg border relative [&>div]:overflow-visible ${showMode === "drawing" ? "w-[320px] shrink-0 max-h-[calc(100vh-220px)] overflow-auto sticky top-0" : ""}`}>
                   <Table>
                     <TableHeader className="sticky top-0 z-20 bg-card shadow-[inset_0_1px_0_hsl(var(--border)),0_1px_2px_hsl(var(--border))]">
                       <TableRow className="bg-card">
@@ -5128,7 +5169,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
 
                           </div>
                         </TableHead>
-                        {enabledCols.map((name) => {
+                        {gridCols.map((name) => {
                           const opt = optionByName.get(name);
                           const alias = aliasMap[name];
                           const aliasPrefix = aliasPrefixMap[name];
@@ -5168,6 +5209,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                             </TableHead>
                           );
                         })}
+                        {showMode === "count" && (
                         <TableHead className="text-right w-[1%] whitespace-nowrap h-9 py-1 bg-card">
                           <Button
                             variant="outline"
@@ -5189,6 +5231,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                             <Settings2 className="h-4 w-4" />
                           </Button>
                         </TableHead>
+                        )}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -5317,7 +5360,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                                        : renderSpaceBadge(row.name, 1))}
                                 </div>
                               </TableCell>
-                              {enabledCols.map((name) => {
+                              {gridCols.map((name) => {
                                 if (processingLock) {
                                   return (
                                     <TableCell key={name} className="text-center py-1">
@@ -5340,7 +5383,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                                   baseCount > 0;
                                 return renderTriageCell(row.id, name, cnt, scoreKnown, fileScore);
                               })}
-                              <TableCell className="py-1" />
+                              {showMode === "count" && <TableCell className="py-1" />}
                             </TableRow>
 
                             {/* Per-page sub-rows (only when multi-page AND expanded) - matches first table */}
@@ -5366,7 +5409,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
 
                                       </div>
                                     </TableCell>
-                                    {enabledCols.map((name) => {
+                                    {gridCols.map((name) => {
                                       const cnt = processingLock
                                         ? 0
                                         : pageInstanceCountLookup.get(
@@ -5387,7 +5430,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                                         </TableCell>
                                       );
                                     })}
-                                    <TableCell className="py-1" />
+                                    {showMode === "count" && <TableCell className="py-1" />}
                                   </TableRow>
                                 );
                               })
@@ -5397,6 +5440,19 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                       })}
                     </TableBody>
                   </Table>
+                </div>
+                {showMode === "drawing" && (
+                  <div
+                    ref={setDrawingHost}
+                    className="flex-1 min-w-0 h-[calc(100vh-220px)] sticky top-0"
+                  >
+                    {!activePageView && (
+                      <div className="h-full rounded-lg border bg-card flex items-center justify-center text-sm text-muted-foreground">
+                        Select a page to view its drawing.
+                      </div>
+                    )}
+                  </div>
+                )}
                 </div>
               )}
             </div>
@@ -5581,6 +5637,8 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
         {activePageView && activePageViewSource && (
           <FileViewerModal
             isOpen={!!activePageView}
+            embedTarget={showMode === "drawing" ? drawingHost : null}
+            reloadKey={viewerReloadKey}
             onClose={() => setActivePageView(null)}
             fileId={activePageView.file.id}
             fileName={`${activePageView.file.name} | Page ${activePageView.page}`}
