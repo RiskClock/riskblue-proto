@@ -67,7 +67,9 @@ async function rebuildCache(params: {
     pollCount++;
   }
 
-  const cache = await ai.caches.create({
+  let cache: any;
+  try {
+    cache = await ai.caches.create({
     model,
     config: {
       displayName: `sheet-analysis-${fileId}`,
