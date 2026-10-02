@@ -363,7 +363,29 @@ Deno.serve(async (req) => {
           `[identify-risk-elements] file=${fileName} classes=${awpClassNames.length} ok=${results.filter((r) => r.ok).length}`,
         );
       } catch (err: any) {
-        console.error(`[identify-risk-elements] fatal for ${fileName}:`, err?.message ?? err);
+        const message = err?.message ?? String(err);
+        console.error(`[identify-risk-elements] fatal for ${fileName}:`, message);
+        try {
+          await admin.from("risk_radar_run_history").insert(
+            awpClassNames.map((c) => ({
+              analysis_request_id: analysisRequestId,
+              file_id: fileId,
+              class_name: c,
+              page_numbers: pageNumbers,
+              model: GEMINI_MODEL,
+              error: message,
+            })),
+          );
+          const existing = ((fileRow as any).risk_element_results as Record<string, any>) ?? {};
+          const nowIso = new Date().toISOString();
+          const merged: Record<string, any> = { ...existing };
+          for (const c of awpClassNames) {
+            merged[c] = { result_text: existing[c]?.result_text ?? null, updated_at: nowIso, error: message };
+          }
+          await admin.from("analysis_request_files").update({ risk_element_results: merged } as any).eq("id", fileId);
+        } catch (e: any) {
+          console.error(`[identify-risk-elements] failure record save failed: ${e?.message ?? e}`);
+        }
       }
     })();
 
