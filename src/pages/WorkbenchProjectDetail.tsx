@@ -492,6 +492,14 @@ export default function WorkbenchProjectDetail() {
     }
   });
   const [activePageView, setActivePageView] = useState<{ file: PageInfoRow; page: number } | null>(null);
+  const [showMode, setShowMode] = useState<"count" | "drawing">("count");
+  const [drawingHost, setDrawingHost] = useState<HTMLDivElement | null>(null);
+  const [viewerReloadKey, setViewerReloadKey] = useState(0);
+  const [wbWadeOpen, setWbWadeOpen] = useState(false);
+  const [wbWadeMinimized, setWbWadeMinimized] = useState(false);
+  const [wbWadePos, setWbWadePos] = useState<{ x: number; y: number } | null>(null);
+  const wbWadeDrag = useRef<{ dx: number; dy: number } | null>(null);
+  const [wadeConfirm, setWadeConfirm] = useState<{ title: string; body: string } | null>(null);
 
   const togglePageInfoExpand = (fileId: string) => {
     setPageInfoExpanded((prev) => {
@@ -4256,6 +4264,208 @@ const isChildPlanType = (t: string) =>
       });
     }
   };
+
+  // -------- Wade (workbench assistant) --------
+  const wadeConfirmResolver = useRef<((ok: boolean) => void) | null>(null);
+  const askWadeConfirm = useCallback(
+    (title: string, body: string) =>
+      new Promise<boolean>((resolve) => {
+        wadeConfirmResolver.current = resolve;
+        setWadeConfirm({ title, body });
+      }),
+    [],
+  );
+  const closeWadeConfirm = (ok: boolean) => {
+    wadeConfirmResolver.current?.(ok);
+    wadeConfirmResolver.current = null;
+    setWadeConfirm(null);
+  };
+
+  const onWbWadePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest("button")) return;
+    const box = (e.currentTarget as HTMLElement).closest("[data-wade-window]") as HTMLElement | null;
+    if (!box) return;
+    const rect = box.getBoundingClientRect();
+    wbWadeDrag.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onWbWadePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = wbWadeDrag.current;
+    if (!d) return;
+    setWbWadePos({
+      x: Math.max(0, Math.min(window.innerWidth - 120, e.clientX - d.dx)),
+      y: Math.max(0, Math.min(window.innerHeight - 60, e.clientY - d.dy)),
+    });
+  };
+  const onWbWadePointerUp = () => {
+    wbWadeDrag.current = null;
+  };
+
+  const wadeClassLabel = useCallback(
+    (name: string) => ({
+      name,
+      label: aliasMap[name] || name,
+      prefix: aliasPrefixMap[name] || optionByName.get(name)?.idPrefix || null,
+    }),
+    [aliasMap, aliasPrefixMap, optionByName],
+  );
+
+  const buildWorkbenchWadeContext = useCallback(async () => {
+    const classes = enabledCols.map(wadeClassLabel);
+    const page = activePageView;
+    if (!page || !requestId) {
+      return {
+        open_drawing: null,
+        classes,
+        note: "No drawing page is open. Ask the user to set Show to Drawing and select a page row.",
+      };
+    }
+    const { data } = await supabase
+      .from("drawing_instances" as any)
+      .select("awp_class_name, nx, ny, instance_number, metadata")
+      .eq("analysis_request_id", requestId)
+      .eq("file_id", page.file.id)
+      .eq("page_index", page.page)
+      .limit(3000);
+    const r4 = (n: number) => Math.round(n * 10000) / 10000;
+    const annotations = ((data as any[]) ?? [])
+      .filter((r) => !String(r.awp_class_name).startsWith("__"))
+      .map((r) => {
+        const c = wadeClassLabel(r.awp_class_name);
+        return {
+          id: r.instance_number != null ? `${c.prefix ?? c.label}-${String(r.instance_number).padStart(3, "0")}` : null,
+          class: r.awp_class_name,
+          x: r4(Number(r.nx)),
+          y: r4(Number(r.ny)),
+          ...(r.metadata && Object.keys(r.metadata).length ? { attributes: r.metadata } : {}),
+        };
+      });
+    return {
+      open_drawing: {
+        file_name: page.file.name,
+        page: page.page,
+        has_floor_plan_bbox: (bboxPagesByFile.get(page.file.id) ?? []).includes(page.page),
+        floor_plans: activePageFloorPlans.map((fp) => ({
+          type: fp.type,
+          reference: fp.reference_id,
+          floors: fp.floors,
+          bbox_pct: fp.xy_width_height_pct,
+        })),
+        annotations,
+      },
+      classes,
+    };
+  }, [enabledCols, wadeClassLabel, activePageView, requestId, bboxPagesByFile, activePageFloorPlans]);
+
+  const WORKBENCH_WADE_ACTION_SPEC = `You can act on the drawing page that is currently open. To act, end your reply with a fenced block tagged wade-actions containing {"actions":[...]}. Supported actions:
+- {"type":"place_annotation","class":"<exact class name from classes>","x":0.42,"y":0.31,"attributes":{"pipe_type":"...","pipe_diameter":"..."}} places a marker on the open page. x and y are fractions (0 to 1) of the page width and height, the same scale as existing annotations; floor plan bbox_pct values are percentages (0 to 100). attributes is optional. Applied immediately.
+- {"type":"update_prompt","class":"<exact class name>","prompt_kind":"analysis"|"triage","prompt":"<full new prompt text>"} replaces that class prompt. The user must approve before it is saved.
+- {"type":"run_risk_radar","classes":["<class name>", ...]} runs the Risk Radar agent on the open page. Omit classes to use all classes. Requires a floor plan bbox on the page. The user must approve before it starts.
+Only use class names listed in classes. Never invent coordinates outside 0 to 1. If no drawing is open, do not emit place_annotation or run_risk_radar.`;
+
+  const applyWorkbenchWadeActions = useCallback(
+    async (actions: any[]): Promise<string | null> => {
+      const lines: string[] = [];
+      const page = activePageView;
+      for (const a of actions) {
+        const type = a?.type;
+        if (type === "place_annotation") {
+          if (!page || !requestId) { lines.push("- Could not place a marker: no drawing page is open."); continue; }
+          const cls = String(a.class ?? "");
+          if (!enabledCols.includes(cls)) { lines.push(`- Skipped marker: unknown class "${cls}".`); continue; }
+          const x = Number(a.x), y = Number(a.y);
+          if (!(x >= 0 && x <= 1 && y >= 0 && y <= 1)) { lines.push(`- Skipped ${cls} marker: coordinates out of range.`); continue; }
+          const { data: maxRow } = await supabase
+            .from("drawing_instances" as any)
+            .select("instance_number")
+            .eq("analysis_request_id", requestId)
+            .eq("awp_class_name", cls)
+            .order("instance_number", { ascending: false, nullsFirst: false })
+            .limit(1)
+            .maybeSingle();
+          const next = (((maxRow as any)?.instance_number as number | null) ?? 0) + 1;
+          const attrs = a.attributes && typeof a.attributes === "object" ? a.attributes : null;
+          const { error } = await supabase.from("drawing_instances" as any).insert({
+            analysis_request_id: requestId,
+            file_id: page.file.id,
+            sheet_id: activeSheetIdForPage ?? null,
+            page_index: page.page,
+            awp_class_name: cls,
+            nx: x,
+            ny: y,
+            instance_number: next,
+            ...(attrs ? { metadata: attrs } : {}),
+          } as any);
+          const c = wadeClassLabel(cls);
+          lines.push(error
+            ? `- Could not place ${c.label}: ${(error as any)?.message}`
+            : `- Placed ${c.prefix ?? c.label}-${String(next).padStart(3, "0")} on page ${page.page}.`);
+        } else if (type === "update_prompt") {
+          const cls = String(a.class ?? "");
+          const kind = a.prompt_kind === "triage" ? "triage" : "analysis";
+          const text = String(a.prompt ?? "").trim();
+          if (!cls || !text) { lines.push("- Skipped prompt update: missing class or prompt."); continue; }
+          const ok = await askWadeConfirm(
+            `Update ${kind} prompt for ${aliasMap[cls] || cls}?`,
+            text,
+          );
+          if (!ok) { lines.push(`- Prompt update for ${cls} was not approved.`); continue; }
+          const now = new Date().toISOString();
+          const payload: any = kind === "triage"
+            ? { triage_prompt_content: text, triage_content_updated_at: now }
+            : { prompt_content: text, content_updated_at: now };
+          const { data, error } = await supabase
+            .from("awp_class_prompts")
+            .update(payload)
+            .eq("awp_class_name", cls)
+            .select("id");
+          lines.push(error
+            ? `- Could not update the ${cls} prompt: ${(error as any)?.message}`
+            : !data || data.length === 0
+              ? `- No saved prompt exists for ${cls}; create it in Configuration first.`
+              : `- Updated the ${kind} prompt for ${cls}.`);
+        } else if (type === "run_risk_radar") {
+          if (!page || !requestId || !projectId) { lines.push("- Could not run Risk Radar: no drawing page is open."); continue; }
+          if (!(bboxPagesByFile.get(page.file.id) ?? []).includes(page.page)) {
+            lines.push("- Risk Radar needs a floor plan bounding box on this page. Run Scout first.");
+            continue;
+          }
+          const requested: string[] = Array.isArray(a.classes) ? a.classes.map(String) : [];
+          const classes = requested.length ? requested.filter((n) => enabledCols.includes(n)) : enabledCols;
+          if (classes.length === 0) { lines.push("- Risk Radar skipped: no valid classes."); continue; }
+          const ok = await askWadeConfirm(
+            `Run Risk Radar on page ${page.page}?`,
+            `${page.file.name}\n\nClasses (${classes.length}):\n${classes.map((c) => aliasMap[c] || c).join("\n")}`,
+          );
+          if (!ok) { lines.push("- Risk Radar run was not approved."); continue; }
+          const lock = await acquireAgentLock(projectId, "Risk Radar", requestId);
+          if (!lock.ok) { lines.push(`- Risk Radar could not start: ${lock.message}`); continue; }
+          const stop = startAgentHeartbeat(lock.runId);
+          setIdentifyRunning(true);
+          try {
+            const { error } = await supabase.functions.invoke("identify-risk-elements", {
+              body: { analysisRequestId: requestId, fileId: page.file.id, awpClassNames: classes, pageNumbers: [page.page] },
+            });
+            if (error) throw await normalizeFunctionError(error);
+            await releaseAgentLock(lock.runId, "completed");
+            lines.push(`- Risk Radar started on page ${page.page} for ${classes.length} class${classes.length === 1 ? "" : "es"}.`);
+          } catch (err: any) {
+            await releaseAgentLock(lock.runId, "failed", err?.message ?? "Unknown error");
+            lines.push(`- Risk Radar failed: ${err?.message ?? "unknown error"}`);
+          } finally {
+            stop();
+            setIdentifyRunning(false);
+          }
+        } else {
+          lines.push(`- Skipped unsupported action "${type}".`);
+        }
+      }
+      setViewerReloadKey((k) => k + 1);
+      queryClient.refetchQueries({ queryKey: ["workbench-instances", requestId] });
+      return lines.length ? lines.join("\n") : null;
+    },
+    [activePageView, requestId, projectId, enabledCols, wadeClassLabel, activeSheetIdForPage, askWadeConfirm, aliasMap, bboxPagesByFile, queryClient],
+  );
 
   return (
     <TooltipProvider delayDuration={150}>
