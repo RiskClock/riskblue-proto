@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   Dialog,
   DialogContent,
@@ -197,8 +199,30 @@ const hasMetaFields = (name: string): boolean => metaFieldsForClass(name).length
 // unit reference and are excluded from the normal detections lists.
 const UNIT_MARKER_CLASS = "__unit_marker__";
 
+/** Inline (non-modal) dialog content used when the viewer is embedded in a page. */
+const EmbeddedDialogContent = forwardRef<HTMLDivElement, React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>>(
+  ({ className: _ignored, children, ...props }, ref) => (
+    <DialogPrimitive.Content
+      ref={ref}
+      {...props}
+      onInteractOutside={(e) => e.preventDefault()}
+      onPointerDownOutside={(e) => e.preventDefault()}
+      onFocusOutside={(e) => e.preventDefault()}
+      onEscapeKeyDown={(e) => e.preventDefault()}
+      className="w-full h-full flex flex-col p-4 bg-card border rounded-lg"
+    >
+      {children}
+    </DialogPrimitive.Content>
+  ),
+);
+EmbeddedDialogContent.displayName = "EmbeddedDialogContent";
+
 interface FileViewerModalProps {
   isOpen: boolean;
+  /** When set, the viewer renders inline inside this element instead of as a modal. */
+  embedTarget?: HTMLElement | null;
+  /** Bump to reload annotations from the database (e.g. after an external insert). */
+  reloadKey?: number;
   onClose: () => void;
   fileId: string;
   fileName: string;
@@ -330,6 +354,8 @@ type HistoryAction =
 
 export const FileViewerModal = ({
   isOpen,
+  embedTarget,
+  reloadKey,
   onClose,
   fileId,
   fileName,
@@ -1042,7 +1068,7 @@ export const FileViewerModal = ({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, sidebarEnabled, analysisRequestId, toast]);
+  }, [isOpen, sidebarEnabled, analysisRequestId, toast, reloadKey]);
 
   // ---- DB helpers (do not touch history) -----------------------------------
   const dbInsert = useCallback(
@@ -1970,8 +1996,11 @@ export const FileViewerModal = ({
     },
   };
 
-  return (
+  const embedded = !!embedTarget;
+  const ViewerContent: any = embedded ? EmbeddedDialogContent : DialogContent;
+  const viewerTree = (
     <Dialog
+      modal={!embedded}
       open={isOpen}
       onOpenChange={(open) => {
         if (!open) {
@@ -1987,7 +2016,7 @@ export const FileViewerModal = ({
       }}
 
     >
-      <DialogContent
+      <ViewerContent
         className="max-w-[95vw] w-[95vw] h-[90vh] flex flex-col p-4 [&>button]:top-4 [&>button]:right-4"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
@@ -2813,7 +2842,7 @@ export const FileViewerModal = ({
             />
           );
         })()}
-      </DialogContent>
+      </ViewerContent>
 
       <PageDownloadDialog
         open={downloadDialogOpen}
@@ -2831,6 +2860,7 @@ export const FileViewerModal = ({
       />
     </Dialog>
   );
+  return embedded ? createPortal(viewerTree, embedTarget!) : viewerTree;
 };
 
 

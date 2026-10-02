@@ -40,6 +40,7 @@ import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectMo
 import { BulkDrawingDownloadModal } from "@/components/workbench/BulkDrawingDownloadModal";
 import { ManageFilesModal } from "@/components/workbench/ManageFilesModal";
 import { AskWadePanel } from "@/components/workbench/AskWadePanel";
+import { useIsSystemAdmin } from "@/hooks/useIsSystemAdmin";
 import { ThreatOverviewCard } from "@/components/workbench/ThreatOverviewCard";
 import { SUBTYPED_CLASSES } from "@/components/CreateProjectModal";
 import { expandSubtypeLabel, expandSubtypeLabelWithSuffix, isSubtypeSplitClass, subtypeAbbr } from "@/lib/awpSubtypeLabels";
@@ -361,6 +362,7 @@ export default function WorkbenchProjectDetail() {
   const { tenantId, tenantPath } = useTenant();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const isSystemAdmin = useIsSystemAdmin();
   const { logActivity } = useActivityLogger();
   const isInternal = user?.email?.toLowerCase().endsWith("@riskclock.com") ?? false;
   const { isWMSV } = useAccountType();
@@ -492,6 +494,14 @@ export default function WorkbenchProjectDetail() {
     }
   });
   const [activePageView, setActivePageView] = useState<{ file: PageInfoRow; page: number } | null>(null);
+  const [showMode, setShowMode] = useState<"count" | "drawing">("count");
+  const [drawingHost, setDrawingHost] = useState<HTMLDivElement | null>(null);
+  const [viewerReloadKey, setViewerReloadKey] = useState(0);
+  const [wbWadeOpen, setWbWadeOpen] = useState(false);
+  const [wbWadeMinimized, setWbWadeMinimized] = useState(false);
+  const [wbWadePos, setWbWadePos] = useState<{ x: number; y: number } | null>(null);
+  const wbWadeDrag = useRef<{ dx: number; dy: number } | null>(null);
+  const [wadeConfirm, setWadeConfirm] = useState<{ title: string; body: string } | null>(null);
 
   const togglePageInfoExpand = (fileId: string) => {
     setPageInfoExpanded((prev) => {
@@ -4257,6 +4267,210 @@ const isChildPlanType = (t: string) =>
     }
   };
 
+  const gridCols = showMode === "drawing" ? [] : enabledCols;
+
+  // -------- Wade (workbench assistant) --------
+  const wadeConfirmResolver = useRef<((ok: boolean) => void) | null>(null);
+  const askWadeConfirm = useCallback(
+    (title: string, body: string) =>
+      new Promise<boolean>((resolve) => {
+        wadeConfirmResolver.current = resolve;
+        setWadeConfirm({ title, body });
+      }),
+    [],
+  );
+  const closeWadeConfirm = (ok: boolean) => {
+    wadeConfirmResolver.current?.(ok);
+    wadeConfirmResolver.current = null;
+    setWadeConfirm(null);
+  };
+
+  const onWbWadePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest("button")) return;
+    const box = (e.currentTarget as HTMLElement).closest("[data-wade-window]") as HTMLElement | null;
+    if (!box) return;
+    const rect = box.getBoundingClientRect();
+    wbWadeDrag.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onWbWadePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = wbWadeDrag.current;
+    if (!d) return;
+    setWbWadePos({
+      x: Math.max(0, Math.min(window.innerWidth - 120, e.clientX - d.dx)),
+      y: Math.max(0, Math.min(window.innerHeight - 60, e.clientY - d.dy)),
+    });
+  };
+  const onWbWadePointerUp = () => {
+    wbWadeDrag.current = null;
+  };
+
+  const wadeClassLabel = useCallback(
+    (name: string) => ({
+      name,
+      label: aliasMap[name] || name,
+      prefix: aliasPrefixMap[name] || optionByName.get(name)?.idPrefix || null,
+    }),
+    [aliasMap, aliasPrefixMap, optionByName],
+  );
+
+  const buildWorkbenchWadeContext = useCallback(async () => {
+    const classes = enabledCols.map(wadeClassLabel);
+    const page = activePageView;
+    if (!page || !requestId) {
+      return {
+        open_drawing: null,
+        classes,
+        note: "No drawing page is open. Ask the user to set Show to Drawing and select a page row.",
+      };
+    }
+    const { data } = await supabase
+      .from("drawing_instances" as any)
+      .select("awp_class_name, nx, ny, instance_number, metadata")
+      .eq("analysis_request_id", requestId)
+      .eq("file_id", page.file.id)
+      .eq("page_index", page.page)
+      .limit(3000);
+    const r4 = (n: number) => Math.round(n * 10000) / 10000;
+    const annotations = ((data as any[]) ?? [])
+      .filter((r) => !String(r.awp_class_name).startsWith("__"))
+      .map((r) => {
+        const c = wadeClassLabel(r.awp_class_name);
+        return {
+          id: r.instance_number != null ? `${c.prefix ?? c.label}-${String(r.instance_number).padStart(3, "0")}` : null,
+          class: r.awp_class_name,
+          x: r4(Number(r.nx)),
+          y: r4(Number(r.ny)),
+          ...(r.metadata && Object.keys(r.metadata).length ? { attributes: r.metadata } : {}),
+        };
+      });
+    return {
+      open_drawing: {
+        file_name: page.file.name,
+        page: page.page,
+        has_floor_plan_bbox: (bboxPagesByFile.get(page.file.id) ?? []).includes(page.page),
+        floor_plans: activePageFloorPlans.map((fp) => ({
+          type: fp.type,
+          reference: fp.reference_id,
+          floors: fp.floors,
+          bbox_pct: fp.xy_width_height_pct,
+        })),
+        annotations,
+      },
+      classes,
+    };
+  }, [enabledCols, wadeClassLabel, activePageView, requestId, bboxPagesByFile, activePageFloorPlans]);
+
+  const WORKBENCH_WADE_ACTION_SPEC = `You can act on the drawing page that is currently open. To act, end your reply with a fenced block tagged wade-actions containing {"actions":[...]}. Supported actions:
+- {"type":"place_annotation","class":"<exact class name from classes>","x":0.42,"y":0.31,"attributes":{"pipe_type":"...","pipe_diameter":"..."}} places a marker on the open page. x and y are fractions (0 to 1) of the page width and height, the same scale as existing annotations; floor plan bbox_pct values are percentages (0 to 100). attributes is optional. Applied immediately.
+- {"type":"update_prompt","class":"<exact class name>","prompt_kind":"analysis"|"triage","prompt":"<full new prompt text>"} replaces that class prompt. The user must approve before it is saved.
+- {"type":"run_risk_radar","classes":["<class name>", ...]} runs the Risk Radar agent on the open page. Omit classes to use all classes. Requires a floor plan bbox on the page. The user must approve before it starts.
+Only use class names listed in classes. Never invent coordinates outside 0 to 1. If no drawing is open, do not emit place_annotation or run_risk_radar.`;
+
+  const applyWorkbenchWadeActions = useCallback(
+    async (actions: any[]): Promise<string | null> => {
+      const lines: string[] = [];
+      const page = activePageView;
+      for (const a of actions) {
+        const type = a?.type;
+        if (type === "place_annotation") {
+          if (!page || !requestId) { lines.push("- Could not place a marker: no drawing page is open."); continue; }
+          const cls = String(a.class ?? "");
+          if (!enabledCols.includes(cls)) { lines.push(`- Skipped marker: unknown class "${cls}".`); continue; }
+          const x = Number(a.x), y = Number(a.y);
+          if (!(x >= 0 && x <= 1 && y >= 0 && y <= 1)) { lines.push(`- Skipped ${cls} marker: coordinates out of range.`); continue; }
+          const { data: maxRow } = await supabase
+            .from("drawing_instances" as any)
+            .select("instance_number")
+            .eq("analysis_request_id", requestId)
+            .eq("awp_class_name", cls)
+            .order("instance_number", { ascending: false, nullsFirst: false })
+            .limit(1)
+            .maybeSingle();
+          const next = (((maxRow as any)?.instance_number as number | null) ?? 0) + 1;
+          const attrs = a.attributes && typeof a.attributes === "object" ? a.attributes : null;
+          const { error } = await supabase.from("drawing_instances" as any).insert({
+            analysis_request_id: requestId,
+            file_id: page.file.id,
+            sheet_id: activeSheetIdForPage ?? null,
+            page_index: page.page,
+            awp_class_name: cls,
+            nx: x,
+            ny: y,
+            instance_number: next,
+            ...(attrs ? { metadata: attrs } : {}),
+          } as any);
+          const c = wadeClassLabel(cls);
+          lines.push(error
+            ? `- Could not place ${c.label}: ${(error as any)?.message}`
+            : `- Placed ${c.prefix ?? c.label}-${String(next).padStart(3, "0")} on page ${page.page}.`);
+        } else if (type === "update_prompt") {
+          const cls = String(a.class ?? "");
+          const kind = a.prompt_kind === "triage" ? "triage" : "analysis";
+          const text = String(a.prompt ?? "").trim();
+          if (!cls || !text) { lines.push("- Skipped prompt update: missing class or prompt."); continue; }
+          const ok = await askWadeConfirm(
+            `Update ${kind} prompt for ${aliasMap[cls] || cls}?`,
+            text,
+          );
+          if (!ok) { lines.push(`- Prompt update for ${cls} was not approved.`); continue; }
+          const now = new Date().toISOString();
+          const payload: any = kind === "triage"
+            ? { triage_prompt_content: text, triage_content_updated_at: now }
+            : { prompt_content: text, content_updated_at: now };
+          const { data, error } = await supabase
+            .from("awp_class_prompts")
+            .update(payload)
+            .eq("awp_class_name", cls)
+            .select("id");
+          lines.push(error
+            ? `- Could not update the ${cls} prompt: ${(error as any)?.message}`
+            : !data || data.length === 0
+              ? `- No saved prompt exists for ${cls}; create it in Configuration first.`
+              : `- Updated the ${kind} prompt for ${cls}.`);
+        } else if (type === "run_risk_radar") {
+          if (!page || !requestId || !projectId) { lines.push("- Could not run Risk Radar: no drawing page is open."); continue; }
+          if (!(bboxPagesByFile.get(page.file.id) ?? []).includes(page.page)) {
+            lines.push("- Risk Radar needs a floor plan bounding box on this page. Run Scout first.");
+            continue;
+          }
+          const requested: string[] = Array.isArray(a.classes) ? a.classes.map(String) : [];
+          const classes = requested.length ? requested.filter((n) => enabledCols.includes(n)) : enabledCols;
+          if (classes.length === 0) { lines.push("- Risk Radar skipped: no valid classes."); continue; }
+          const ok = await askWadeConfirm(
+            `Run Risk Radar on page ${page.page}?`,
+            `${page.file.name}\n\nClasses (${classes.length}):\n${classes.map((c) => aliasMap[c] || c).join("\n")}`,
+          );
+          if (!ok) { lines.push("- Risk Radar run was not approved."); continue; }
+          const lock = await acquireAgentLock(projectId, "Risk Radar", requestId);
+          if (!lock.ok) { lines.push(`- Risk Radar could not start: ${lock.message}`); continue; }
+          const stop = startAgentHeartbeat(lock.runId);
+          setIdentifyRunning(true);
+          try {
+            const { error } = await supabase.functions.invoke("identify-risk-elements", {
+              body: { analysisRequestId: requestId, fileId: page.file.id, awpClassNames: classes, pageNumbers: [page.page] },
+            });
+            if (error) throw await normalizeFunctionError(error);
+            await releaseAgentLock(lock.runId, "completed");
+            lines.push(`- Risk Radar started on page ${page.page} for ${classes.length} class${classes.length === 1 ? "" : "es"}.`);
+          } catch (err: any) {
+            await releaseAgentLock(lock.runId, "failed", err?.message ?? "Unknown error");
+            lines.push(`- Risk Radar failed: ${err?.message ?? "unknown error"}`);
+          } finally {
+            stop();
+            setIdentifyRunning(false);
+          }
+        } else {
+          lines.push(`- Skipped unsupported action "${type}".`);
+        }
+      }
+      setViewerReloadKey((k) => k + 1);
+      queryClient.refetchQueries({ queryKey: ["workbench-instances", requestId] });
+      return lines.length ? lines.join("\n") : null;
+    },
+    [activePageView, requestId, projectId, enabledCols, wadeClassLabel, activeSheetIdForPage, askWadeConfirm, aliasMap, bboxPagesByFile, queryClient],
+  );
+
   return (
     <TooltipProvider delayDuration={150}>
       <div className="h-screen flex flex-col bg-background overflow-hidden">
@@ -4518,6 +4732,19 @@ const isChildPlanType = (t: string) =>
 
                 <div className="flex-1" />
 
+                {isSystemAdmin && (
+                  <Button
+                    type="button"
+                    variant={wbWadeOpen ? "secondary" : "outline"}
+                    onClick={() => {
+                      setWbWadeOpen(true);
+                      setWbWadeMinimized(false);
+                    }}
+                  >
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    Wade
+                  </Button>
+                )}
                 {analysisRequest && totalFiles > 0 && enabledCols.length > 0 && (
                   (() => {
                     const disabled = processingLock;
@@ -4882,6 +5109,29 @@ const isChildPlanType = (t: string) =>
             <div className="space-y-3">
 
 
+              {pageInfoRows.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-muted-foreground">Show:</span>
+                  <div className="inline-flex rounded-md border bg-card p-0.5">
+                    {(["count", "drawing"] as const).map((m) => (
+                      <Button
+                        key={m}
+                        type="button"
+                        size="sm"
+                        variant={showMode === m ? "secondary" : "ghost"}
+                        className="h-7 px-3"
+                        onClick={() => {
+                          if (m === showMode) return;
+                          setActivePageView(null);
+                          setShowMode(m);
+                        }}
+                      >
+                        {m === "count" ? "Count" : "Drawing"}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {pageInfoRows.length === 0 ? (
                 <div className="text-sm text-muted-foreground text-center py-6 space-y-3">
                   <div>{pageInfoLoading ? "Loading…" : "No files in this request."}</div>
@@ -4893,7 +5143,8 @@ const isChildPlanType = (t: string) =>
                   )}
                 </div>
               ) : (
-                <div className="bg-card rounded-lg border relative [&>div]:overflow-visible">
+                <div className={showMode === "drawing" ? "flex gap-3 items-start" : ""}>
+                <div className={`bg-card rounded-lg border relative [&>div]:overflow-visible ${showMode === "drawing" ? "w-[320px] shrink-0 max-h-[calc(100vh-220px)] overflow-auto sticky top-0" : ""}`}>
                   <Table>
                     <TableHeader className="sticky top-0 z-20 bg-card shadow-[inset_0_1px_0_hsl(var(--border)),0_1px_2px_hsl(var(--border))]">
                       <TableRow className="bg-card">
@@ -4918,7 +5169,7 @@ const isChildPlanType = (t: string) =>
 
                           </div>
                         </TableHead>
-                        {enabledCols.map((name) => {
+                        {gridCols.map((name) => {
                           const opt = optionByName.get(name);
                           const alias = aliasMap[name];
                           const aliasPrefix = aliasPrefixMap[name];
@@ -4958,6 +5209,7 @@ const isChildPlanType = (t: string) =>
                             </TableHead>
                           );
                         })}
+                        {showMode === "count" && (
                         <TableHead className="text-right w-[1%] whitespace-nowrap h-9 py-1 bg-card">
                           <Button
                             variant="outline"
@@ -4979,6 +5231,7 @@ const isChildPlanType = (t: string) =>
                             <Settings2 className="h-4 w-4" />
                           </Button>
                         </TableHead>
+                        )}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -5107,7 +5360,7 @@ const isChildPlanType = (t: string) =>
                                        : renderSpaceBadge(row.name, 1))}
                                 </div>
                               </TableCell>
-                              {enabledCols.map((name) => {
+                              {gridCols.map((name) => {
                                 if (processingLock) {
                                   return (
                                     <TableCell key={name} className="text-center py-1">
@@ -5130,7 +5383,7 @@ const isChildPlanType = (t: string) =>
                                   baseCount > 0;
                                 return renderTriageCell(row.id, name, cnt, scoreKnown, fileScore);
                               })}
-                              <TableCell className="py-1" />
+                              {showMode === "count" && <TableCell className="py-1" />}
                             </TableRow>
 
                             {/* Per-page sub-rows (only when multi-page AND expanded) - matches first table */}
@@ -5156,7 +5409,7 @@ const isChildPlanType = (t: string) =>
 
                                       </div>
                                     </TableCell>
-                                    {enabledCols.map((name) => {
+                                    {gridCols.map((name) => {
                                       const cnt = processingLock
                                         ? 0
                                         : pageInstanceCountLookup.get(
@@ -5177,7 +5430,7 @@ const isChildPlanType = (t: string) =>
                                         </TableCell>
                                       );
                                     })}
-                                    <TableCell className="py-1" />
+                                    {showMode === "count" && <TableCell className="py-1" />}
                                   </TableRow>
                                 );
                               })
@@ -5187,6 +5440,19 @@ const isChildPlanType = (t: string) =>
                       })}
                     </TableBody>
                   </Table>
+                </div>
+                {showMode === "drawing" && (
+                  <div
+                    ref={setDrawingHost}
+                    className="flex-1 min-w-0 h-[calc(100vh-220px)] sticky top-0"
+                  >
+                    {!activePageView && (
+                      <div className="h-full rounded-lg border bg-card flex items-center justify-center text-sm text-muted-foreground">
+                        Select a page to view its drawing.
+                      </div>
+                    )}
+                  </div>
+                )}
                 </div>
               )}
             </div>
@@ -5367,10 +5633,70 @@ const isChildPlanType = (t: string) =>
           />
         )}
 
+        {isSystemAdmin && wbWadeOpen && projectId && (
+          <div
+            data-wade-window
+            className={`fixed z-50 w-[420px] h-[520px] rounded-lg border bg-card shadow-xl flex flex-col overflow-hidden ${
+              wbWadeMinimized ? "hidden" : ""
+            }`}
+            style={{
+              left: wbWadePos ? wbWadePos.x : undefined,
+              top: wbWadePos ? wbWadePos.y : undefined,
+              right: wbWadePos ? undefined : 24,
+              bottom: wbWadePos ? undefined : 24,
+            }}
+          >
+            <div className="flex-1 min-h-0 flex">
+              <div className="flex-1 min-h-0 flex flex-col [&>div]:flex-1 [&>div]:border-0 [&>div]:rounded-none">
+                <AskWadePanel
+                  projectId={projectId}
+                  onClose={() => setWbWadeOpen(false)}
+                  onMinimize={() => setWbWadeMinimized(true)}
+                  dragHandleProps={{
+                    onPointerDown: onWbWadePointerDown,
+                    onPointerMove: onWbWadePointerMove,
+                    onPointerUp: onWbWadePointerUp,
+                  }}
+                  buildContext={buildWorkbenchWadeContext}
+                  persistHistory={false}
+                  title="Wade"
+                  emptyHint={`Ask about the open drawing page, or ask Wade to act on it. For example: "place a shut-off valve marker in the top left of the Level 2 plan", "tighten the triage prompt for Cold Water", or "run Risk Radar on this page".`}
+                  actionSpec={WORKBENCH_WADE_ACTION_SPEC}
+                  onActions={applyWorkbenchWadeActions}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+        {isSystemAdmin && wbWadeOpen && wbWadeMinimized && (
+          <button
+            type="button"
+            className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm shadow-lg hover:bg-muted"
+            onClick={() => setWbWadeMinimized(false)}
+          >
+            <MessageSquare className="h-4 w-4" /> Wade
+          </button>
+        )}
+        <Dialog open={!!wadeConfirm} onOpenChange={(o) => { if (!o) closeWadeConfirm(false); }}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>{wadeConfirm?.title}</DialogTitle>
+              <DialogDescription>Wade wants to make this change. Approve to apply it.</DialogDescription>
+            </DialogHeader>
+            <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap rounded-md border p-3 text-xs">{wadeConfirm?.body}</pre>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => closeWadeConfirm(false)}>Cancel</Button>
+              <Button onClick={() => closeWadeConfirm(true)}>Approve</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* Single-page viewer for Pages by File table */}
-        {activePageView && activePageViewSource && (
+        {activePageView && activePageViewSource && (showMode !== "drawing" || drawingHost) && (
           <FileViewerModal
             isOpen={!!activePageView}
+            embedTarget={showMode === "drawing" ? drawingHost : null}
+            reloadKey={viewerReloadKey}
             onClose={() => setActivePageView(null)}
             fileId={activePageView.file.id}
             fileName={`${activePageView.file.name} | Page ${activePageView.page}`}

@@ -82,7 +82,7 @@ export function AskWadePanel({
 }: {
   projectId: string;
   onClose: () => void;
-  buildContext: () => unknown;
+  buildContext: () => unknown | Promise<unknown>;
   /** When false, the transcript is session-only (no database reads/writes). */
   persistHistory?: boolean;
   title?: string;
@@ -211,7 +211,7 @@ export function AskWadePanel({
         headers: { Authorization: `Bearer ${session.access_token}` },
         body: {
           projectId,
-          context: buildContext(),
+          context: await buildContext(),
           messages: windowed.map((m) => ({ role: m.role, content: m.content })),
           actionSpec: onActions ? actionSpec : undefined,
         },

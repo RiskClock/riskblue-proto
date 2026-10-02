@@ -38,3 +38,5 @@
 - [x] Let users choose Unit or Detail marker colors when placing; verify the drawing modal in the preview.
 - [x] Separate Changes/Undo/Redo into the drawing canvas bottom-right and correct detail-marker colors.
 - [x] Classify existing British Library Tenant Connection markers as detail markers.
+- [x] Workbench: Wade button (internal only, floating window) with actions on the open page: place annotation, update class prompt (approval), run Risk Radar (approval)
+- [x] Workbench: Show [Count | Drawing] toggle; Drawing shows the drawing viewer inline for page rows
