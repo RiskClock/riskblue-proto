@@ -2653,6 +2653,66 @@ export type Database = {
           },
         ]
       }
+      risk_radar_run_history: {
+        Row: {
+          analysis_request_id: string
+          class_name: string
+          created_at: string
+          error: string | null
+          file_id: string
+          id: string
+          model: string | null
+          page_numbers: number[]
+          prompt_text: string | null
+          result_text: string | null
+          tokens: Json | null
+          updated_at: string
+        }
+        Insert: {
+          analysis_request_id: string
+          class_name: string
+          created_at?: string
+          error?: string | null
+          file_id: string
+          id?: string
+          model?: string | null
+          page_numbers?: number[]
+          prompt_text?: string | null
+          result_text?: string | null
+          tokens?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          analysis_request_id?: string
+          class_name?: string
+          created_at?: string
+          error?: string | null
+          file_id?: string
+          id?: string
+          model?: string | null
+          page_numbers?: number[]
+          prompt_text?: string | null
+          result_text?: string | null
+          tokens?: Json | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "risk_radar_run_history_analysis_request_id_fkey"
+            columns: ["analysis_request_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "risk_radar_run_history_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_request_files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       riskred_analysis_items: {
         Row: {
           area_name: string | null

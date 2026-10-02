@@ -68,6 +68,10 @@ import { tagStyle } from "@/lib/tagColor";
 import { Search } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useBetaAccess } from "@/hooks/useBetaAccess";
+import { useSystemAdminStatus } from "@/hooks/useIsSystemAdmin";
+import { AgentActionBar } from "@/components/wizard/AgentActionBar";
+import floorPlanIcon from "@/assets/floorplan_color.png.asset.json";
+import productIcon from "@/assets/product.png.asset.json";
 
 /** Row key for an instance: class, or class::type::diameter for split classes. */
 function instanceRowKey(i: { awp_class_name: string; metadata?: unknown }): string {
@@ -372,6 +376,43 @@ export const FileViewerModal = ({
 }: FileViewerModalProps) => {
 
   const { toast } = useToast();
+  const { isSystemAdmin } = useSystemAdminStatus();
+  const [riskRadarOpen, setRiskRadarOpen] = useState(false);
+  const [riskRadarDebugOpen, setRiskRadarDebugOpen] = useState(false);
+  const [riskRadarLoading, setRiskRadarLoading] = useState(false);
+  const [riskRadarRuns, setRiskRadarRuns] = useState<any[]>([]);
+  const [riskRadarDetail, setRiskRadarDetail] = useState<{ title: string; text: string } | null>(null);
+  useEffect(() => {
+    if (!riskRadarDebugOpen || !isSystemAdmin) return;
+    const target = parentFileId ?? fileId;
+    let cancelled = false;
+    setRiskRadarLoading(true);
+    (async () => {
+      const [{ data, error }, { data: fileSnapshot }] = await Promise.all([
+        supabase.from("risk_radar_run_history")
+          .select("id, class_name, page_numbers, model, prompt_text, result_text, error, tokens, created_at")
+          .eq("file_id", target)
+          .order("created_at", { ascending: false })
+          .limit(100),
+        supabase.from("analysis_request_files").select("risk_element_results").eq("id", target).maybeSingle(),
+      ]);
+      if (cancelled) return;
+      const recordedClasses = new Set((data ?? []).map((run) => run.class_name));
+      const snapshots = Object.entries((fileSnapshot?.risk_element_results ?? {}) as Record<string, any>)
+        .filter(([name, entry]) => !recordedClasses.has(name) && entry && typeof entry === "object")
+        .map(([name, entry]) => ({
+          id: `snapshot-${name}`, class_name: name, page_numbers: [], model: entry.model,
+          prompt_text: entry.prompt_text, result_text: entry.result_text, error: entry.error,
+          tokens: entry.tokens, created_at: entry.updated_at, snapshot: true,
+        }));
+      setRiskRadarRuns([...(data ?? []), ...snapshots].sort((a, b) =>
+        new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime(),
+      ));
+      if (error) toast({ title: "Could not load Risk Radar history", description: error.message, variant: "destructive" });
+      setRiskRadarLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [riskRadarDebugOpen, isSystemAdmin, parentFileId, fileId, toast]);
   const [hoveredCode, setHoveredCode] = useState<string | null>(null);
   /** Instance hovered on the canvas or in either side list (kept in sync). */
   const [hoveredInstanceId, setHoveredInstanceId] = useState<string | null>(null);
@@ -2235,6 +2276,7 @@ export const FileViewerModal = ({
                   />
                 </TabsContent>
                 <TabsContent value="detections" className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0 data-[state=inactive]:hidden">
+                  {isSystemAdmin && <AgentActionBar label="Risk Radar Agent" icon={<Radar className="h-3.5 w-3.5 mr-1.5" />} onAction={() => setRiskRadarOpen(true)} onDebug={() => setRiskRadarDebugOpen(true)} debugLabel="Risk Radar debug" />}
                   <DetectionsPanel
                      rotationByPage={rotationByPage}
                      viewerApiRef={viewerApiRef}
@@ -2468,6 +2510,35 @@ export const FileViewerModal = ({
         </AlertDialog>
 
         {/* Scout debug: recent scout runs for this file (internal only) */}
+        {isSystemAdmin && <>
+          <Dialog open={riskRadarOpen} onOpenChange={setRiskRadarOpen}>
+            <DialogContent><DialogHeader><DialogTitle>Risk Radar Agent</DialogTitle></DialogHeader>
+              <p className="text-sm text-muted-foreground">Risk Radar is not available from this drawing yet.</p>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={riskRadarDebugOpen} onOpenChange={setRiskRadarDebugOpen}>
+            <DialogContent className="max-w-[680px] w-[min(680px,95vw)] max-h-[80vh] flex flex-col">
+              <DialogHeader><DialogTitle>Risk Radar Debug</DialogTitle></DialogHeader>
+              <div className="min-h-0 overflow-auto border rounded-md divide-y">
+                {riskRadarLoading ? <p className="p-4 text-sm text-muted-foreground">Loading…</p> : riskRadarRuns.length === 0 ? <p className="p-4 text-sm text-muted-foreground">No recorded Risk Radar runs for this drawing yet. Earlier overwritten runs cannot be recovered.</p> : riskRadarRuns.map((run) => (
+                  <div key={run.id} className="p-3 space-y-1 text-sm">
+                    <div className="font-medium">{run.class_name} <span className="font-normal text-muted-foreground">· {run.created_at ? new Date(run.created_at).toLocaleString() : "Date unavailable"}</span></div>
+                    <div className="text-xs text-muted-foreground">{run.snapshot ? "Latest saved result (before history began)" : run.page_numbers?.length ? `Pages ${run.page_numbers.join(", ")}` : "All pages"}{run.model ? ` · ${run.model}` : ""}{run.tokens?.durationMs ? ` · ${(run.tokens.durationMs / 1000).toFixed(1)}s` : ""}</div>
+                    {run.tokens && <div className="text-xs text-muted-foreground">in {Number(run.tokens.prompt ?? 0).toLocaleString()} · cached {Number(run.tokens.cached ?? 0).toLocaleString()} · out {Number(run.tokens.candidates ?? 0).toLocaleString()} · total {Number(run.tokens.total ?? 0).toLocaleString()}</div>}
+                    {run.error && <div className="text-xs text-destructive">{run.error}</div>}
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" disabled={!run.prompt_text} onClick={() => setRiskRadarDetail({ title: `Risk Radar prompt · ${run.class_name}`, text: run.prompt_text })}>View prompt</Button>
+                      <Button size="sm" variant="outline" disabled={!run.result_text} onClick={() => setRiskRadarDetail({ title: `Risk Radar response · ${run.class_name}`, text: run.result_text })}>View response</Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={!!riskRadarDetail} onOpenChange={(open) => { if (!open) setRiskRadarDetail(null); }}>
+            <DialogContent className="w-[80vw] max-w-[80vw] h-[80vh] flex flex-col"><DialogHeader><DialogTitle>{riskRadarDetail?.title}</DialogTitle></DialogHeader><pre className="flex-1 min-h-0 overflow-auto whitespace-pre-wrap border rounded-md p-3 text-xs">{riskRadarDetail?.text}</pre></DialogContent>
+          </Dialog>
+        </>}
         <Dialog open={scoutDebugOpen} onOpenChange={setScoutDebugOpen}>
           <DialogContent className="max-w-[680px] w-[680px] max-h-[80vh] flex flex-col">
             <DialogHeader>
@@ -2933,7 +3004,7 @@ const DeviceButton = ({ row, devices }: { row: DetectionRowModel; devices: Devic
   ) : (
     <PopoverTrigger asChild>
         <Button type="button" variant="ghost" size="sm" className="h-7 px-1.5 text-sm text-primary" disabled={disabled} onClick={(e) => e.stopPropagation()}>
-          <Plus className="h-3 w-3" /> Add Device
+          <Plus className="h-3 w-3" /><img src={productIcon.url} alt="" className="h-3.5 w-3.5" />
       </Button>
     </PopoverTrigger>
   );
@@ -3242,19 +3313,18 @@ const DetectionsPanel = ({
                       className="h-3.5 w-3.5 shrink-0"
                     />
                     <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                         <span className="shrink-0 text-sm">{row.label}</span>
-                      </TooltipTrigger>
-                      <TooltipContent side="left">{row.fullName}</TooltipContent>
-                    </Tooltip>
-                    {row.diam && <Badge variant="outline" className="max-w-28 truncate rounded px-1.5 py-0.5 text-xs font-medium">{row.diam}</Badge>}
-                    {row.type && <Badge variant="outline" className="max-w-32 truncate rounded px-1.5 py-0.5 text-xs font-medium">{subtypeAbbr(c.name, row.type) || row.type}</Badge>}
-                    <span className="text-xs tabular-nums text-muted-foreground shrink-0">{row.count}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0"><span className="shrink-0">{row.label}</span><span className="truncate" title={c.label || c.name}>{c.label || c.name}</span><span className="text-xs tabular-nums text-muted-foreground shrink-0">{row.count}</span></div>
+                      {(row.diam || row.type) && <div className="flex flex-wrap gap-1 mt-1">
+                        {row.diam && <Badge variant="outline" className="max-w-28 truncate rounded px-1.5 py-0.5 text-xs font-medium">{row.diam}</Badge>}
+                        {row.type && <Badge variant="outline" className="max-w-32 truncate rounded px-1.5 py-0.5 text-xs font-medium">{subtypeAbbr(c.name, row.type) || row.type}</Badge>}
+                      </div>}
+                    </div>
                   </div>
                   {devices.beta && <DeviceButton row={row} devices={devices} />}
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost" size="icon-sm" disabled={row.items.length === 0}
                     onClick={(e) => {
                       e.stopPropagation();
                       setExpanded((prev) => {
@@ -3264,11 +3334,11 @@ const DetectionsPanel = ({
                         return next;
                       });
                     }}
-                    className="shrink-0 text-muted-foreground hover:text-foreground p-0.5 rounded hover:bg-muted/50"
+                    className="shrink-0 h-6 w-6 text-muted-foreground"
                     aria-label={isExpanded ? "Collapse" : "Expand"}
                   >
                     {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                  </button>
+                  </Button>
                 </div>
                 {isExpanded && (
                   <div className="px-8 py-1 space-y-1 bg-muted/20">
@@ -3575,38 +3645,7 @@ const FloorPlansPanel = ({
 
   return (
     <div className="h-full flex flex-col min-h-0">
-      {onScoutPage && (
-        <div className="p-3 border-b shrink-0 flex items-center gap-1">
-<Button
-            size="sm"
-            variant="outline"
-            className="flex-1 h-8 text-xs"
-            onClick={onScoutPage}
-            disabled={scoutBusy}
-          >
-            {scoutBusy ? (
-              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-            ) : (
-              <Radar className="h-3.5 w-3.5 mr-1.5" />
-            )}
-            {scoutBusy
-              ? `Scouting page${scoutPageNumber ? ` ${scoutPageNumber}` : ""}…`
-              : `Scout Page${scoutPageNumber ? ` ${scoutPageNumber}` : ""}`}
-          </Button>
-          {onScoutDebug && (
-            <Button
-size="sm"
-              variant="outline"
-              className="h-8 w-8 p-0 shrink-0"
-              onClick={onScoutDebug}
-              aria-label="Scout debug"
-              title="Scout debug"
-            >
-              <Bug className="h-3.5 w-3.5" />
-            </Button>
-          )}
-        </div>
-      )}
+      {onScoutPage && onScoutDebug && <AgentActionBar label={scoutBusy ? "Scouting…" : "Scout Agent"} icon={scoutBusy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <img src={floorPlanIcon.url} alt="" className="h-3.5 w-3.5 mr-1.5" />} onAction={onScoutPage} onDebug={onScoutDebug} debugLabel="Scout debug" disabled={scoutBusy} />}
 
       {scoutReview && (
         <div className="mx-2 mb-2 shrink-0 rounded-md border border-primary/40 bg-primary/5 p-2 space-y-2">

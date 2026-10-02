@@ -1,5 +1,7 @@
 # Architecture rules
 
+- Risk Radar writes immutable per-class history to `risk_radar_run_history` while `analysis_request_files.risk_element_results` remains the latest-result snapshot; this keeps older runs inspectable without changing existing consumers.
+
 - Drawing risk-type device assignments live on `projects.risk_device_assignments`; devices are project-wide and plans derive their device lists from selected risk instances.
 - Drawing plan visualization state uses `project_mitigation_plans.color` and `included_instance_ids`; an empty instance list on legacy plans retains assignment-based coverage.
 - Drawing risk colors are assigned from the visible page's attribute-group keys with deterministic hue spacing; floor-plan box colors stay on their separate legacy palette so risk emphasis cannot recolor plans.
