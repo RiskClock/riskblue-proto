@@ -38,7 +38,7 @@ async function rebuildCache(params: {
   bucket: string;
   storagePath: string;
   model: string;
-}): Promise<{ cacheName: string; expiresAt: string }> {
+}): Promise<{ cacheName: string | null; fileUri: string; fileMime: string }> {
   const { ai, admin, fileId, fileName, bucket, storagePath, model } = params;
 
   const { data: blob, error: dlErr } = await admin.storage
@@ -67,34 +67,28 @@ async function rebuildCache(params: {
     pollCount++;
   }
 
-  let cache: any;
   try {
-    cache = await ai.caches.create({
-    model,
-    config: {
-      displayName: `sheet-analysis-${fileId}`,
-      contents: [
-        {
-          role: "user",
-          parts: [{ fileData: { fileUri, mimeType: fileMime } }],
-        },
-      ],
-      ttl: `${CACHE_TTL_SECONDS}s`,
-    },
-  });
-  const cacheName: string | undefined = (cache as any)?.name;
-  if (!cacheName) throw new Error("caches.create returned no name");
-  const expiresAt = new Date(Date.now() + CACHE_TTL_SECONDS * 1000).toISOString();
-
-  await admin
-    .from("analysis_request_files")
-    .update({
-      gemini_cache_id: cacheName,
-      gemini_cache_expires_at: expiresAt,
-    } as any)
-    .eq("id", fileId);
-
-  return { cacheName, expiresAt };
+    const cache = await ai.caches.create({
+      model,
+      config: {
+        displayName: `sheet-analysis-${fileId}`,
+        contents: [{ role: "user", parts: [{ fileData: { fileUri, mimeType: fileMime } }] }],
+        ttl: `${CACHE_TTL_SECONDS}s`,
+      },
+    });
+    const cacheName: string | undefined = (cache as any)?.name;
+    if (!cacheName) throw new Error("caches.create returned no name");
+    const expiresAt = new Date(Date.now() + CACHE_TTL_SECONDS * 1000).toISOString();
+    await admin
+      .from("analysis_request_files")
+      .update({ gemini_cache_id: cacheName, gemini_cache_expires_at: expiresAt } as any)
+      .eq("id", fileId);
+    return { cacheName, fileUri, fileMime };
+  } catch (err: any) {
+    // Small PDFs fall below Gemini's minimum cache size; send the file directly instead.
+    console.warn(`[identify-risk-elements] cache create failed for ${fileName}, using direct file: ${err?.message ?? err}`);
+    return { cacheName: null, fileUri, fileMime };
+  }
 }
 
 Deno.serve(async (req) => {
