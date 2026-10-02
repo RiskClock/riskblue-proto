@@ -535,7 +535,7 @@ export function ManageFilesModal({
                 <span className="text-sm font-medium text-primary">Drop files or folders to upload</span>
               </div>
             )}
-            <ScrollArea className="max-h-[55vh] border rounded-md">
+            <div className="max-h-[55vh] overflow-auto border rounded-md [&>div]:overflow-visible">
               <Table>
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
@@ -659,7 +659,7 @@ export function ManageFilesModal({
                   )}
                 </TableBody>
               </Table>
-            </ScrollArea>
+            </div>
           </div>
 
           <DialogFooter className="sm:justify-between">
