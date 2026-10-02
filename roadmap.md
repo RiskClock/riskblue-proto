@@ -1,5 +1,9 @@
 # Roadmap
 
+- [x] Add system-admin-only Risk Radar placeholder and file-scoped historical debug view in Detections.
+- [x] Preserve future Risk Radar run results, prompts, tokens, and failures independently of latest results.
+- [x] Align Scout and Risk Radar controls; show class names, suppress empty chevrons, and update product/scout icons.
+
 - [x] Make the plan manager keep the page controls and first plan row fixed while rows below scroll.
 - [x] Add “Other” to the Add Product product-type picker and remove checkbox save lag.
 - [x] Stop automatic Plan 1 creation and remove untouched empty auto-created Plan 1 records.

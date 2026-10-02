@@ -5,6 +5,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { GoogleGenAI } from "npm:@google/genai@2.8.0";
+import { isStaffUser } from "../_shared/systemAdmin.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -115,8 +116,7 @@ Deno.serve(async (req) => {
     );
     const { data: userData, error: userErr } = await userClient.auth.getUser();
     if (userErr || !userData.user) return json({ error: "Unauthorized" }, 401);
-    const email = (userData.user.email ?? "").toLowerCase();
-    if (!email.endsWith("@riskclock.com")) {
+    if (!(await isStaffUser(admin, userData.user))) {
       return json({ error: "Forbidden" }, 403);
     }
 
@@ -320,6 +320,22 @@ Deno.serve(async (req) => {
         };
 
         const results = await Promise.all(awpClassNames.map(runOne));
+
+        // Keep immutable per-class run records before updating the latest-result snapshot.
+        const { error: historyError } = await admin.from("risk_radar_run_history").insert(
+          results.map((r) => ({
+            analysis_request_id: analysisRequestId,
+            file_id: fileId,
+            class_name: r.className,
+            page_numbers: pageNumbers,
+            model: r.ok ? r.model : GEMINI_MODEL,
+            prompt_text: r.ok ? r.promptText : null,
+            result_text: r.ok ? r.text : null,
+            error: r.ok ? null : r.error,
+            tokens: r.ok ? r.tokens : null,
+          })),
+        );
+        if (historyError) console.error(`[identify-risk-elements] history save failed for ${fileName}: ${historyError.message}`);
 
         const nowIso = new Date().toISOString();
         const merged: Record<string, any> = { ...existingResults };
