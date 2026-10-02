@@ -388,14 +388,26 @@ export const FileViewerModal = ({
     let cancelled = false;
     setRiskRadarLoading(true);
     (async () => {
-      const { data, error } = await supabase
-        .from("risk_radar_run_history")
-        .select("id, class_name, page_numbers, model, prompt_text, result_text, error, tokens, created_at")
-        .eq("file_id", target)
-        .order("created_at", { ascending: false })
-        .limit(100);
+      const [{ data, error }, { data: fileSnapshot }] = await Promise.all([
+        supabase.from("risk_radar_run_history")
+          .select("id, class_name, page_numbers, model, prompt_text, result_text, error, tokens, created_at")
+          .eq("file_id", target)
+          .order("created_at", { ascending: false })
+          .limit(100),
+        supabase.from("analysis_request_files").select("risk_element_results").eq("id", target).maybeSingle(),
+      ]);
       if (cancelled) return;
-      setRiskRadarRuns(data ?? []);
+      const recordedClasses = new Set((data ?? []).map((run) => run.class_name));
+      const snapshots = Object.entries((fileSnapshot?.risk_element_results ?? {}) as Record<string, any>)
+        .filter(([name, entry]) => !recordedClasses.has(name) && entry && typeof entry === "object")
+        .map(([name, entry]) => ({
+          id: `snapshot-${name}`, class_name: name, page_numbers: [], model: entry.model,
+          prompt_text: entry.prompt_text, result_text: entry.result_text, error: entry.error,
+          tokens: entry.tokens, created_at: entry.updated_at, snapshot: true,
+        }));
+      setRiskRadarRuns([...(data ?? []), ...snapshots].sort((a, b) =>
+        new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime(),
+      ));
       if (error) toast({ title: "Could not load Risk Radar history", description: error.message, variant: "destructive" });
       setRiskRadarLoading(false);
     })();
@@ -2510,8 +2522,8 @@ export const FileViewerModal = ({
               <div className="min-h-0 overflow-auto border rounded-md divide-y">
                 {riskRadarLoading ? <p className="p-4 text-sm text-muted-foreground">Loading…</p> : riskRadarRuns.length === 0 ? <p className="p-4 text-sm text-muted-foreground">No recorded Risk Radar runs for this drawing yet. Earlier overwritten runs cannot be recovered.</p> : riskRadarRuns.map((run) => (
                   <div key={run.id} className="p-3 space-y-1 text-sm">
-                    <div className="font-medium">{run.class_name} <span className="font-normal text-muted-foreground">· {new Date(run.created_at).toLocaleString()}</span></div>
-                    <div className="text-xs text-muted-foreground">{run.page_numbers?.length ? `Pages ${run.page_numbers.join(", ")}` : "All pages"}{run.model ? ` · ${run.model}` : ""}{run.tokens?.durationMs ? ` · ${(run.tokens.durationMs / 1000).toFixed(1)}s` : ""}</div>
+                    <div className="font-medium">{run.class_name} <span className="font-normal text-muted-foreground">· {run.created_at ? new Date(run.created_at).toLocaleString() : "Date unavailable"}</span></div>
+                    <div className="text-xs text-muted-foreground">{run.snapshot ? "Latest saved result (before history began)" : run.page_numbers?.length ? `Pages ${run.page_numbers.join(", ")}` : "All pages"}{run.model ? ` · ${run.model}` : ""}{run.tokens?.durationMs ? ` · ${(run.tokens.durationMs / 1000).toFixed(1)}s` : ""}</div>
                     {run.tokens && <div className="text-xs text-muted-foreground">in {Number(run.tokens.prompt ?? 0).toLocaleString()} · cached {Number(run.tokens.cached ?? 0).toLocaleString()} · out {Number(run.tokens.candidates ?? 0).toLocaleString()} · total {Number(run.tokens.total ?? 0).toLocaleString()}</div>}
                     {run.error && <div className="text-xs text-destructive">{run.error}</div>}
                     <div className="flex gap-2">
