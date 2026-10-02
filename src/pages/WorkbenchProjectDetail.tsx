@@ -5633,8 +5633,66 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
           />
         )}
 
+        {isSystemAdmin && wbWadeOpen && projectId && (
+          <div
+            data-wade-window
+            className={`fixed z-50 w-[420px] h-[520px] rounded-lg border bg-card shadow-xl flex flex-col overflow-hidden ${
+              wbWadeMinimized ? "hidden" : ""
+            }`}
+            style={{
+              left: wbWadePos ? wbWadePos.x : undefined,
+              top: wbWadePos ? wbWadePos.y : undefined,
+              right: wbWadePos ? undefined : 24,
+              bottom: wbWadePos ? undefined : 24,
+            }}
+          >
+            <div className="flex-1 min-h-0 flex">
+              <div className="flex-1 min-h-0 flex flex-col [&>div]:flex-1 [&>div]:border-0 [&>div]:rounded-none">
+                <AskWadePanel
+                  projectId={projectId}
+                  onClose={() => setWbWadeOpen(false)}
+                  onMinimize={() => setWbWadeMinimized(true)}
+                  dragHandleProps={{
+                    onPointerDown: onWbWadePointerDown,
+                    onPointerMove: onWbWadePointerMove,
+                    onPointerUp: onWbWadePointerUp,
+                  }}
+                  buildContext={buildWorkbenchWadeContext}
+                  persistHistory={false}
+                  title="Wade"
+                  emptyHint={`Ask about the open drawing page, or ask Wade to act on it. For example: "place a shut-off valve marker in the top left of the Level 2 plan", "tighten the triage prompt for Cold Water", or "run Risk Radar on this page".`}
+                  actionSpec={WORKBENCH_WADE_ACTION_SPEC}
+                  onActions={applyWorkbenchWadeActions}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+        {isSystemAdmin && wbWadeOpen && wbWadeMinimized && (
+          <button
+            type="button"
+            className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm shadow-lg hover:bg-muted"
+            onClick={() => setWbWadeMinimized(false)}
+          >
+            <MessageSquare className="h-4 w-4" /> Wade
+          </button>
+        )}
+        <Dialog open={!!wadeConfirm} onOpenChange={(o) => { if (!o) closeWadeConfirm(false); }}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>{wadeConfirm?.title}</DialogTitle>
+              <DialogDescription>Wade wants to make this change. Approve to apply it.</DialogDescription>
+            </DialogHeader>
+            <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap rounded-md border p-3 text-xs">{wadeConfirm?.body}</pre>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => closeWadeConfirm(false)}>Cancel</Button>
+              <Button onClick={() => closeWadeConfirm(true)}>Approve</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* Single-page viewer for Pages by File table */}
-        {activePageView && activePageViewSource && (
+        {activePageView && activePageViewSource && (showMode !== "drawing" || drawingHost) && (
           <FileViewerModal
             isOpen={!!activePageView}
             embedTarget={showMode === "drawing" ? drawingHost : null}
