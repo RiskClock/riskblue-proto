@@ -4447,12 +4447,37 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
           const stop = startAgentHeartbeat(lock.runId);
           setIdentifyRunning(true);
           try {
+            const startedAt = new Date().toISOString();
             const { error } = await supabase.functions.invoke("identify-risk-elements", {
               body: { analysisRequestId: requestId, fileId: page.file.id, awpClassNames: classes, pageNumbers: [page.page] },
             });
             if (error) throw await normalizeFunctionError(error);
-            await releaseAgentLock(lock.runId, "completed");
-            lines.push(`- Risk Radar started on page ${page.page} for ${classes.length} class${classes.length === 1 ? "" : "es"}.`);
+            // The function runs in the background; wait for history rows for every class.
+            let rows: { class_name: string; error: string | null }[] = [];
+            const deadline = Date.now() + 5 * 60_000;
+            while (Date.now() < deadline) {
+              await new Promise((r) => setTimeout(r, 4000));
+              const { data } = await supabase
+                .from("risk_radar_run_history" as any)
+                .select("class_name, error")
+                .eq("file_id", page.file.id)
+                .gte("created_at", startedAt);
+              rows = ((data as any[]) ?? []).filter((r) => classes.includes(r.class_name));
+              if (new Set(rows.map((r) => r.class_name)).size >= classes.length) break;
+            }
+            const done = new Set(rows.map((r) => r.class_name)).size >= classes.length;
+            const failed = rows.filter((r) => r.error);
+            if (!done) {
+              await releaseAgentLock(lock.runId, "failed", "Timed out waiting for results");
+              lines.push(`- Risk Radar is still running on page ${page.page}; check the Risk Radar history shortly.`);
+            } else if (failed.length === rows.length) {
+              await releaseAgentLock(lock.runId, "failed", failed[0]?.error ?? "Unknown error");
+              lines.push(`- Risk Radar failed on page ${page.page}: ${failed[0]?.error}`);
+            } else {
+              await releaseAgentLock(lock.runId, "completed");
+              lines.push(`- Risk Radar finished on page ${page.page} for ${classes.length} class${classes.length === 1 ? "" : "es"}${failed.length ? ` (${failed.length} failed)` : ""}. Results are in the Risk Radar history.`);
+            }
+            queryClient.invalidateQueries();
           } catch (err: any) {
             await releaseAgentLock(lock.runId, "failed", err?.message ?? "Unknown error");
             lines.push(`- Risk Radar failed: ${err?.message ?? "unknown error"}`);

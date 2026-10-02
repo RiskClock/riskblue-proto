@@ -38,7 +38,7 @@ async function rebuildCache(params: {
   bucket: string;
   storagePath: string;
   model: string;
-}): Promise<{ cacheName: string; expiresAt: string }> {
+}): Promise<{ cacheName: string | null; fileUri: string; fileMime: string }> {
   const { ai, admin, fileId, fileName, bucket, storagePath, model } = params;
 
   const { data: blob, error: dlErr } = await admin.storage
@@ -67,32 +67,28 @@ async function rebuildCache(params: {
     pollCount++;
   }
 
-  const cache = await ai.caches.create({
-    model,
-    config: {
-      displayName: `sheet-analysis-${fileId}`,
-      contents: [
-        {
-          role: "user",
-          parts: [{ fileData: { fileUri, mimeType: fileMime } }],
-        },
-      ],
-      ttl: `${CACHE_TTL_SECONDS}s`,
-    },
-  });
-  const cacheName: string | undefined = (cache as any)?.name;
-  if (!cacheName) throw new Error("caches.create returned no name");
-  const expiresAt = new Date(Date.now() + CACHE_TTL_SECONDS * 1000).toISOString();
-
-  await admin
-    .from("analysis_request_files")
-    .update({
-      gemini_cache_id: cacheName,
-      gemini_cache_expires_at: expiresAt,
-    } as any)
-    .eq("id", fileId);
-
-  return { cacheName, expiresAt };
+  try {
+    const cache = await ai.caches.create({
+      model,
+      config: {
+        displayName: `sheet-analysis-${fileId}`,
+        contents: [{ role: "user", parts: [{ fileData: { fileUri, mimeType: fileMime } }] }],
+        ttl: `${CACHE_TTL_SECONDS}s`,
+      },
+    });
+    const cacheName: string | undefined = (cache as any)?.name;
+    if (!cacheName) throw new Error("caches.create returned no name");
+    const expiresAt = new Date(Date.now() + CACHE_TTL_SECONDS * 1000).toISOString();
+    await admin
+      .from("analysis_request_files")
+      .update({ gemini_cache_id: cacheName, gemini_cache_expires_at: expiresAt } as any)
+      .eq("id", fileId);
+    return { cacheName, fileUri, fileMime };
+  } catch (err: any) {
+    // Small PDFs fall below Gemini's minimum cache size; send the file directly instead.
+    console.warn(`[identify-risk-elements] cache create failed for ${fileName}, using direct file: ${err?.message ?? err}`);
+    return { cacheName: null, fileUri, fileMime };
+  }
 }
 
 Deno.serve(async (req) => {
@@ -203,12 +199,17 @@ Deno.serve(async (req) => {
 
         // Resolve a usable cache.
         let cacheName: string | null = (fileRow as any).gemini_cache_id ?? null;
+        let directFile: { fileUri: string; fileMime: string } | null = null;
         const expiresAt = (fileRow as any).gemini_cache_expires_at as string | null;
         const expired = expiresAt ? new Date(expiresAt).getTime() < Date.now() + 30_000 : true;
-        if (!cacheName || expired) {
-          console.log(`[identify-risk-elements] (re)building cache for file=${fileName}`);
+        const rebuild = async () => {
           const rebuilt = await rebuildCache({ ai, admin, fileId, fileName, bucket, storagePath, model: GEMINI_MODEL });
           cacheName = rebuilt.cacheName;
+          directFile = rebuilt.cacheName ? null : { fileUri: rebuilt.fileUri, fileMime: rebuilt.fileMime };
+        };
+        if (!cacheName || expired) {
+          console.log(`[identify-risk-elements] (re)building cache for file=${fileName}`);
+          await rebuild();
         }
 
         const existingResults =
@@ -223,7 +224,8 @@ Deno.serve(async (req) => {
               error: `No prompt_content for class "${className}"`,
             };
           }
-          const callGemini = async (cacheRef: string) => {
+          const callGemini = async () => {
+            const df = directFile as { fileUri: string; fileMime: string } | null;
             // gemini-3.5 rejects systemInstruction alongside cachedContent, so
             // we fold the per-class prompt into the user message instead.
             return await ai.models.generateContent({
@@ -232,6 +234,7 @@ Deno.serve(async (req) => {
                 {
                   role: "user",
                   parts: [
+                    ...(df ? [{ fileData: { fileUri: df.fileUri, mimeType: df.fileMime } }] : []),
                     { text: `Instructions:\n${prompt}` },
                     ...(pageNumbers.length > 0
                       ? [{
@@ -244,34 +247,26 @@ Deno.serve(async (req) => {
                   ],
                 },
               ],
-
-              config: { cachedContent: cacheRef },
+              ...(df ? {} : { config: { cachedContent: cacheName! } }),
             });
           };
 
           try {
             const runStartedAt = Date.now();
             let resp: any;
-            let usedCache = cacheName!;
+            const usedCache = cacheName;
             try {
-              resp = await callGemini(usedCache);
+              resp = await callGemini();
             } catch (err: any) {
               const msg = String(err?.message ?? err);
-              // Most common failure here is a model/cache mismatch (cache was
-              // built for a different model, e.g. legacy gemini-2.5-pro caches
-              // when we are now on gemini-3.5-flash). Rebuild and retry once.
               const looksLikeCacheError =
                 /cache|cached|model|mismatch|not\s*found|invalid/i.test(msg);
-              if (!looksLikeCacheError) throw err;
+              if (directFile || !looksLikeCacheError) throw err;
               console.warn(
                 `[identify-risk-elements][cache-retry] file=${fileName} class=${className} error=${msg} - rebuilding cache and retrying`,
               );
-              const rebuilt = await rebuildCache({
-                ai, admin, fileId, fileName, bucket, storagePath, model: GEMINI_MODEL,
-              });
-              usedCache = rebuilt.cacheName;
-              cacheName = usedCache;
-              resp = await callGemini(usedCache);
+              await rebuild();
+              resp = await callGemini();
             }
             const text: string =
               (resp as any)?.text ??
@@ -368,7 +363,29 @@ Deno.serve(async (req) => {
           `[identify-risk-elements] file=${fileName} classes=${awpClassNames.length} ok=${results.filter((r) => r.ok).length}`,
         );
       } catch (err: any) {
-        console.error(`[identify-risk-elements] fatal for ${fileName}:`, err?.message ?? err);
+        const message = err?.message ?? String(err);
+        console.error(`[identify-risk-elements] fatal for ${fileName}:`, message);
+        try {
+          await admin.from("risk_radar_run_history").insert(
+            awpClassNames.map((c) => ({
+              analysis_request_id: analysisRequestId,
+              file_id: fileId,
+              class_name: c,
+              page_numbers: pageNumbers,
+              model: GEMINI_MODEL,
+              error: message,
+            })),
+          );
+          const existing = ((fileRow as any).risk_element_results as Record<string, any>) ?? {};
+          const nowIso = new Date().toISOString();
+          const merged: Record<string, any> = { ...existing };
+          for (const c of awpClassNames) {
+            merged[c] = { result_text: existing[c]?.result_text ?? null, updated_at: nowIso, error: message };
+          }
+          await admin.from("analysis_request_files").update({ risk_element_results: merged } as any).eq("id", fileId);
+        } catch (e: any) {
+          console.error(`[identify-risk-elements] failure record save failed: ${e?.message ?? e}`);
+        }
       }
     })();
 
