@@ -1,5 +1,9 @@
 # Roadmap
 
+- [x] Add drawing-page Risk Radar class selection, prompt access, and run controls.
+- [x] Connect and highlight the selected file and drawing panels in Drawing mode.
+- [x] Keep zero-count classes readable, hide page agents in View Mode, update agent icons, and rename the add action to + Control.
+
 - [x] Add system-admin-only Risk Radar placeholder and file-scoped historical debug view in Detections.
 - [x] Preserve future Risk Radar run results, prompts, tokens, and failures independently of latest results.
 - [x] Align Scout and Risk Radar controls; show class names, suppress empty chevrons, and update product/scout icons.
