@@ -2602,6 +2602,7 @@ export const FileViewerModal = ({
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" disabled={!run.prompt_text} onClick={() => setRiskRadarDetail({ title: `Risk Radar prompt · ${run.class_name}`, text: run.prompt_text })}>View prompt</Button>
                       <Button size="sm" variant="outline" disabled={!run.result_text} onClick={() => setRiskRadarDetail({ title: `Risk Radar response · ${run.class_name}`, text: run.result_text })}>View response</Button>
+                      {sidebarEnabled && <Button size="sm" disabled={!run.result_text || parseRiskRadarTable(run.result_text).length === 0} onClick={() => openRiskRadarReview(run)}>Review detections</Button>}
                     </div>
                   </div>
                 ))}
@@ -2610,6 +2611,31 @@ export const FileViewerModal = ({
           </Dialog>
           <Dialog open={!!riskRadarDetail} onOpenChange={(open) => { if (!open) setRiskRadarDetail(null); }}>
             <DialogContent className="w-[80vw] max-w-[80vw] h-[80vh] flex flex-col"><DialogHeader><DialogTitle>{riskRadarDetail?.title}</DialogTitle></DialogHeader><pre className="flex-1 min-h-0 overflow-auto whitespace-pre-wrap border rounded-md p-3 text-xs">{riskRadarDetail?.text}</pre></DialogContent>
+          </Dialog>
+          <Dialog open={!!rrReview} onOpenChange={(open) => { if (!open && !rrReview?.saving) setRrReview(null); }}>
+            <DialogContent className="max-w-[640px] w-[min(640px,95vw)] max-h-[80vh] flex flex-col">
+              <DialogHeader><DialogTitle>Review detections · {rrReview ? (awpClasses?.find((c) => c.name === rrReview.className)?.name ?? rrReview.className) : ""}</DialogTitle></DialogHeader>
+              <p className="text-sm text-muted-foreground">Each detection is looked up on page {effectivePage} by its room identifier, then by its drawing label. Choose which ones to place as markers.</p>
+              <div className="min-h-0 overflow-auto border rounded-md divide-y">
+                {rrReview?.loading ? <p className="p-4 text-sm text-muted-foreground">Searching the drawing…</p> : (rrReview?.candidates.length ?? 0) === 0 ? <p className="p-4 text-sm text-muted-foreground">This run has no detections.</p> : rrReview!.candidates.map((c) => {
+                  const located = c.nx != null;
+                  return (
+                    <label key={c.key} className={`flex items-start gap-3 p-3 text-sm ${located ? "cursor-pointer" : "opacity-60"}`}>
+                      <Checkbox className="mt-0.5" disabled={!located} checked={rrReview!.selected.has(c.key)} onCheckedChange={(v) => setRrReview((r) => { if (!r) return r; const s = new Set(r.selected); if (v === true) s.add(c.key); else s.delete(c.key); return { ...r, selected: s }; })} />
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium">{[c.identifier, c.label].filter(Boolean).join(" · ")}</div>
+                        {c.level && <div className="text-xs text-muted-foreground">{c.level}</div>}
+                        <div className={`text-xs ${located ? "text-muted-foreground" : "text-destructive"}`}>{located ? `Found "${c.matchedText}" on this page` : "Not found on this page, will not be placed"}</div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" disabled={rrReview?.saving} onClick={() => setRrReview(null)}>Cancel</Button>
+                <Button disabled={!rrReview || rrReview.loading || rrReview.saving || rrReview.selected.size === 0} onClick={applyRiskRadarReview}>{rrReview?.saving ? "Placing…" : `Place ${rrReview?.selected.size ?? 0} marker${rrReview?.selected.size === 1 ? "" : "s"}`}</Button>
+              </div>
+            </DialogContent>
           </Dialog>
         </>}
         <Dialog open={scoutDebugOpen} onOpenChange={setScoutDebugOpen}>
