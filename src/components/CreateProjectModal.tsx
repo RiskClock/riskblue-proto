@@ -606,6 +606,29 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
               )}
             </div>
 
+            {/* Protection Phase */}
+            <div className="space-y-2">
+              <Label>
+                Protection Phase <span className="text-destructive">*</span>
+              </Label>
+              <div className="flex flex-wrap gap-4 pt-1">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={protectionPhase.has("construction")}
+                    onCheckedChange={() => toggleProtectionPhase("construction")}
+                  />
+                  <span>Construction</span>
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={protectionPhase.has("operational")}
+                    onCheckedChange={() => toggleProtectionPhase("operational")}
+                  />
+                  <span>Operational</span>
+                </label>
+              </div>
+            </div>
+
             {/* Classes */}
             <div className="space-y-2">
               <Label>
