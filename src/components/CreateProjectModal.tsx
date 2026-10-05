@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, FileText, X, Loader2, Coins, ChevronDown, ChevronRight } from "lucide-react";
+import { Upload, FileText, X, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -168,6 +168,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
   const [selectedClassNames, setSelectedClassNames] = useState<Set<string>>(new Set());
   const [selectedControlIds, setSelectedControlIds] = useState<Set<string>>(new Set());
   const [otherTextByTab, setOtherTextByTab] = useState<Record<IdentifyTab, string>>(EMPTY_OTHER_TEXT);
+  const [protectionPhase, setProtectionPhase] = useState<Set<"construction" | "operational">>(new Set());
   const [activeIdentifyTab, setActiveIdentifyTab] = useState<IdentifyTab>("water_systems");
   const [currencyCode, setCurrencyCode] = useState<CurrencyCode>(normalizeCurrencyCode(tenant?.default_currency));
   const [files, setFiles] = useState<File[]>([]);
@@ -183,6 +184,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
       setSelectedClassNames(new Set());
       setSelectedControlIds(new Set());
       setOtherTextByTab(EMPTY_OTHER_TEXT);
+      setProtectionPhase(new Set());
       setActiveIdentifyTab("water_systems");
       setCurrencyCode(normalizeCurrencyCode(tenant?.default_currency));
       setFiles([]);
@@ -300,6 +302,15 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
   };
 
 
+  const toggleProtectionPhase = (phase: "construction" | "operational") => {
+    setProtectionPhase((prev) => {
+      const next = new Set(prev);
+      if (next.has(phase)) next.delete(phase);
+      else next.add(phase);
+      return next;
+    });
+  };
+
   const canSave =
     !!user &&
     name.trim().length > 0 &&
@@ -309,6 +320,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
     cost != null &&
     hasAnyClass &&
     files.length > 0 &&
+    protectionPhase.size > 0 &&
     !submitting;
 
   const toggleClass = (n: string) => {
@@ -385,6 +397,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
           selected_awp_class_names: finalSelectedClassNames,
           selected_other_classes: otherList,
           selected_awp_subtypes: selectedSubtypesMap,
+          protection_phase: Array.from(protectionPhase),
           project_data: {
             intake_identify_selections: {
               water_systems: optionsByTab.water_systems.filter((opt) => selectedClassNames.has(opt.name)).map((opt) => opt.name),
@@ -542,40 +555,6 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
               </div>
             </div>
 
-            {/* Cost summary */}
-            <div className="rounded-lg border bg-muted/40 p-4">
-              <div className="flex items-center gap-2 mb-1">
-                <Coins className="w-4 h-4 text-primary" />
-                <span className="text-sm font-semibold">Cost</span>
-              </div>
-              {!tierConfig ? (
-                <p className="text-sm text-muted-foreground">
-                  Select a project size to see the cost.
-                </p>
-              ) : tierConfig.id === "enterprise" ? (
-                <div className="text-sm">
-                  <div>
-                    <span className="text-2xl font-bold text-primary">0</span>{" "}
-                    <span className="text-muted-foreground">credits</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Enterprise projects are free to create - our team will reach out to coordinate scope.
-                  </p>
-                </div>
-              ) : (
-                <div className="text-sm">
-                  <div>
-                    <span className="text-2xl font-bold text-primary">{cost}</span>{" "}
-                    <span className="text-muted-foreground">credits</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Your balance: {effectiveBalance} credit{effectiveBalance === 1 ? "" : "s"}.
-                    {effectiveBalance < (cost ?? 0) && " You don't have enough - you'll be prompted to purchase more."}
-                  </p>
-                </div>
-              )}
-            </div>
-
             {/* Files */}
             <div className="space-y-2">
               <Label>
@@ -626,6 +605,29 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Protection Phase */}
+            <div className="space-y-2">
+              <Label>
+                Protection Phase <span className="text-destructive">*</span>
+              </Label>
+              <div className="flex flex-wrap gap-4 pt-1">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={protectionPhase.has("construction")}
+                    onCheckedChange={() => toggleProtectionPhase("construction")}
+                  />
+                  <span>Construction</span>
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={protectionPhase.has("operational")}
+                    onCheckedChange={() => toggleProtectionPhase("operational")}
+                  />
+                  <span>Operational</span>
+                </label>
+              </div>
             </div>
 
             {/* Classes */}
