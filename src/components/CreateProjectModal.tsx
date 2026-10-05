@@ -184,6 +184,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
       setSelectedClassNames(new Set());
       setSelectedControlIds(new Set());
       setOtherTextByTab(EMPTY_OTHER_TEXT);
+      setProtectionPhase(new Set());
       setActiveIdentifyTab("water_systems");
       setCurrencyCode(normalizeCurrencyCode(tenant?.default_currency));
       setFiles([]);
