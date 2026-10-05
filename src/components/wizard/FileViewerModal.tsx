@@ -101,6 +101,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { parseRiskRadarTable, locateRiskRadarRows, type RiskRadarCandidate } from "@/lib/riskRadarPlacement";
 
 
 interface SystemDetection {
@@ -1727,6 +1728,49 @@ export const FileViewerModal = ({
     };
   }, [isOpen, sourceOverride, fileId, accessToken, mimeType, fileName]);
 
+  // ---- Risk Radar review: turn a run's table rows into markers -------------
+  const [rrReview, setRrReview] = useState<{ className: string; loading: boolean; candidates: RiskRadarCandidate[]; selected: Set<string>; saving: boolean } | null>(null);
+  const openRiskRadarReview = useCallback(async (run: any) => {
+    const rows = parseRiskRadarTable(run.result_text);
+    setRrReview({ className: run.class_name, loading: true, candidates: [], selected: new Set(), saving: false });
+    if (!source || rows.length === 0) {
+      setRrReview((r) => r && { ...r, loading: false, candidates: rows.map((x) => ({ ...x, matchedText: null, nx: null, ny: null })) });
+      return;
+    }
+    try {
+      const { resolveDocumentSource } = await import("@/components/viewer/hooks/useDocumentSource");
+      const { blob } = await resolveDocumentSource(source);
+      const candidates = await locateRiskRadarRows(blob, sheetId ? 1 : currentPage, rows);
+      setRrReview((r) => r && { ...r, loading: false, candidates, selected: new Set(candidates.filter((c) => c.nx != null).map((c) => c.key)) });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Could not read this drawing", description: e?.message ?? "Unknown error" });
+      setRrReview((r) => r && { ...r, loading: false, candidates: rows.map((x) => ({ ...x, matchedText: null, nx: null, ny: null })) });
+    }
+  }, [source, sheetId, currentPage, toast]);
+
+  const applyRiskRadarReview = useCallback(async () => {
+    if (!rrReview) return;
+    setRrReview((r) => r && { ...r, saving: true });
+    let placed = 0;
+    let num = instances.filter((i) => i.awp_class_name === rrReview.className).reduce((m, i) => Math.max(m, i.instance_number ?? 0), 0);
+    const added: DrawingInstanceRow[] = [];
+    for (const c of rrReview.candidates) {
+      if (!rrReview.selected.has(c.key) || c.nx == null || c.ny == null) continue;
+      num += 1;
+      const { data, error } = await supabase.from("drawing_instances" as any).insert({
+        analysis_request_id: analysisRequestId!, file_id: parentFileId!, sheet_id: sheetId ?? null,
+        instance_number: num, awp_class_name: rrReview.className, nx: c.nx, ny: c.ny, page_index: effectivePage,
+        metadata: { source: "risk_radar", room_identifier: c.identifier, drawing_label: c.label },
+      } as any).select("id, awp_class_name, nx, ny, page_index, file_id, created_at, instance_number, metadata").single();
+      if (error) { toast({ variant: "destructive", title: "Could not save marker", description: getUserFriendlyError(error) }); continue; }
+      added.push(data as unknown as DrawingInstanceRow);
+      placed++;
+    }
+    if (added.length) { setInstances((prev) => [...prev, ...added]); onInstancesChanged?.(); }
+    toast({ title: `Placed ${placed} marker${placed === 1 ? "" : "s"}` });
+    setRrReview(null);
+  }, [rrReview, instances, analysisRequestId, parentFileId, sheetId, effectivePage, toast, onInstancesChanged]);
+
   // ---- Numbering: persistent per AWP class --------------------------------
   // IDs are stored on each row (instance_number). Deleting does NOT renumber
   // - gaps remain and the next added marker continues past the highest ID.
@@ -2558,6 +2602,7 @@ export const FileViewerModal = ({
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" disabled={!run.prompt_text} onClick={() => setRiskRadarDetail({ title: `Risk Radar prompt · ${run.class_name}`, text: run.prompt_text })}>View prompt</Button>
                       <Button size="sm" variant="outline" disabled={!run.result_text} onClick={() => setRiskRadarDetail({ title: `Risk Radar response · ${run.class_name}`, text: run.result_text })}>View response</Button>
+                      {sidebarEnabled && <Button size="sm" disabled={!run.result_text || parseRiskRadarTable(run.result_text).length === 0} onClick={() => openRiskRadarReview(run)}>Review detections</Button>}
                     </div>
                   </div>
                 ))}
@@ -2566,6 +2611,31 @@ export const FileViewerModal = ({
           </Dialog>
           <Dialog open={!!riskRadarDetail} onOpenChange={(open) => { if (!open) setRiskRadarDetail(null); }}>
             <DialogContent className="w-[80vw] max-w-[80vw] h-[80vh] flex flex-col"><DialogHeader><DialogTitle>{riskRadarDetail?.title}</DialogTitle></DialogHeader><pre className="flex-1 min-h-0 overflow-auto whitespace-pre-wrap border rounded-md p-3 text-xs">{riskRadarDetail?.text}</pre></DialogContent>
+          </Dialog>
+          <Dialog open={!!rrReview} onOpenChange={(open) => { if (!open && !rrReview?.saving) setRrReview(null); }}>
+            <DialogContent className="max-w-[640px] w-[min(640px,95vw)] max-h-[80vh] flex flex-col">
+              <DialogHeader><DialogTitle>Review detections · {rrReview ? (awpClasses?.find((c) => c.name === rrReview.className)?.name ?? rrReview.className) : ""}</DialogTitle></DialogHeader>
+              <p className="text-sm text-muted-foreground">Each detection is looked up on page {effectivePage} by its room identifier, then by its drawing label. Choose which ones to place as markers.</p>
+              <div className="min-h-0 overflow-auto border rounded-md divide-y">
+                {rrReview?.loading ? <p className="p-4 text-sm text-muted-foreground">Searching the drawing…</p> : (rrReview?.candidates.length ?? 0) === 0 ? <p className="p-4 text-sm text-muted-foreground">This run has no detections.</p> : rrReview!.candidates.map((c) => {
+                  const located = c.nx != null;
+                  return (
+                    <label key={c.key} className={`flex items-start gap-3 p-3 text-sm ${located ? "cursor-pointer" : "opacity-60"}`}>
+                      <Checkbox className="mt-0.5" disabled={!located} checked={rrReview!.selected.has(c.key)} onCheckedChange={(v) => setRrReview((r) => { if (!r) return r; const s = new Set(r.selected); if (v === true) s.add(c.key); else s.delete(c.key); return { ...r, selected: s }; })} />
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium">{[c.identifier, c.label].filter(Boolean).join(" · ")}</div>
+                        {c.level && <div className="text-xs text-muted-foreground">{c.level}</div>}
+                        <div className={`text-xs ${located ? "text-muted-foreground" : "text-destructive"}`}>{located ? `Found "${c.matchedText}" on this page` : "Not found on this page, will not be placed"}</div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" disabled={rrReview?.saving} onClick={() => setRrReview(null)}>Cancel</Button>
+                <Button disabled={!rrReview || rrReview.loading || rrReview.saving || rrReview.selected.size === 0} onClick={applyRiskRadarReview}>{rrReview?.saving ? "Placing…" : `Place ${rrReview?.selected.size ?? 0} marker${rrReview?.selected.size === 1 ? "" : "s"}`}</Button>
+              </div>
+            </DialogContent>
           </Dialog>
         </>}
         <Dialog open={scoutDebugOpen} onOpenChange={setScoutDebugOpen}>
