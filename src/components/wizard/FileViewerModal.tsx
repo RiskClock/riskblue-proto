@@ -101,6 +101,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { parseRiskRadarTable, locateRiskRadarRows, type RiskRadarCandidate } from "@/lib/riskRadarPlacement";
 
 
 interface SystemDetection {
@@ -1726,6 +1727,49 @@ export const FileViewerModal = ({
       fileName,
     };
   }, [isOpen, sourceOverride, fileId, accessToken, mimeType, fileName]);
+
+  // ---- Risk Radar review: turn a run's table rows into markers -------------
+  const [rrReview, setRrReview] = useState<{ className: string; loading: boolean; candidates: RiskRadarCandidate[]; selected: Set<string>; saving: boolean } | null>(null);
+  const openRiskRadarReview = useCallback(async (run: any) => {
+    const rows = parseRiskRadarTable(run.result_text);
+    setRrReview({ className: run.class_name, loading: true, candidates: [], selected: new Set(), saving: false });
+    if (!source || rows.length === 0) {
+      setRrReview((r) => r && { ...r, loading: false, candidates: rows.map((x) => ({ ...x, matchedText: null, nx: null, ny: null })) });
+      return;
+    }
+    try {
+      const { resolveDocumentSource } = await import("@/components/viewer/hooks/useDocumentSource");
+      const { blob } = await resolveDocumentSource(source);
+      const candidates = await locateRiskRadarRows(blob, sheetId ? 1 : currentPage, rows);
+      setRrReview((r) => r && { ...r, loading: false, candidates, selected: new Set(candidates.filter((c) => c.nx != null).map((c) => c.key)) });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Could not read this drawing", description: e?.message ?? "Unknown error" });
+      setRrReview((r) => r && { ...r, loading: false, candidates: rows.map((x) => ({ ...x, matchedText: null, nx: null, ny: null })) });
+    }
+  }, [source, sheetId, currentPage, toast]);
+
+  const applyRiskRadarReview = useCallback(async () => {
+    if (!rrReview) return;
+    setRrReview((r) => r && { ...r, saving: true });
+    let placed = 0;
+    let num = instances.filter((i) => i.awp_class_name === rrReview.className).reduce((m, i) => Math.max(m, i.instance_number ?? 0), 0);
+    const added: DrawingInstanceRow[] = [];
+    for (const c of rrReview.candidates) {
+      if (!rrReview.selected.has(c.key) || c.nx == null || c.ny == null) continue;
+      num += 1;
+      const { data, error } = await supabase.from("drawing_instances" as any).insert({
+        analysis_request_id: analysisRequestId!, file_id: parentFileId!, sheet_id: sheetId ?? null,
+        instance_number: num, awp_class_name: rrReview.className, nx: c.nx, ny: c.ny, page_index: effectivePage,
+        metadata: { source: "risk_radar", room_identifier: c.identifier, drawing_label: c.label },
+      } as any).select("id, awp_class_name, nx, ny, page_index, file_id, created_at, instance_number, metadata").single();
+      if (error) { toast({ variant: "destructive", title: "Could not save marker", description: getUserFriendlyError(error) }); continue; }
+      added.push(data as unknown as DrawingInstanceRow);
+      placed++;
+    }
+    if (added.length) { setInstances((prev) => [...prev, ...added]); onInstancesChanged?.(); }
+    toast({ title: `Placed ${placed} marker${placed === 1 ? "" : "s"}` });
+    setRrReview(null);
+  }, [rrReview, instances, analysisRequestId, parentFileId, sheetId, effectivePage, toast, onInstancesChanged]);
 
   // ---- Numbering: persistent per AWP class --------------------------------
   // IDs are stored on each row (instance_number). Deleting does NOT renumber
