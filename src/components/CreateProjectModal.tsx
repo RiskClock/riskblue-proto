@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, FileText, X, Loader2, Coins, ChevronDown, ChevronRight } from "lucide-react";
+import { Upload, FileText, X, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -167,7 +167,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
   const [sizeTier, setSizeTier] = useState<ProjectSizeTier | null>(null);
   const [selectedClassNames, setSelectedClassNames] = useState<Set<string>>(new Set());
   const [selectedControlIds, setSelectedControlIds] = useState<Set<string>>(new Set());
-  const [otherTextByTab, setOtherTextByTab] = useState<Record<IdentifyTab, string>>(EMPTY_OTHER_TEXT);
+  const [protectionPhase, setProtectionPhase] = useState<Set<"construction" | "operational">>(new Set());
   const [activeIdentifyTab, setActiveIdentifyTab] = useState<IdentifyTab>("water_systems");
   const [currencyCode, setCurrencyCode] = useState<CurrencyCode>(normalizeCurrencyCode(tenant?.default_currency));
   const [files, setFiles] = useState<File[]>([]);
