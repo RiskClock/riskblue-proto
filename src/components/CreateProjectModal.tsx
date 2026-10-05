@@ -167,6 +167,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
   const [sizeTier, setSizeTier] = useState<ProjectSizeTier | null>(null);
   const [selectedClassNames, setSelectedClassNames] = useState<Set<string>>(new Set());
   const [selectedControlIds, setSelectedControlIds] = useState<Set<string>>(new Set());
+  const [otherTextByTab, setOtherTextByTab] = useState<Record<IdentifyTab, string>>(EMPTY_OTHER_TEXT);
   const [protectionPhase, setProtectionPhase] = useState<Set<"construction" | "operational">>(new Set());
   const [activeIdentifyTab, setActiveIdentifyTab] = useState<IdentifyTab>("water_systems");
   const [currencyCode, setCurrencyCode] = useState<CurrencyCode>(normalizeCurrencyCode(tenant?.default_currency));
