@@ -397,6 +397,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
           selected_awp_class_names: finalSelectedClassNames,
           selected_other_classes: otherList,
           selected_awp_subtypes: selectedSubtypesMap,
+          protection_phase: Array.from(protectionPhase),
           project_data: {
             intake_identify_selections: {
               water_systems: optionsByTab.water_systems.filter((opt) => selectedClassNames.has(opt.name)).map((opt) => opt.name),
