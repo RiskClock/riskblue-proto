@@ -554,40 +554,6 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
               </div>
             </div>
 
-            {/* Cost summary */}
-            <div className="rounded-lg border bg-muted/40 p-4">
-              <div className="flex items-center gap-2 mb-1">
-                <Coins className="w-4 h-4 text-primary" />
-                <span className="text-sm font-semibold">Cost</span>
-              </div>
-              {!tierConfig ? (
-                <p className="text-sm text-muted-foreground">
-                  Select a project size to see the cost.
-                </p>
-              ) : tierConfig.id === "enterprise" ? (
-                <div className="text-sm">
-                  <div>
-                    <span className="text-2xl font-bold text-primary">0</span>{" "}
-                    <span className="text-muted-foreground">credits</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Enterprise projects are free to create - our team will reach out to coordinate scope.
-                  </p>
-                </div>
-              ) : (
-                <div className="text-sm">
-                  <div>
-                    <span className="text-2xl font-bold text-primary">{cost}</span>{" "}
-                    <span className="text-muted-foreground">credits</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Your balance: {effectiveBalance} credit{effectiveBalance === 1 ? "" : "s"}.
-                    {effectiveBalance < (cost ?? 0) && " You don't have enough - you'll be prompted to purchase more."}
-                  </p>
-                </div>
-              )}
-            </div>
-
             {/* Files */}
             <div className="space-y-2">
               <Label>
