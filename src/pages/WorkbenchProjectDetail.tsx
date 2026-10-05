@@ -5530,7 +5530,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                     className="flex-1 min-w-0 h-[calc(100vh-220px)] sticky top-0 -ml-px"
                   >
                     {!activePageView && (
-                      <div className="h-full rounded-lg border bg-card flex items-center justify-center text-sm text-muted-foreground">
+                      <div className="h-full rounded-r-lg rounded-l-none border bg-card flex items-center justify-center text-sm text-muted-foreground">
                         Select a page to view its drawing.
                       </div>
                     )}
