@@ -209,7 +209,7 @@ const EmbeddedDialogContent = forwardRef<HTMLDivElement, React.ComponentPropsWit
       onPointerDownOutside={(e) => e.preventDefault()}
       onFocusOutside={(e) => e.preventDefault()}
       onEscapeKeyDown={(e) => e.preventDefault()}
-      className="w-full h-full flex flex-col p-4 bg-card border rounded-lg"
+      className="w-full h-full flex flex-col p-4 bg-card border rounded-r-lg rounded-l-none"
     >
       {children}
     </DialogPrimitive.Content>
