@@ -847,7 +847,7 @@ export default function WorkbenchProjectDetail() {
             .select("class_name, error")
             .eq("file_id", fileId)
             .gte("created_at", startedAt);
-          const matching = ((data as Array<{ class_name: string; error: string | null }>) ?? []).filter((row) => classNames.includes(row.class_name));
+          const matching = ((data as unknown as Array<{ class_name: string; error: string | null }>) ?? []).filter((row) => classNames.includes(row.class_name));
           completed = new Set(matching.map((row) => row.class_name));
           failures = matching.filter((row) => row.error);
           if (completed.size >= classNames.length) break;
