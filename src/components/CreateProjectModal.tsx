@@ -302,6 +302,15 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
   };
 
 
+  const toggleProtectionPhase = (phase: "construction" | "operational") => {
+    setProtectionPhase((prev) => {
+      const next = new Set(prev);
+      if (next.has(phase)) next.delete(phase);
+      else next.add(phase);
+      return next;
+    });
+  };
+
   const canSave =
     !!user &&
     name.trim().length > 0 &&
@@ -311,6 +320,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
     cost != null &&
     hasAnyClass &&
     files.length > 0 &&
+    protectionPhase.size > 0 &&
     !submitting;
 
   const toggleClass = (n: string) => {
