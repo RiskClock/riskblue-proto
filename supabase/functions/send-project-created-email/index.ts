@@ -45,7 +45,7 @@ serve(async (req) => {
 
     const { data: project } = await admin
       .from("projects")
-      .select("id, name, user_id, created_at, selected_awp_class_names, selected_other_classes, selected_awp_subtypes")
+      .select("id, name, user_id, created_at, selected_awp_class_names, selected_other_classes, selected_awp_subtypes, protection_phase")
       .eq("id", projectId)
       .single();
 
@@ -204,6 +204,10 @@ serve(async (req) => {
         <p><strong>Created by:</strong> ${escapeHtml(creatorName)} &lt;${escapeHtml(creatorEmail)}&gt;</p>
         <p><strong>Project ID:</strong> ${project.id}</p>
         <p><strong>Created at:</strong> ${new Date(project.created_at).toISOString()}</p>
+        <p><strong>Protection Phase:</strong> ${(() => {
+          const pp = Array.isArray((project as any).protection_phase) ? (project as any).protection_phase as string[] : [];
+          return pp.length ? pp.map((p) => escapeHtml(p.charAt(0).toUpperCase() + p.slice(1))).join(", ") : "Not specified";
+        })()}</p>
         ${selectionsHtml || '<p style="color:#666;">No assets, water systems, or processes selected.</p>'}
         ${subtypesHtml}
       </div>
