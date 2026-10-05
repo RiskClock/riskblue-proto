@@ -494,7 +494,9 @@ export default function WorkbenchProjectDetail() {
     }
   });
   const [activePageView, setActivePageView] = useState<{ file: PageInfoRow; page: number } | null>(null);
-  const [showMode, setShowMode] = useState<"count" | "drawing">("count");
+  const [showModeRaw, setShowMode] = useState<"count" | "drawing">("count");
+  // Drawing mode is restricted to system admins.
+  const showMode: "count" | "drawing" = isSystemAdmin ? showModeRaw : "count";
   const [drawingHost, setDrawingHost] = useState<HTMLDivElement | null>(null);
   const [viewerReloadKey, setViewerReloadKey] = useState(0);
   const [wbWadeOpen, setWbWadeOpen] = useState(false);
@@ -5192,7 +5194,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
             <div className="space-y-3">
 
 
-              {pageInfoRows.length > 0 && (
+              {isSystemAdmin && pageInfoRows.length > 0 && (
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-muted-foreground">Show:</span>
                   <div className="inline-flex rounded-md border bg-card p-0.5">
