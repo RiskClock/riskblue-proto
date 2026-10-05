@@ -815,6 +815,64 @@ export default function WorkbenchProjectDetail() {
     [activePageView, projectId, toast, logActivity, activeFloorPlanOverrides, activeSheetIdForPage],
   );
 
+  const handleRiskRadarPage = useCallback(
+    async ({ page, classNames }: { page: number; classNames: string[] }) => {
+      const fileId = activePageView?.file.id;
+      const reqId = requestIdRef.current;
+      if (!fileId || !reqId || !projectId || classNames.length === 0) return;
+      const lock = await acquireAgentLock(projectId, "Risk Radar", reqId);
+      if (!lock.ok) {
+        toast({
+          variant: "destructive",
+          title: lock.busy ? "Another agent is running" : "Risk Radar unavailable",
+          description: lock.message,
+        });
+        throw new Error(lock.message);
+      }
+      const stopHeartbeat = startAgentHeartbeat(lock.runId);
+      setIdentifyRunning(true);
+      try {
+        const startedAt = new Date().toISOString();
+        const { error } = await supabase.functions.invoke("identify-risk-elements", {
+          body: { analysisRequestId: reqId, fileId, awpClassNames: classNames, pageNumbers: [page] },
+        });
+        if (error) throw await normalizeFunctionError(error);
+        const deadline = Date.now() + 5 * 60_000;
+        let completed = new Set<string>();
+        let failures: Array<{ class_name: string; error: string | null }> = [];
+        while (Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 4000));
+          const { data } = await supabase
+            .from("risk_radar_run_history" as any)
+            .select("class_name, error")
+            .eq("file_id", fileId)
+            .gte("created_at", startedAt);
+          const matching = ((data as unknown as Array<{ class_name: string; error: string | null }>) ?? []).filter((row) => classNames.includes(row.class_name));
+          completed = new Set(matching.map((row) => row.class_name));
+          failures = matching.filter((row) => row.error);
+          if (completed.size >= classNames.length) break;
+        }
+        if (completed.size < classNames.length) throw new Error("Timed out waiting for Risk Radar results.");
+        if (failures.length === classNames.length) throw new Error(failures[0]?.error ?? "Risk Radar failed.");
+        await releaseAgentLock(lock.runId, "completed");
+        toast({
+          title: "Risk Radar complete",
+          description: `${classNames.length - failures.length} class${classNames.length - failures.length === 1 ? "" : "es"} scanned on page ${page}${failures.length ? `, ${failures.length} failed` : ""}.`,
+          variant: failures.length ? "destructive" : "default",
+        });
+        queryClient.invalidateQueries();
+      } catch (error: any) {
+        await releaseAgentLock(lock.runId, "failed", error?.message ?? "Unknown error");
+        toast({ variant: "destructive", title: "Risk Radar failed", description: error?.message ?? "Unknown error" });
+        throw error;
+      } finally {
+        stopHeartbeat();
+        setIdentifyRunning(false);
+      }
+    },
+    [activePageView, projectId, queryClient, toast],
+  );
+
 
 
   const activeFileFloorPlansByPage = useMemo(
@@ -5168,8 +5226,8 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                   )}
                 </div>
               ) : (
-                <div className={showMode === "drawing" ? "flex gap-3 items-start" : ""}>
-                <div className={`bg-card rounded-lg border relative [&>div]:overflow-visible ${showMode === "drawing" ? "w-[320px] shrink-0 max-h-[calc(100vh-220px)] overflow-auto sticky top-0" : ""}`}>
+                <div className={showMode === "drawing" ? "flex gap-0 items-start" : ""}>
+                <div className={`bg-card rounded-lg border relative [&>div]:overflow-visible ${showMode === "drawing" ? "w-[320px] shrink-0 max-h-[calc(100vh-220px)] overflow-auto sticky top-0 rounded-r-none" : ""}`}>
                   <Table>
                     <TableHeader className="sticky top-0 z-20 bg-card shadow-[inset_0_1px_0_hsl(var(--border)),0_1px_2px_hsl(var(--border))]">
                       <TableRow className="bg-card">
@@ -5334,7 +5392,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                           <Fragment key={row.id}>
                             {/* File-level row - matches first table */}
                             <TableRow
-                              className="group h-8 cursor-pointer"
+                              className={`group h-8 cursor-pointer ${activePageView?.file.id === row.id ? "bg-primary/10" : ""}`}
                               onMouseEnter={() => handleRowHoverStart(row)}
                               onMouseLeave={() => handleRowHoverEnd(row.id)}
                               onFocus={() => handleRowHoverStart(row)}
@@ -5344,7 +5402,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                               }}
                             >
                               <TableCell
-                                className={`${stickyCellFirstBase} bg-card group-hover:bg-muted/50 py-1 text-sm`}
+                                className={`${stickyCellFirstBase} ${activePageView?.file.id === row.id ? "bg-primary/10" : "bg-card"} group-hover:bg-muted/50 py-1 text-sm`}
                               >
                                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
                                   {!singlePage && count > 0 ? (
@@ -5417,14 +5475,14 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                                 return (
                                   <TableRow
                                     key={`${row.id}:${p}`}
-                                    className="group h-8 cursor-pointer bg-muted/10"
+                                    className={`group h-8 cursor-pointer ${activePageView?.file.id === row.id && activePageView.page === p ? "bg-primary/15" : "bg-muted/10"}`}
                                     onMouseEnter={() => handleRowHoverStart(row)}
                                     onMouseLeave={() => handleRowHoverEnd(row.id)}
                                     onFocus={() => handleRowHoverStart(row)}
                                     onClick={() => setActivePageView({ file: row, page: p })}
                                   >
                                     <TableCell
-                                      className={`${stickyCellFirstBase} bg-muted/10 group-hover:bg-muted/30 py-1 text-sm`}
+                                      className={`${stickyCellFirstBase} ${activePageView?.file.id === row.id && activePageView.page === p ? "bg-primary/15" : "bg-muted/10"} group-hover:bg-muted/30 py-1 text-sm`}
                                     >
                                       <div className="flex items-center gap-1.5 min-w-0 pl-7 flex-wrap">
                                         <span className="text-muted-foreground shrink-0">
@@ -5469,7 +5527,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                 {showMode === "drawing" && (
                   <div
                     ref={setDrawingHost}
-                    className="flex-1 min-w-0 h-[calc(100vh-220px)] sticky top-0"
+                    className="flex-1 min-w-0 h-[calc(100vh-220px)] sticky top-0 -ml-px"
                   >
                     {!activePageView && (
                       <div className="h-full rounded-lg border bg-card flex items-center justify-center text-sm text-muted-foreground">
@@ -5738,6 +5796,8 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
             canScoutPage={canManage && !processingLock}
             isInternal={isInternal}
             onScoutPage={handleScoutPage}
+            onRunRiskRadar={handleRiskRadarPage}
+            onViewRiskRadarPrompt={setPromptClass}
 
             allUnitPlans={activeFileAllUnitPlans}
             allLevelPlans={activeFileAllLevelPlans}

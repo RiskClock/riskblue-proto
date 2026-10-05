@@ -7,3 +7,4 @@
 - Drawing risk colors are assigned from the visible page's attribute-group keys with deterministic hue spacing; floor-plan box colors stay on their separate legacy palette so risk emphasis cannot recolor plans.
 - The drawing Plans tab always selects one existing plan; a New Plan draft temporarily replaces that selection and restores plan selection after save or cancel.
 - Drawing unit/detail marker kind is stored in `drawing_instances.metadata.marker_type`; British Library's existing Tenant Connection markers are details, while other legacy untyped markers remain units.
+- Drawing-page agent execution stays in the Workbench parent and is passed into the viewer as callbacks; this keeps project locking and run polling centralized.

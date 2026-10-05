@@ -20,7 +20,6 @@ import {
   Loader2,
   Pencil,
   Plus,
-  Radar,
   Trash2,
 } from "lucide-react";
 
@@ -72,8 +71,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useBetaAccess } from "@/hooks/useBetaAccess";
 import { useSystemAdminStatus } from "@/hooks/useIsSystemAdmin";
 import { AgentActionBar } from "@/components/wizard/AgentActionBar";
-import floorPlanIcon from "@/assets/floorplan_color.png.asset.json";
-import productIcon from "@/assets/product.png.asset.json";
+import floorPlanIcon from "@/assets/floorplan_color-2.png.asset.json";
+import radarIcon from "@/assets/radar_color.png.asset.json";
 
 /** Row key for an instance: class, or class::type::diameter for split classes. */
 function instanceRowKey(i: { awp_class_name: string; metadata?: unknown }): string {
@@ -334,6 +333,10 @@ interface FileViewerModalProps {
   }) => Promise<{ before: number; after: number; warnings?: string[]; discard: () => Promise<void> } | void>;
   /** Whether the Scout Page control is available to this user. */
   canScoutPage?: boolean;
+  /** Run Risk Radar for selected classes on this drawing page. */
+  onRunRiskRadar?: (args: { page: number; classNames: string[] }) => Promise<void>;
+  /** Open the saved prompt for a Risk Radar class. */
+  onViewRiskRadarPrompt?: (className: string) => void;
   /** Internal users get the annotation label visibility toggle. */
   isInternal?: boolean;
 }
@@ -399,16 +402,24 @@ export const FileViewerModal = ({
   preseededTypesByClass,
   onScoutPage,
   canScoutPage = false,
+  onRunRiskRadar,
+  onViewRiskRadarPrompt,
   isInternal = false,
 }: FileViewerModalProps) => {
 
   const { toast } = useToast();
   const { isSystemAdmin } = useSystemAdminStatus();
   const [riskRadarOpen, setRiskRadarOpen] = useState(false);
+  const [riskRadarSelection, setRiskRadarSelection] = useState<Set<string>>(new Set());
+  const [riskRadarRunning, setRiskRadarRunning] = useState(false);
   const [riskRadarDebugOpen, setRiskRadarDebugOpen] = useState(false);
   const [riskRadarLoading, setRiskRadarLoading] = useState(false);
   const [riskRadarRuns, setRiskRadarRuns] = useState<any[]>([]);
   const [riskRadarDetail, setRiskRadarDetail] = useState<{ title: string; text: string } | null>(null);
+  useEffect(() => {
+    if (!riskRadarOpen) return;
+    setRiskRadarSelection(new Set((awpClasses ?? []).map((item) => item.name)));
+  }, [riskRadarOpen, awpClasses]);
   useEffect(() => {
     if (!riskRadarDebugOpen || !isSystemAdmin) return;
     const target = parentFileId ?? fileId;
@@ -2349,7 +2360,7 @@ export const FileViewerModal = ({
                   />
                 </TabsContent>
                 <TabsContent value="detections" className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0 data-[state=inactive]:hidden">
-                  {isSystemAdmin && <AgentActionBar label="Risk Radar Agent" icon={<Radar className="h-3.5 w-3.5 mr-1.5" />} onAction={() => setRiskRadarOpen(true)} onDebug={() => setRiskRadarDebugOpen(true)} debugLabel="Risk Radar debug" />}
+                  {isSystemAdmin && !viewingMode && onRunRiskRadar && <AgentActionBar label={riskRadarRunning ? "Running…" : "Risk Radar Agent"} icon={riskRadarRunning ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <img src={radarIcon.url} alt="" className="h-3.5 w-3.5 mr-1.5" />} onAction={() => setRiskRadarOpen(true)} onDebug={() => setRiskRadarDebugOpen(true)} debugLabel="Risk Radar debug" disabled={riskRadarRunning} />}
                   <DetectionsPanel
                      rotationByPage={rotationByPage}
                      viewerApiRef={viewerApiRef}
@@ -2585,8 +2596,57 @@ export const FileViewerModal = ({
         {/* Scout debug: recent scout runs for this file (internal only) */}
         {isSystemAdmin && <>
           <Dialog open={riskRadarOpen} onOpenChange={setRiskRadarOpen}>
-            <DialogContent><DialogHeader><DialogTitle>Risk Radar Agent</DialogTitle></DialogHeader>
-              <p className="text-sm text-muted-foreground">Risk Radar is not available from this drawing yet.</p>
+            <DialogContent className="max-w-lg">
+              <DialogHeader><DialogTitle>Risk Radar Agent</DialogTitle></DialogHeader>
+              <div className="flex items-center justify-between border-b pb-2 text-sm">
+                <span className="text-muted-foreground">{riskRadarSelection.size} of {awpClasses?.length ?? 0} selected</span>
+                <div className="flex gap-3">
+                  <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setRiskRadarSelection(new Set((awpClasses ?? []).map((item) => item.name)))}>Select all</Button>
+                  <Button type="button" variant="link" size="sm" className="h-auto p-0 text-muted-foreground" onClick={() => setRiskRadarSelection(new Set())}>Clear</Button>
+                </div>
+              </div>
+              <div className="max-h-[50vh] overflow-y-auto divide-y rounded-md border">
+                {(awpClasses ?? []).map((item) => (
+                  <div key={item.name} className="flex items-center gap-3 px-3 py-2">
+                    <Checkbox
+                      checked={riskRadarSelection.has(item.name)}
+                      onCheckedChange={(checked) => setRiskRadarSelection((previous) => {
+                        const next = new Set(previous);
+                        if (checked === true) next.add(item.name); else next.delete(item.name);
+                        return next;
+                      })}
+                      aria-label={`Select ${item.label || item.name}`}
+                    />
+                    <button type="button" className="min-w-0 flex-1 text-left text-sm" onClick={() => setRiskRadarSelection((previous) => {
+                      const next = new Set(previous);
+                      if (next.has(item.name)) next.delete(item.name); else next.add(item.name);
+                      return next;
+                    })}>
+                      {item.prefix && <span className="mr-2 text-muted-foreground">{item.prefix}</span>}
+                      <span>{item.label || item.name}</span>
+                    </button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => onViewRiskRadarPrompt?.(item.name)}>View prompt</Button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setRiskRadarOpen(false)} disabled={riskRadarRunning}>Cancel</Button>
+                <Button
+                  disabled={riskRadarSelection.size === 0 || riskRadarRunning}
+                  onClick={async () => {
+                    if (!onRunRiskRadar) return;
+                    setRiskRadarRunning(true);
+                    try {
+                      await onRunRiskRadar({ page: effectivePage, classNames: Array.from(riskRadarSelection) });
+                      setRiskRadarOpen(false);
+                    } finally {
+                      setRiskRadarRunning(false);
+                    }
+                  }}
+                >
+                  {riskRadarRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Running…</> : "Run"}
+                </Button>
+              </div>
             </DialogContent>
           </Dialog>
           <Dialog open={riskRadarDebugOpen} onOpenChange={setRiskRadarDebugOpen}>
@@ -3104,7 +3164,7 @@ const DeviceButton = ({ row, devices }: { row: DetectionRowModel; devices: Devic
   ) : (
     <PopoverTrigger asChild>
         <Button type="button" variant="ghost" size="sm" className="h-7 px-1.5 text-sm text-primary" disabled={disabled} onClick={(e) => e.stopPropagation()}>
-          <Plus className="h-3 w-3" /><img src={productIcon.url} alt="" className="h-3.5 w-3.5" />
+          + Control
       </Button>
     </PopoverTrigger>
   );
@@ -3378,7 +3438,7 @@ const DetectionsPanel = ({
             const firstPipeType = row.type;
             const color = drawingColors.get(row.key) || (row.type || row.diam ? awpClassColorForType(c.name, firstPipeType, row.diam) : awpClassColor(c.name));
             return (
-               <div key={row.key} className={`border-b last:border-b-0 min-w-0 ${row.items.length === 0 ? "text-muted-foreground opacity-50" : ""}`}>
+               <div key={row.key} className="border-b last:border-b-0 min-w-0">
                 <div
                   className={`flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50 min-w-0 ${isSelected ? "bg-muted/40" : ""}`}
                   onClick={() => {
