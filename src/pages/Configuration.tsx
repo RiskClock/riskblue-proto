@@ -1,5 +1,4 @@
 import { useState, useMemo, Fragment } from "react";
-import { Fragment } from "react";
 import { CLASS_CALIBRATION_PROMPT_KEY, CLASS_CALIBRATION_SCHEMA_KEY, DEFAULT_CLASS_CALIBRATION_PROMPT, DEFAULT_CLASS_CALIBRATION_SCHEMA } from "@/lib/wadeSkills";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
