@@ -335,6 +335,8 @@ interface FileViewerModalProps {
   canScoutPage?: boolean;
   /** Run Risk Radar for selected classes on this drawing page. */
   onRunRiskRadar?: (args: { page: number; classNames: string[] }) => Promise<void>;
+  /** Opens the Wade window (system admins). Shown at the bottom of the Detections tab. */
+  onOpenWade?: () => void;
   /** Open the saved prompt for a Risk Radar class. */
   onViewRiskRadarPrompt?: (className: string) => void;
   /** Internal users get the annotation label visibility toggle. */
@@ -403,6 +405,7 @@ export const FileViewerModal = ({
   onScoutPage,
   canScoutPage = false,
   onRunRiskRadar,
+  onOpenWade,
   onViewRiskRadarPrompt,
   isInternal = false,
 }: FileViewerModalProps) => {
@@ -2394,6 +2397,13 @@ export const FileViewerModal = ({
                     devices={devicesApi}
                     onFocusInstance={focusInstance}
                   />
+                  {isSystemAdmin && onOpenWade && (
+                    <div className="border-t p-2 shrink-0 bg-background flex items-center gap-1">
+                      <Button type="button" size="sm" variant="outline" className="flex-1 h-8 text-xs" onClick={onOpenWade}>
+                        Wade
+                      </Button>
+                    </div>
+                  )}
                 </TabsContent>
                 <TabsContent value="plans" forceMount className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0 data-[state=inactive]:hidden">
                    {!newPlanOpen && <PlansPanel

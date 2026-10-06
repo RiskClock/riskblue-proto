@@ -79,6 +79,7 @@ export function AskWadePanel({
   onActions,
   onMinimize,
   dragHandleProps,
+  skills,
 }: {
   projectId: string;
   onClose: () => void;
@@ -97,6 +98,8 @@ export function AskWadePanel({
   onMinimize?: () => void;
   /** Pointer handlers that make the header act as a drag handle. */
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
+  /** Skills the user can start manually from the panel. */
+  skills?: { id: string; label: string; onRun: () => void; disabled?: boolean }[];
 }) {
   const { toast } = useToast();
   const [messages, setMessages] = useState<WadeMessage[]>([]);
@@ -345,6 +348,16 @@ export function AskWadePanel({
         <ConversationScrollButton />
       </Conversation>
 
+      {skills && skills.length > 0 && (
+        <div className="border-t px-3 py-2 flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-medium text-muted-foreground">Skills:</span>
+          {skills.map((sk) => (
+            <Button key={sk.id} type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={sk.onRun} disabled={sk.disabled || sending}>
+              {sk.label}
+            </Button>
+          ))}
+        </div>
+      )}
       <div className="border-t p-2">
         <PromptInput
           className="[&_[data-slot=input-group]]:relative [&_[data-slot=input-group]]:!flex-row"
