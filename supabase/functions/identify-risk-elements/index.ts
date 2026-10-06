@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
 
     const { data: reqRow, error: reqErr } = await admin
       .from("analysis_requests")
-      .select("source_type")
+      .select("source_type, project_id")
       .eq("id", analysisRequestId)
       .maybeSingle();
     if (reqErr) return json({ error: reqErr.message }, 500);
@@ -170,6 +170,19 @@ Deno.serve(async (req) => {
     const promptByClass = new Map<string, string>();
     for (const r of (promptRows ?? []) as any[]) {
       if (r?.prompt_content) promptByClass.set(r.awp_class_name, r.prompt_content);
+    }
+    // Per-project calibrated prompts (Wade Class Calibration skill) replace
+    // the shared class prompt for this project only.
+    const projectIdForOverrides = (reqRow as any)?.project_id as string | null;
+    if (projectIdForOverrides) {
+      const { data: overrideRows } = await admin
+        .from("project_class_prompt_overrides")
+        .select("awp_class_name, prompt_content")
+        .eq("project_id", projectIdForOverrides)
+        .in("awp_class_name", awpClassNames);
+      for (const r of (overrideRows ?? []) as any[]) {
+        if (r?.prompt_content) promptByClass.set(r.awp_class_name, r.prompt_content);
+      }
     }
 
     // Optional shared developer/analyze prompt.
