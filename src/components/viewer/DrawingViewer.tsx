@@ -552,7 +552,7 @@ export const DrawingViewer = forwardRef<DrawingViewerApi, DrawingViewerProps>(
             <div className="flex items-center justify-center h-full">
               <div className="text-center space-y-2">
                 <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mx-auto" />
-                <p className="text-sm text-muted-foreground">Loading...</p>
+                <p className="text-sm text-muted-foreground">Loading drawing…</p>
               </div>
             </div>
           ) : error ? (
