@@ -8,3 +8,5 @@
 - The drawing Plans tab always selects one existing plan; a New Plan draft temporarily replaces that selection and restores plan selection after save or cancel.
 - Drawing unit/detail marker kind is stored in `drawing_instances.metadata.marker_type`; British Library's existing Tenant Connection markers are details, while other legacy untyped markers remain units.
 - Drawing-page agent execution stays in the Workbench parent and is passed into the viewer as callbacks; this keeps project locking and run polling centralized.
+- Per-project class prompt overrides live in `project_class_prompt_overrides` and replace the shared `awp_class_prompts` text in Risk Radar for that project only; Wade's Class Calibration skill proposes them and saves only after user approval.
+- Wade skill system prompts and schemas are stored in `app_settings` and appended to the base Wade prompt only when the skill runs; this keeps everyday Wade calls lean.

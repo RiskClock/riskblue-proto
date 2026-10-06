@@ -1,4 +1,5 @@
 import { useState, useMemo, Fragment } from "react";
+import { CLASS_CALIBRATION_PROMPT_KEY, CLASS_CALIBRATION_SCHEMA_KEY, DEFAULT_CLASS_CALIBRATION_PROMPT, DEFAULT_CLASS_CALIBRATION_SCHEMA } from "@/lib/wadeSkills";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -715,7 +716,7 @@ const AGENT_CONFIGS: AgentConfig[] = [
     modelKey: "survey_page_model",
     defaultModel: "gemini-3.5-flash",
     promptKey: "survey_page_prompt",
-    buttonLabel: "Show Prompt",
+    buttonLabel: "Base System Prompt",
     dialogTitle: "Scout Agent Prompt",
     fallbackDescription: "Edit and save the prompt used by Survey Pages.",
     savedDescription: "Scout Agent will use the updated prompt next run.",
@@ -727,7 +728,7 @@ const AGENT_CONFIGS: AgentConfig[] = [
     modelKey: "analyze_model",
     defaultModel: "gemini-3.5-flash",
     promptKey: "analyze_prompt",
-    buttonLabel: "Show Prompt",
+    buttonLabel: "Base System Prompt",
     dialogTitle: "Risk Radar Agent Prompt",
     fallbackDescription: "Edit and save the prompt used by the Analyze stage.",
     savedDescription: "Risk Radar Agent will use the updated prompt next run.",
@@ -740,7 +741,7 @@ const AGENT_CONFIGS: AgentConfig[] = [
     modelKey: "space_hierarchy_model",
     defaultModel: "gemini-2.5-flash-lite",
     promptKey: "space_hierarchy_prompt",
-    buttonLabel: "Show Prompt",
+    buttonLabel: "Base System Prompt",
     dialogTitle: "Spatial Architect Agent Prompt",
     fallbackDescription: "Edit and save the prompt used by Build Space Hierarchy.",
     savedDescription: "Spatial Architect Agent will use the updated prompt next run.",
@@ -752,59 +753,70 @@ const AGENT_CONFIGS: AgentConfig[] = [
     modelKey: "ask_wade_model",
     defaultModel: "gemini-3.5-flash",
     promptKey: "ask_wade_prompt",
-    buttonLabel: "Show Prompt",
+    buttonLabel: "Base System Prompt",
     dialogTitle: "Wade Agent System Prompt",
     fallbackDescription: "Leave blank to use the built-in default prompt.",
     savedDescription: "Wade will use the updated prompt on the next question.",
   },
 ];
 
-function AgentPromptRow({ agent }: { agent: AgentConfig }) {
+function PromptEditorDialog({
+  open,
+  onOpenChange,
+  settingKey,
+  title,
+  fallbackDescription,
+  savedDescription,
+  defaultValue,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  settingKey: string;
+  title: string;
+  fallbackDescription: string;
+  savedDescription: string;
+  defaultValue?: string;
+}) {
   const { toast } = useToast();
-  const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [content, setContent] = useState("");
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 
-  const loadPrompt = async () => {
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
     setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("app_settings" as any)
-        .select("value, updated_at")
-        .eq("key", agent.promptKey)
-        .maybeSingle();
-      if (error) throw error;
-      const stored = (data as any)?.value;
-      setContent(
-        typeof stored === "string" && stored.length > 0 ? stored : (agent.defaultPrompt ?? ""),
-      );
-      setUpdatedAt((data as any)?.updated_at ?? null);
-    } catch (e: any) {
-      toast({ title: "Failed to load prompt", description: (e as any)?.message, variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const openModal = async () => {
-    setOpen(true);
-    await loadPrompt();
-  };
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("app_settings" as any)
+          .select("value, updated_at")
+          .eq("key", settingKey)
+          .maybeSingle();
+        if (error) throw error;
+        if (cancelled) return;
+        const stored = (data as any)?.value;
+        setContent(typeof stored === "string" && stored.length > 0 ? stored : (defaultValue ?? ""));
+        setUpdatedAt((data as any)?.updated_at ?? null);
+      } catch (e: any) {
+        toast({ title: "Failed to load", description: (e as any)?.message, variant: "destructive" });
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, settingKey, defaultValue, toast]);
 
   const save = async () => {
     setSaving(true);
     try {
       const { error } = await supabase
         .from("app_settings" as any)
-        .upsert(
-          { key: agent.promptKey, value: content, updated_at: new Date().toISOString() } as any,
-          { onConflict: "key" },
-        );
+        .upsert({ key: settingKey, value: content, updated_at: new Date().toISOString() } as any, { onConflict: "key" });
       if (error) throw error;
-      toast({ title: "Prompt saved", description: agent.savedDescription });
-      setOpen(false);
+      toast({ title: "Saved", description: savedDescription });
+      onOpenChange(false);
     } catch (e: any) {
       toast({ title: "Save failed", description: (e as any)?.message, variant: "destructive" });
     } finally {
@@ -812,6 +824,35 @@ function AgentPromptRow({ agent }: { agent: AgentConfig }) {
     }
   };
 
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>
+            {updatedAt ? `Last updated ${format(new Date(updatedAt), "MMM d, yyyy 'at' h:mm a")}` : fallbackDescription}
+          </DialogDescription>
+        </DialogHeader>
+        {loading ? (
+          <div className="flex items-center justify-center py-12 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading...
+          </div>
+        ) : (
+          <Textarea value={content} onChange={(e) => setContent(e.target.value)} className="font-mono text-xs flex-1 min-h-[400px]" />
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
+          <Button onClick={save} disabled={saving || loading}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AgentPromptRow({ agent }: { agent: AgentConfig }) {
+  const [open, setOpen] = useState(false);
   return (
     <>
       <TableRow>
@@ -823,39 +864,64 @@ function AgentPromptRow({ agent }: { agent: AgentConfig }) {
           <PromptModelPicker settingKey={agent.modelKey} defaultModel={agent.defaultModel} />
         </TableCell>
         <TableCell className="align-top text-right">
-          <Button variant="outline" onClick={openModal}>{agent.buttonLabel}</Button>
+          <Button variant="outline" onClick={() => setOpen(true)}>{agent.buttonLabel}</Button>
         </TableCell>
       </TableRow>
+      <PromptEditorDialog
+        open={open}
+        onOpenChange={setOpen}
+        settingKey={agent.promptKey}
+        title={agent.dialogTitle}
+        fallbackDescription={agent.fallbackDescription}
+        savedDescription={agent.savedDescription}
+        defaultValue={agent.defaultPrompt}
+      />
+    </>
+  );
+}
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>{agent.dialogTitle}</DialogTitle>
-            <DialogDescription>
-              {updatedAt
-                ? `Last updated ${format(new Date(updatedAt), "MMM d, yyyy 'at' h:mm a")}`
-                : agent.fallbackDescription}
-            </DialogDescription>
-          </DialogHeader>
-          {loading ? (
-            <div className="flex items-center justify-center py-12 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading...
-            </div>
-          ) : (
-            <Textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              className="font-mono text-xs flex-1 min-h-[400px]"
-            />
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
-            <Button onClick={save} disabled={saving || loading}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+function WadeSkillRows() {
+  const [openKind, setOpenKind] = useState<"schema" | "prompt" | null>(null);
+  return (
+    <>
+      <TableRow className="bg-muted/20 hover:bg-muted/20">
+        <TableCell colSpan={4} className="pl-8 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Skills
+        </TableCell>
+      </TableRow>
+      <TableRow>
+        <TableCell className="align-top pl-8 font-medium">Risk Radar Calibration</TableCell>
+        <TableCell className="align-top">
+          <p className="text-sm text-muted-foreground max-w-[620px]">
+            Calibrates a class's Risk Radar prompt for one project from an example clicked on a drawing. Shown in Wade as Class Calibration. The skill system prompt is appended to the base system prompt only when this skill runs.
+          </p>
+        </TableCell>
+        <TableCell className="align-top" />
+        <TableCell className="align-top text-right">
+          <div className="flex flex-col items-end gap-2">
+            <Button variant="outline" onClick={() => setOpenKind("schema")}>Schema</Button>
+            <Button variant="outline" onClick={() => setOpenKind("prompt")}>Skill System Prompt</Button>
+          </div>
+        </TableCell>
+      </TableRow>
+      <PromptEditorDialog
+        open={openKind === "schema"}
+        onOpenChange={(o) => !o && setOpenKind(null)}
+        settingKey={CLASS_CALIBRATION_SCHEMA_KEY}
+        title="Risk Radar Calibration Schema"
+        fallbackDescription="JSON schema for the calibration output. Include an updated_prompt field."
+        savedDescription="The next calibration will use this schema."
+        defaultValue={DEFAULT_CLASS_CALIBRATION_SCHEMA}
+      />
+      <PromptEditorDialog
+        open={openKind === "prompt"}
+        onOpenChange={(o) => !o && setOpenKind(null)}
+        settingKey={CLASS_CALIBRATION_PROMPT_KEY}
+        title="Risk Radar Calibration Skill System Prompt"
+        fallbackDescription="Appended to Wade's base system prompt only when this skill runs."
+        savedDescription="The next calibration will use this prompt."
+        defaultValue={DEFAULT_CLASS_CALIBRATION_PROMPT}
+      />
     </>
   );
 }
@@ -876,7 +942,10 @@ function AIAgentsSection() {
           </TableHeader>
           <TableBody>
             {AGENT_CONFIGS.map((agent) => (
-              <AgentPromptRow key={agent.promptKey} agent={agent} />
+              <Fragment key={agent.promptKey}>
+                <AgentPromptRow agent={agent} />
+                {agent.promptKey === "ask_wade_prompt" && <WadeSkillRows />}
+              </Fragment>
             ))}
           </TableBody>
         </Table>

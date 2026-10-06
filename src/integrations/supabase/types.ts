@@ -1972,6 +1972,47 @@ export type Database = {
           },
         ]
       }
+      project_class_prompt_overrides: {
+        Row: {
+          awp_class_name: string
+          calibration_notes: Json | null
+          created_at: string
+          id: string
+          project_id: string
+          prompt_content: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          awp_class_name: string
+          calibration_notes?: Json | null
+          created_at?: string
+          id?: string
+          project_id: string
+          prompt_content: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          awp_class_name?: string
+          calibration_notes?: Json | null
+          created_at?: string
+          id?: string
+          project_id?: string
+          prompt_content?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_class_prompt_overrides_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_collaborators: {
         Row: {
           company: string
