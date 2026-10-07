@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
     if (!projectId || !classId || classId.length > 200) return json({ error: "projectId and class_id are required" }, 400);
     if (!imageBase64 || imageBase64.length > 8_000_000) return json({ error: "A cropped image of the example is required" }, 400);
 
-    const { data: project } = await userClient.from("projects").select("id").eq("id", projectId).maybeSingle();
+    const { data: project } = await admin.from("projects").select("id").eq("id", projectId).maybeSingle();
     if (!project) return json({ error: "Project not found or access denied" }, 403);
 
     const apiKey = Deno.env.get("GEMINI_API_KEY");
