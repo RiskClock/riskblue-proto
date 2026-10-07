@@ -5762,7 +5762,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                   buildContext={buildWorkbenchWadeContext}
                   persistHistory
                   title="Wade"
-                  emptyHint={`Ask about the open drawing page, or ask Wade to act on it. For example: "place a shut-off valve marker in the top left of the Level 2 plan", "tighten the triage prompt for Cold Water", or "run Risk Radar on this page".`}
+                  emptyHint={`Ask about the open drawing page, or ask Wade to act on it. For example: "place a shut-off valve marker in the top left of the Level 2 plan", "reset Electrical Room to the default prompt", or "run Risk Radar on this page".`}
                   actionSpec={WORKBENCH_WADE_ACTION_SPEC}
                   onActions={applyWorkbenchWadeActions}
                   calibration={{
