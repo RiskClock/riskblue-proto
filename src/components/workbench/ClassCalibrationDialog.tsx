@@ -53,11 +53,17 @@ export function ClassCalibrationDialog({
 
   const label = classes.find((c) => c.name === cls)?.label ?? cls;
 
-  const run = async (image: string) => {
+  const run = async (image: string, coordinates: { x: number; y: number } | null) => {
     setStep("running");
     try {
       const { data, error } = await supabase.functions.invoke("calibrate-class", {
-        body: { projectId, className: cls, imageBase64: image, userText: note },
+        body: {
+          projectId,
+          class_id: cls,
+          user_text_description: note,
+          coordinates,
+          imageBase64: image,
+        },
       });
       if (error) throw await normalizeFunctionError(error);
       if ((data as any)?.error) throw new Error((data as any).error);
@@ -87,8 +93,15 @@ export function ClassCalibrationDialog({
         toast({ title: "Could not read the drawing", description: "Try again once the drawing has loaded.", variant: "destructive" });
         return;
       }
+      const rect = img.getBoundingClientRect();
+      const coordinates = rect.width && rect.height && img.naturalWidth
+        ? {
+            x: Math.round((ev.clientX - rect.left) * (img.naturalWidth / rect.width)),
+            y: Math.round((ev.clientY - rect.top) * (img.naturalHeight / rect.height)),
+          }
+        : null;
       setPreview(image);
-      void run(image);
+      void run(image, coordinates);
     };
     const swallow = (ev: Event) => {
       if (Date.now() < swallowUntil) { ev.preventDefault(); ev.stopPropagation(); }
@@ -162,7 +175,7 @@ export function ClassCalibrationDialog({
           <DialogTitle>Class Calibration</DialogTitle>
           <DialogDescription>
             {step === "review"
-              ? `Review the proposed ${label} prompt for this project. Approve to save it. The shared class prompt stays unchanged.`
+              ? `The calibrated ${label} prompt has been saved for this project. You can still edit it below and save your changes. The shared class prompt stays unchanged.`
               : "Pick a class, then click an example of it on the open drawing."}
           </DialogDescription>
         </DialogHeader>
@@ -199,7 +212,7 @@ export function ClassCalibrationDialog({
             <>
               <Button variant="outline" onClick={() => setStep("pick")} disabled={saving}>Try another example</Button>
               <Button onClick={approve} disabled={saving || !proposal.trim()}>
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Approve and save"}
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save changes"}
               </Button>
             </>
           )}
