@@ -28,7 +28,7 @@ const json = (body: unknown, status = 200) =>
 
 export const DEFAULT_SKILL_PROMPT =
   `SKILL: CLASS CALIBRATION
-Analyze the visual features in the image (hatches, symbols, line styles, text labels, tags) and any user text. Combine this with the current prompt to generate an updated, highly specific set of detection rules for this class on this project. Keep everything in the current prompt that is still valid, add what the example shows, and never drop the required output table format of the current prompt.`;
+Analyze the visual features in the image (hatches, symbols, line styles, text labels, tags) and any user text. Produce ONLY a short project-specific addendum for this class: tag patterns, room prefixes, label abbreviations, hatches and symbols that identify this class on this project. Do NOT rewrite, summarize or repeat the base prompt; it is kept verbatim and your addendum is appended to it. Describe only the target class. Ignore neighboring rooms or labels visible in the image that are not the target class. If a previous addendum is given, merge it with the new findings into one deduplicated addendum.`;
 
 export const DEFAULT_SCHEMA = JSON.stringify(
   {
@@ -49,9 +49,9 @@ const GEMINI_OUTPUT_SCHEMA = {
   properties: {
     visual_features: { type: "ARRAY", items: { type: "STRING" }, description: "Visual features observed in the cropped image." },
     detection_rules: { type: "ARRAY", items: { type: "STRING" }, description: "Specific identification rules extracted." },
-    updated_prompt: { type: "STRING", description: "The full updated detection prompt for Risk Radar." },
+    project_addendum: { type: "STRING", description: "Project-specific calibration rules for the target class only. Bullet list. Never repeat the base prompt." },
   },
-  required: ["visual_features", "detection_rules", "updated_prompt"],
+  required: ["visual_features", "detection_rules", "project_addendum"],
 };
 
 async function setting(admin: any, key: string): Promise<string | null> {
@@ -102,28 +102,25 @@ Deno.serve(async (req) => {
     const apiKey = Deno.env.get("GEMINI_API_KEY");
     if (!apiKey) return json({ error: "GEMINI_API_KEY is not configured" }, 500);
 
-    // Current prompt: project override first, else shared class prompt.
+    // Additive calibration: the base is ALWAYS the shared class prompt, kept
+    // verbatim. Calibration only produces a project addendum appended to it.
     const { data: override } = await admin
       .from("project_class_prompt_overrides")
-      .select("prompt_content")
+      .select("prompt_content, calibration_notes")
       .eq("project_id", projectId)
       .eq("awp_class_name", classId)
       .maybeSingle();
-    let currentPrompt = (override as any)?.prompt_content as string | undefined;
-    let source: "project" | "shared" = "project";
-    if (!currentPrompt) {
-      source = "shared";
-      const { data: shared } = await admin
-        .from("awp_class_prompts")
-        .select("prompt_content")
-        .eq("awp_class_name", classId)
-        .maybeSingle();
-      currentPrompt = (shared as any)?.prompt_content ?? "";
-    }
-    // An explicit current_prompt in the request wins over the lookup.
-    if (typeof body?.current_prompt === "string" && body.current_prompt.trim()) {
-      currentPrompt = body.current_prompt;
-    }
+    const previousPrompt = ((override as any)?.prompt_content as string | undefined) ?? null;
+    const source: "project" | "shared" = previousPrompt ? "project" : "shared";
+    const previousAddendum = typeof (override as any)?.calibration_notes?.project_addendum === "string"
+      ? (override as any).calibration_notes.project_addendum as string : "";
+    const { data: shared } = await admin
+      .from("awp_class_prompts")
+      .select("prompt_content")
+      .eq("awp_class_name", classId)
+      .maybeSingle();
+    const basePromptText: string = (shared as any)?.prompt_content ?? "";
+    const currentPrompt = previousPrompt ?? basePromptText;
 
     // 3. Model configured for the Wade agent, from database settings.
     const basePrompt = (await setting(admin, "ask_wade_prompt")) ?? "You are Wade, a water-risk analyst assistant.";
@@ -141,7 +138,7 @@ Deno.serve(async (req) => {
     const userParts: any[] = [
       { inlineData: { mimeType: "image/png", data: imageBase64 } },
       {
-        text: `CLASS: ${classId}\n\nUSER DESCRIPTION: ${userText || "(none)"}\n\nCURRENT PROMPT:\n${currentPrompt || "(empty)"}`,
+        text: `CLASS: ${classId}\n\nUSER DESCRIPTION: ${userText || "(none)"}\n\nBASE PROMPT (read only, do not rewrite):\n${basePromptText || "(empty)"}\n\nPREVIOUS PROJECT ADDENDUM:\n${previousAddendum || "(none)"}`,
       },
     ];
 
@@ -171,9 +168,9 @@ Deno.serve(async (req) => {
 
     let parsed: any = null;
     try { parsed = JSON.parse(text); } catch { /* keep raw */ }
-    const updatedPrompt = typeof parsed?.updated_prompt === "string" && parsed.updated_prompt.trim()
-      ? parsed.updated_prompt
-      : text;
+    const addendum = (typeof parsed?.project_addendum === "string" && parsed.project_addendum.trim()
+      ? parsed.project_addendum : text).trim();
+    const updatedPrompt = `${basePromptText.trimEnd()}\n\n## PROJECT-SPECIFIC CALIBRATION RULES (${classId})\n${addendum}\n`;
 
     // 5. Save the updated prompt as this project's per-class override.
     const { error: saveErr } = await admin
@@ -189,6 +186,7 @@ Deno.serve(async (req) => {
             coordinates,
             visual_features: Array.isArray(parsed?.visual_features) ? parsed.visual_features : null,
             detection_rules: Array.isArray(parsed?.detection_rules) ? parsed.detection_rules : null,
+            project_addendum: addendum,
             calibrated_at: new Date().toISOString(),
           },
           updated_by: userData.user.id,
@@ -205,6 +203,7 @@ Deno.serve(async (req) => {
       saved: true,
       current_prompt: updatedPrompt,
       previous_prompt: currentPrompt,
+      project_addendum: addendum,
       previous_source: source,
       result: parsed ?? text,
       model,
