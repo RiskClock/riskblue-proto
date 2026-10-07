@@ -5828,7 +5828,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
             onRunRiskRadar={handleRiskRadarPage}
             onOpenWade={isSystemAdmin ? () => { setWbWadeOpen(true); setWbWadeMinimized(false); } : undefined}
             wadeEmbedded={isSystemAdmin && wadeEmbedded}
-            onToggleWadeEmbedded={isSystemAdmin && showMode === "drawing" ? () => { setWadeEmbedded((v) => !v); setWbWadeOpen(false); } : undefined}
+            onToggleWadeEmbedded={isSystemAdmin ? () => { setWadeEmbedded((v) => !v); setWbWadeOpen(false); } : undefined}
             wadePanel={isSystemAdmin && wadeEmbedded && projectId ? (
               <AskWadePanel
                 projectId={projectId}
