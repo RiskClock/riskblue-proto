@@ -119,3 +119,6 @@ verify_jwt = true
 
 [functions.accept-tenant-invite]
 verify_jwt = false
+
+[functions.calibrate-class]
+verify_jwt = false
