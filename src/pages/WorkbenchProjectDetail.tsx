@@ -4428,6 +4428,7 @@ const isChildPlanType = (t: string) =>
 - {"type":"update_prompt","class":"<exact class name>","prompt_kind":"analysis"|"triage","prompt":"<full new prompt text>"} replaces that class prompt. The user must approve before it is saved.
 - {"type":"run_risk_radar","classes":["<class name>", ...]} runs the Risk Radar agent on the open page. Omit classes to use all classes. Requires a floor plan bbox on the page. The user must approve before it starts.
 - {"type":"start_skill","skill":"class_calibration","class":"<exact class name>","note":"<optional description>"} starts the Class Calibration skill in this chat: you ask for any missing class or description, the user clicks an example on the drawing, and a calibrated Risk Radar prompt is saved for this project. Use it when the user wants Risk Radar to better recognise a class on this project.
+- {"type":"ask_user_choice","prompt":"<question>","options":[{"value":"<id>","label":"<shown text>"}],"multi":false} shows the user a dropdown (or checkboxes when multi is true) instead of making them type. Use it whenever the user must choose between known options, such as which class to calibrate or which classes to run Risk Radar on. Their selection comes back as their next message. Do not combine it with other actions in the same reply.
 Only use class names listed in classes. Never invent coordinates outside 0 to 1. If no drawing is open, do not emit place_annotation or run_risk_radar.`;
 
   const applyWorkbenchWadeActions = useCallback(
