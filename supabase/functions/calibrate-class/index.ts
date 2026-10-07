@@ -57,12 +57,12 @@ Deno.serve(async (req) => {
     if (!authHeader.startsWith("Bearer ")) return json({ error: "Authentication required." }, 401);
     const url = Deno.env.get("SUPABASE_URL")!;
     const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
-    const userClient = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!, {
-      global: { headers: { Authorization: authHeader } },
-      auth: { persistSession: false },
-    });
-    const { data: userData, error: userErr } = await userClient.auth.getUser();
-    if (userErr || !userData.user) return json({ error: "Your session expired. Please sign in again." }, 401);
+    const token = authHeader.slice(7).trim();
+    const { data: userData, error: userErr } = await admin.auth.getUser(token);
+    if (userErr || !userData.user) {
+      console.error("calibrate-class auth failed", userErr?.message);
+      return json({ error: "Your session expired. Please sign in again." }, 401);
+    }
     if (!(await isStaffUser(admin, userData.user))) return json({ error: "Forbidden" }, 403);
 
     // 1. Parse the incoming request. Accepts the spec field names
