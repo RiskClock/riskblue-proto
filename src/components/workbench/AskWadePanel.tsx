@@ -192,7 +192,7 @@ export function AskWadePanel({
 
   const runCalibration = async (f: Extract<Flow, { step: "pick" }>, image: string, coordinates: { x: number; y: number } | null) => {
     setFlow({ step: "running", cls: f.cls, label: f.label });
-    setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: `![Example](${image})` }]);
+    setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: "Picked an example on the drawing." }]);
     try {
       const { data, error } = await supabase.functions.invoke("calibrate-class", {
         body: { projectId, class_id: f.cls, user_text_description: f.note, coordinates, imageBase64: image },
