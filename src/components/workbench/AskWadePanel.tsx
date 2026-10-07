@@ -81,6 +81,7 @@ export function AskWadePanel({
   onMinimize,
   dragHandleProps,
   skills,
+  calibration,
 }: {
   projectId: string;
   onClose: () => void;
