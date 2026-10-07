@@ -146,12 +146,6 @@ export function ClassCalibrationDialog({
       setSaving(false);
     }
   };
-    } catch (e: any) {
-      toast({ title: "Save failed", description: (e as any)?.message, variant: "destructive" });
-    } finally {
-      setSaving(false);
-    }
-  };
 
   if (!open) return null;
 
