@@ -175,7 +175,7 @@ export function ClassCalibrationDialog({
           <DialogTitle>Class Calibration</DialogTitle>
           <DialogDescription>
             {step === "review"
-              ? `Review the proposed ${label} prompt for this project. Approve to save it. The shared class prompt stays unchanged.`
+              ? `The calibrated ${label} prompt has been saved for this project. You can still edit it below and save your changes. The shared class prompt stays unchanged.`
               : "Pick a class, then click an example of it on the open drawing."}
           </DialogDescription>
         </DialogHeader>
@@ -212,7 +212,7 @@ export function ClassCalibrationDialog({
             <>
               <Button variant="outline" onClick={() => setStep("pick")} disabled={saving}>Try another example</Button>
               <Button onClick={approve} disabled={saving || !proposal.trim()}>
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Approve and save"}
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save changes"}
               </Button>
             </>
           )}
