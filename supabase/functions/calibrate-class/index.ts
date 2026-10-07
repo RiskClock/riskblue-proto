@@ -44,6 +44,16 @@ export const DEFAULT_SCHEMA = JSON.stringify(
   2,
 );
 
+const GEMINI_OUTPUT_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    visual_features: { type: "ARRAY", items: { type: "STRING" }, description: "Visual features observed in the cropped image." },
+    detection_rules: { type: "ARRAY", items: { type: "STRING" }, description: "Specific identification rules extracted." },
+    updated_prompt: { type: "STRING", description: "The full updated detection prompt for Risk Radar." },
+  },
+  required: ["visual_features", "detection_rules", "updated_prompt"],
+};
+
 async function setting(admin: any, key: string): Promise<string | null> {
   const { data } = await admin.from("app_settings").select("value").eq("key", key).maybeSingle();
   const v = (data as any)?.value;
@@ -118,16 +128,12 @@ Deno.serve(async (req) => {
     // 3. Model configured for the Wade agent, from database settings.
     const basePrompt = (await setting(admin, "ask_wade_prompt")) ?? "You are Wade, a water-risk analyst assistant.";
     const skillPrompt = (await setting(admin, "wade_skill_class_calibration_prompt")) ?? DEFAULT_SKILL_PROMPT;
-    const schemaText = (await setting(admin, "wade_skill_class_calibration_schema")) ?? DEFAULT_SCHEMA;
     const model = (await setting(admin, "ask_wade_model"))?.trim() ?? "gemini-3.5-flash";
 
-    let responseSchema: unknown = null;
-    try { responseSchema = JSON.parse(schemaText); } catch { responseSchema = JSON.parse(DEFAULT_SCHEMA); }
-    // Accept tool-style wrappers ({ name, description, parameters } or { schema }).
-    const rs = responseSchema as any;
-    if (rs && typeof rs === "object" && !rs.type) {
-      responseSchema = rs.parameters ?? rs.schema ?? rs.json_schema?.schema ?? rs;
-    }
+    // Gemini output schema is internal and fixed. The "Schema" setting in
+    // Configuration (wade_skill_class_calibration_schema) is Wade's tool-call
+    // INPUT schema and is intentionally not used here.
+    const responseSchema = GEMINI_OUTPUT_SCHEMA;
 
     // 4. Call the configured Gemini model with the system instruction and
     //    response schema so the reply is structured JSON.
@@ -149,7 +155,7 @@ Deno.serve(async (req) => {
           contents: [{ role: "user", parts: userParts }],
           generationConfig: {
             responseMimeType: "application/json",
-            responseJsonSchema: responseSchema,
+            responseSchema,
           },
         }),
       },
