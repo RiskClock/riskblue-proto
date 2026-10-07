@@ -4,6 +4,7 @@ import { GripVertical, Loader2, Minus, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { normalizeFunctionError } from "@/lib/functionsError";
+import { cropDrawingAt } from "@/lib/wadeSkills";
 import { Conversation, ConversationContent, ConversationScrollButton } from "@/components/ai-elements/conversation";
 import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
 import { PromptInput, PromptInputFooter, PromptInputSubmit, PromptInputTextarea } from "@/components/ai-elements/prompt-input";
@@ -80,6 +81,7 @@ export function AskWadePanel({
   onMinimize,
   dragHandleProps,
   skills,
+  calibration,
 }: {
   projectId: string;
   onClose: () => void;
@@ -100,6 +102,13 @@ export function AskWadePanel({
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
   /** Skills the user can start manually from the panel. */
   skills?: { id: string; label: string; onRun: () => void; disabled?: boolean }[];
+  /** Enables the in-chat Class Calibration skill. */
+  calibration?: {
+    classes: { name: string; label: string }[];
+    disabled?: boolean;
+    /** Bump `nonce` to start the flow (e.g. when Wade decides to run the skill). */
+    request?: { nonce: number; cls?: string | null; note?: string | null } | null;
+  };
 }) {
   const { toast } = useToast();
   const [messages, setMessages] = useState<WadeMessage[]>([]);
@@ -107,6 +116,144 @@ export function AskWadePanel({
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(persistHistory);
   const bottomRef = useRef<HTMLDivElement>(null);
+  type Flow =
+    | { step: "class" }
+    | { step: "note"; cls: string; label: string }
+    | { step: "pick"; cls: string; label: string; note: string }
+    | { step: "running"; cls: string; label: string };
+  const [flow, setFlow] = useState<Flow | null>(null);
+
+  const say = async (role: "user" | "assistant", content: string) => {
+    setMessages((prev) => [...prev, { id: crypto.randomUUID(), role, content }]);
+    await persist(role, content);
+  };
+
+  const matchClass = (text: string) => {
+    const list = calibration?.classes ?? [];
+    const t = text.trim().toLowerCase();
+    if (!t) return null;
+    return (
+      list.find((c) => c.name.toLowerCase() === t || c.label.toLowerCase() === t) ||
+      list.find((c) => c.label.toLowerCase().includes(t) || c.name.toLowerCase().includes(t)) ||
+      list.find((c) => t.includes(c.label.toLowerCase()) || t.includes(c.name.toLowerCase())) ||
+      null
+    );
+  };
+
+  const askForNote = (cls: string, label: string) => {
+    setFlow({ step: "note", cls, label });
+    void say("assistant", `Calibrating **${label}**. Describe how it appears on this project's drawings (symbols, hatches, labels), or type "skip".`);
+  };
+
+  const startCalibration = (cls?: string | null, note?: string | null) => {
+    const match = cls ? matchClass(cls) : null;
+    if (match && note) {
+      setFlow({ step: "pick", cls: match.name, label: match.label, note });
+      void say("assistant", `Calibrating **${match.label}**. Click an example of it on the drawing.`);
+    } else if (match) {
+      askForNote(match.name, match.label);
+    } else {
+      setFlow({ step: "class" });
+      void say("assistant", "Class Calibration: which class do you want to calibrate? Type its name.");
+    }
+  };
+
+  const lastNonce = useRef<number | null>(null);
+  useEffect(() => {
+    const r = calibration?.request;
+    if (!r || r.nonce === lastNonce.current || loading) return;
+    lastNonce.current = r.nonce;
+    startCalibration(r.cls, r.note);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calibration?.request, loading]);
+
+  const handleFlowInput = async (text: string) => {
+    if (!flow) return;
+    if (/^(cancel|stop)$/i.test(text.trim())) {
+      setFlow(null);
+      await say("user", text);
+      await say("assistant", "Class Calibration cancelled.");
+      return;
+    }
+    if (flow.step === "class") {
+      await say("user", text);
+      const m = matchClass(text);
+      if (!m) {
+        await say("assistant", `I couldn't find a class matching "${text}". Try again, or type "cancel".`);
+        return;
+      }
+      askForNote(m.name, m.label);
+    } else if (flow.step === "note") {
+      await say("user", text);
+      const note = /^skip$/i.test(text.trim()) ? "" : text;
+      setFlow({ step: "pick", cls: flow.cls, label: flow.label, note });
+      await say("assistant", `Now click an example of **${flow.label}** on the drawing.`);
+    }
+  };
+
+  const runCalibration = async (f: Extract<Flow, { step: "pick" }>, image: string, coordinates: { x: number; y: number } | null) => {
+    setFlow({ step: "running", cls: f.cls, label: f.label });
+    setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: "Picked an example on the drawing." }]);
+    try {
+      const { data, error } = await supabase.functions.invoke("calibrate-class", {
+        body: { projectId, class_id: f.cls, user_text_description: f.note, coordinates, imageBase64: image },
+      });
+      if (error) throw await normalizeFunctionError(error);
+      if ((data as any)?.error) throw new Error((data as any).error);
+      const prompt = String((data as any).current_prompt ?? "");
+      await say(
+        "assistant",
+        `Saved a calibrated **${f.label}** prompt for this project. Risk Radar will use it from now on.\n\n\`\`\`text\n${prompt}\n\`\`\``,
+      );
+    } catch (e: any) {
+      await say("assistant", `Calibration failed: ${e?.message || "unknown error"}`);
+    } finally {
+      setFlow(null);
+    }
+  };
+
+  // Capture the next click on the drawing while picking.
+  useEffect(() => {
+    if (flow?.step !== "pick") return;
+    const current = flow;
+    let swallowUntil = 0;
+    const onDown = (ev: PointerEvent) => {
+      const surface = (ev.target as HTMLElement | null)?.closest?.("[data-doc-surface]");
+      if (!surface) return;
+      const img = surface.querySelector("img.pdf-canvas-element") as HTMLImageElement | null;
+      if (!img) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      swallowUntil = Date.now() + 800;
+      const image = cropDrawingAt(img, ev.clientX, ev.clientY);
+      if (!image) {
+        toast({ title: "Could not read the drawing", description: "Try again once the drawing has loaded.", variant: "destructive" });
+        return;
+      }
+      const rect = img.getBoundingClientRect();
+      const coordinates = rect.width && rect.height && img.naturalWidth
+        ? {
+            x: Math.round((ev.clientX - rect.left) * (img.naturalWidth / rect.width)),
+            y: Math.round((ev.clientY - rect.top) * (img.naturalHeight / rect.height)),
+          }
+        : null;
+      void runCalibration(current, image, coordinates);
+    };
+    const swallow = (ev: Event) => {
+      if (Date.now() < swallowUntil) { ev.preventDefault(); ev.stopPropagation(); }
+    };
+    document.addEventListener("pointerdown", onDown, true);
+    document.addEventListener("pointerup", swallow, true);
+    document.addEventListener("click", swallow, true);
+    return () => {
+      document.removeEventListener("pointerdown", onDown, true);
+      setTimeout(() => {
+        document.removeEventListener("pointerup", swallow, true);
+        document.removeEventListener("click", swallow, true);
+      }, 900);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flow]);
 
   useEffect(() => {
     if (!persistHistory) {
@@ -184,6 +331,13 @@ export function AskWadePanel({
   const send = async () => {
     const text = input.trim();
     if (!text || sending) return;
+    if (flow) {
+      if (flow.step === "class" || flow.step === "note") {
+        setInput("");
+        await handleFlowInput(text);
+      }
+      return;
+    }
     const pendingId = crypto.randomUUID();
     const pendingMessage: WadeMessage = { id: pendingId, role: "user", content: text };
     setSending(true);
@@ -348,10 +502,31 @@ export function AskWadePanel({
         <ConversationScrollButton />
       </Conversation>
 
-      {skills && skills.length > 0 && (
+      {flow && (
+        <div className="border-t px-3 py-2 flex items-center gap-2 text-xs bg-muted/30">
+          {flow.step === "running" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+          <span className="flex-1">
+            {flow.step === "class" && "Class Calibration: type a class name."}
+            {flow.step === "note" && `Describe ${flow.label}, or type "skip".`}
+            {flow.step === "pick" && `Click an example of ${flow.label} on the drawing.`}
+            {flow.step === "running" && `Calibrating ${flow.label}...`}
+          </span>
+          {flow.step !== "running" && (
+            <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setFlow(null); void say("assistant", "Class Calibration cancelled."); }}>
+              Cancel
+            </Button>
+          )}
+        </div>
+      )}
+      {((skills && skills.length > 0) || calibration) && !flow && (
         <div className="border-t px-3 py-2 flex items-center gap-2 flex-wrap">
           <span className="text-xs font-medium text-muted-foreground">Skills:</span>
-          {skills.map((sk) => (
+          {calibration && (
+            <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => startCalibration()} disabled={calibration.disabled || sending}>
+              Class Calibration
+            </Button>
+          )}
+          {(skills ?? []).map((sk) => (
             <Button key={sk.id} type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={sk.onRun} disabled={sk.disabled || sending}>
               {sk.label}
             </Button>
@@ -366,7 +541,7 @@ export function AskWadePanel({
           <PromptInputTextarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask a question..."
+            placeholder={flow?.step === "class" ? "Type a class name..." : flow?.step === "note" ? "Describe the class, or type skip..." : "Ask a question..."}
             rows={1}
             className="min-h-9 max-h-24 py-2 pl-3 pr-11 text-sm"
           />
@@ -374,7 +549,7 @@ export function AskWadePanel({
             <PromptInputSubmit
               className="h-7 w-7"
               status={sending ? "submitted" : "ready"}
-              disabled={!input.trim() || sending}
+              disabled={!input.trim() || sending || flow?.step === "pick" || flow?.step === "running"}
             />
           </PromptInputFooter>
         </PromptInput>

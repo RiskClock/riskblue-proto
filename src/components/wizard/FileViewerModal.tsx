@@ -337,6 +337,10 @@ interface FileViewerModalProps {
   onRunRiskRadar?: (args: { page: number; classNames: string[] }) => Promise<void>;
   /** Opens the Wade window (system admins). Shown at the bottom of the Detections tab. */
   onOpenWade?: () => void;
+  /** When provided, the Wade button shows Wade in the bottom half of the right panel instead. */
+  onToggleWadeEmbedded?: () => void;
+  wadeEmbedded?: boolean;
+  wadePanel?: React.ReactNode;
   /** Open the saved prompt for a Risk Radar class. */
   onViewRiskRadarPrompt?: (className: string) => void;
   /** Internal users get the annotation label visibility toggle. */
@@ -406,6 +410,9 @@ export const FileViewerModal = ({
   canScoutPage = false,
   onRunRiskRadar,
   onOpenWade,
+  onToggleWadeEmbedded,
+  wadeEmbedded,
+  wadePanel,
   onViewRiskRadarPrompt,
   isInternal = false,
 }: FileViewerModalProps) => {
@@ -2364,6 +2371,7 @@ export const FileViewerModal = ({
                 </TabsContent>
                 <TabsContent value="detections" className="flex-1 overflow-hidden m-0 mt-0 flex flex-col min-h-0 data-[state=inactive]:hidden">
                   {isSystemAdmin && !viewingMode && onRunRiskRadar && <AgentActionBar label={riskRadarRunning ? "Running…" : "Risk Radar Agent"} icon={riskRadarRunning ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <img src={radarIcon.url} alt="" className="h-3.5 w-3.5 mr-1.5" />} onAction={() => setRiskRadarOpen(true)} onDebug={() => setRiskRadarDebugOpen(true)} debugLabel="Risk Radar debug" disabled={riskRadarRunning} />}
+                  <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
                   <DetectionsPanel
                      rotationByPage={rotationByPage}
                      viewerApiRef={viewerApiRef}
@@ -2397,9 +2405,15 @@ export const FileViewerModal = ({
                     devices={devicesApi}
                     onFocusInstance={focusInstance}
                   />
-                  {isSystemAdmin && onOpenWade && (
+                  </div>
+                  {isSystemAdmin && wadeEmbedded && wadePanel && (
+                    <div className="h-1/2 min-h-0 shrink-0 border-t flex flex-col [&>div]:flex-1 [&>div]:border-0 [&>div]:rounded-none">
+                      {wadePanel}
+                    </div>
+                  )}
+                  {isSystemAdmin && (onToggleWadeEmbedded || onOpenWade) && !(wadeEmbedded && wadePanel) && (
                     <div className="border-t p-2 shrink-0 bg-background flex items-center gap-1">
-                      <Button type="button" size="sm" variant="outline" className="flex-1 h-8 text-xs" onClick={onOpenWade}>
+                      <Button type="button" size="sm" variant="outline" className="flex-1 h-8 text-xs" onClick={onToggleWadeEmbedded ?? onOpenWade}>
                         Wade
                       </Button>
                     </div>

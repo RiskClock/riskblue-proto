@@ -40,7 +40,6 @@ import { SpatialArchitectModal } from "@/components/workbench/SpatialArchitectMo
 import { BulkDrawingDownloadModal } from "@/components/workbench/BulkDrawingDownloadModal";
 import { ManageFilesModal } from "@/components/workbench/ManageFilesModal";
 import { AskWadePanel } from "@/components/workbench/AskWadePanel";
-import { ClassCalibrationDialog } from "@/components/workbench/ClassCalibrationDialog";
 import { useIsSystemAdmin } from "@/hooks/useIsSystemAdmin";
 import { ThreatOverviewCard } from "@/components/workbench/ThreatOverviewCard";
 import { SUBTYPED_CLASSES } from "@/components/CreateProjectModal";
@@ -501,7 +500,8 @@ export default function WorkbenchProjectDetail() {
   const [drawingHost, setDrawingHost] = useState<HTMLDivElement | null>(null);
   const [viewerReloadKey, setViewerReloadKey] = useState(0);
   const [wbWadeOpen, setWbWadeOpen] = useState(false);
-  const [calibration, setCalibration] = useState<{ cls?: string | null; note?: string | null } | null>(null);
+  const [calibrationReq, setCalibrationReq] = useState<{ nonce: number; cls?: string | null; note?: string | null } | null>(null);
+  const [wadeEmbedded, setWadeEmbedded] = useState(false);
   const [wbWadeMinimized, setWbWadeMinimized] = useState(false);
   const [wbWadePos, setWbWadePos] = useState<{ x: number; y: number } | null>(null);
   const wbWadeDrag = useRef<{ dx: number; dy: number } | null>(null);
@@ -4427,7 +4427,7 @@ const isChildPlanType = (t: string) =>
 - {"type":"place_annotation","class":"<exact class name from classes>","x":0.42,"y":0.31,"attributes":{"pipe_type":"...","pipe_diameter":"..."}} places a marker on the open page. x and y are fractions (0 to 1) of the page width and height, the same scale as existing annotations; floor plan bbox_pct values are percentages (0 to 100). attributes is optional. Applied immediately.
 - {"type":"update_prompt","class":"<exact class name>","prompt_kind":"analysis"|"triage","prompt":"<full new prompt text>"} replaces that class prompt. The user must approve before it is saved.
 - {"type":"run_risk_radar","classes":["<class name>", ...]} runs the Risk Radar agent on the open page. Omit classes to use all classes. Requires a floor plan bbox on the page. The user must approve before it starts.
-- {"type":"start_skill","skill":"class_calibration","class":"<exact class name>","note":"<optional description>"} starts the Class Calibration skill: the user clicks an example of the class on the drawing and approves a calibrated Risk Radar prompt for this project. Use it when the user wants Risk Radar to better recognise a class on this project.
+- {"type":"start_skill","skill":"class_calibration","class":"<exact class name>","note":"<optional description>"} starts the Class Calibration skill in this chat: you ask for any missing class or description, the user clicks an example on the drawing, and a calibrated Risk Radar prompt is saved for this project. Use it when the user wants Risk Radar to better recognise a class on this project.
 Only use class names listed in classes. Never invent coordinates outside 0 to 1. If no drawing is open, do not emit place_annotation or run_risk_radar.`;
 
   const applyWorkbenchWadeActions = useCallback(
@@ -4550,8 +4550,8 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
           }
         } else if (type === "start_skill" && a.skill === "class_calibration") {
           if (!page) { lines.push("- Class Calibration needs an open drawing page."); continue; }
-          setCalibration({ cls: a.class ? String(a.class) : null, note: a.note ? String(a.note) : null });
-          lines.push("- Started Class Calibration. Pick the class and click an example on the drawing.");
+          setCalibrationReq({ nonce: Date.now(), cls: a.class ? String(a.class) : null, note: a.note ? String(a.note) : null });
+          lines.push("- Started Class Calibration.");
         } else {
           lines.push(`- Skipped unsupported action "${type}".`);
         }
@@ -5769,26 +5769,15 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                   emptyHint={`Ask about the open drawing page, or ask Wade to act on it. For example: "place a shut-off valve marker in the top left of the Level 2 plan", "tighten the triage prompt for Cold Water", or "run Risk Radar on this page".`}
                   actionSpec={WORKBENCH_WADE_ACTION_SPEC}
                   onActions={applyWorkbenchWadeActions}
-                  skills={[{
-                    id: "class_calibration",
-                    label: "Class Calibration",
-                    onRun: () => setCalibration({}),
+                  calibration={{
+                    classes: enabledCols.map((n) => ({ name: n, label: wadeClassLabel(n).label })),
                     disabled: !activePageView,
-                  }]}
+                    request: wadeEmbedded ? null : calibrationReq,
+                  }}
                 />
               </div>
             </div>
           </div>
-        )}
-        {isSystemAdmin && projectId && (
-          <ClassCalibrationDialog
-            open={!!calibration}
-            onClose={() => setCalibration(null)}
-            projectId={projectId}
-            classes={enabledCols.map((n) => ({ name: n, label: wadeClassLabel(n).label }))}
-            initialClass={calibration?.cls}
-            initialNote={calibration?.note}
-          />
         )}
         {isSystemAdmin && wbWadeOpen && wbWadeMinimized && (
           <button
@@ -5838,6 +5827,25 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
             onScoutPage={handleScoutPage}
             onRunRiskRadar={handleRiskRadarPage}
             onOpenWade={isSystemAdmin ? () => { setWbWadeOpen(true); setWbWadeMinimized(false); } : undefined}
+            wadeEmbedded={isSystemAdmin && wadeEmbedded}
+            onToggleWadeEmbedded={isSystemAdmin && showMode === "drawing" ? () => { setWadeEmbedded((v) => !v); setWbWadeOpen(false); } : undefined}
+            wadePanel={isSystemAdmin && wadeEmbedded && projectId ? (
+              <AskWadePanel
+                projectId={projectId}
+                onClose={() => setWadeEmbedded(false)}
+                buildContext={buildWorkbenchWadeContext}
+                persistHistory
+                title="Wade"
+                emptyHint={`Ask about the open drawing page, or ask Wade to act on it. For example: "place a shut-off valve marker in the top left of the Level 2 plan" or "run Risk Radar on this page".`}
+                actionSpec={WORKBENCH_WADE_ACTION_SPEC}
+                onActions={applyWorkbenchWadeActions}
+                calibration={{
+                  classes: enabledCols.map((n) => ({ name: n, label: wadeClassLabel(n).label })),
+                  disabled: !activePageView,
+                  request: calibrationReq,
+                }}
+              />
+            ) : null}
             onViewRiskRadarPrompt={setPromptClass}
 
             allUnitPlans={activeFileAllUnitPlans}
