@@ -75,35 +75,48 @@ function parseList(text: string): RiskRadarRow[] {
     }
     cur = null;
   };
+  const looksId = (s: string) => /\d/.test(s) && s.length <= 20 && !/\s\w+\s+\w+/.test(s);
+  const EXCLUDED = /\b(exclud|not included|omitted|disregard|ignored)/i;
+  let inExcluded = false;
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();
-    if (!line) { flush(); continue; }
-    if (/^#+\s/.test(line) || /no (results|detections|elements)/i.test(line)) { flush(); continue; }
-    const isBullet = BULLET.test(line) && !/^\s{2,}/.test(raw);
+    if (!line || /^[-*_=]{3,}$/.test(line)) { flush(); continue; }
+    if (/^#+\s/.test(line)) { flush(); inExcluded = EXCLUDED.test(line); continue; }
+    if (inExcluded) continue;
+    if (/no (results|detections|elements)/i.test(line)) { flush(); continue; }
+    const isBullet = BULLET.test(line);
+    const indented = /^\s{2,}/.test(raw);
     const kv = line.match(KV);
     const field = kv ? fieldFor(kv[1]) : null;
     if (kv && field) {
-      if (isBullet && cur && cur[field]) flush();
       if (!cur) cur = {};
       if (cur[field]) { flush(); cur = {}; }
       cur[field] = clean(kv[2]);
       continue;
     }
-    if (kv && !field) continue; // unrelated key (file name, size, sheet)
-    // Single-line record: "SWC-B04 - Electrical Room (Level 1)" or "SWC-B04 | Electrical Room | L1"
-    const body = line.replace(BULLET, "");
-    if (!isBullet && !/[|–—-]/.test(body)) continue;
+    if (kv && !field) continue; // unrelated key (area, file name, size, sheet)
+    // Plain prose (intros, summaries) is never a record.
+    if (!isBullet && (line.endsWith(":") || line.length > 100 || !/\s[|–—-]\s|\|/.test(line))) continue;
+    if (isBullet && indented) continue; // sub-bullet detail of the previous record
+    if (EXCLUDED.test(line)) { flush(); continue; }
     flush();
-    const parts = body.split(/\s*\|\s*|\s+[–—-]\s+|:\s+/).map((p) => clean(p)).filter(Boolean) as string[];
+    // "**LABEL (ID)**: note" -> keep record part before a trailing ": note"
+    const body = line.replace(BULLET, "").replace(/\*\*|__|`/g, "").replace(/:\s.*$/, "").replace(/:$/, "").trim();
+    if (!body || body.length > 100) continue;
+    const parts = body.split(/\s*\|\s*|\s+[–—-]\s+/).map((p) => clean(p)).filter(Boolean) as string[];
     if (parts.length === 0) continue;
     let level: string | null = null;
+    let identifier: string | null = null;
     const last = parts[parts.length - 1];
-    const paren = last.match(/^(.*?)\s*\(([^)]*(level|floor|lvl|basement)[^)]*)\)$/i);
-    if (paren) { parts[parts.length - 1] = paren[1]; level = paren[2]; }
+    const lvl = last.match(/^(.*?)\s*\(([^)]*(level|floor|lvl|basement)[^)]*)\)$/i);
+    if (lvl) { parts[parts.length - 1] = lvl[1]; level = lvl[2]; }
     else if (parts.length > 2 && /level|floor|lvl|basement/i.test(last)) { level = parts.pop()!; }
-    const looksId = (s: string) => /\d/.test(s) && !/\s{1}\w+\s+\w+/.test(s) && s.length <= 20;
-    const identifier = parts.length > 1 && looksId(parts[0]) ? parts[0] : null;
-    const label = identifier ? parts[1] ?? null : parts[0];
+    if (parts.length > 1 && looksId(parts[0])) identifier = parts.shift()!;
+    let label = parts[0] ?? null;
+    // "EXAM ROOM (SWC-212)" -> label EXAM ROOM, identifier SWC-212
+    const idParen = label?.match(/^(.*?)\s*\(([^)]+)\)$/);
+    if (idParen && looksId(idParen[2])) { label = idParen[1]; identifier = identifier ?? idParen[2]; }
+    if (!identifier && !clean(label)) continue;
     rows.push({ key: `${rows.length}`, identifier, label: clean(label), level: clean(level), notes: null });
   }
   flush();
