@@ -17,6 +17,16 @@ const corsHeaders = {
 const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
 const CACHE_TTL_SECONDS = 7200; // 2 hours
 
+// Always appended after the class prompt (base or project override) so
+// calibration can never drop the output format the placement parser relies on.
+const OUTPUT_FORMAT_RULES = `OUTPUT FORMAT (mandatory, overrides any conflicting formatting instructions above):
+- Respond ONLY with a single Markdown table. No preamble, no bullet lists, no prose before or after.
+- Use exactly these columns in this order:
+| Room Identifier on Plan (room number/tag or N/A) | File Name | Drawing Label (Exact Text as shown) | Building Floor / Level | Sheet / Page Reference | Notes (only if ambiguity exists) | Size (as shown) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+- One row per detected element. Copy room identifiers and drawing labels exactly as printed on the drawing.
+- Use N/A for any unknown cell. If nothing is found, output only the header and separator rows.`;
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -248,7 +258,7 @@ Deno.serve(async (req) => {
                   role: "user",
                   parts: [
                     ...(df ? [{ fileData: { fileUri: df.fileUri, mimeType: df.fileMime } }] : []),
-                    { text: `Instructions:\n${prompt}` },
+                    { text: `Instructions:\n${prompt}\n\n${OUTPUT_FORMAT_RULES}` },
                     ...(pageNumbers.length > 0
                       ? [{
                         text:
@@ -308,7 +318,7 @@ Deno.serve(async (req) => {
               className,
               ok: true as const,
               text,
-              promptText: `Instructions:\n${prompt}\n\n---\n${analyzePrefix}`,
+              promptText: `Instructions:\n${prompt}\n\n${OUTPUT_FORMAT_RULES}\n\n---\n${analyzePrefix}`,
               tokens: {
                 prompt: promptTokens,
                 cached: cachedTokens,
