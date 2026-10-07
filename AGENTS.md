@@ -10,3 +10,5 @@
 - Drawing-page agent execution stays in the Workbench parent and is passed into the viewer as callbacks; this keeps project locking and run polling centralized.
 - Per-project class prompt overrides live in `project_class_prompt_overrides` and replace the shared `awp_class_prompts` text in Risk Radar for that project only; Wade's Class Calibration skill proposes them and saves only after user approval.
 - Wade skill system prompts and schemas are stored in `app_settings` and appended to the base Wade prompt only when the skill runs; this keeps everyday Wade calls lean.
+
+- Class Calibration is additive: the saved project override is the shared class prompt verbatim plus a generated project addendum (kept in `calibration_notes.project_addendum`); this stops calibration from summarizing away the base taxonomy.
