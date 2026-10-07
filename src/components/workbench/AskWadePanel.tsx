@@ -7,6 +7,7 @@ import { normalizeFunctionError } from "@/lib/functionsError";
 import { cropDrawingAt } from "@/lib/wadeSkills";
 import { Conversation, ConversationContent, ConversationScrollButton } from "@/components/ai-elements/conversation";
 import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PromptInput, PromptInputFooter, PromptInputSubmit, PromptInputTextarea } from "@/components/ai-elements/prompt-input";
 
 interface WadeMessage {
@@ -122,6 +123,10 @@ export function AskWadePanel({
     | { step: "pick"; cls: string; label: string; note: string }
     | { step: "running"; cls: string; label: string };
   const [flow, setFlow] = useState<Flow | null>(null);
+  type Choice = { prompt: string; options: { value: string; label: string }[]; multi: boolean };
+  const [choice, setChoice] = useState<Choice | null>(null);
+  const [choiceValue, setChoiceValue] = useState<string[]>([]);
+  const [classPick, setClassPick] = useState("");
 
   const say = async (role: "user" | "assistant", content: string) => {
     setMessages((prev) => [...prev, { id: crypto.randomUUID(), role, content }]);
@@ -154,7 +159,7 @@ export function AskWadePanel({
       askForNote(match.name, match.label);
     } else {
       setFlow({ step: "class" });
-      void say("assistant", "Class Calibration: which class do you want to calibrate? Type its name.");
+      void say("assistant", "Class Calibration: which class do you want to calibrate? Pick it from the list below.");
     }
   };
 
@@ -328,8 +333,8 @@ export function AskWadePanel({
     } as any);
   };
 
-  const send = async () => {
-    const text = input.trim();
+  const send = async (override?: string) => {
+    const text = (override ?? input).trim();
     if (!text || sending) return;
     if (flow) {
       if (flow.step === "class" || flow.step === "note") {
@@ -377,8 +382,20 @@ export function AskWadePanel({
       if ((data as any)?.error) throw new Error((data as any).error);
 
       const raw = (data as any).response as string;
-      const { visible, actions } = onActions ? extractActions(raw) : { visible: raw, actions: [] };
-      const answer = visible || (actions.length > 0 ? "Applying the requested changes…" : raw);
+      const extracted = extractActions(raw);
+      const visible = extracted.visible;
+      const choiceAction = extracted.actions.find((a) => a?.type === "ask_user_choice");
+      const actions = onActions ? extracted.actions.filter((a) => a?.type !== "ask_user_choice") : [];
+      if (choiceAction && Array.isArray(choiceAction.options) && choiceAction.options.length > 0) {
+        const opts = choiceAction.options
+          .map((o: any) => (typeof o === "string" ? { value: o, label: o } : { value: String(o?.value ?? o?.label ?? ""), label: String(o?.label ?? o?.value ?? "") }))
+          .filter((o: any) => o.value);
+        if (opts.length) {
+          setChoice({ prompt: String(choiceAction.prompt ?? "Choose an option"), options: opts, multi: !!choiceAction.multi });
+          setChoiceValue([]);
+        }
+      }
+      const answer = visible || (choiceAction ? String(choiceAction.prompt ?? "Choose an option.") : actions.length > 0 ? "Applying the requested changes..." : raw);
 
       setMessages((prev) => [...prev, { role: "assistant", content: answer }]);
       onAssistantMessage?.(answer);
@@ -502,11 +519,65 @@ export function AskWadePanel({
         <ConversationScrollButton />
       </Conversation>
 
+      {choice && !flow && (
+        <div className="border-t px-3 py-2 space-y-2 bg-muted/30">
+          <div className="text-xs font-medium">{choice.prompt}</div>
+          {choice.multi ? (
+            <div className="flex flex-wrap gap-1.5">
+              {choice.options.map((o) => {
+                const on = choiceValue.includes(o.value);
+                return (
+                  <Button key={o.value} type="button" size="sm" variant={on ? "default" : "outline"} className="h-7 text-xs"
+                    onClick={() => setChoiceValue((v) => (on ? v.filter((x) => x !== o.value) : [...v, o.value]))}>
+                    {o.label}
+                  </Button>
+                );
+              })}
+            </div>
+          ) : (
+            <Select value={choiceValue[0] ?? ""} onValueChange={(v) => setChoiceValue([v])}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select an option" /></SelectTrigger>
+              <SelectContent>
+                {choice.options.map((o) => <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setChoice(null)}>Dismiss</Button>
+            <Button type="button" size="sm" className="h-7 text-xs" disabled={choiceValue.length === 0 || sending}
+              onClick={() => {
+                const labels = choice.options.filter((o) => choiceValue.includes(o.value)).map((o) => o.label);
+                setChoice(null);
+                void send(labels.join(", "));
+              }}>
+              Confirm
+            </Button>
+          </div>
+        </div>
+      )}
+      {flow?.step === "class" && calibration && (
+        <div className="border-t px-3 py-2 flex items-center gap-2 bg-muted/30">
+          <Select value={classPick} onValueChange={setClassPick}>
+            <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="Select a class to calibrate" /></SelectTrigger>
+            <SelectContent>
+              {calibration.classes.map((c) => <SelectItem key={c.name} value={c.name} className="text-xs">{c.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button type="button" size="sm" className="h-8 text-xs" disabled={!classPick}
+            onClick={() => {
+              const c = calibration.classes.find((x) => x.name === classPick);
+              setClassPick("");
+              if (c) void (async () => { await say("user", c.label); askForNote(c.name, c.label); })();
+            }}>
+            Confirm
+          </Button>
+        </div>
+      )}
       {flow && (
         <div className="border-t px-3 py-2 flex items-center gap-2 text-xs bg-muted/30">
           {flow.step === "running" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
           <span className="flex-1">
-            {flow.step === "class" && "Class Calibration: type a class name."}
+            {flow.step === "class" && "Class Calibration: pick a class above or type its name."}
             {flow.step === "note" && `Describe ${flow.label}, or type "skip".`}
             {flow.step === "pick" && `Click an example of ${flow.label} on the drawing.`}
             {flow.step === "running" && `Calibrating ${flow.label}...`}
