@@ -123,6 +123,11 @@ Deno.serve(async (req) => {
 
     let responseSchema: unknown = null;
     try { responseSchema = JSON.parse(schemaText); } catch { responseSchema = JSON.parse(DEFAULT_SCHEMA); }
+    // Accept tool-style wrappers ({ name, description, parameters } or { schema }).
+    const rs = responseSchema as any;
+    if (rs && typeof rs === "object" && !rs.type) {
+      responseSchema = rs.parameters ?? rs.schema ?? rs.json_schema?.schema ?? rs;
+    }
 
     // 4. Call the configured Gemini model with the system instruction and
     //    response schema so the reply is structured JSON.
@@ -144,7 +149,7 @@ Deno.serve(async (req) => {
           contents: [{ role: "user", parts: userParts }],
           generationConfig: {
             responseMimeType: "application/json",
-            responseSchema,
+            responseJsonSchema: responseSchema,
           },
         }),
       },
