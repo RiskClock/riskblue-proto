@@ -93,8 +93,15 @@ export function ClassCalibrationDialog({
         toast({ title: "Could not read the drawing", description: "Try again once the drawing has loaded.", variant: "destructive" });
         return;
       }
+      const rect = img.getBoundingClientRect();
+      const coordinates = rect.width && rect.height && img.naturalWidth
+        ? {
+            x: Math.round((ev.clientX - rect.left) * (img.naturalWidth / rect.width)),
+            y: Math.round((ev.clientY - rect.top) * (img.naturalHeight / rect.height)),
+          }
+        : null;
       setPreview(image);
-      void run(image);
+      void run(image, coordinates);
     };
     const swallow = (ev: Event) => {
       if (Date.now() < swallowUntil) { ev.preventDefault(); ev.stopPropagation(); }
@@ -133,6 +140,12 @@ export function ClassCalibrationDialog({
       toast({ title: "Calibration saved", description: `Risk Radar will use the calibrated ${label} prompt on this project.` });
       onFinished?.(`- Saved a calibrated ${label} prompt for this project.`);
       onClose();
+    } catch (e: any) {
+      toast({ title: "Save failed", description: (e as any)?.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
     } catch (e: any) {
       toast({ title: "Save failed", description: (e as any)?.message, variant: "destructive" });
     } finally {
