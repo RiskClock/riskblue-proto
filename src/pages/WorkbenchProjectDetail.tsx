@@ -4425,7 +4425,7 @@ const isChildPlanType = (t: string) =>
 
   const WORKBENCH_WADE_ACTION_SPEC = `You can act on the drawing page that is currently open. To act, end your reply with a fenced block tagged wade-actions containing {"actions":[...]}. Supported actions:
 - {"type":"place_annotation","class":"<exact class name from classes>","x":0.42,"y":0.31,"attributes":{"pipe_type":"...","pipe_diameter":"..."}} places a marker on the open page. x and y are fractions (0 to 1) of the page width and height, the same scale as existing annotations; floor plan bbox_pct values are percentages (0 to 100). attributes is optional. Applied immediately.
-- {"type":"update_prompt","class":"<exact class name>","prompt_kind":"analysis"|"triage","prompt":"<full new prompt text>"} replaces that class prompt. The user must approve before it is saved.
+- {"type":"reset_class_prompt","class":"<exact class name>"} removes this project's custom calibrated Risk Radar prompt for that class so the default prompt from Configuration is used again. The user must approve first. You cannot edit the default prompts in Configuration; they are read only.
 - {"type":"run_risk_radar","classes":["<class name>", ...]} runs the Risk Radar agent on the open page. Omit classes to use all classes. Requires a floor plan bbox on the page. The user must approve before it starts.
 - {"type":"start_skill","skill":"class_calibration","class":"<exact class name>","note":"<optional description>"} starts the Class Calibration skill in this chat: you ask for any missing class or description, the user clicks an example on the drawing, and a calibrated Risk Radar prompt is saved for this project. Use it when the user wants Risk Radar to better recognise a class on this project.
 - {"type":"ask_user_choice","prompt":"<question>","options":[{"value":"<id>","label":"<shown text>"}],"multi":false} shows the user a dropdown (or checkboxes when multi is true) instead of making them type. Use it whenever the user must choose between known options, such as which class to calibrate or which classes to run Risk Radar on. Their selection comes back as their next message. Do not combine it with other actions in the same reply.
@@ -4468,30 +4468,25 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
           lines.push(error
             ? `- Could not place ${c.label}: ${(error as any)?.message}`
             : `- Placed ${c.prefix ?? c.label}-${String(next).padStart(3, "0")} on page ${page.page}.`);
-        } else if (type === "update_prompt") {
+        } else if (type === "reset_class_prompt") {
           const cls = String(a.class ?? "");
-          const kind = a.prompt_kind === "triage" ? "triage" : "analysis";
-          const text = String(a.prompt ?? "").trim();
-          if (!cls || !text) { lines.push("- Skipped prompt update: missing class or prompt."); continue; }
-          const ok = await askWadeConfirm(
-            `Update ${kind} prompt for ${aliasMap[cls] || cls}?`,
-            text,
-          );
-          if (!ok) { lines.push(`- Prompt update for ${cls} was not approved.`); continue; }
-          const now = new Date().toISOString();
-          const payload: any = kind === "triage"
-            ? { triage_prompt_content: text, triage_content_updated_at: now }
-            : { prompt_content: text, content_updated_at: now };
-          const { data, error } = await supabase
-            .from("awp_class_prompts")
-            .update(payload)
+          if (!cls || !projectId) { lines.push("- Skipped prompt reset: missing class."); continue; }
+          const { data: ov } = await supabase
+            .from("project_class_prompt_overrides" as any)
+            .select("id")
+            .eq("project_id", projectId)
             .eq("awp_class_name", cls)
-            .select("id");
+            .maybeSingle();
+          if (!ov) { lines.push(`- ${aliasMap[cls] || cls} already uses the default prompt on this project.`); continue; }
+          const ok = await askWadeConfirm(
+            `Reset ${aliasMap[cls] || cls} to the default prompt?`,
+            "This removes the custom calibrated prompt for this project. Risk Radar will use the default prompt from Configuration.",
+          );
+          if (!ok) { lines.push(`- Prompt reset for ${cls} was not approved.`); continue; }
+          const { error } = await supabase.from("project_class_prompt_overrides" as any).delete().eq("id", (ov as any).id);
           lines.push(error
-            ? `- Could not update the ${cls} prompt: ${(error as any)?.message}`
-            : !data || data.length === 0
-              ? `- No saved prompt exists for ${cls}; create it in Configuration first.`
-              : `- Updated the ${kind} prompt for ${cls}.`);
+            ? `- Could not reset the ${cls} prompt: ${(error as any)?.message}`
+            : `- Reset ${aliasMap[cls] || cls} to the default prompt for this project.`);
         } else if (type === "run_risk_radar") {
           if (!page || !requestId || !projectId) { lines.push("- Could not run Risk Radar: no drawing page is open."); continue; }
           if (!(bboxPagesByFile.get(page.file.id) ?? []).includes(page.page)) {
@@ -5767,7 +5762,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                   buildContext={buildWorkbenchWadeContext}
                   persistHistory
                   title="Wade"
-                  emptyHint={`Ask about the open drawing page, or ask Wade to act on it. For example: "place a shut-off valve marker in the top left of the Level 2 plan", "tighten the triage prompt for Cold Water", or "run Risk Radar on this page".`}
+                  emptyHint={`Ask about the open drawing page, or ask Wade to act on it. For example: "place a shut-off valve marker in the top left of the Level 2 plan", "reset Electrical Room to the default prompt", or "run Risk Radar on this page".`}
                   actionSpec={WORKBENCH_WADE_ACTION_SPEC}
                   onActions={applyWorkbenchWadeActions}
                   calibration={{
@@ -6003,6 +5998,8 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
         <AwpPromptModal
           className={promptClass}
           onClose={() => setPromptClass(null)}
+          projectId={projectId ?? null}
+          canReset={isSystemAdmin}
         />
 
         {/* Space edit modal */}
@@ -6841,10 +6838,45 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
 function AwpPromptModal({
   className,
   onClose,
+  projectId,
+  canReset,
 }: {
   className: string | null;
   onClose: () => void;
+  projectId?: string | null;
+  canReset?: boolean;
 }) {
+  const { toast } = useToast();
+  const [override, setOverride] = useState<{ id: string; prompt_content: string; updated_at: string } | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  useEffect(() => {
+    setOverride(null);
+    setConfirmReset(false);
+    if (!className || !projectId || !canReset) return;
+    let cancelled = false;
+    void supabase
+      .from("project_class_prompt_overrides" as any)
+      .select("id, prompt_content, updated_at")
+      .eq("project_id", projectId)
+      .eq("awp_class_name", className)
+      .maybeSingle()
+      .then(({ data }) => { if (!cancelled) setOverride((data as any) ?? null); });
+    return () => { cancelled = true; };
+  }, [className, projectId, canReset]);
+  const resetOverride = async () => {
+    if (!override) return;
+    setResetting(true);
+    const { error } = await supabase.from("project_class_prompt_overrides" as any).delete().eq("id", override.id);
+    setResetting(false);
+    setConfirmReset(false);
+    if (error) {
+      toast({ title: "Could not reset prompt", description: (error as any)?.message, variant: "destructive" });
+      return;
+    }
+    setOverride(null);
+    toast({ title: "Prompt reset", description: `Risk Radar will use the default ${className} prompt on this project.` });
+  };
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"triage" | "analyze">("triage");
   const [row, setRow] = useState<{
@@ -6891,7 +6923,8 @@ function AwpPromptModal({
   }, [className]);
 
   const isTriage = tab === "triage";
-  const content = isTriage ? row?.triage_prompt_content : row?.prompt_content;
+  const showOverride = !isTriage && !!override;
+  const content = isTriage ? row?.triage_prompt_content : (override?.prompt_content ?? row?.prompt_content);
   const driveUrl = isTriage ? row?.triage_drive_file_url : row?.drive_file_url;
   const driveName = isTriage ? row?.triage_drive_file_name : row?.drive_file_name;
 
@@ -6924,6 +6957,23 @@ function AwpPromptModal({
             Analyze prompt
           </button>
         </div>
+        {showOverride && (
+          <div className="flex items-center gap-2 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-xs">
+            <span className="flex-1">
+              This project uses a custom calibrated prompt (updated {new Date(override!.updated_at).toLocaleDateString()}). Risk Radar uses it instead of the default.
+            </span>
+            {confirmReset ? (
+              <>
+                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setConfirmReset(false)} disabled={resetting}>Cancel</Button>
+                <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={resetOverride} disabled={resetting}>
+                  {resetting ? <Loader2 className="h-3 w-3 animate-spin" /> : "Confirm reset"}
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setConfirmReset(true)}>Reset to Default</Button>
+            )}
+          </div>
+        )}
         {loading ? (
           <div className="flex items-center justify-center p-8">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
