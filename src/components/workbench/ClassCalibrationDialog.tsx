@@ -53,11 +53,17 @@ export function ClassCalibrationDialog({
 
   const label = classes.find((c) => c.name === cls)?.label ?? cls;
 
-  const run = async (image: string) => {
+  const run = async (image: string, coordinates: { x: number; y: number } | null) => {
     setStep("running");
     try {
       const { data, error } = await supabase.functions.invoke("calibrate-class", {
-        body: { projectId, className: cls, imageBase64: image, userText: note },
+        body: {
+          projectId,
+          class_id: cls,
+          user_text_description: note,
+          coordinates,
+          imageBase64: image,
+        },
       });
       if (error) throw await normalizeFunctionError(error);
       if ((data as any)?.error) throw new Error((data as any).error);
