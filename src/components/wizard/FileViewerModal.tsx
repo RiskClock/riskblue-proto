@@ -2407,9 +2407,7 @@ export const FileViewerModal = ({
                   />
                   </div>
                   {isSystemAdmin && wadeEmbedded && wadePanel && (
-                    <div className="h-1/2 min-h-0 shrink-0 border-t flex flex-col [&>div]:flex-1 [&>div]:border-0 [&>div]:rounded-none">
-                      {wadePanel}
-                    </div>
+                    <WadeSplitPane>{wadePanel}</WadeSplitPane>
                   )}
                   {isSystemAdmin && (onToggleWadeEmbedded || onOpenWade) && !(wadeEmbedded && wadePanel) && (
                     <div className="border-t p-2 shrink-0 bg-background flex items-center gap-1">
@@ -4484,3 +4482,42 @@ function PageDownloadDialog({
 
 
 
+
+
+/** Bottom pane for Wade with a draggable divider above it. Height persists per browser. */
+function WadeSplitPane({ children }: { children: React.ReactNode }) {
+  const [pct, setPct] = React.useState<number>(() => {
+    const v = Number(localStorage.getItem("wade-split-pct"));
+    return v >= 15 && v <= 85 ? v : 50;
+  });
+  const ref = React.useRef<HTMLDivElement>(null);
+  const onPointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const parent = ref.current?.parentElement;
+    if (!parent) return;
+    const rect = parent.getBoundingClientRect();
+    let last = pct;
+    const move = (ev: PointerEvent) => {
+      const p = ((rect.bottom - ev.clientY) / rect.height) * 100;
+      last = Math.min(85, Math.max(15, p));
+      setPct(last);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      localStorage.setItem("wade-split-pct", String(Math.round(last)));
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+  return (
+    <div ref={ref} style={{ height: `${pct}%` }} className="min-h-0 shrink-0 flex flex-col">
+      <div
+        onPointerDown={onPointerDown}
+        className="h-1.5 shrink-0 cursor-row-resize border-t bg-border/40 hover:bg-primary/40 transition-colors"
+        title="Drag to resize"
+      />
+      <div className="flex-1 min-h-0 flex flex-col [&>div]:flex-1 [&>div]:border-0 [&>div]:rounded-none">{children}</div>
+    </div>
+  );
+}
