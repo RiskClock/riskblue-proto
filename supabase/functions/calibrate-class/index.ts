@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
 
     // 4. Call the configured Gemini model with the system instruction and
     //    response schema so the reply is structured JSON.
-    const systemInstruction = `${basePrompt}\n\n${skillPrompt}`;
+    const systemInstruction = `${basePrompt}\n\n${skillPrompt}\n\nOUTPUT RULE (always applies): Return only a project-specific addendum for the target class in project_addendum. The base prompt is kept verbatim by the system; never rewrite or summarize it. Ignore neighboring rooms in the image.`;
     const userParts: any[] = [
       { inlineData: { mimeType: "image/png", data: imageBase64 } },
       {
