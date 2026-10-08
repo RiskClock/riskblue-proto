@@ -1061,7 +1061,9 @@ export default function WaterMitigationPlan() {
 
   /** Instances a plan actually covers (drawing plans list them explicitly). */
   const planCoversInstance = (plan: Plan, instanceId: string, controlId: string) => {
-    if (isDrawingPlan(plan)) return plan.included_instance_ids.includes(instanceId);
+    if (isDrawingPlan(plan)) {
+      return plan.included_instance_ids.includes(instanceId) && !excludedFor(plan, controlId).has(instanceId);
+    }
     return !excludedFor(plan, controlId).has(instanceId);
   };
 
@@ -1383,34 +1385,9 @@ export default function WaterMitigationPlan() {
     const plan = plans.find((p) => p.id === planId);
     if (!plan) return;
 
-    // Drawing-modal plans track the risk instances they cover directly.
-    if (isDrawingPlan(plan)) {
-      const included = new Set(plan.included_instance_ids);
-      const turningOffDrawing = included.has(instanceId);
-      turningOffDrawing ? included.delete(instanceId) : included.add(instanceId);
-      const nextIds = [...included];
-      queryClient.setQueryData(["wmp-plans", projectId], (old: Plan[] | undefined) =>
-        (old || []).map((p) => (p.id === planId ? { ...p, included_instance_ids: nextIds } : p)),
-      );
-      const { error: drawingError } = await supabase
-        .from("project_mitigation_plans")
-        .update({ included_instance_ids: nextIds } as any)
-        .eq("id", planId);
-      if (drawingError) {
-        toast.error(getUserFriendlyError(drawingError));
-        queryClient.invalidateQueries({ queryKey: ["wmp-plans", projectId] });
-        return;
-      }
-      const name = controlRows.find((c) => c.id === controlId)?.name || "control";
-      const saved = await logPlanChange(
-        turningOffDrawing ? "control_off" : "control_on",
-        `${turningOffDrawing ? "Removed" : "Added"} ${name} at 1 location in "${plan.name}"`,
-        planId,
-        { controlId, instanceId },
-      );
-      if (!saved) toast.warning("The control was updated, but its change history could not be recorded.");
-      return;
-    }
+    // Per-control toggles always use excluded_instances, so drawing plans keep
+    // their included_instance_ids (shared across controls) intact.
+
 
     const cur = new Set((plan.excluded_instances || {})[controlId] || []);
     const turningOff = !cur.has(instanceId);
@@ -2772,7 +2749,7 @@ actions and posts its own recap.`;
             (() => {
               const activePlan = plans.find((p) => p.id === viewer.planId) ??
                 ({ excluded_instances: {}, product_assignments: {}, included_instance_ids: [] } as unknown as Plan);
-              const ids = isDrawingPlan(activePlan) ? new Set<string>() : excludedFor(activePlan, viewer.controlId);
+              const ids = excludedFor(activePlan, viewer.controlId);
               viewerData.instances.forEach((instance) => {
                 if (
                   !planUsesProductForClass(activePlan, viewer.controlId, instance.catalogId, instance.assignmentId) ||

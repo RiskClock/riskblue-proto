@@ -1,0 +1,1 @@
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS protection_phase text[] NOT NULL DEFAULT '{}'::text[];

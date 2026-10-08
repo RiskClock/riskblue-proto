@@ -2211,6 +2211,7 @@ export type Database = {
           name: string
           project_data: Json | null
           project_type: string | null
+          protection_phase: string[]
           public_share_expires_at: string | null
           public_share_revoked: boolean
           public_share_token: string | null
@@ -2257,6 +2258,7 @@ export type Database = {
           name: string
           project_data?: Json | null
           project_type?: string | null
+          protection_phase?: string[]
           public_share_expires_at?: string | null
           public_share_revoked?: boolean
           public_share_token?: string | null
@@ -2303,6 +2305,7 @@ export type Database = {
           name?: string
           project_data?: Json | null
           project_type?: string | null
+          protection_phase?: string[]
           public_share_expires_at?: string | null
           public_share_revoked?: boolean
           public_share_token?: string | null
