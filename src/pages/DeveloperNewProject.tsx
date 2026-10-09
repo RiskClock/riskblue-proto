@@ -159,7 +159,7 @@ export default function DeveloperNewProject() {
                 <button type="button" onClick={() => imageInput.current?.click()} className="inline-flex items-center gap-2 border-b border-current pb-1 text-base underline-offset-8 hover:opacity-80">
                   <ImagePlus className="h-4 w-4" /> {imageUrl ? "Change project image" : "Add project image"}
                 </button>
-                {imageUrl && <button type="button" onClick={() => setProjectImage(null)} className="text-base text-muted-foreground underline underline-offset-8 hover:opacity-80">Remove image</button>}
+                {imageUrl && <button type="button" onClick={() => setProjectImage(null)} className="text-base opacity-70 underline underline-offset-8 hover:opacity-100">Remove image</button>}
               </div>
               {imageError && <p role="alert" className="mt-4 break-words text-base text-destructive">{imageError}</p>}
             </div>
@@ -331,7 +331,7 @@ function Section({ index, title, children }: { index: string; title: string; chi
   return (
     <section className="grid gap-6 md:grid-cols-[200px_minmax(0,1fr)]">
       <div className="pt-5">
-        <p className="font-serif text-xl text-muted-foreground">{index}</p>
+        <p className="font-serif text-xl text-foreground/60">{index}</p>
         <p className="mt-2 text-base font-medium text-foreground">{title}</p>
       </div>
       <div>{children}</div>
