@@ -331,7 +331,7 @@ function Section({ index, title, children }: { index: string; title: string; chi
   return (
     <section className="grid gap-6 md:grid-cols-[200px_minmax(0,1fr)]">
       <div className="pt-5">
-        <p className="font-serif text-xl text-foreground/60">{index}</p>
+        <p className="font-serif text-xl text-foreground/75">{index}</p>
         <p className="mt-2 text-base font-medium text-foreground">{title}</p>
       </div>
       <div>{children}</div>
