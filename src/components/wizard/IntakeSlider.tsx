@@ -8,7 +8,7 @@ export function IntakeSlider({ label, value, max, ticks, onChange, onCommit, dis
 }) {
   const [dragging, setDragging] = useState(false);
   return <div className="relative py-3">
-    <SliderPrimitive.Root aria-label={label} value={[value]} min={0} max={max} step={max === 2 ? 0.01 : 1} disabled={disabled}
+    <SliderPrimitive.Root aria-label={label} value={[value]} min={0} max={max} step={max === 2 ? 1 : 100_000} disabled={disabled}
       className="relative z-10 flex h-6 w-full touch-none select-none items-center"
       onPointerDown={() => setDragging(true)} onPointerUp={() => setDragging(false)} onPointerCancel={() => setDragging(false)}
       onValueChange={([next]) => onChange(next)} onValueCommit={([next]) => { setDragging(false); onCommit(next); }}>
