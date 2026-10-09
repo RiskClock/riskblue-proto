@@ -1,5 +1,9 @@
 # Roadmap
 
+- [ ] Fix developer image control position and prevent layout shifts.
+- [ ] Add ticked snapping risk and coverage sliders with direct coverage entry.
+- [ ] Save developer project and attachments without analysis or credits; verify persistence and interactions.
+
 - [x] Improve developer intake readability, header navigation and New Project wording.
 - [x] Add local drawing selection and project-image backdrop previews; verify interactions.
 - [x] Move the project-image control into the intro, serif step numbers, square translucent overlay that keeps intro text aligned, remove the intro divider; verify in preview.
