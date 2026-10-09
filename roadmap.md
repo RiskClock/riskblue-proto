@@ -1,7 +1,7 @@
 # Roadmap
 
-- [ ] Improve developer intake readability, header navigation and New Project wording.
-- [ ] Add local drawing selection and project-image backdrop previews; verify interactions.
+- [x] Improve developer intake readability, header navigation and New Project wording.
+- [x] Add local drawing selection and project-image backdrop previews; verify interactions.
 
 - [x] Add drawing-page Risk Radar class selection, prompt access, and run controls.
 - [x] Connect and highlight the selected file and drawing panels in Drawing mode.
