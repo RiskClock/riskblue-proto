@@ -50,7 +50,8 @@ export default function DeveloperNewProject() {
   const [drawings, setDrawings] = useState<File[]>([]);
   const [projectImage, setProjectImage] = useState<File | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [drawingError, setDrawingError] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
   const drawingInput = useRef<HTMLInputElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
 
@@ -132,18 +133,36 @@ export default function DeveloperNewProject() {
         </Button>
       } />
       <main className="pb-32">
-        <header className={cn("relative isolate mb-16 overflow-hidden border-b border-border", imageUrl && "min-h-[440px]")}>
+        <header className={cn("relative isolate mb-16 overflow-hidden", imageUrl && "min-h-[440px]")}>
           {imageUrl && <img src={imageUrl} alt="Project backdrop" className="absolute inset-0 -z-10 h-full w-full object-cover" />}
           <div className="mx-auto max-w-5xl px-6 py-16 sm:px-8 sm:py-20">
-          <div className={cn("max-w-2xl", imageUrl && "project-intro-image-copy rounded-md p-6 sm:p-10")}>
-          <p className="mb-6 text-base font-medium uppercase tracking-[0.15em] text-muted-foreground">New Project</p>
-          <h1 className="font-serif text-5xl font-medium leading-[1.1] sm:text-6xl">
-            Begin with intent.
-          </h1>
-          <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-            Tell us about the project. We will shape a water mitigation strategy around it and introduce the
-            specialists best placed to deliver it.
-          </p>
+          <div className={cn("relative max-w-2xl", imageUrl && "project-intro-image-copy")}>
+            {imageUrl && <div aria-hidden className="project-intro-image-backdrop absolute -inset-x-8 -inset-y-10" />}
+            <div className="relative">
+              <input ref={imageInput} type="file" accept="image/png,image/jpeg,image/webp" aria-label="Upload project image" className="hidden" onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file && ["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+                  setImageError(null);
+                  setProjectImage(file);
+                } else if (file) setImageError("Please select a JPG, PNG or WebP project image.");
+                e.target.value = "";
+              }} />
+              <p className="mb-6 text-base font-medium uppercase tracking-[0.15em] text-muted-foreground">New Project</p>
+              <h1 className="font-serif text-5xl font-medium leading-[1.1] sm:text-6xl">
+                Begin with intent.
+              </h1>
+              <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
+                Tell us about the project. We will shape a water mitigation strategy around it and introduce the
+                specialists best placed to deliver it.
+              </p>
+              <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-3">
+                <button type="button" onClick={() => imageInput.current?.click()} className="inline-flex items-center gap-2 border-b border-current pb-1 text-base underline-offset-8 hover:opacity-80">
+                  <ImagePlus className="h-4 w-4" /> {imageUrl ? "Change project image" : "Add project image"}
+                </button>
+                {imageUrl && <button type="button" onClick={() => setProjectImage(null)} className="text-base text-muted-foreground underline underline-offset-8 hover:opacity-80">Remove image</button>}
+              </div>
+              {imageError && <p role="alert" className="mt-4 break-words text-base text-destructive">{imageError}</p>}
+            </div>
           </div>
           </div>
         </header>
@@ -163,7 +182,7 @@ export default function DeveloperNewProject() {
             <input ref={drawingInput} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.dwg,.dxf" aria-label="Upload drawings" className="hidden" onChange={(e) => {
               const selected = Array.from(e.target.files ?? []);
               const invalid = selected.filter((file) => !/\.(pdf|png|jpe?g|dwg|dxf)$/i.test(file.name));
-              setUploadError(invalid.length ? `Unsupported drawing: ${invalid.map((file) => file.name).join(", ")}` : null);
+              setDrawingError(invalid.length ? `Unsupported drawing: ${invalid.map((file) => file.name).join(", ")}` : null);
               setDrawings((current) => [...current, ...selected.filter((file) => /\.(pdf|png|jpe?g|dwg|dxf)$/i.test(file.name) && !current.some((item) => item.name === file.name && item.size === file.size))]);
               e.target.value = "";
             }} />
@@ -175,27 +194,10 @@ export default function DeveloperNewProject() {
                 <Button variant="ghost" size="icon" aria-label={`Remove ${file.name}`} title={`Remove ${file.name}`} onClick={() => setDrawings((current) => current.filter((_, index) => index !== i))}><X /></Button>
               </li>)}
             </ul>}
+            {drawingError && <p role="alert" className="mt-3 break-words text-base text-destructive">{drawingError}</p>}
           </Section>
 
-          <Section index="03" title="Project image">
-            <input ref={imageInput} type="file" accept="image/png,image/jpeg,image/webp" aria-label="Upload project image" className="hidden" onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file && ["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
-                setUploadError(null);
-                setProjectImage(file);
-              } else if (file) setUploadError("Please select a JPG, PNG or WebP project image.");
-              e.target.value = "";
-            }} />
-            <div className="flex flex-wrap items-center gap-4">
-              {imageUrl && <img src={imageUrl} alt="Selected project image" className="h-20 w-28 rounded-md object-cover" />}
-              <Button variant="outline" className="h-12 text-base" onClick={() => imageInput.current?.click()}><ImagePlus /> {projectImage ? "Change image" : "Add project image"}</Button>
-              {projectImage && <Button variant="ghost" size="icon" aria-label="Remove project image" title="Remove project image" onClick={() => setProjectImage(null)}><X /></Button>}
-            </div>
-            {projectImage && <p className="mt-3 break-words text-base text-muted-foreground">{projectImage.name}</p>}
-          </Section>
-          {uploadError && <p role="alert" className="text-base text-destructive">{uploadError}</p>}
-
-          <Section index="04" title="Water mitigation budget">
+          <Section index="03" title="Water mitigation budget">
             <div className="flex items-baseline gap-3 border-b border-border focus-within:border-foreground">
               <span className="font-serif text-3xl text-muted-foreground">$</span>
               <Input
@@ -209,7 +211,7 @@ export default function DeveloperNewProject() {
             </div>
           </Section>
 
-          <Section index="05" title="Risk tolerance">
+          <Section index="04" title="Risk tolerance">
             <div className="pt-4">
                <Slider aria-label="Risk tolerance" value={[tolerance]} min={0} max={2} step={1} onValueChange={(v) => setTolerance(v[0])} />
               <div className="mt-6 grid grid-cols-3 text-base">
@@ -234,7 +236,7 @@ export default function DeveloperNewProject() {
             </div>
           </Section>
 
-          <Section index="06" title="Project address">
+          <Section index="05" title="Project address">
             <div className="relative">
               <div className="flex items-center gap-4 border-b border-border focus-within:border-foreground">
                 <MapPin className="h-5 w-5 shrink-0 text-muted-foreground" />
@@ -329,7 +331,7 @@ function Section({ index, title, children }: { index: string; title: string; chi
   return (
     <section className="grid gap-6 md:grid-cols-[200px_minmax(0,1fr)]">
       <div className="pt-5">
-        <p className="text-base text-muted-foreground">{index}</p>
+        <p className="font-serif text-xl text-muted-foreground">{index}</p>
         <p className="mt-2 text-base font-medium text-foreground">{title}</p>
       </div>
       <div>{children}</div>
