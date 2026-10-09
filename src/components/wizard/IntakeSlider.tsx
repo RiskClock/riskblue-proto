@@ -15,7 +15,7 @@ export function IntakeSlider({ label, value, max, ticks, onChange, onCommit, dis
       <SliderPrimitive.Track className="relative h-px w-full grow bg-border">
         <SliderPrimitive.Range className="absolute h-full bg-foreground" />
       </SliderPrimitive.Track>
-      <SliderPrimitive.Thumb className={cn("block border-foreground bg-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50", dragging ? "h-5 w-5 rounded-full border-2" : "h-4 w-0.5 rounded-none border-0 bg-foreground")} />
+      <SliderPrimitive.Thumb aria-label={label} className={cn("block border-foreground bg-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50", dragging ? "h-5 w-5 rounded-full border-2" : "h-4 w-0.5 rounded-none border-0 bg-foreground")} />
     </SliderPrimitive.Root>
     <div aria-hidden className="pointer-events-none absolute inset-x-0 top-5 flex justify-between">
       {Array.from({ length: ticks }, (_, index) => <span key={index} className={cn("w-px bg-muted-foreground/50", index % 10 === 0 || ticks === 3 ? "h-4" : "h-2")} />)}
