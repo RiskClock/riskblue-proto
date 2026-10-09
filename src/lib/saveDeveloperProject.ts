@@ -11,7 +11,7 @@ export async function saveDeveloperProject(client: SupabaseClient<Database>, inp
   const { error: projectError } = await client.from("projects").upsert({
     id: input.projectId, user_id: input.userId, tenant_id: input.tenantId,
     name: input.name.trim(), address_1: input.address.trim(), location: input.address.trim(),
-    city: input.city, state: input.region, status: "draft", workbench_status: "draft",
+    city: input.city, state: input.region, status: "draft", workbench_status: "processed",
     currency_code: "USD", credits_consumed: 0, project_data: input.details as Json,
   });
   check(projectError);
