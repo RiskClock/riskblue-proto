@@ -167,7 +167,7 @@ export default function DeveloperNewProject() {
         <header className="relative isolate mb-16 overflow-hidden">
           {imageUrl && <img src={imageUrl} alt="Project backdrop" className="absolute inset-0 -z-10 h-full w-full object-cover" />}
           <div className="relative mx-auto max-w-5xl px-6 py-24 sm:px-8 sm:py-20">
-            <div className={cn("absolute right-6 top-4 flex items-center gap-2 sm:right-8", imageUrl && "project-intro-image-copy")}>
+            <div className="absolute right-6 top-4 z-20 flex items-center gap-2 sm:right-8">
               <Button variant="outline" disabled={saving} onClick={() => imageInput.current?.click()} className="text-base"><ImagePlus />{imageUrl ? "Change project image" : "Add project image"}</Button>
               <Button variant="outline" size="icon" aria-label="Remove project image" title="Remove project image" disabled={saving || !projectImage} className={cn(!projectImage && "invisible")} onClick={() => setProjectImage(null)}><X /></Button>
             </div>
