@@ -2,6 +2,7 @@
 
 - [x] Improve developer intake readability, header navigation and New Project wording.
 - [x] Add local drawing selection and project-image backdrop previews; verify interactions.
+- [x] Move the project-image control into the intro, serif step numbers, square translucent overlay that keeps intro text aligned, remove the intro divider; verify in preview.
 
 - [x] Add drawing-page Risk Radar class selection, prompt access, and run controls.
 - [x] Connect and highlight the selected file and drawing panels in Drawing mode.
