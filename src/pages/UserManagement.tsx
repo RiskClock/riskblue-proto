@@ -12,7 +12,6 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TenantAssigner, type TenantOption, type TenantAssignment, type TenantRoleValue } from "@/components/users/TenantAssigner";
 import { Badge } from "@/components/ui/badge";
-import { Select as AcctSelect } from "@/components/ui/select";
 import { accountTypeLabel } from "@/lib/accountType";
 import {
   Table,
