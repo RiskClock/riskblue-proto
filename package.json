@@ -90,7 +90,6 @@
   "devDependencies": {
     "@eslint/js": "^9.32.0",
     "@tailwindcss/typography": "^0.5.16",
-    "@types/bun": "^1.4.2",
     "@types/node": "^22.16.5",
     "@types/rbush": "^4.0.0",
     "@types/react": "^18.3.23",
