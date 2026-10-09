@@ -5,8 +5,12 @@ import { AppHeader } from "@/components/AppHeader";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useTenant } from "@/contexts/TenantContext";
-import { Slider } from "@/components/ui/slider";
-import { ArrowLeft, ArrowUpRight, Loader2, MapPin, ShieldCheck, ImagePlus, Upload, FileText, X } from "lucide-react";
+import { IntakeSlider } from "@/components/wizard/IntakeSlider";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import { COVERAGE_FIELDS, COVERAGE_MAX, clampCoverage, snapCoverage, snapTolerance, developerProjectDetails, type CoverageKey } from "@/lib/developerIntake";
+import { saveDeveloperProject } from "@/lib/saveDeveloperProject";
+import { ArrowLeft, ArrowUpRight, Loader2, MapPin, ShieldCheck, ImagePlus, Upload, FileText, X, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Suggestion = { placeId: string; text: string };
@@ -46,7 +50,34 @@ function formatCurrency(raw: string) {
 
 export default function DeveloperNewProject() {
   const navigate = useNavigate();
-  const { tenantPath } = useTenant();
+  const { tenantPath, tenantId } = useTenant();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const saveIds = useRef({ projectId: crypto.randomUUID(), requestId: crypto.randomUUID() });
+  const saveLock = useRef(false);
+  const [scope, setScope] = useState<Record<CoverageKey, number>>({ general_liability: 0, workers_compensation: 0, pollution_environmental_liability: 0, excess_umbrella_liability: 0 });
+  const handleSave = async () => {
+    if (!user || !name.trim() || saveLock.current) return;
+    saveLock.current = true;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await saveDeveloperProject(supabase, {
+        ...saveIds.current, userId: user.id, tenantId, name, address: query,
+        city: place?.city, region: place?.region,
+        details: developerProjectDetails(budget, tolerance, scope), image: projectImage, drawings,
+      });
+      toast({ title: "Project saved", description: "Your project and attachments have been saved. No credits were charged." });
+      navigate(tenantPath("/projects"));
+    } catch (error) {
+      setSaveError(`Saving did not finish. Please retry to complete the same project. ${(error as any)?.message || "Please try again."}`);
+    } finally {
+      saveLock.current = false;
+      setSaving(false);
+    }
+  };
   const [drawings, setDrawings] = useState<File[]>([]);
   const [projectImage, setProjectImage] = useState<File | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -119,7 +150,7 @@ export default function DeveloperNewProject() {
     }
   };
 
-  const tol = TOLERANCES[tolerance];
+  const tol = TOLERANCES[snapTolerance(tolerance)];
   const locality = useMemo(
     () => [place?.city, place?.region].filter(Boolean).join(", "),
     [place],
@@ -133,9 +164,13 @@ export default function DeveloperNewProject() {
         </Button>
       } />
       <main className="pb-32">
-        <header className={cn("relative isolate mb-16 overflow-hidden", imageUrl && "min-h-[440px]")}>
+        <header className="relative isolate mb-16 overflow-hidden">
           {imageUrl && <img src={imageUrl} alt="Project backdrop" className="absolute inset-0 -z-10 h-full w-full object-cover" />}
-          <div className="mx-auto max-w-5xl px-6 py-16 sm:px-8 sm:py-20">
+          <div className="relative mx-auto max-w-5xl px-6 py-24 sm:px-8 sm:py-20">
+            <div className="absolute right-6 top-4 z-20 flex items-center gap-2 sm:right-8">
+              <Button variant="outline" disabled={saving} onClick={() => imageInput.current?.click()} className="text-base"><ImagePlus />{imageUrl ? "Change project image" : "Add project image"}</Button>
+              <Button variant="outline" size="icon" aria-label="Remove project image" title="Remove project image" disabled={saving || !projectImage} className={cn(!projectImage && "invisible")} onClick={() => setProjectImage(null)}><X /></Button>
+            </div>
           <div className={cn("relative max-w-2xl", imageUrl && "project-intro-image-copy")}>
             {imageUrl && <div aria-hidden className="project-intro-image-backdrop absolute -inset-x-8 -inset-y-10" />}
             <div className="relative">
@@ -155,19 +190,13 @@ export default function DeveloperNewProject() {
                 Tell us about the project. We will shape a water mitigation strategy around it and introduce the
                 specialists best placed to deliver it.
               </p>
-              <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-3">
-                <button type="button" onClick={() => imageInput.current?.click()} className="inline-flex items-center gap-2 border-b border-current pb-1 text-base underline-offset-8 hover:opacity-80">
-                  <ImagePlus className="h-4 w-4" /> {imageUrl ? "Change project image" : "Add project image"}
-                </button>
-                {imageUrl && <button type="button" onClick={() => setProjectImage(null)} className="text-base opacity-70 underline underline-offset-8 hover:opacity-100">Remove image</button>}
-              </div>
               {imageError && <p role="alert" className="mt-4 break-words text-base text-destructive">{imageError}</p>}
             </div>
           </div>
           </div>
         </header>
 
-        <div className="mx-auto max-w-5xl space-y-20 px-6 sm:px-8">
+        <fieldset disabled={saving} className="mx-auto min-w-0 max-w-5xl space-y-20 px-6 sm:px-8">
           <Section index="01" title="Project name">
             <Input
               value={name}
@@ -213,7 +242,7 @@ export default function DeveloperNewProject() {
 
           <Section index="04" title="Risk tolerance">
             <div className="pt-4">
-               <Slider aria-label="Risk tolerance" value={[tolerance]} min={0} max={2} step={1} onValueChange={(v) => setTolerance(v[0])} />
+               <IntakeSlider label="Risk tolerance" value={tolerance} max={2} ticks={3} onChange={setTolerance} onCommit={(value) => setTolerance(snapTolerance(value))} />
               <div className="mt-6 grid grid-cols-3 text-base">
                 {TOLERANCES.map((t, i) => (
                   <Button variant="ghost"
@@ -236,7 +265,23 @@ export default function DeveloperNewProject() {
             </div>
           </Section>
 
-          <Section index="05" title="Project address">
+          <Section index="05" title="Minimum Protection Scope">
+            <div className="space-y-10">
+              {COVERAGE_FIELDS.map(({ key, label }) => <div key={key}>
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+                  <label htmlFor={key} className="text-base font-medium">{label}</label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">$</span>
+                    <Input id={key} aria-label={label} inputMode="numeric" value={scope[key].toLocaleString("en-US")} className="w-40 text-right text-base md:text-base tabular-nums" onChange={(e) => setScope((current) => ({ ...current, [key]: clampCoverage(Number(e.target.value.replace(/[^\d]/g, ""))) }))} />
+                  </div>
+                </div>
+                <IntakeSlider label={`${label} coverage`} value={scope[key]} max={COVERAGE_MAX} ticks={101} onChange={(value) => setScope((current) => ({ ...current, [key]: value }))} onCommit={(value) => setScope((current) => ({ ...current, [key]: snapCoverage(value) }))} />
+                <div className="mt-1 flex justify-between text-base tabular-nums text-muted-foreground"><span>$0</span><span>$10 million</span></div>
+              </div>)}
+            </div>
+          </Section>
+
+          <Section index="06" title="Project address">
             <div className="relative">
               <div className="flex items-center gap-4 border-b border-border focus-within:border-foreground">
                 <MapPin className="h-5 w-5 shrink-0 text-muted-foreground" />
@@ -321,7 +366,11 @@ export default function DeveloperNewProject() {
               <p className="mt-6 text-base text-muted-foreground">Preview only. Specialist details are illustrative.</p>
             </section>
           )}
-        </div>
+          <div className="flex flex-col items-end gap-4">
+            {saveError && <p role="alert" className="w-full text-base text-destructive">{saveError}</p>}
+            <Button size="lg" className="h-14 px-8 text-base" disabled={saving || !user || !name.trim()} onClick={handleSave}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? "Saving project…" : "Save project"}</Button>
+          </div>
+        </fieldset>
       </main>
     </div>
   );
