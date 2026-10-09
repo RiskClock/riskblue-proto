@@ -1,6 +1,6 @@
 # Architecture rules
 
-- Developer intake attachments remain local preview state with object URLs revoked on replacement or unmount; preview selection must not create projects or upload to storage.
+- Developer intake selection stays local until explicit Save, with object URLs revoked on replacement or unmount; Save persists intake fields in projects.project_data and attachments in private uploaded-drawings under project folders, using copied requests without starting pipelines or consuming credits.
 
 - Risk Radar writes immutable per-class history to `risk_radar_run_history` while `analysis_request_files.risk_element_results` remains the latest-result snapshot; this keeps older runs inspectable without changing existing consumers.
 
