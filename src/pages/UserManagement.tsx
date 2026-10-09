@@ -1433,6 +1433,7 @@ function CreateUserDialog({
     projects: { project_id: string; role: "admin" | "contributor" }[];
     tenants: TenantAssignment[];
     tenant_role?: TenantRoleValue;
+    account_type?: string;
   }) => void;
   loading: boolean;
 }) {
@@ -1444,9 +1445,11 @@ function CreateUserDialog({
   const [projects, setProjects] = useState<{ project_id: string; role: "admin" | "contributor" }[]>([]);
   const [tenantAssignments, setTenantAssignments] = useState<TenantAssignment[]>([]);
   const [scopedRole, setScopedRole] = useState<TenantRoleValue>("member");
+  const [newAccountType, setNewAccountType] = useState<string>("wmsv");
 
   useEffect(() => {
     if (open) {
+      setNewAccountType("wmsv");
       setEmail("");
       setName("");
       setPassword("");
@@ -1468,7 +1471,7 @@ function CreateUserDialog({
       send_welcome_email: sendWelcomeEmail,
       projects: scopedTenant ? [] : projects,
       tenants: scopedTenant ? [{ tenant_id: scopedTenant.id, role: scopedRole }] : tenantAssignments,
-      ...(scopedTenant ? { tenant_role: scopedRole } : {}),
+      ...(scopedTenant ? { tenant_role: scopedRole } : { account_type: newAccountType }),
     });
   };
 
@@ -1544,6 +1547,19 @@ function CreateUserDialog({
             </div>
           ) : (
             <>
+              <div>
+                <Label>Account type</Label>
+                <Select value={newAccountType} onValueChange={setNewAccountType}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="standard">Standard</SelectItem>
+                    <SelectItem value="wmsv">WMSV</SelectItem>
+                    <SelectItem value="developer">Developer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <TenantAssigner tenants={allTenants} value={tenantAssignments} onChange={setTenantAssignments} />
               <div>
                 <Label>Tags (optional)</Label>

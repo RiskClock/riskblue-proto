@@ -463,6 +463,10 @@ async function actionCreate(
   const password = body.password ? String(body.password) : null;
   // Every account is a WMSV account now; the toggle was removed from the UI.
   const isWmsv = body.is_wmsv === undefined ? true : !!body.is_wmsv;
+  const createAccountType =
+    typeof body.account_type === "string" && ["standard", "wmsv", "developer"].includes(body.account_type)
+      ? body.account_type
+      : isWmsv ? "wmsv" : "standard";
   const company = body.company ? String(body.company).trim() : null;
   const tagNames: string[] = Array.isArray(body.tags) ? body.tags : [];
   const credits = Number.isFinite(Number(body.credits)) ? Math.max(0, Math.floor(Number(body.credits))) : 0;
@@ -531,7 +535,7 @@ async function actionCreate(
       {
         user_id: created.user.id,
         display_name: name,
-        account_type: isWmsv ? "wmsv" : "standard",
+        account_type: createAccountType,
         company,
         is_active: true,
         credits_balance: 0,
@@ -636,7 +640,7 @@ async function actionCreate(
   await logAdminEvent(created.user.id, "admin_user_created", actor, {
     target_email: email,
     target_name: name,
-    account_type: isWmsv ? "wmsv" : "standard",
+    account_type: createAccountType,
     company,
     tags: tagNames,
     credits_balance: credits,
