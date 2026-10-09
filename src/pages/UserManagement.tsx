@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TenantAssigner, type TenantOption, type TenantAssignment, type TenantRoleValue } from "@/components/users/TenantAssigner";
 import { Badge } from "@/components/ui/badge";
+import { Select as AcctSelect } from "@/components/ui/select";
+import { accountTypeLabel } from "@/lib/accountType";
 import {
   Table,
   TableBody,
@@ -1011,7 +1013,7 @@ const UserManagement = () => {
                           case "type":
                             return (
                               <TableCell key={colId} className={dim}>
-                                <Badge variant="outline">{u.account_type === "wmsv" ? "WMSV" : "Standard"}</Badge>
+                                <Badge variant="outline">{accountTypeLabel(u.account_type)}</Badge>
                               </TableCell>
                             );
                           case "credits":
@@ -1597,6 +1599,7 @@ function EditUserDialog({
     projects: { project_id: string; role: "admin" | "contributor" }[];
     tenants: TenantAssignment[];
     is_system_admin?: boolean;
+    account_type?: string;
   }) => void;
   loading: boolean;
 }) {
@@ -1604,6 +1607,7 @@ function EditUserDialog({
   const [tags, setTags] = useState<string[]>([]);
   const [password, setPassword] = useState("");
   const [isSystemAdmin, setIsSystemAdmin] = useState(false);
+  const [accountType, setAccountType] = useState<string>("standard");
   const [projects, setProjects] = useState<{ project_id: string; role: "admin" | "contributor" }[]>([]);
   const [tenantAssignments, setTenantAssignments] = useState<TenantAssignment[]>([]);
   const [scopedRole, setScopedRole] = useState<TenantRoleValue>("member");
@@ -1616,6 +1620,7 @@ function EditUserDialog({
       setTags(user.tags.map((t) => t.name));
       setPassword("");
       setIsSystemAdmin(!!user.is_system_admin);
+      setAccountType(user.account_type || "standard");
       setProjects(
         user.projects.map((p) => ({
           project_id: p.id,
@@ -1681,6 +1686,19 @@ function EditUserDialog({
                   <TagPicker selected={tags} onChange={setTags} available={availableTags} />
                 </div>
               </div>
+              <div>
+                <Label>Account type</Label>
+                <Select value={accountType} onValueChange={setAccountType}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="standard">Standard</SelectItem>
+                    <SelectItem value="wmsv">WMSV</SelectItem>
+                    <SelectItem value="developer">Developer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="rounded-md border px-3 py-2.5">
                 <div className="flex items-start gap-2">
                   <Checkbox
@@ -1718,7 +1736,7 @@ function EditUserDialog({
                       { tenant_id: scopedTenant.id, role: scopedRole },
                     ]
                   : tenantAssignments,
-                ...(scopedTenant ? {} : { is_system_admin: isSystemAdmin }),
+                ...(scopedTenant ? {} : { is_system_admin: isSystemAdmin, account_type: accountType }),
               })
             }
             disabled={loading || !name.trim() || !pwdValid}

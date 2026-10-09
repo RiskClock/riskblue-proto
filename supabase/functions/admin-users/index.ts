@@ -656,6 +656,9 @@ async function actionUpdate(body: any, actor: { id: string | null; email: string
   if (typeof body.name === "string") updates.display_name = body.name.trim();
   if (typeof body.company === "string") updates.company = body.company.trim() || null;
   if (typeof body.is_wmsv === "boolean") updates.account_type = body.is_wmsv ? "wmsv" : "standard";
+  if (typeof body.account_type === "string" && ["standard", "wmsv", "developer"].includes(body.account_type)) {
+    updates.account_type = body.account_type;
+  }
 
   // Credits are NOT written through the plain profile update - they go through
   // admin_adjust_credits() so a row is logged in credit_transactions.
@@ -740,6 +743,7 @@ async function actionUpdate(body: any, actor: { id: string | null; email: string
       ...(typeof body.name === "string" ? { name: body.name.trim() } : {}),
       ...(typeof body.company === "string" ? { company: body.company.trim() || null } : {}),
       ...(typeof body.is_wmsv === "boolean" ? { account_type: body.is_wmsv ? "wmsv" : "standard" } : {}),
+      ...(updates.account_type ? { account_type: updates.account_type } : {}),
       ...(updates.credits_balance !== undefined ? { credits_balance: updates.credits_balance } : {}),
       ...(Array.isArray(body.tags) ? { tags: body.tags } : {}),
       ...(Array.isArray(body.projects) ? { projects: body.projects } : {}),
@@ -913,6 +917,7 @@ Deno.serve(async (req) => {
       delete body.credits;
       delete body.company;
       delete body.is_wmsv;
+      delete body.account_type;
       delete body.is_system_admin;
       delete body.tags;
       delete body.projects;
