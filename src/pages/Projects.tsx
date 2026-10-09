@@ -41,7 +41,7 @@ const Projects = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { isWMSV, company } = useAccountType();
+  const { isWMSV, company, accountType } = useAccountType();
   const isStaffViewer = useIsSystemAdmin();
   const { hasBetaAccess } = useBetaAccess();
   const staffIds = useStaffUserIds();
@@ -138,6 +138,10 @@ const Projects = () => {
 
   const handleNewProject = () => {
     logActivity("add_new_clicked");
+    if (accountType === "developer") {
+      navigate("/developer/new-project");
+      return;
+    }
     setShowCreateModal(true);
   };
 

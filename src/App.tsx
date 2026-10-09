@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import DeveloperNewProject from "./pages/DeveloperNewProject";
 import { Toaster } from "@/components/ui/toaster"; 
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -85,6 +86,7 @@ const App = () => (
             <Routes>
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
             <Route path="/projects" element={<ProtectedRoute><RootRedirect fallback={<Projects />} /></ProtectedRoute>} />
+            <Route path="/developer/new-project" element={<ProtectedRoute><DeveloperNewProject /></ProtectedRoute>} />
             <Route path="/project/:id" element={<ProtectedRoute><ProjectWizard /></ProtectedRoute>} />
             
             <Route path="/solution-provider-portal" element={<ProtectedRoute><SolutionProviderPortal /></ProtectedRoute>} />

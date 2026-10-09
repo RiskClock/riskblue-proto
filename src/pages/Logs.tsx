@@ -1,3 +1,4 @@
+import { accountTypeLabel } from "@/lib/accountType";
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -305,7 +306,7 @@ export default function Logs() {
     if (log.action === "admin_user_created") {
       lines.push({ value: `Created ${m.target_email || "user"}` });
       const bits: string[] = [];
-      if (m.account_type) bits.push(m.account_type === "wmsv" ? "WMSV" : "Standard");
+      if (m.account_type) bits.push(accountTypeLabel(m.account_type));
       if (m.company) bits.push(`Company: ${m.company}`);
       if (Array.isArray(m.tags) && m.tags.length) bits.push(`Tags: ${m.tags.join(", ")}`);
       if (bits.length) lines.push({ value: bits.join(" • ") });
@@ -315,7 +316,7 @@ export default function Logs() {
       const bits: string[] = [];
       if ("name" in c) bits.push(`Name: ${c.name}`);
       if ("company" in c) bits.push(`Company: ${c.company || "-"}`);
-      if ("account_type" in c) bits.push(`Type: ${c.account_type === "wmsv" ? "WMSV" : "Standard"}`);
+      if ("account_type" in c) bits.push(`Type: ${accountTypeLabel(c.account_type)}`);
       if ("tags" in c) bits.push(`Tags: ${(c.tags || []).join(", ") || "-"}`);
       if (bits.length) lines.push({ value: bits.join(" • ") });
     } else if (log.action === "admin_user_deactivated") {
