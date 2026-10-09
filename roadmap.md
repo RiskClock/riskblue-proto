@@ -1,5 +1,8 @@
 # Roadmap
 
+- [ ] Improve developer intake readability, header navigation and New Project wording.
+- [ ] Add local drawing selection and project-image backdrop previews; verify interactions.
+
 - [x] Add drawing-page Risk Radar class selection, prompt access, and run controls.
 - [x] Connect and highlight the selected file and drawing panels in Drawing mode.
 - [x] Keep zero-count classes readable, hide page agents in View Mode, update agent icons, and rename the add action to + Control.
