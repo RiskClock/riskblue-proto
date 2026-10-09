@@ -130,12 +130,15 @@ All colors MUST be HSL.
 }
 
 .project-intro-image-copy {
-  background: hsl(var(--intro-overlay) / 0.7);
   color: hsl(var(--intro-overlay-foreground));
 }
 
-.project-intro-image-copy p {
+.project-intro-image-copy p:not([role="alert"]) {
   color: hsl(var(--intro-overlay-foreground) / 0.92);
+}
+
+.project-intro-image-backdrop {
+  background: hsl(var(--intro-overlay) / 0.45);
 }
 
 @layer base {
