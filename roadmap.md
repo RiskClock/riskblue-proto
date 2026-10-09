@@ -1,8 +1,8 @@
 # Roadmap
 
-- [ ] Fix developer image control position and prevent layout shifts.
-- [ ] Add ticked snapping risk and coverage sliders with direct coverage entry.
-- [ ] Save developer project and attachments without analysis or credits; verify persistence and interactions.
+- [x] Fix developer image control position and prevent layout shifts.
+- [x] Add ticked snapping risk and coverage sliders with direct coverage entry.
+- [x] Save developer project and attachments without analysis or credits; verify persistence and interactions.
 
 - [x] Improve developer intake readability, header navigation and New Project wording.
 - [x] Add local drawing selection and project-image backdrop previews; verify interactions.
