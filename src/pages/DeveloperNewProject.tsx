@@ -150,7 +150,7 @@ export default function DeveloperNewProject() {
     }
   };
 
-  const tol = TOLERANCES[tolerance];
+  const tol = TOLERANCES[snapTolerance(tolerance)];
   const locality = useMemo(
     () => [place?.city, place?.region].filter(Boolean).join(", "),
     [place],
