@@ -138,6 +138,10 @@ const Projects = () => {
 
   const handleNewProject = () => {
     logActivity("add_new_clicked");
+    if (accountType === "developer") {
+      navigate("/developer/new-project");
+      return;
+    }
     setShowCreateModal(true);
   };
 
