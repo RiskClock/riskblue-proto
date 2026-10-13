@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Show received-bid status/count and scroll link, synchronize intro/image reveal, and widen bids to browser width; verify.
+- [x] Show received-bid status/count and scroll link, synchronize intro/image reveal, and widen bids to browser width; verified signed-in list and page, image readiness, full-width bounds, and 7 passing tests.
 
 - [x] Reuse reorderable column controls in Projects, Company Management and User Management; verified drag order and visibility persist after reload.
 - [x] Restore Drawings (optional) on creation and eliminate the existing-project title flash; verified the signed-in project title.
