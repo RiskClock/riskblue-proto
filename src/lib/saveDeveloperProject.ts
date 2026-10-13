@@ -6,21 +6,29 @@ export async function saveDeveloperProject(client: SupabaseClient<Database>, inp
   projectId: string; requestId: string; userId: string; tenantId: string | null;
   name: string; address: string; city?: string | null; region?: string | null;
   details: Record<string, unknown>; image: File | null; drawings: File[];
+  protectionPhase?: string[]; workbenchStatus?: "waiting_drawings" | "processing" | "processed";
+  existingImagePath?: string | null; isUpdate?: boolean;
 }) {
   const check = (error: unknown) => { if (error) throw error; };
-  const { error: projectError } = await client.from("projects").upsert({
-    id: input.projectId, user_id: input.userId, tenant_id: input.tenantId,
+  const workbenchStatus = input.workbenchStatus ?? (input.drawings.length ? "processing" : "waiting_drawings");
+  const shared = {
     name: input.name.trim(), address_1: input.address.trim(), location: input.address.trim(),
-    city: input.city, state: input.region, status: "draft", workbench_status: "processed",
-    currency_code: "USD", credits_consumed: 0, project_data: input.details as Json,
-  });
+    city: input.city, state: input.region, workbench_status: workbenchStatus,
+    protection_phase: input.protectionPhase ?? [],
+  };
+  const { error: projectError } = input.isUpdate
+    ? await client.from("projects").update(shared).eq("id", input.projectId)
+    : await client.from("projects").upsert({
+      id: input.projectId, user_id: input.userId, tenant_id: input.tenantId, ...shared, status: "draft",
+      currency_code: "USD", credits_consumed: 0, project_data: input.details as Json,
+    });
   check(projectError);
   const upload = async (file: File, path: string) => {
     const { error } = await client.storage.from("uploaded-drawings").upload(path, file, { upsert: true });
     check(error);
     return path;
   };
-  let imagePath: string | null = null;
+  let imagePath: string | null = input.existingImagePath ?? null;
   if (input.image) imagePath = await upload(input.image, `${input.projectId}/intro/${toStorageSafeFileName(input.image.name)}`);
   if (input.drawings.length) {
     const { error } = await client.from("analysis_requests").upsert({
