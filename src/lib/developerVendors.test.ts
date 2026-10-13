@@ -6,15 +6,14 @@ describe("sample bid metrics", () => {
     for (const id of DEFAULT_VENDOR_IDS) {
       const bid = mockBid("project", id);
       if (bid.status !== "received") throw new Error("Expected sample bid");
-      expect(bid.amount).toBeGreaterThanOrEqual(100_000);
-      expect(bid.amount).toBeLessThanOrEqual(999_999);
+      expect(bid.amount >= 100_000 && bid.amount <= 999_999).toBe(true);
     }
   });
   test("rental durations are at least 10 months", () => {
     for (const id of DEFAULT_VENDOR_IDS) {
       const bid = mockBid("project", id);
       if (bid.status !== "received") throw new Error("Expected sample bid");
-      expect(bid.rentalMonths).toBeGreaterThanOrEqual(10);
+      expect(bid.rentalMonths >= 10).toBe(true);
     }
   });
   test("Aquilon matches the bloated-scope sample", () => {
