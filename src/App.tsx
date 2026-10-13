@@ -87,6 +87,7 @@ const App = () => (
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
             <Route path="/projects" element={<ProtectedRoute><RootRedirect fallback={<Projects />} /></ProtectedRoute>} />
             <Route path="/developer/new-project" element={<ProtectedRoute><DeveloperNewProject /></ProtectedRoute>} />
+            <Route path="/developer/project/:id" element={<ProtectedRoute><DeveloperNewProject /></ProtectedRoute>} />
             <Route path="/project/:id" element={<ProtectedRoute><ProjectWizard /></ProtectedRoute>} />
             
             <Route path="/solution-provider-portal" element={<ProtectedRoute><SolutionProviderPortal /></ProtectedRoute>} />

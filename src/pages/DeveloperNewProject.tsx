@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
 import { Input } from "@/components/ui/input";
@@ -14,9 +14,9 @@ import { ArrowLeft, ArrowUpRight, Loader2, MapPin, ShieldCheck, ImagePlus, Uploa
 import { cn } from "@/lib/utils";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
-import aquilonLogo from "@/assets/aquilon-logo.png.asset.json";
-import meridianLogo from "@/assets/meridian-logo.png.asset.json";
-import halcyonLogo from "@/assets/halcyon-logo.png.asset.json";
+import { Checkbox } from "@/components/ui/checkbox";
+import { MOCK_VENDORS, DEFAULT_VENDOR_IDS, mockBid, DEVELOPER_STATUS_LABEL } from "@/lib/developerVendors";
+import { Search, Check } from "lucide-react";
 
 type Suggestion = { placeId: string; text: string };
 type Place = { formattedAddress: string; lat?: number; lng?: number; city?: string | null; region?: string | null };
@@ -42,12 +42,6 @@ const TOLERANCES = [
   },
 ];
 
-const MOCK_WMSVS = [
-  { name: "Aquilon Water Defence", street: "18 Harbour Row", km: 2.4, rating: "4.9", years: 14, specialty: "High-rise residential and hospitality", url: "https://example.com/aquilon", logo: aquilonLogo.url },
-  { name: "Meridian Leak Systems", street: "402 Foundry Lane, Suite 7", km: 5.8, rating: "4.8", years: 21, specialty: "Commercial office and mixed-use", url: "https://example.com/meridian", logo: meridianLogo.url },
-  { name: "Halcyon Mitigation Group", street: "77 Kingsway Court", km: 9.1, rating: "4.7", years: 9, specialty: "Healthcare, labs and critical facilities", url: "https://example.com/halcyon", logo: halcyonLogo.url },
-];
-
 function formatCurrency(raw: string) {
   const digits = raw.replace(/[^\d]/g, "");
   return digits ? Number(digits).toLocaleString("en-US") : "";
@@ -55,18 +49,25 @@ function formatCurrency(raw: string) {
 
 export default function DeveloperNewProject() {
   const navigate = useNavigate();
+  const { id: editId } = useParams();
+  const isEdit = !!editId;
+  const [loaded, setLoaded] = useState<{ status: string; projectData: Record<string, any>; imagePath: string | null; drawingNames: string[] } | null>(null);
+  const [phases, setPhases] = useState<string[]>([]);
+  const [vendorIds, setVendorIds] = useState<string[]>(DEFAULT_VENDOR_IDS);
+  const [addedVendorIds, setAddedVendorIds] = useState<string[]>([]);
+  const [vendorQuery, setVendorQuery] = useState("");
   const { tenantPath, tenantId } = useTenant();
   const { user } = useAuth();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const saveIds = useRef({ projectId: crypto.randomUUID(), requestId: crypto.randomUUID() });
+  const saveIds = useRef({ projectId: editId || crypto.randomUUID(), requestId: crypto.randomUUID() });
   const saveLock = useRef(false);
   const [drawingMode, setDrawingMode] = useState("upload");
   const [requestEmail, setRequestEmail] = useState("");
   const [requestBody, setRequestBody] = useState("Hello,\n\nCould you please upload the project drawings using the secure upload link provided with this request? Architectural and plumbing drawings would be especially helpful.\n\nThank you.");
   const handleSave = async () => {
-    if (!user || !name.trim() || saveLock.current) return;
+    if (!user || !name.trim() || !phases.length || saveLock.current) return;
     saveLock.current = true;
     setSaving(true);
     setSaveError(null);
@@ -74,9 +75,14 @@ export default function DeveloperNewProject() {
       await saveDeveloperProject(supabase, {
         ...saveIds.current, userId: user.id, tenantId, name, address: query,
         city: place?.city, region: place?.region,
-        details: developerProjectDetails(budget, tolerance), image: projectImage, drawings: drawingMode === "upload" ? drawings : [],
+        details: { ...(loaded?.projectData || {}), ...developerProjectDetails(budget, tolerance), selected_vendor_ids: vendorIds },
+        image: projectImage, drawings: drawingMode === "upload" ? drawings : [],
+        protectionPhase: phases, isUpdate: isEdit, existingImagePath: projectImage ? null : loaded?.imagePath ?? null,
+        workbenchStatus: loaded?.status === "processed" ? "processed"
+          : (loaded?.drawingNames.length || (drawingMode === "upload" && drawings.length)) ? "processing" : "waiting_drawings",
       });
-      toast({ title: "Project created", description: "Your project and attachments have been saved. No credits were charged." });
+      if (isEdit) saveIds.current.requestId = crypto.randomUUID();
+      toast({ title: isEdit ? "Changes saved" : "Project created", description: "Your project and attachments have been saved. No credits were charged." });
       navigate(tenantPath("/projects"));
     } catch (error) {
       setSaveError(`Saving did not finish. Please retry to complete the same project. ${(error as any)?.message || "Please try again."}`);
@@ -113,6 +119,36 @@ export default function DeveloperNewProject() {
   const [resolving, setResolving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const sessionToken = useRef<string>(crypto.randomUUID());
+  const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!editId) return;
+    (async () => {
+      const { data: p, error } = await supabase.from("projects")
+        .select("name, address_1, location, city, state, workbench_status, protection_phase, project_data").eq("id", editId).maybeSingle();
+      if (error || !p) { setSaveError("This project could not be loaded."); return; }
+      const pd = ((p as any).project_data || {}) as Record<string, any>;
+      const { data: reqs } = await supabase.from("analysis_requests").select("id").eq("project_id", editId);
+      const reqIds = (reqs || []).map((r) => r.id);
+      const { data: files } = reqIds.length
+        ? await supabase.from("analysis_request_files").select("name").in("analysis_request_id", reqIds) : { data: [] as { name: string }[] };
+      setName(p.name || "");
+      setBudget(pd.water_mitigation_budget ? formatCurrency(String(pd.water_mitigation_budget)) : "");
+      setTolerance({ high: 0, medium: 1, low: 2 }[pd.riskTolerance as string] ?? 1);
+      const addr = (p as any).address_1 || (p as any).location || "";
+      setQuery(addr);
+      if (addr) setPlace({ formattedAddress: addr, city: (p as any).city, region: (p as any).state });
+      setPhases(((p as any).protection_phase as string[]) || []);
+      const ids: string[] = Array.isArray(pd.selected_vendor_ids) ? pd.selected_vendor_ids : DEFAULT_VENDOR_IDS;
+      setVendorIds(ids);
+      setAddedVendorIds(ids.filter((id) => !DEFAULT_VENDOR_IDS.includes(id)));
+      setLoaded({ status: (p as any).workbench_status || "processing", projectData: pd, imagePath: pd.project_image_path || null, drawingNames: (files || []).map((f) => f.name) });
+      if (pd.project_image_path) {
+        const { data: signed } = await supabase.storage.from(pd.project_image_bucket || "uploaded-drawings").createSignedUrl(pd.project_image_path, 3600);
+        setExistingImageUrl(signed?.signedUrl || null);
+      }
+    })();
+  }, [editId]);
   const reqId = useRef(0);
 
   useEffect(() => {
@@ -158,6 +194,14 @@ export default function DeveloperNewProject() {
   };
 
   const tol = TOLERANCES[snapTolerance(tolerance)];
+  const backdropUrl = imageUrl || existingImageUrl;
+  const budgetValue = Number(budget.replace(/[^\d]/g, "")) || 0;
+  const shownVendors = MOCK_VENDORS.filter((v) => isEdit ? vendorIds.includes(v.id) : (v.recommended || addedVendorIds.includes(v.id)));
+  const vendorMatches = vendorQuery.trim()
+    ? MOCK_VENDORS.filter((v) => !shownVendors.some((s) => s.id === v.id) && v.name.toLowerCase().includes(vendorQuery.trim().toLowerCase()))
+    : [];
+  const toggleVendor = (id: string) => setVendorIds((c) => c.includes(id) ? c.filter((x) => x !== id) : [...c, id]);
+  const addVendor = (id: string) => { setAddedVendorIds((c) => [...c, id]); setVendorIds((c) => c.includes(id) ? c : [...c, id]); setVendorQuery(""); };
   const locality = useMemo(
     () => [place?.city, place?.region].filter(Boolean).join(", "),
     [place],
@@ -172,14 +216,14 @@ export default function DeveloperNewProject() {
       } />
       <main className="pb-32">
         <header className="relative isolate mb-16 overflow-hidden">
-          {imageUrl && <img src={imageUrl} alt="Project backdrop" className="absolute inset-0 -z-10 h-full w-full object-cover" />}
+          {backdropUrl && <img src={backdropUrl} alt="Project backdrop" className="absolute inset-0 -z-10 h-full w-full object-cover" />}
           <div className="relative mx-auto max-w-5xl px-6 py-24 sm:px-8 sm:py-20">
             <div className="absolute right-6 top-4 z-20 flex items-center gap-2 sm:right-8">
-              <Button variant="outline" disabled={saving} onClick={() => imageInput.current?.click()} className="text-base"><ImagePlus />{imageUrl ? "Change project image" : "Add project image"}</Button>
+              <Button variant="outline" disabled={saving} onClick={() => imageInput.current?.click()} className="text-base"><ImagePlus />{backdropUrl ? "Change project image" : "Add project image"}</Button>
               <Button variant="outline" size="icon" aria-label="Remove project image" title="Remove project image" disabled={saving || !projectImage} className={cn(!projectImage && "invisible")} onClick={() => setProjectImage(null)}><X /></Button>
             </div>
-          <div className={cn("relative max-w-2xl", imageUrl && "project-intro-image-copy")}>
-            {imageUrl && <div aria-hidden className="project-intro-image-backdrop absolute -inset-x-8 -inset-y-10" />}
+          <div className={cn("relative max-w-2xl", backdropUrl && "project-intro-image-copy")}>
+            {backdropUrl && <div aria-hidden className="project-intro-image-backdrop absolute -inset-x-8 -inset-y-10" />}
             <div className="relative">
               <input ref={imageInput} type="file" accept="image/png,image/jpeg,image/webp" aria-label="Upload project image" className="hidden" onChange={(e) => {
                 const file = e.target.files?.[0];
@@ -189,13 +233,14 @@ export default function DeveloperNewProject() {
                 } else if (file) setImageError("Please select a JPG, PNG or WebP project image.");
                 e.target.value = "";
               }} />
-              <p className="mb-6 text-base font-medium uppercase tracking-[0.15em] text-muted-foreground">New Project</p>
-              <h1 className="font-serif text-5xl font-medium leading-[1.1] sm:text-6xl">
-                Begin with intent.
+              <p className="mb-6 text-base font-medium uppercase tracking-[0.15em] text-muted-foreground">
+                {isEdit ? (loaded ? DEVELOPER_STATUS_LABEL[loaded.status] || "Processing" : "Loading project") : "New Project"}
+              </p>
+              <h1 className="break-words font-serif text-5xl font-medium leading-[1.1] sm:text-6xl">
+                {isEdit ? (name || "Untitled project") : "Begin with intent."}
               </h1>
               <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-                Tell us about the project. We will shape a water mitigation strategy around it and introduce the
-                specialists best placed to deliver it.
+                {isEdit ? (query || "No address provided") : "Tell us about the project. We will shape a water mitigation strategy around it and introduce the specialists best placed to deliver it."}
               </p>
               {imageError && <p role="alert" className="mt-4 break-words text-base text-destructive">{imageError}</p>}
             </div>
@@ -254,7 +299,18 @@ export default function DeveloperNewProject() {
             </div>
           </Section>
 
-          <Section index="04" title="Drawings">
+          <Section index="04" title="Protection phase">
+            <div className="flex flex-wrap gap-x-8 gap-y-4 md:pt-[3.25rem]">
+              {["Construction", "Operational"].map((ph) => (
+                <label key={ph} className="flex cursor-pointer items-center gap-3 text-base">
+                  <Checkbox checked={phases.includes(ph)} onCheckedChange={(v) => setPhases((c) => v ? [...c, ph] : c.filter((x) => x !== ph))} aria-label={ph} />{ph}
+                </label>
+              ))}
+            </div>
+            {!phases.length && <p className="mt-3 text-base text-muted-foreground">Select at least one phase.</p>}
+          </Section>
+
+          <Section index="05" title="Drawings">
             <RadioGroup aria-label="Drawing availability" value={drawingMode} onValueChange={setDrawingMode} disabled={saving} className="mb-6 flex flex-wrap gap-x-6 gap-y-4 md:pt-[3.25rem]">
               {[["upload", "Upload now"], ["later", "Provide later"], ["request", "Request from other"]].map(([value, label]) => (
                 <label key={value} className="flex cursor-pointer items-center gap-2 text-base">
@@ -273,6 +329,9 @@ export default function DeveloperNewProject() {
                 <Textarea id="drawing-request-body" value={requestBody} onChange={(event) => setRequestBody(event.target.value)} className="min-h-48 text-base leading-relaxed" />
               </div>
             </div>}
+            {loaded && loaded.drawingNames.length > 0 && <ul className="mb-4 divide-y divide-border">
+              {loaded.drawingNames.map((n, i) => <li key={`${n}-${i}`} className="flex items-center gap-3 py-3"><FileText className="h-5 w-5 shrink-0 text-muted-foreground" /><p className="min-w-0 flex-1 break-words text-base">{n}</p><span className="text-sm text-muted-foreground">Uploaded</span></li>)}
+            </ul>}
             {drawingMode === "upload" && <>
             <input ref={drawingInput} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.dwg,.dxf" aria-label="Upload drawings" className="hidden" onChange={(e) => {
               const selected = Array.from(e.target.files ?? []);
@@ -293,7 +352,7 @@ export default function DeveloperNewProject() {
             </>}
           </Section>
 
-          <Section index="05" title="Project address (optional)">
+          <Section index="06" title="Project address (optional)">
             <div className="relative">
               <div className="flex items-center gap-4 border-b border-border focus-within:border-foreground">
                 <MapPin className="h-5 w-5 shrink-0 text-muted-foreground" />
@@ -330,54 +389,80 @@ export default function DeveloperNewProject() {
             </div>
           </Section>
 
-          {place && !resolving && (
+          {((place && !resolving) || isEdit) && (
             <section className="animate-fade-in">
               <div className="mb-14 flex items-end justify-between gap-8 border-t border-border pt-16">
                 <div>
-                  <p className="mb-4 text-base uppercase tracking-[0.1em] text-muted-foreground">Curated for this site</p>
-                  <h2 className="font-serif text-4xl font-medium text-foreground">Your recommended specialists</h2>
+                  <p className="mb-4 text-base uppercase tracking-[0.1em] text-muted-foreground">{isEdit ? "Bids" : "Curated for this site"}</p>
+                  <h2 className="font-serif text-4xl font-medium text-foreground">{isEdit ? "Your water mitigation vendors" : "Your recommended specialists"}</h2>
                 </div>
-                <p className="hidden max-w-xs text-right text-sm font-light text-muted-foreground md:block">
-                  Matched on proximity, project type and a {tol.label.toLowerCase()} protection level.
-                </p>
+                {!isEdit && <p className="hidden max-w-xs text-right text-sm font-light text-muted-foreground md:block">
+                  Matched on proximity, project type and a {tol.label.toLowerCase()} protection level. Untick any you do not want to invite.
+                </p>}
               </div>
+              {shownVendors.length === 0 ? <p className="text-base text-muted-foreground">No vendors selected yet. Search below to add one.</p> :
               <div className="grid gap-px overflow-hidden border border-border bg-border md:grid-cols-3">
-                {MOCK_WMSVS.map((w, i) => (
-                  <article key={w.name} className="flex min-w-0 flex-col bg-card p-6 lg:p-8">
+                {shownVendors.map((w, i) => {
+                  const selected = vendorIds.includes(w.id);
+                  const bid = mockBid(saveIds.current.projectId, w.id, budgetValue);
+                  return (
+                  <article key={w.id} className={cn("flex min-w-0 flex-col bg-card p-6 transition-opacity lg:p-8", !selected && "opacity-50")}>
                     <div className="mb-10 grid h-24 grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-                      <img src={w.logo} alt={`${w.name} logo`} className="h-24 w-full max-w-32 object-contain object-left" />
-                      <span className="whitespace-nowrap text-sm uppercase tracking-[0.1em] text-muted-foreground">
-                        {i === 0 ? "Best match" : `0${i + 1}`}
-                      </span>
+                      {w.logo ? <img src={w.logo} alt={`${w.name} logo`} className="h-24 w-full max-w-32 object-contain object-left" />
+                        : <span className="flex h-20 w-20 items-center justify-center border border-border font-serif text-3xl text-foreground">{w.name[0]}</span>}
+                      {isEdit
+                        ? <Button variant="ghost" size="icon" aria-label={`Remove ${w.name}`} title={`Remove ${w.name}`} onClick={() => toggleVendor(w.id)}><X /></Button>
+                        : <label className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-sm uppercase tracking-[0.1em] text-muted-foreground">
+                            {w.recommended ? (i === 0 ? "Best match" : `0${i + 1}`) : "Added"}
+                            <Checkbox checked={selected} onCheckedChange={() => toggleVendor(w.id)} aria-label={`Select ${w.name}`} />
+                          </label>}
                     </div>
                     <h3 className="font-serif text-2xl leading-tight text-card-foreground">{w.name}</h3>
+                    {isEdit ? (
+                      <div className="mt-6 space-y-2 border-t border-border pt-6 text-base">
+                        {bid.status === "received" ? <>
+                          <p className="flex items-center gap-2 font-medium text-foreground"><Check className="h-4 w-4" /> Bid received</p>
+                          <p className="font-serif text-3xl tabular-nums text-foreground">${bid.amount.toLocaleString("en-US")}</p>
+                          <p className="text-muted-foreground">{bid.timelineWeeks} week installation</p>
+                          <p className="text-muted-foreground">Submitted {bid.submittedDays} {bid.submittedDays === 1 ? "day" : "days"} ago</p>
+                        </> : <p className="text-muted-foreground">{bid.status === "awaiting" ? "Awaiting bid" : "Declined to bid"}</p>}
+                      </div>
+                    ) : <>
                     <p className="mt-3 text-base text-muted-foreground">{w.specialty}</p>
-                    <div className="mt-10 space-y-3 text-base text-muted-foreground">
-                      <p className="text-card-foreground">
-                        {w.street}
-                        {locality ? `, ${locality}` : ""}
-                      </p>
+                    <div className="mt-8 space-y-2 border-t border-border pt-6 text-base text-muted-foreground">
+                      <p>{w.street}{locality ? `, ${locality}` : ""}</p>
                       <p className="tabular-nums">{w.km.toFixed(1)} km from site</p>
-                      <p className="flex items-center gap-2">
-                        <ShieldCheck className="h-4 w-4" /> {w.rating} rating, {w.years} years certified
-                      </p>
+                      <p className="flex items-center gap-2"><ShieldCheck className="h-4 w-4" /> {w.rating} rating, {w.years} years certified</p>
                     </div>
-                    <a
-                      href={w.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-auto inline-flex items-center gap-2 pt-12 text-base text-foreground underline-offset-8 hover:underline"
-                    >
+                    <a href={w.url} target="_blank" rel="noreferrer" className="mt-auto inline-flex items-center gap-2 pt-12 text-base text-foreground underline-offset-8 hover:underline">
                       Visit website <ArrowUpRight className="h-3.5 w-3.5" />
-                    </a>
-                  </article>
-                ))}
+                    </a></>}
+                  </article>);
+                })}
+              </div>}
+              <div className="relative mt-10">
+                <p className="mb-3 text-base font-medium text-foreground">Add another vendor</p>
+                <div className="flex items-center gap-4 border-b border-border focus-within:border-foreground">
+                  <Search className="h-5 w-5 shrink-0 text-muted-foreground" />
+                  <Input value={vendorQuery} onChange={(e) => setVendorQuery(e.target.value)} aria-label="Search vendors" placeholder="Search vendors by name"
+                    className="h-auto rounded-none border-0 bg-transparent px-0 py-4 text-xl md:text-xl shadow-none focus-visible:ring-0" />
+                </div>
+                {vendorQuery.trim() && (
+                  <ul className="absolute z-20 mt-2 w-full overflow-hidden border border-border bg-popover shadow-2xl">
+                    {vendorMatches.length === 0 ? <li className="px-6 py-4 text-base text-muted-foreground">No matching vendors</li> :
+                      vendorMatches.map((v) => <li key={v.id}>
+                        <Button variant="ghost" onClick={() => addVendor(v.id)} className="h-auto w-full justify-between whitespace-normal px-6 py-4 text-left text-base text-popover-foreground hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground">
+                          <span>{v.name}</span><span className="text-sm opacity-70">{v.specialty}</span>
+                        </Button>
+                      </li>)}
+                  </ul>
+                )}
               </div>
             </section>
           )}
           <div className="flex flex-col items-end gap-4">
             {saveError && <p role="alert" className="w-full text-base text-destructive">{saveError}</p>}
-            <Button size="lg" className="h-14 px-8 text-base" disabled={saving || !user || !name.trim()} onClick={handleSave}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? "Creating project…" : "Create project"}</Button>
+            <Button size="lg" className="h-14 px-8 text-base" disabled={saving || !user || !name.trim() || !phases.length || (isEdit && !loaded)} onClick={handleSave}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? (isEdit ? "Saving changes" : "Creating project") : (isEdit ? "Save changes" : "Create project")}</Button>
           </div>
         </fieldset>
       </main>
