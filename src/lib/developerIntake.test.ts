@@ -16,8 +16,12 @@ describe("developer intake rules", () => {
   test("direct entry preserves amounts between ticks", () => {
     expect(clampCoverage(123_456)).toBe(123_456);
   });
-  test("risk slider snaps to low medium and high", () => {
+  test("protection slider snaps to three ticks", () => {
     expect([0.2, 0.8, 1.8].map(snapTolerance)).toEqual([0, 1, 2]);
+  });
+  test("essential stores high tolerance and comprehensive stores low", () => {
+    expect(developerProjectDetails("0", 0).riskTolerance).toBe("high");
+    expect(developerProjectDetails("0", 2).riskTolerance).toBe("low");
   });
   test("all four protection limits and budget persist", () => {
     expect(developerProjectDetails("250,000", 1, { general_liability: 100_000, workers_compensation: 200_000, pollution_environmental_liability: 300_000, excess_umbrella_liability: 10_000_000 })).toEqual({

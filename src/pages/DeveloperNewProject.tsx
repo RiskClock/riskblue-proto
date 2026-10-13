@@ -263,7 +263,7 @@ export default function DeveloperNewProject() {
               ))}
             </RadioGroup>
             {drawingMode === "request" && <div className="space-y-5 border-l border-border pl-6">
-              <p className="text-base leading-relaxed text-muted-foreground">We'll send them a secure link to upload the files. They will not see your budget or risk tolerance.</p>
+              <p className="text-base leading-relaxed text-muted-foreground">We'll send them a secure link to upload the files. They will not see your budget or protection level.</p>
               <div className="space-y-2">
                 <label htmlFor="drawing-request-email" className="text-base font-medium">Email</label>
                 <Input id="drawing-request-email" type="email" value={requestEmail} onChange={(event) => setRequestEmail(event.target.value)} placeholder="name@company.com" className="text-base md:text-base" />
