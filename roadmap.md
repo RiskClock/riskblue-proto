@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Reorder developer intake, remove protection scope, add local drawing-request choices and company logos, use black highlights and Create project wording; verify interactions.
+- [x] Reorder developer intake, remove protection scope, add local drawing-request choices and company logos, use black highlights and Create project wording; verify interactions.
 
 - [x] Fix developer image control position and prevent layout shifts.
 - [x] Add ticked snapping risk and coverage sliders with direct coverage entry.
