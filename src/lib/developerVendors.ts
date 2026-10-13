@@ -21,14 +21,14 @@ export const MOCK_VENDORS: MockVendor[] = [
 export const DEFAULT_VENDOR_IDS = MOCK_VENDORS.filter((v) => v.recommended).map((v) => v.id);
 
 export type MockBid = { status: "received"; amount: number; submittedDays: number; timelineWeeks: number;
-  airMovers: number; dehumidifiers: number; rentalDays: number; treatment: string;
+  airMovers: number; dehumidifiers: number; rentalMonths: number; treatment: string;
   assessment: "bloated" | "risk" | "aligned"; systemStatus: string; analysis: string;
 } | { status: "awaiting" | "declined" };
 
 const SAMPLE_SCOPES = [
-  { amount: 41_500, airMovers: 55, dehumidifiers: 12, rentalDays: 9, treatment: "Heavy Anti-microbial", assessment: "bloated" as const, systemStatus: "Bloated Scope", analysis: "Vendor is quoting 80% more equipment and 4 extra rental days than the baseline standard for a 5,000 sq ft space." },
-  { amount: 16_200, airMovers: 15, dehumidifiers: 2, rentalDays: 3, treatment: "None listed", assessment: "risk" as const, systemStatus: "High Liability Risk", analysis: "Scope fails to meet minimum drying standards. Insufficient dehumidification and missing mandatory anti-microbial treatment for Category 2 water." },
-  { amount: 26_800, airMovers: 32, dehumidifiers: 6, rentalDays: 5, treatment: "Standard Anti-microbial", assessment: "aligned" as const, systemStatus: "Baseline Aligned", analysis: "Scope and equipment density align 96% with industry standards. Pricing is within 4% of local baseline averages." },
+  { amount: 236_500, airMovers: 55, dehumidifiers: 12, rentalMonths: 14, treatment: "Heavy Anti-microbial", assessment: "bloated" as const, systemStatus: "Bloated Scope", analysis: "Vendor is quoting 80% more equipment and 4 extra rental months than the baseline standard for a 5,000 sq ft space." },
+  { amount: 128_400, airMovers: 15, dehumidifiers: 2, rentalMonths: 10, treatment: "None listed", assessment: "risk" as const, systemStatus: "High Liability Risk", analysis: "Scope fails to meet minimum drying standards. Insufficient dehumidification and missing mandatory anti-microbial treatment for Category 2 water." },
+  { amount: 182_750, airMovers: 32, dehumidifiers: 6, rentalMonths: 12, treatment: "Standard Anti-microbial", assessment: "aligned" as const, systemStatus: "Baseline Aligned", analysis: "Scope and equipment density align 96% with industry standards. Pricing is within 4% of local baseline averages." },
 ];
 
 const hash = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
