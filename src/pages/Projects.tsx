@@ -284,7 +284,9 @@ const Projects = () => {
                 <tr className="text-left">
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Project Name</th>
                   {orderedColumns.map(id => <th key={id} className="px-6 py-3 text-sm font-medium text-foreground">{columnOptions.find(c => c.value === id)?.label}</th>)}
-                  <th className="px-6 py-3 w-[120px]"></th>
+                  <th className="px-6 py-3 w-[60px] text-center">
+                    <ColumnEditDropdown columns={[{ id: "name", label: "Project Name" }, ...columnOptions.map(c => ({ id: c.value, label: c.label }))]} columnPrefs={columnPrefs} onChange={updateColumns} lockedColumns={["name"]} />
+                  </th>
                 </tr>
               </thead>
               <tbody>
