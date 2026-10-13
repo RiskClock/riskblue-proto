@@ -1,0 +1,2 @@
+ALTER TABLE public.projects DROP CONSTRAINT IF EXISTS projects_workbench_status_check;
+ALTER TABLE public.projects ADD CONSTRAINT projects_workbench_status_check CHECK (workbench_status IN ('waiting_drawings','processing','processed'));
