@@ -240,7 +240,7 @@ export default function DeveloperNewProject() {
                 {isEdit ? (name || "Untitled project") : "Begin with intent."}
               </h1>
               <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-                {isEdit ? (loaded?.status && query ? query : "No address provided") : "Tell us about the project. We will shape a water mitigation strategy around it and introduce the specialists best placed to deliver it."}
+                {isEdit ? (query || "No address provided") : "Tell us about the project. We will shape a water mitigation strategy around it and introduce the specialists best placed to deliver it."}
               </p>
               {imageError && <p role="alert" className="mt-4 break-words text-base text-destructive">{imageError}</p>}
             </div>
@@ -389,54 +389,80 @@ export default function DeveloperNewProject() {
             </div>
           </Section>
 
-          {place && !resolving && (
+          {((place && !resolving) || isEdit) && (
             <section className="animate-fade-in">
               <div className="mb-14 flex items-end justify-between gap-8 border-t border-border pt-16">
                 <div>
-                  <p className="mb-4 text-base uppercase tracking-[0.1em] text-muted-foreground">Curated for this site</p>
-                  <h2 className="font-serif text-4xl font-medium text-foreground">Your recommended specialists</h2>
+                  <p className="mb-4 text-base uppercase tracking-[0.1em] text-muted-foreground">{isEdit ? "Bids" : "Curated for this site"}</p>
+                  <h2 className="font-serif text-4xl font-medium text-foreground">{isEdit ? "Your water mitigation vendors" : "Your recommended specialists"}</h2>
                 </div>
-                <p className="hidden max-w-xs text-right text-sm font-light text-muted-foreground md:block">
-                  Matched on proximity, project type and a {tol.label.toLowerCase()} protection level.
-                </p>
+                {!isEdit && <p className="hidden max-w-xs text-right text-sm font-light text-muted-foreground md:block">
+                  Matched on proximity, project type and a {tol.label.toLowerCase()} protection level. Untick any you do not want to invite.
+                </p>}
               </div>
+              {shownVendors.length === 0 ? <p className="text-base text-muted-foreground">No vendors selected yet. Search below to add one.</p> :
               <div className="grid gap-px overflow-hidden border border-border bg-border md:grid-cols-3">
-                {MOCK_WMSVS.map((w, i) => (
-                  <article key={w.name} className="flex min-w-0 flex-col bg-card p-6 lg:p-8">
+                {shownVendors.map((w, i) => {
+                  const selected = vendorIds.includes(w.id);
+                  const bid = mockBid(saveIds.current.projectId, w.id, budgetValue);
+                  return (
+                  <article key={w.id} className={cn("flex min-w-0 flex-col bg-card p-6 transition-opacity lg:p-8", !selected && "opacity-50")}>
                     <div className="mb-10 grid h-24 grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-                      <img src={w.logo} alt={`${w.name} logo`} className="h-24 w-full max-w-32 object-contain object-left" />
-                      <span className="whitespace-nowrap text-sm uppercase tracking-[0.1em] text-muted-foreground">
-                        {i === 0 ? "Best match" : `0${i + 1}`}
-                      </span>
+                      {w.logo ? <img src={w.logo} alt={`${w.name} logo`} className="h-24 w-full max-w-32 object-contain object-left" />
+                        : <span className="flex h-20 w-20 items-center justify-center border border-border font-serif text-3xl text-foreground">{w.name[0]}</span>}
+                      {isEdit
+                        ? <Button variant="ghost" size="icon" aria-label={`Remove ${w.name}`} title={`Remove ${w.name}`} onClick={() => toggleVendor(w.id)}><X /></Button>
+                        : <label className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-sm uppercase tracking-[0.1em] text-muted-foreground">
+                            {w.recommended ? (i === 0 ? "Best match" : `0${i + 1}`) : "Added"}
+                            <Checkbox checked={selected} onCheckedChange={() => toggleVendor(w.id)} aria-label={`Select ${w.name}`} />
+                          </label>}
                     </div>
                     <h3 className="font-serif text-2xl leading-tight text-card-foreground">{w.name}</h3>
+                    {isEdit ? (
+                      <div className="mt-6 space-y-2 border-t border-border pt-6 text-base">
+                        {bid.status === "received" ? <>
+                          <p className="flex items-center gap-2 font-medium text-foreground"><Check className="h-4 w-4" /> Bid received</p>
+                          <p className="font-serif text-3xl tabular-nums text-foreground">${bid.amount.toLocaleString("en-US")}</p>
+                          <p className="text-muted-foreground">{bid.timelineWeeks} week installation</p>
+                          <p className="text-muted-foreground">Submitted {bid.submittedDays} {bid.submittedDays === 1 ? "day" : "days"} ago</p>
+                        </> : <p className="text-muted-foreground">{bid.status === "awaiting" ? "Awaiting bid" : "Declined to bid"}</p>}
+                      </div>
+                    ) : <>
                     <p className="mt-3 text-base text-muted-foreground">{w.specialty}</p>
-                    <div className="mt-10 space-y-3 text-base text-muted-foreground">
-                      <p className="text-card-foreground">
-                        {w.street}
-                        {locality ? `, ${locality}` : ""}
-                      </p>
+                    <div className="mt-8 space-y-2 border-t border-border pt-6 text-base text-muted-foreground">
+                      <p>{w.street}{locality ? `, ${locality}` : ""}</p>
                       <p className="tabular-nums">{w.km.toFixed(1)} km from site</p>
-                      <p className="flex items-center gap-2">
-                        <ShieldCheck className="h-4 w-4" /> {w.rating} rating, {w.years} years certified
-                      </p>
+                      <p className="flex items-center gap-2"><ShieldCheck className="h-4 w-4" /> {w.rating} rating, {w.years} years certified</p>
                     </div>
-                    <a
-                      href={w.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-auto inline-flex items-center gap-2 pt-12 text-base text-foreground underline-offset-8 hover:underline"
-                    >
+                    <a href={w.url} target="_blank" rel="noreferrer" className="mt-auto inline-flex items-center gap-2 pt-12 text-base text-foreground underline-offset-8 hover:underline">
                       Visit website <ArrowUpRight className="h-3.5 w-3.5" />
-                    </a>
-                  </article>
-                ))}
+                    </a></>}
+                  </article>);
+                })}
+              </div>}
+              <div className="relative mt-10">
+                <p className="mb-3 text-base font-medium text-foreground">Add another vendor</p>
+                <div className="flex items-center gap-4 border-b border-border focus-within:border-foreground">
+                  <Search className="h-5 w-5 shrink-0 text-muted-foreground" />
+                  <Input value={vendorQuery} onChange={(e) => setVendorQuery(e.target.value)} aria-label="Search vendors" placeholder="Search vendors by name"
+                    className="h-auto rounded-none border-0 bg-transparent px-0 py-4 text-xl md:text-xl shadow-none focus-visible:ring-0" />
+                </div>
+                {vendorQuery.trim() && (
+                  <ul className="absolute z-20 mt-2 w-full overflow-hidden border border-border bg-popover shadow-2xl">
+                    {vendorMatches.length === 0 ? <li className="px-6 py-4 text-base text-muted-foreground">No matching vendors</li> :
+                      vendorMatches.map((v) => <li key={v.id}>
+                        <Button variant="ghost" onClick={() => addVendor(v.id)} className="h-auto w-full justify-between whitespace-normal px-6 py-4 text-left text-base text-popover-foreground hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground">
+                          <span>{v.name}</span><span className="text-sm opacity-70">{v.specialty}</span>
+                        </Button>
+                      </li>)}
+                  </ul>
+                )}
               </div>
             </section>
           )}
           <div className="flex flex-col items-end gap-4">
             {saveError && <p role="alert" className="w-full text-base text-destructive">{saveError}</p>}
-            <Button size="lg" className="h-14 px-8 text-base" disabled={saving || !user || !name.trim()} onClick={handleSave}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? "Creating project…" : "Create project"}</Button>
+            <Button size="lg" className="h-14 px-8 text-base" disabled={saving || !user || !name.trim() || !phases.length || (isEdit && !loaded)} onClick={handleSave}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? (isEdit ? "Saving changes" : "Creating project") : (isEdit ? "Save changes" : "Create project")}</Button>
           </div>
         </fieldset>
       </main>
