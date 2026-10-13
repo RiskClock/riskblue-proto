@@ -8,10 +8,15 @@ import { useTenant } from "@/contexts/TenantContext";
 import { IntakeSlider } from "@/components/wizard/IntakeSlider";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { COVERAGE_FIELDS, COVERAGE_MAX, clampCoverage, snapCoverage, snapTolerance, developerProjectDetails, type CoverageKey } from "@/lib/developerIntake";
+import { snapTolerance, developerProjectDetails } from "@/lib/developerIntake";
 import { saveDeveloperProject } from "@/lib/saveDeveloperProject";
 import { ArrowLeft, ArrowUpRight, Loader2, MapPin, ShieldCheck, ImagePlus, Upload, FileText, X, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Textarea } from "@/components/ui/textarea";
+import aquilonLogo from "@/assets/aquilon-logo.png.asset.json";
+import meridianLogo from "@/assets/meridian-logo.png.asset.json";
+import halcyonLogo from "@/assets/halcyon-logo.png.asset.json";
 
 type Suggestion = { placeId: string; text: string };
 type Place = { formattedAddress: string; lat?: number; lng?: number; city?: string | null; region?: string | null };
@@ -38,9 +43,9 @@ const TOLERANCES = [
 ];
 
 const MOCK_WMSVS = [
-  { name: "Aquilon Water Defence", street: "18 Harbour Row", km: 2.4, rating: "4.9", years: 14, specialty: "High-rise residential and hospitality", url: "https://example.com/aquilon", initials: "AQ" },
-  { name: "Meridian Leak Systems", street: "402 Foundry Lane, Suite 7", km: 5.8, rating: "4.8", years: 21, specialty: "Commercial office and mixed-use", url: "https://example.com/meridian", initials: "ME" },
-  { name: "Halcyon Mitigation Group", street: "77 Kingsway Court", km: 9.1, rating: "4.7", years: 9, specialty: "Healthcare, labs and critical facilities", url: "https://example.com/halcyon", initials: "HM" },
+  { name: "Aquilon Water Defence", street: "18 Harbour Row", km: 2.4, rating: "4.9", years: 14, specialty: "High-rise residential and hospitality", url: "https://example.com/aquilon", logo: aquilonLogo.url },
+  { name: "Meridian Leak Systems", street: "402 Foundry Lane, Suite 7", km: 5.8, rating: "4.8", years: 21, specialty: "Commercial office and mixed-use", url: "https://example.com/meridian", logo: meridianLogo.url },
+  { name: "Halcyon Mitigation Group", street: "77 Kingsway Court", km: 9.1, rating: "4.7", years: 9, specialty: "Healthcare, labs and critical facilities", url: "https://example.com/halcyon", logo: halcyonLogo.url },
 ];
 
 function formatCurrency(raw: string) {
@@ -57,7 +62,9 @@ export default function DeveloperNewProject() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const saveIds = useRef({ projectId: crypto.randomUUID(), requestId: crypto.randomUUID() });
   const saveLock = useRef(false);
-  const [scope, setScope] = useState<Record<CoverageKey, number>>({ general_liability: 0, workers_compensation: 0, pollution_environmental_liability: 0, excess_umbrella_liability: 0 });
+  const [drawingMode, setDrawingMode] = useState("upload");
+  const [requestEmail, setRequestEmail] = useState("");
+  const [requestBody, setRequestBody] = useState("Hello,\n\nCould you please upload the project drawings using the secure upload link provided with this request? Architectural and plumbing drawings would be especially helpful.\n\nThank you.");
   const handleSave = async () => {
     if (!user || !name.trim() || saveLock.current) return;
     saveLock.current = true;
@@ -67,9 +74,9 @@ export default function DeveloperNewProject() {
       await saveDeveloperProject(supabase, {
         ...saveIds.current, userId: user.id, tenantId, name, address: query,
         city: place?.city, region: place?.region,
-        details: developerProjectDetails(budget, tolerance, scope), image: projectImage, drawings,
+        details: developerProjectDetails(budget, tolerance), image: projectImage, drawings: drawingMode === "upload" ? drawings : [],
       });
-      toast({ title: "Project saved", description: "Your project and attachments have been saved. No credits were charged." });
+      toast({ title: "Project created", description: "Your project and attachments have been saved. No credits were charged." });
       navigate(tenantPath("/projects"));
     } catch (error) {
       setSaveError(`Saving did not finish. Please retry to complete the same project. ${(error as any)?.message || "Please try again."}`);
@@ -157,7 +164,7 @@ export default function DeveloperNewProject() {
   );
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="developer-intake min-h-screen bg-background">
       <AppHeader leftContent={
         <Button variant="ghost" onClick={() => navigate(tenantPath("/projects"))} className="text-base">
           <ArrowLeft /> <span className="hidden sm:inline">Projects</span>
@@ -207,26 +214,7 @@ export default function DeveloperNewProject() {
             />
           </Section>
 
-          <Section index="02" title="Drawings">
-            <input ref={drawingInput} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.dwg,.dxf" aria-label="Upload drawings" className="hidden" onChange={(e) => {
-              const selected = Array.from(e.target.files ?? []);
-              const invalid = selected.filter((file) => !/\.(pdf|png|jpe?g|dwg|dxf)$/i.test(file.name));
-              setDrawingError(invalid.length ? `Unsupported drawing: ${invalid.map((file) => file.name).join(", ")}` : null);
-              setDrawings((current) => [...current, ...selected.filter((file) => /\.(pdf|png|jpe?g|dwg|dxf)$/i.test(file.name) && !current.some((item) => item.name === file.name && item.size === file.size))]);
-              e.target.value = "";
-            }} />
-            <Button variant="outline" className="h-14 w-full justify-start border-dashed px-5 text-base" onClick={() => drawingInput.current?.click()}><Upload /> Upload drawings</Button>
-            {drawings.length > 0 && <ul className="mt-4 divide-y divide-border">
-              {drawings.map((file, i) => <li key={`${file.name}-${file.size}-${i}`} className="flex items-center gap-3 py-3">
-                <FileText className="h-5 w-5 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1"><p className="break-words text-base">{file.name}</p><p className="text-sm text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</p></div>
-                <Button variant="ghost" size="icon" aria-label={`Remove ${file.name}`} title={`Remove ${file.name}`} onClick={() => setDrawings((current) => current.filter((_, index) => index !== i))}><X /></Button>
-              </li>)}
-            </ul>}
-            {drawingError && <p role="alert" className="mt-3 break-words text-base text-destructive">{drawingError}</p>}
-          </Section>
-
-          <Section index="03" title="Water mitigation budget">
+          <Section index="02" title="Water mitigation budget">
             <div className="flex items-baseline gap-3 border-b border-border focus-within:border-foreground">
               <span className="font-serif text-3xl text-muted-foreground">$</span>
               <Input
@@ -240,7 +228,7 @@ export default function DeveloperNewProject() {
             </div>
           </Section>
 
-          <Section index="04" title="Risk tolerance">
+          <Section index="03" title="Risk tolerance">
             <div className="pt-4">
                <IntakeSlider label="Risk tolerance" value={tolerance} max={2} ticks={3} onChange={setTolerance} onCommit={(value) => setTolerance(snapTolerance(value))} />
               <div className="mt-6 grid grid-cols-3 text-base">
@@ -265,23 +253,46 @@ export default function DeveloperNewProject() {
             </div>
           </Section>
 
-          <Section index="05" title="Minimum Protection Scope">
-            <div className="space-y-10">
-              {COVERAGE_FIELDS.map(({ key, label }) => <div key={key}>
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-                  <label htmlFor={key} className="text-base font-medium">{label}</label>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">$</span>
-                    <Input id={key} aria-label={label} inputMode="numeric" value={scope[key].toLocaleString("en-US")} className="w-40 text-right text-base md:text-base tabular-nums" onChange={(e) => setScope((current) => ({ ...current, [key]: clampCoverage(Number(e.target.value.replace(/[^\d]/g, ""))) }))} />
-                  </div>
-                </div>
-                <IntakeSlider label={`${label} coverage`} value={scope[key]} max={COVERAGE_MAX} ticks={101} onChange={(value) => setScope((current) => ({ ...current, [key]: value }))} onCommit={(value) => setScope((current) => ({ ...current, [key]: snapCoverage(value) }))} />
-                <div className="mt-1 flex justify-between text-base tabular-nums text-muted-foreground"><span>$0</span><span>$10 million</span></div>
-              </div>)}
-            </div>
+          <Section index="04" title="Drawings (optional)">
+            <RadioGroup aria-label="Drawing availability" value={drawingMode} onValueChange={setDrawingMode} disabled={saving} className="mb-6 flex flex-wrap gap-x-6 gap-y-4">
+              {[["upload", "Upload now"], ["later", "Provide later"], ["request", "Request from other"]].map(([value, label]) => (
+                <label key={value} className="flex cursor-pointer items-center gap-2 text-base">
+                  <RadioGroupItem value={value} id={`drawings-${value}`} />{label}
+                </label>
+              ))}
+            </RadioGroup>
+            {drawingMode === "request" && <div className="space-y-5 border-l border-border pl-6">
+              <p className="text-base leading-relaxed text-muted-foreground">We'll send them a secure link to upload the files. They will not see your budget or risk tolerance.</p>
+              <div className="space-y-2">
+                <label htmlFor="drawing-request-email" className="text-base font-medium">Email</label>
+                <Input id="drawing-request-email" type="email" value={requestEmail} onChange={(event) => setRequestEmail(event.target.value)} placeholder="name@company.com" className="text-base md:text-base" />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="drawing-request-body" className="text-base font-medium">Email body</label>
+                <Textarea id="drawing-request-body" value={requestBody} onChange={(event) => setRequestBody(event.target.value)} className="min-h-48 text-base leading-relaxed" />
+              </div>
+            </div>}
+            {drawingMode === "upload" && <>
+            <input ref={drawingInput} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.dwg,.dxf" aria-label="Upload drawings" className="hidden" onChange={(e) => {
+              const selected = Array.from(e.target.files ?? []);
+              const invalid = selected.filter((file) => !/\.(pdf|png|jpe?g|dwg|dxf)$/i.test(file.name));
+              setDrawingError(invalid.length ? `Unsupported drawing: ${invalid.map((file) => file.name).join(", ")}` : null);
+              setDrawings((current) => [...current, ...selected.filter((file) => /\.(pdf|png|jpe?g|dwg|dxf)$/i.test(file.name) && !current.some((item) => item.name === file.name && item.size === file.size))]);
+              e.target.value = "";
+            }} />
+            <Button variant="outline" className="h-14 w-full justify-start border-dashed px-5 text-base" onClick={() => drawingInput.current?.click()}><Upload /> Upload drawings</Button>
+            {drawings.length > 0 && <ul className="mt-4 divide-y divide-border">
+              {drawings.map((file, i) => <li key={`${file.name}-${file.size}-${i}`} className="flex items-center gap-3 py-3">
+                <FileText className="h-5 w-5 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1"><p className="break-words text-base">{file.name}</p><p className="text-sm text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</p></div>
+                <Button variant="ghost" size="icon" aria-label={`Remove ${file.name}`} title={`Remove ${file.name}`} onClick={() => setDrawings((current) => current.filter((_, index) => index !== i))}><X /></Button>
+              </li>)}
+            </ul>}
+            {drawingError && <p role="alert" className="mt-3 break-words text-base text-destructive">{drawingError}</p>}
+            </>}
           </Section>
 
-          <Section index="06" title="Project address">
+          <Section index="05" title="Project address (optional)">
             <div className="relative">
               <div className="flex items-center gap-4 border-b border-border focus-within:border-foreground">
                 <MapPin className="h-5 w-5 shrink-0 text-muted-foreground" />
@@ -332,10 +343,8 @@ export default function DeveloperNewProject() {
               <div className="grid gap-px overflow-hidden border border-border bg-border md:grid-cols-3">
                 {MOCK_WMSVS.map((w, i) => (
                   <article key={w.name} className="flex flex-col bg-card p-10">
-                    <div className="mb-10 flex items-center justify-between">
-                      <div className="flex h-14 w-14 items-center justify-center border border-foreground/80 font-serif text-xl tracking-wider text-foreground">
-                        {w.initials}
-                      </div>
+                    <div className="mb-10 flex flex-wrap items-center justify-between gap-3">
+                      <img src={w.logo} alt={`${w.name} logo`} className="h-24 w-32 shrink-0 object-contain" />
                       <span className="text-sm uppercase tracking-[0.1em] text-muted-foreground">
                         {i === 0 ? "Best match" : `0${i + 1}`}
                       </span>
@@ -363,12 +372,11 @@ export default function DeveloperNewProject() {
                   </article>
                 ))}
               </div>
-              <p className="mt-6 text-base text-muted-foreground">Preview only. Specialist details are illustrative.</p>
             </section>
           )}
           <div className="flex flex-col items-end gap-4">
             {saveError && <p role="alert" className="w-full text-base text-destructive">{saveError}</p>}
-            <Button size="lg" className="h-14 px-8 text-base" disabled={saving || !user || !name.trim()} onClick={handleSave}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? "Saving project…" : "Save project"}</Button>
+            <Button size="lg" className="h-14 px-8 text-base" disabled={saving || !user || !name.trim()} onClick={handleSave}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? "Creating project…" : "Create project"}</Button>
           </div>
         </fieldset>
       </main>
