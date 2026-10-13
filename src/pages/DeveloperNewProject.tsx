@@ -147,6 +147,7 @@ export default function DeveloperNewProject() {
       const reqIds = (reqs || []).map((r) => r.id);
       const { data: files } = reqIds.length
         ? await supabase.from("analysis_request_files").select("name").in("analysis_request_id", reqIds) : { data: [] as { name: string }[] };
+      setLoaded({ status: (p as any).workbench_status || "processing", projectData: pd, imagePath: pd.project_image_path || null, drawingNames: (files || []).map((f) => f.name) });
       if (pd.project_image_path) {
         const { data: signed } = await supabase.storage.from(pd.project_image_bucket || "uploaded-drawings").createSignedUrl(pd.project_image_path, 3600);
         if (signed?.signedUrl) {
@@ -157,7 +158,6 @@ export default function DeveloperNewProject() {
         }
         setExistingImageUrl(signed?.signedUrl || null);
       }
-      setLoaded({ status: (p as any).workbench_status || "processing", projectData: pd, imagePath: pd.project_image_path || null, drawingNames: (files || []).map((f) => f.name) });
     })();
   }, [editId]);
   const reqId = useRef(0);
@@ -227,7 +227,7 @@ export default function DeveloperNewProject() {
         </Button>
       } />
       <main className="pb-32">
-        <header aria-busy={isEdit && !loaded} className={cn("relative isolate mb-16 overflow-hidden", ((isEdit && !loaded) || (backdropUrl && readyBackdropUrl !== backdropUrl)) && "invisible")}>
+        <header aria-busy={isEdit && !loaded} className={cn("relative isolate mb-16 overflow-hidden", (backdropUrl && readyBackdropUrl !== backdropUrl) && "invisible")}>
           {backdropUrl && <img src={backdropUrl} alt="Project backdrop" onLoad={() => setReadyBackdropUrl(backdropUrl)} onError={() => setReadyBackdropUrl(backdropUrl)} className="absolute inset-0 -z-10 h-full w-full object-cover" />}
           <div className="relative mx-auto max-w-5xl px-6 py-24 sm:px-8 sm:py-20">
             <div className="absolute right-6 top-4 z-20 flex items-center gap-2 sm:right-8">
@@ -260,7 +260,8 @@ export default function DeveloperNewProject() {
           </div>
         </header>
 
-        {isEdit && !loaded ? <div className="mx-auto flex max-w-5xl items-center gap-3 px-6 text-muted-foreground" role="status"><Loader2 className="h-5 w-5 animate-spin" />{saveError || "Loading project details…"}</div> : <fieldset disabled={saving} className="min-w-0 space-y-20">
+        {isEdit && !loaded && <div className="mx-auto mb-10 flex max-w-5xl items-center gap-3 px-6 text-muted-foreground sm:px-8" role="status"><Loader2 className="h-5 w-5 animate-spin" />{saveError || "Loading project details…"}</div>}
+        <fieldset disabled={saving || (isEdit && !loaded)} aria-busy={isEdit && !loaded} className={cn("min-w-0 space-y-20 transition-opacity", isEdit && !loaded && "opacity-60")}>
           <Section index="01" title="Project name">
             <Input
               value={name}
@@ -468,7 +469,7 @@ export default function DeveloperNewProject() {
             {saveError && <p role="alert" className="w-full text-base text-destructive">{saveError}</p>}
             <Button size="lg" className="h-14 px-8 text-base" disabled={saving || !user || !name.trim() || !phases.length || (isEdit && !loaded)} onClick={handleSave}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? (isEdit ? "Saving changes" : "Creating project") : (isEdit ? "Save changes" : "Create project")}</Button>
           </div>
-        </fieldset>}
+        </fieldset>
       </main>
     </div>
   );
