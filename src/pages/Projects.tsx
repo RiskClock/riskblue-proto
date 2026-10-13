@@ -278,16 +278,15 @@ const Projects = () => {
           </div>
         ) : (
           <>
-          <div className="mb-3 flex justify-end">
-            <ColumnEditDropdown columns={[{ id: "name", label: "Project Name" }, ...columnOptions.map(c => ({ id: c.value, label: c.label }))]} columnPrefs={columnPrefs} onChange={updateColumns} lockedColumns={["name"]} />
-          </div>
           <div className="bg-card rounded-lg border overflow-x-auto">
             <table className="w-full">
               <thead className="bg-muted/50 [&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-muted [&_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
                 <tr className="text-left">
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Project Name</th>
                   {orderedColumns.map(id => <th key={id} className="px-6 py-3 text-sm font-medium text-foreground">{columnOptions.find(c => c.value === id)?.label}</th>)}
-                  <th className="px-6 py-3 w-[120px]"></th>
+                  <th className="px-6 py-3 w-[60px] text-center">
+                    <ColumnEditDropdown columns={[{ id: "name", label: "Project Name" }, ...columnOptions.map(c => ({ id: c.value, label: c.label }))]} columnPrefs={columnPrefs} onChange={updateColumns} lockedColumns={["name"]} />
+                  </th>
                 </tr>
               </thead>
               <tbody>
