@@ -16,7 +16,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { BidComparison } from "@/components/developer/BidComparison";
-import { MOCK_VENDORS, DEFAULT_VENDOR_IDS, DEVELOPER_STATUS_LABEL } from "@/lib/developerVendors";
+import { MOCK_VENDORS, DEFAULT_VENDOR_IDS, DEVELOPER_STATUS_LABEL, bidsReceived } from "@/lib/developerVendors";
 import { Search } from "lucide-react";
 
 type Suggestion = { placeId: string; text: string };
@@ -123,6 +123,8 @@ export default function DeveloperNewProject() {
   const [error, setError] = useState<string | null>(null);
   const sessionToken = useRef<string>(crypto.randomUUID());
   const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
+  const [readyBackdropUrl, setReadyBackdropUrl] = useState<string | null>(null);
+  const bidsSection = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (!editId) return;
@@ -145,11 +147,17 @@ export default function DeveloperNewProject() {
       const reqIds = (reqs || []).map((r) => r.id);
       const { data: files } = reqIds.length
         ? await supabase.from("analysis_request_files").select("name").in("analysis_request_id", reqIds) : { data: [] as { name: string }[] };
-      setLoaded({ status: (p as any).workbench_status || "processing", projectData: pd, imagePath: pd.project_image_path || null, drawingNames: (files || []).map((f) => f.name) });
       if (pd.project_image_path) {
         const { data: signed } = await supabase.storage.from(pd.project_image_bucket || "uploaded-drawings").createSignedUrl(pd.project_image_path, 3600);
+        if (signed?.signedUrl) {
+          const image = new Image();
+          image.src = signed.signedUrl;
+          await image.decode().catch(() => undefined);
+          setReadyBackdropUrl(signed.signedUrl);
+        }
         setExistingImageUrl(signed?.signedUrl || null);
       }
+      setLoaded({ status: (p as any).workbench_status || "processing", projectData: pd, imagePath: pd.project_image_path || null, drawingNames: (files || []).map((f) => f.name) });
     })();
   }, [editId]);
   const reqId = useRef(0);
@@ -198,6 +206,7 @@ export default function DeveloperNewProject() {
 
   const tol = TOLERANCES[snapTolerance(tolerance)];
   const backdropUrl = imageUrl || existingImageUrl;
+  const receivedCount = isEdit ? bidsReceived(editId || "", vendorIds) : 0;
   const budgetValue = Number(budget.replace(/[^\d]/g, "")) || 0;
   const shownVendors = MOCK_VENDORS.filter((v) => isEdit ? vendorIds.includes(v.id) : (v.recommended || addedVendorIds.includes(v.id)));
   const vendorMatches = vendorQuery.trim()
@@ -218,8 +227,8 @@ export default function DeveloperNewProject() {
         </Button>
       } />
       <main className="pb-32">
-        <header className="relative isolate mb-16 overflow-hidden">
-          {backdropUrl && <img src={backdropUrl} alt="Project backdrop" className="absolute inset-0 -z-10 h-full w-full object-cover" />}
+        <header aria-busy={isEdit && !loaded} className={cn("relative isolate mb-16 overflow-hidden", ((isEdit && !loaded) || (backdropUrl && readyBackdropUrl !== backdropUrl)) && "invisible")}>
+          {backdropUrl && <img src={backdropUrl} alt="Project backdrop" onLoad={() => setReadyBackdropUrl(backdropUrl)} onError={() => setReadyBackdropUrl(backdropUrl)} className="absolute inset-0 -z-10 h-full w-full object-cover" />}
           <div className="relative mx-auto max-w-5xl px-6 py-24 sm:px-8 sm:py-20">
             <div className="absolute right-6 top-4 z-20 flex items-center gap-2 sm:right-8">
               <Button variant="outline" disabled={saving} onClick={() => imageInput.current?.click()} className="text-base"><ImagePlus />{backdropUrl ? "Change project image" : "Add project image"}</Button>
@@ -237,7 +246,7 @@ export default function DeveloperNewProject() {
                 e.target.value = "";
               }} />
               <p className="mb-6 text-base font-medium uppercase tracking-[0.15em] text-muted-foreground">
-                {isEdit ? (loaded ? DEVELOPER_STATUS_LABEL[loaded.status] || "Processing" : "Loading project") : "New Project"}
+                {isEdit && receivedCount > 0 ? <Button variant="link" className="h-auto p-0 text-base text-inherit" onClick={() => bidsSection.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })}>{receivedCount} {receivedCount === 1 ? "bid" : "bids"} available</Button> : isEdit ? (loaded ? DEVELOPER_STATUS_LABEL[loaded.status] || "Processing" : "Loading project") : "New Project"}
               </p>
               <h1 className="break-words font-serif text-5xl font-medium leading-[1.1] sm:text-6xl">
                 {isEdit ? (name || "Loading project…") : "Begin with intent."}
@@ -251,7 +260,7 @@ export default function DeveloperNewProject() {
           </div>
         </header>
 
-        {isEdit && !loaded ? <div className="mx-auto flex max-w-5xl items-center gap-3 px-6 text-muted-foreground" role="status"><Loader2 className="h-5 w-5 animate-spin" />{saveError || "Loading project details…"}</div> : <fieldset disabled={saving} className="mx-auto min-w-0 max-w-5xl space-y-20 px-6 sm:px-8">
+        {isEdit && !loaded ? <div className="mx-auto flex max-w-5xl items-center gap-3 px-6 text-muted-foreground" role="status"><Loader2 className="h-5 w-5 animate-spin" />{saveError || "Loading project details…"}</div> : <fieldset disabled={saving} className="min-w-0 space-y-20">
           <Section index="01" title="Project name">
             <Input
               value={name}
@@ -393,7 +402,7 @@ export default function DeveloperNewProject() {
           </Section>
 
           {((place && !resolving) || isEdit) && (
-            <section className="animate-fade-in">
+            <section ref={bidsSection} id="project-bids" className={cn("scroll-mt-8 px-6 sm:px-8", !isEdit && "mx-auto max-w-5xl animate-fade-in")}>
               <div className="mb-14 flex items-end justify-between gap-8 border-t border-border pt-16">
                 <div>
                   <p className="mb-4 text-base uppercase tracking-[0.1em] text-muted-foreground">{isEdit ? "Bids" : "Curated for this site"}</p>
@@ -455,7 +464,7 @@ export default function DeveloperNewProject() {
               </div>
             </section>
           )}
-          <div className="flex flex-col items-end gap-4">
+          <div className="mx-auto flex max-w-5xl flex-col items-end gap-4 px-6 sm:px-8">
             {saveError && <p role="alert" className="w-full text-base text-destructive">{saveError}</p>}
             <Button size="lg" className="h-14 px-8 text-base" disabled={saving || !user || !name.trim() || !phases.length || (isEdit && !loaded)} onClick={handleSave}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? (isEdit ? "Saving changes" : "Creating project") : (isEdit ? "Save changes" : "Create project")}</Button>
           </div>
@@ -467,7 +476,7 @@ export default function DeveloperNewProject() {
 
 function Section({ index, title, children }: { index: string; title: string; children: React.ReactNode }) {
   return (
-    <section className="grid gap-6 md:grid-cols-[200px_minmax(0,1fr)]">
+    <section className="mx-auto grid max-w-5xl gap-6 px-6 sm:px-8 md:grid-cols-[200px_minmax(0,1fr)]">
       <div className="pt-5">
         <p className="font-serif text-xl text-foreground/75">{index}</p>
         <p className="mt-2 text-base font-medium text-foreground">{title}</p>

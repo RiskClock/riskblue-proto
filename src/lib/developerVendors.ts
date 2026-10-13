@@ -49,6 +49,8 @@ export function mockBid(projectId: string, vendorId: string, budget = 0): MockBi
 export const bidsReceived = (projectId: string, vendorIds: string[]) =>
   vendorIds.filter((id) => mockBid(projectId, id).status === "received").length;
 
+export const hasReceivedBids = (projectId: string, vendorIds: string[]) => bidsReceived(projectId, vendorIds) > 0;
+
 export const DEVELOPER_STATUS_LABEL: Record<string, string> = {
   waiting_drawings: "Waiting for Drawings",
   processing: "Being Processed by RiskBlue Engine",
