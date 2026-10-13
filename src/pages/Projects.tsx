@@ -17,7 +17,7 @@ import { useAccountType } from "@/hooks/useAccountType";
 import { useTenant } from "@/contexts/TenantContext";
 import { useIsSystemAdmin, useStaffUserIds } from "@/hooks/useIsSystemAdmin";
 import { useBetaAccess } from "@/hooks/useBetaAccess";
-import { MultiSelectChecklist } from "@/components/common/MultiSelectChecklist";
+import { ColumnEditDropdown, type ColumnPreferences } from "@/components/common/ColumnEditDropdown";
 import { bidsReceived, DEFAULT_VENDOR_IDS } from "@/lib/developerVendors";
 
 const PROJECT_STATUS_LABEL: Record<string, string> = { waiting_drawings: "Waiting for Drawings", processing: "Processing", processed: "Processed" };
@@ -79,14 +79,22 @@ const Projects = () => {
     ...(isDeveloper ? [{ value: "budget", label: "Budget" }, { value: "protection", label: "Protection Level" }, { value: "bids", label: "Bids Received" }] : []),
   ];
   const columnsKey = `projects_columns_${user?.id}_${isDeveloper ? "dev" : "std"}`;
-  const [columns, setColumns] = useState<string[] | null>(null);
+  const [columns, setColumns] = useState<ColumnPreferences<string> | null>(null);
   useEffect(() => {
     if (!user) return;
-    try { setColumns(JSON.parse(localStorage.getItem(columnsKey) || "null")); } catch { setColumns(null); }
+    try {
+      const stored = JSON.parse(localStorage.getItem(columnsKey) || "null");
+      if (Array.isArray(stored)) setColumns({ order: ["name", ...columnOptions.map(c => c.value)], visible: Object.fromEntries(["name", ...columnOptions.map(c => c.value)].map(id => [id, id === "name" || stored.includes(id)])) });
+      else setColumns(stored);
+    } catch { setColumns(null); }
   }, [columnsKey, user]);
-  const visible = columns ?? columnOptions.map((c) => c.value).filter((c) => !isDeveloper || c !== "credits");
-  const show = (c: string) => visible.includes(c);
-  const updateColumns = (next: string[]) => { setColumns(next); localStorage.setItem(columnsKey, JSON.stringify(next)); };
+  const ids = columnOptions.map(c => c.value);
+  const columnPrefs: ColumnPreferences<string> = {
+    order: ["name", ...Array.from(new Set([...(columns?.order || []).filter(id => ids.includes(id)), ...ids]))],
+    visible: { ...Object.fromEntries(ids.map(id => [id, !isDeveloper || id !== "credits"])), ...columns?.visible, name: true },
+  };
+  const orderedColumns = columnPrefs.order.filter(id => id !== "name" && columnPrefs.visible[id]);
+  const updateColumns = (next: ColumnPreferences<string>) => { setColumns(next); localStorage.setItem(columnsKey, JSON.stringify(next)); };
   const [projectData, setProjectData] = useState<Map<string, any>>(new Map());
   useEffect(() => {
     if (!isDeveloper || !projects.length) return;
@@ -271,22 +279,14 @@ const Projects = () => {
         ) : (
           <>
           <div className="mb-3 flex justify-end">
-            <div className="w-56">
-              <MultiSelectChecklist options={columnOptions} selected={visible} onChange={updateColumns} allLabel="Edit columns" />
-            </div>
+            <ColumnEditDropdown columns={[{ id: "name", label: "Project Name" }, ...columnOptions.map(c => ({ id: c.value, label: c.label }))]} columnPrefs={columnPrefs} onChange={updateColumns} lockedColumns={["name"]} />
           </div>
-          <div className="bg-card rounded-lg border overflow-hidden">
+          <div className="bg-card rounded-lg border overflow-x-auto">
             <table className="w-full">
               <thead className="bg-muted/50 [&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-muted [&_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
                 <tr className="text-left">
                   <th className="px-6 py-3 text-sm font-medium text-foreground">Project Name</th>
-                  {show("status") && <th className="px-6 py-3 text-sm font-medium text-foreground">Status</th>}
-                  {show("created_by") && <th className="px-6 py-3 text-sm font-medium text-foreground">Created By</th>}
-                  {show("created_on") && <th className="px-6 py-3 text-sm font-medium text-foreground">Created On</th>}
-                  {show("credits") && <th className="px-6 py-3 text-sm font-medium text-foreground">Credit Cost</th>}
-                  {show("budget") && <th className="px-6 py-3 text-sm font-medium text-foreground">Budget</th>}
-                  {show("protection") && <th className="px-6 py-3 text-sm font-medium text-foreground">Protection Level</th>}
-                  {show("bids") && <th className="px-6 py-3 text-sm font-medium text-foreground">Bids Received</th>}
+                  {orderedColumns.map(id => <th key={id} className="px-6 py-3 text-sm font-medium text-foreground">{columnOptions.find(c => c.value === id)?.label}</th>)}
                   <th className="px-6 py-3 w-[120px]"></th>
                 </tr>
               </thead>
@@ -304,13 +304,15 @@ const Projects = () => {
                             ? `/workbench/project/${project.id}`
                             : `/project/${project.id}`,
                         ),
+                        { state: { projectName: project.name } },
                       )
                     }
                   >
                     <td className="px-6 py-4">
                       <span className="text-foreground">{project.name}</span>
                     </td>
-                    {show("status") && <td className="px-6 py-4">
+                    {orderedColumns.map(id => { switch (id) {
+                    case "status": return <td key={id} className="px-6 py-4">
                       {(() => {
                         const s = project.workbench_status || "processing";
                         const cls =
@@ -326,8 +328,8 @@ const Projects = () => {
                           </Badge>
                         );
                       })()}
-                    </td>}
-                    {show("created_by") && <td className="px-6 py-4 text-muted-foreground">
+                    </td>;
+                    case "created_by": return <td key={id} className="px-6 py-4 text-muted-foreground">
                       {(() => {
                         const creator = displayCreator(project);
                         return creator.email ? (
@@ -345,22 +347,24 @@ const Projects = () => {
                           <span>{creator.name}</span>
                         );
                       })()}
-                    </td>}
-                    {show("created_on") && <td className="px-6 py-4 text-muted-foreground">
+                    </td>;
+                    case "created_on": return <td key={id} className="px-6 py-4 text-muted-foreground">
                       {formatDateShort(project.created_at)}
-                    </td>}
-                    {show("credits") && <td className="px-6 py-4 text-muted-foreground tabular-nums">
+                    </td>;
+                    case "credits": return <td key={id} className="px-6 py-4 text-muted-foreground tabular-nums">
                       {typeof project.credits_consumed === "number" ? project.credits_consumed : "-"}
-                    </td>}
-                    {show("budget") && <td className="px-6 py-4 text-muted-foreground tabular-nums">
+                    </td>;
+                    case "budget": return <td key={id} className="px-6 py-4 text-muted-foreground tabular-nums">
                       {projectData.get(project.id)?.water_mitigation_budget ? `$${Number(projectData.get(project.id).water_mitigation_budget).toLocaleString("en-US")}` : "-"}
-                    </td>}
-                    {show("protection") && <td className="px-6 py-4 text-muted-foreground">
+                    </td>;
+                    case "protection": return <td key={id} className="px-6 py-4 text-muted-foreground">
                       {PROTECTION_LABEL[projectData.get(project.id)?.riskTolerance] || "-"}
-                    </td>}
-                    {show("bids") && <td className="px-6 py-4 text-muted-foreground tabular-nums">
+                    </td>;
+                    case "bids": return <td key={id} className="px-6 py-4 text-muted-foreground tabular-nums">
                       {projectData.has(project.id) ? bidsReceived(project.id, Array.isArray(projectData.get(project.id)?.selected_vendor_ids) ? projectData.get(project.id).selected_vendor_ids : DEFAULT_VENDOR_IDS) : "-"}
-                    </td>}
+                    </td>;
+                    default: return null;
+                    } })}
                     <td className="px-6 py-4">
                       <div className="h-9 flex items-center justify-end gap-1">
                         {hasBetaAccess && (

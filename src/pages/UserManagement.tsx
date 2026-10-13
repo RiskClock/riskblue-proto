@@ -1,3 +1,4 @@
+import { ColumnEditDropdown } from "@/components/common/ColumnEditDropdown";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -920,7 +921,7 @@ const UserManagement = () => {
                     }
                   })}
                   <TableHead className="w-[60px] text-center">
-                    <ColumnEditDropdown columnPrefs={columnPrefs} setColumnPrefs={setColumnPrefs} columns={availableColumns} />
+                    <ColumnEditDropdown columnPrefs={columnPrefs} onChange={setColumnPrefs} columns={availableColumns} lockedColumns={["user"]} />
                   </TableHead>
                 </TableRow>
               </TableHeader>
@@ -1880,126 +1881,5 @@ function ProjectsAssigner({
 }
 
 // ---------- Column edit dropdown (with drag-to-reorder) ----------
-
-function ColumnEditDropdown({
-  columnPrefs,
-  setColumnPrefs,
-  columns = ALL_COLUMNS,
-}: {
-  columnPrefs: ColumnPrefs;
-  setColumnPrefs: React.Dispatch<React.SetStateAction<ColumnPrefs>>;
-  columns?: typeof ALL_COLUMNS;
-}) {
-  const [open, setOpen] = useState(false);
-  const [dragId, setDragId] = useState<ColumnId | null>(null);
-  const [overId, setOverId] = useState<ColumnId | null>(null);
-
-  const labelFor = (id: ColumnId) => ALL_COLUMNS.find((c) => c.id === id)?.label || id;
-
-  const toggleVisible = (id: ColumnId) => {
-    if (id === "user") return;
-    setColumnPrefs((prev) => ({
-      ...prev,
-      visible: { ...prev.visible, [id]: !prev.visible[id] },
-    }));
-  };
-
-  const handleDrop = (targetId: ColumnId) => {
-    if (!dragId || dragId === targetId || dragId === "user" || targetId === "user") {
-      setDragId(null);
-      setOverId(null);
-      return;
-    }
-    setColumnPrefs((prev) => {
-      const order = [...prev.order];
-      const from = order.indexOf(dragId);
-      const to = order.indexOf(targetId);
-      if (from === -1 || to === -1) return prev;
-      order.splice(from, 1);
-      order.splice(to, 0, dragId);
-      // Force user first
-      const filtered = order.filter((id) => id !== "user");
-      return { ...prev, order: ["user", ...filtered] };
-    });
-    setDragId(null);
-    setOverId(null);
-  };
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button size="icon" variant="ghost" className="h-8 w-8" title="Edit columns">
-          <Settings2 className="h-4 w-4" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-64 p-2">
-        <div className="text-xs font-medium text-muted-foreground px-2 py-1.5">
-          Show & reorder columns
-        </div>
-        <div className="space-y-0.5">
-          {columnPrefs.order
-            .filter((id) => columns.some((c) => c.id === id))
-            .map((id) => {
-            const isUser = id === "user";
-            const isDraggingOver = overId === id && dragId && dragId !== id;
-            return (
-              <div
-                key={id}
-                draggable={!isUser}
-                onDragStart={(e) => {
-                  if (isUser) {
-                    e.preventDefault();
-                    return;
-                  }
-                  setDragId(id);
-                  e.dataTransfer.effectAllowed = "move";
-                }}
-                onDragOver={(e) => {
-                  if (isUser || !dragId) return;
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = "move";
-                  if (overId !== id) setOverId(id);
-                }}
-                onDragLeave={() => {
-                  if (overId === id) setOverId(null);
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  handleDrop(id);
-                }}
-                onDragEnd={() => {
-                  setDragId(null);
-                  setOverId(null);
-                }}
-                className={cn(
-                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm select-none",
-                  !isUser && "cursor-grab active:cursor-grabbing hover:bg-accent",
-                  isDraggingOver && "border border-primary/40 bg-primary/5",
-                  dragId === id && "opacity-50"
-                )}
-              >
-                <GripVertical
-                  className={cn(
-                    "h-4 w-4 shrink-0",
-                    isUser ? "opacity-25" : "text-muted-foreground"
-                  )}
-                />
-                <Checkbox
-                  checked={columnPrefs.visible[id]}
-                  disabled={isUser}
-                  onCheckedChange={() => toggleVisible(id)}
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <span className={cn("flex-1", isUser && "text-muted-foreground")}>
-                  {labelFor(id)}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 export default UserManagement;

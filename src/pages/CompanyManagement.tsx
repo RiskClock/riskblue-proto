@@ -1,3 +1,4 @@
+import { ColumnEditDropdown } from "@/components/common/ColumnEditDropdown";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -342,7 +343,7 @@ const CompanyManagement = () => {
               <TableRow>
                 {visibleColumns.map((c) => headerFor(c))}
                 <TableHead className="w-[60px] text-center">
-                  <ColumnEditDropdown columnPrefs={columnPrefs} setColumnPrefs={setColumnPrefs} />
+                  <ColumnEditDropdown columns={ALL_COLUMNS} columnPrefs={columnPrefs} onChange={setColumnPrefs} lockedColumns={LOCKED_COLUMNS} />
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -398,109 +399,6 @@ const CompanyManagement = () => {
     </div>
   );
 };
-
-function ColumnEditDropdown({
-  columnPrefs,
-  setColumnPrefs,
-}: {
-  columnPrefs: ColumnPrefs;
-  setColumnPrefs: React.Dispatch<React.SetStateAction<ColumnPrefs>>;
-}) {
-  const [open, setOpen] = useState(false);
-  const [dragId, setDragId] = useState<ColumnId | null>(null);
-  const [overId, setOverId] = useState<ColumnId | null>(null);
-
-  const labelFor = (id: ColumnId) => ALL_COLUMNS.find((c) => c.id === id)?.label || id;
-
-  const toggleVisible = (id: ColumnId) => {
-    if (LOCKED_COLUMNS.includes(id)) return;
-    setColumnPrefs((prev) => ({ ...prev, visible: { ...prev.visible, [id]: !prev.visible[id] } }));
-  };
-
-  const handleDrop = (targetId: ColumnId) => {
-    if (!dragId || dragId === targetId || LOCKED_COLUMNS.includes(dragId) || LOCKED_COLUMNS.includes(targetId)) {
-      setDragId(null);
-      setOverId(null);
-      return;
-    }
-    setColumnPrefs((prev) => {
-      const order = [...prev.order];
-      const from = order.indexOf(dragId);
-      const to = order.indexOf(targetId);
-      if (from === -1 || to === -1) return prev;
-      order.splice(from, 1);
-      order.splice(to, 0, dragId);
-      return { ...prev, order: [...LOCKED_COLUMNS, ...order.filter((id) => !LOCKED_COLUMNS.includes(id))] };
-    });
-    setDragId(null);
-    setOverId(null);
-  };
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button size="icon" variant="ghost" className="h-8 w-8" title="Edit columns">
-          <Settings2 className="h-4 w-4" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-64 p-2">
-        <div className="text-xs font-medium text-muted-foreground px-2 py-1.5">Show & reorder columns</div>
-        <div className="space-y-0.5">
-          {columnPrefs.order.map((id) => {
-            const locked = LOCKED_COLUMNS.includes(id);
-            const isDraggingOver = overId === id && dragId && dragId !== id;
-            return (
-              <div
-                key={id}
-                draggable={!locked}
-                onDragStart={(e) => {
-                  if (locked) {
-                    e.preventDefault();
-                    return;
-                  }
-                  setDragId(id);
-                  e.dataTransfer.effectAllowed = "move";
-                }}
-                onDragOver={(e) => {
-                  if (locked || !dragId) return;
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = "move";
-                  if (overId !== id) setOverId(id);
-                }}
-                onDragLeave={() => {
-                  if (overId === id) setOverId(null);
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  handleDrop(id);
-                }}
-                onDragEnd={() => {
-                  setDragId(null);
-                  setOverId(null);
-                }}
-                className={cn(
-                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm select-none",
-                  !locked && "cursor-grab active:cursor-grabbing hover:bg-accent",
-                  isDraggingOver && "border border-primary/40 bg-primary/5",
-                  dragId === id && "opacity-50",
-                )}
-              >
-                <GripVertical className={cn("h-4 w-4 shrink-0", locked ? "opacity-25" : "text-muted-foreground")} />
-                <Checkbox
-                  checked={columnPrefs.visible[id]}
-                  disabled={locked}
-                  onCheckedChange={() => toggleVisible(id)}
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <span className={cn("flex-1", locked && "text-muted-foreground")}>{labelFor(id)}</span>
-              </div>
-            );
-          })}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 interface MemberRow {
   /** tenant_members row id; null for rows staged but not yet saved. */
