@@ -23,22 +23,22 @@ type Place = { formattedAddress: string; lat?: number; lng?: number; city?: stri
 
 const TOLERANCES = [
   {
-    key: "low",
-    label: "Low",
-    title: "Comprehensive protection",
-    body: "For high-value interiors, occupied buildings and critical systems. Typically covers every riser, plant room, kitchen and washroom with automatic shut-off and continuous leak detection.",
+    key: "essential",
+    label: "Essential",
+    title: "Essential protection",
+    body: "For budget-led or early-phase projects. Typically covers the incoming supply and highest-risk plant spaces with point detection and a site-wide alert.",
   },
   {
-    key: "medium",
-    label: "Medium",
+    key: "balanced",
+    label: "Balanced",
     title: "Balanced protection",
     body: "The common choice for most developments. Typically protects mechanical rooms, risers and wet areas with detection and alerts, plus shut-off on the main supply.",
   },
   {
-    key: "high",
-    label: "High",
-    title: "Essential protection",
-    body: "For budget-led or early-phase projects. Typically covers the incoming supply and highest-risk plant spaces with point detection and a site-wide alert.",
+    key: "comprehensive",
+    label: "Comprehensive",
+    title: "Comprehensive protection",
+    body: "For high-value interiors, occupied buildings and critical systems. Typically covers every riser, plant room, kitchen and washroom with automatic shut-off and continuous leak detection.",
   },
 ];
 
@@ -228,9 +228,9 @@ export default function DeveloperNewProject() {
             </div>
           </Section>
 
-          <Section index="03" title="Risk tolerance">
+          <Section index="03" title="Protection level">
             <div className="pt-4">
-               <IntakeSlider label="Risk tolerance" value={tolerance} max={2} ticks={3} onChange={setTolerance} onCommit={(value) => setTolerance(snapTolerance(value))} />
+               <IntakeSlider label="Protection level" value={tolerance} max={2} ticks={3} onChange={setTolerance} onCommit={(value) => setTolerance(snapTolerance(value))} />
               <div className="mt-6 grid grid-cols-3 text-base">
                 {TOLERANCES.map((t, i) => (
                   <Button variant="ghost"
@@ -254,7 +254,7 @@ export default function DeveloperNewProject() {
             </div>
           </Section>
 
-          <Section index="04" title="Drawings (optional)">
+          <Section index="04" title="Drawings">
             <RadioGroup aria-label="Drawing availability" value={drawingMode} onValueChange={setDrawingMode} disabled={saving} className="mb-6 flex flex-wrap gap-x-6 gap-y-4 md:pt-[3.25rem]">
               {[["upload", "Upload now"], ["later", "Provide later"], ["request", "Request from other"]].map(([value, label]) => (
                 <label key={value} className="flex cursor-pointer items-center gap-2 text-base">
@@ -338,7 +338,7 @@ export default function DeveloperNewProject() {
                   <h2 className="font-serif text-4xl font-medium text-foreground">Your recommended specialists</h2>
                 </div>
                 <p className="hidden max-w-xs text-right text-sm font-light text-muted-foreground md:block">
-                  Matched on proximity, project type and a {tol.label.toLowerCase()} risk tolerance.
+                  Matched on proximity, project type and a {tol.label.toLowerCase()} protection level.
                 </p>
               </div>
               <div className="grid gap-px overflow-hidden border border-border bg-border md:grid-cols-3">

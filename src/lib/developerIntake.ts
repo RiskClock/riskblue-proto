@@ -13,6 +13,8 @@ export const snapTolerance = (value: number) => Math.min(2, Math.max(0, Math.rou
 export const developerProjectDetails = (budget: string, tolerance: number, scope?: Record<CoverageKey, number>) => ({
   intake_type: "developer",
   water_mitigation_budget: Number(budget.replace(/[^\d]/g, "")) || 0,
-  riskTolerance: ["low", "medium", "high"][snapTolerance(tolerance)],
+  // Slider reads Essential -> Balanced -> Comprehensive; stored riskTolerance inverts it
+  // (comprehensive protection = low risk tolerance, as consumed by the project wizard).
+  riskTolerance: ["high", "medium", "low"][snapTolerance(tolerance)],
   ...(scope ? { minimum_protection_scope: Object.fromEntries(COVERAGE_FIELDS.map(({ key }) => [key, clampCoverage(scope[key])])) } : {}),
 });
