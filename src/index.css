@@ -149,6 +149,10 @@ All colors MUST be HSL.
   background: hsl(var(--intro-overlay) / 0.45);
 }
 
+.bid-status-bloated { background: hsl(var(--warning)); }
+.bid-status-risk { background: hsl(var(--danger)); }
+.bid-status-aligned { background: hsl(var(--success)); }
+
 @layer base {
   * {
     @apply border-border;

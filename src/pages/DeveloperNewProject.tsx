@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
 import { Input } from "@/components/ui/input";
@@ -15,8 +15,9 @@ import { cn } from "@/lib/utils";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { MOCK_VENDORS, DEFAULT_VENDOR_IDS, mockBid, DEVELOPER_STATUS_LABEL } from "@/lib/developerVendors";
-import { Search, Check } from "lucide-react";
+import { BidComparison } from "@/components/developer/BidComparison";
+import { MOCK_VENDORS, DEFAULT_VENDOR_IDS, DEVELOPER_STATUS_LABEL } from "@/lib/developerVendors";
+import { Search } from "lucide-react";
 
 type Suggestion = { placeId: string; text: string };
 type Place = { formattedAddress: string; lat?: number; lng?: number; city?: string | null; region?: string | null };
@@ -49,6 +50,8 @@ function formatCurrency(raw: string) {
 
 export default function DeveloperNewProject() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const initialName = (location.state as { projectName?: string } | null)?.projectName || "";
   const { id: editId } = useParams();
   const isEdit = !!editId;
   const [loaded, setLoaded] = useState<{ status: string; projectData: Record<string, any>; imagePath: string | null; drawingNames: string[] } | null>(null);
@@ -108,7 +111,7 @@ export default function DeveloperNewProject() {
     setImageUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [projectImage]);
-  const [name, setName] = useState("");
+  const [name, setName] = useState(initialName);
   const [budget, setBudget] = useState("");
   const [tolerance, setTolerance] = useState(1);
   const [query, setQuery] = useState("");
@@ -128,10 +131,6 @@ export default function DeveloperNewProject() {
         .select("name, address_1, location, city, state, workbench_status, protection_phase, project_data").eq("id", editId).maybeSingle();
       if (error || !p) { setSaveError("This project could not be loaded."); return; }
       const pd = ((p as any).project_data || {}) as Record<string, any>;
-      const { data: reqs } = await supabase.from("analysis_requests").select("id").eq("project_id", editId);
-      const reqIds = (reqs || []).map((r) => r.id);
-      const { data: files } = reqIds.length
-        ? await supabase.from("analysis_request_files").select("name").in("analysis_request_id", reqIds) : { data: [] as { name: string }[] };
       setName(p.name || "");
       setBudget(pd.water_mitigation_budget ? formatCurrency(String(pd.water_mitigation_budget)) : "");
       setTolerance({ high: 0, medium: 1, low: 2 }[pd.riskTolerance as string] ?? 1);
@@ -142,6 +141,10 @@ export default function DeveloperNewProject() {
       const ids: string[] = Array.isArray(pd.selected_vendor_ids) ? pd.selected_vendor_ids : DEFAULT_VENDOR_IDS;
       setVendorIds(ids);
       setAddedVendorIds(ids.filter((id) => !DEFAULT_VENDOR_IDS.includes(id)));
+      const { data: reqs } = await supabase.from("analysis_requests").select("id").eq("project_id", editId);
+      const reqIds = (reqs || []).map((r) => r.id);
+      const { data: files } = reqIds.length
+        ? await supabase.from("analysis_request_files").select("name").in("analysis_request_id", reqIds) : { data: [] as { name: string }[] };
       setLoaded({ status: (p as any).workbench_status || "processing", projectData: pd, imagePath: pd.project_image_path || null, drawingNames: (files || []).map((f) => f.name) });
       if (pd.project_image_path) {
         const { data: signed } = await supabase.storage.from(pd.project_image_bucket || "uploaded-drawings").createSignedUrl(pd.project_image_path, 3600);
@@ -237,10 +240,10 @@ export default function DeveloperNewProject() {
                 {isEdit ? (loaded ? DEVELOPER_STATUS_LABEL[loaded.status] || "Processing" : "Loading project") : "New Project"}
               </p>
               <h1 className="break-words font-serif text-5xl font-medium leading-[1.1] sm:text-6xl">
-                {isEdit ? (name || "Untitled project") : "Begin with intent."}
+                {isEdit ? (name || "Loading project…") : "Begin with intent."}
               </h1>
               <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-                {isEdit ? (query || "No address provided") : "Tell us about the project. We will shape a water mitigation strategy around it and introduce the specialists best placed to deliver it."}
+                {isEdit ? (loaded ? query || "No address provided" : "") : "Tell us about the project. We will shape a water mitigation strategy around it and introduce the specialists best placed to deliver it."}
               </p>
               {imageError && <p role="alert" className="mt-4 break-words text-base text-destructive">{imageError}</p>}
             </div>
@@ -248,7 +251,7 @@ export default function DeveloperNewProject() {
           </div>
         </header>
 
-        <fieldset disabled={saving} className="mx-auto min-w-0 max-w-5xl space-y-20 px-6 sm:px-8">
+        {isEdit && !loaded ? <div className="mx-auto flex max-w-5xl items-center gap-3 px-6 text-muted-foreground" role="status"><Loader2 className="h-5 w-5 animate-spin" />{saveError || "Loading project details…"}</div> : <fieldset disabled={saving} className="mx-auto min-w-0 max-w-5xl space-y-20 px-6 sm:px-8">
           <Section index="01" title="Project name">
             <Input
               value={name}
@@ -310,7 +313,7 @@ export default function DeveloperNewProject() {
             {!phases.length && <p className="mt-3 text-base text-muted-foreground">Select at least one phase.</p>}
           </Section>
 
-          <Section index="05" title="Drawings">
+          <Section index="05" title={isEdit ? "Drawings" : "Drawings (optional)"}>
             <RadioGroup aria-label="Drawing availability" value={drawingMode} onValueChange={setDrawingMode} disabled={saving} className="mb-6 flex flex-wrap gap-x-6 gap-y-4 md:pt-[3.25rem]">
               {[["upload", "Upload now"], ["later", "Provide later"], ["request", "Request from other"]].map(([value, label]) => (
                 <label key={value} className="flex cursor-pointer items-center gap-2 text-base">
@@ -401,10 +404,11 @@ export default function DeveloperNewProject() {
                 </p>}
               </div>
               {shownVendors.length === 0 ? <p className="text-base text-muted-foreground">No vendors selected yet. Search below to add one.</p> :
+              isEdit ? <BidComparison vendors={shownVendors} projectId={editId || saveIds.current.projectId} budget={budgetValue} onRemove={toggleVendor} /> :
               <div className="grid gap-px overflow-hidden border border-border bg-border md:grid-cols-3">
                 {shownVendors.map((w, i) => {
                   const selected = vendorIds.includes(w.id);
-                  const bid = mockBid(saveIds.current.projectId, w.id, budgetValue);
+                  
                   return (
                   <article key={w.id} className={cn("flex min-w-0 flex-col bg-card p-6 transition-opacity lg:p-8", !selected && "opacity-50")}>
                     <div className="mb-10 grid h-24 grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
@@ -418,16 +422,7 @@ export default function DeveloperNewProject() {
                           </label>}
                     </div>
                     <h3 className="font-serif text-2xl leading-tight text-card-foreground">{w.name}</h3>
-                    {isEdit ? (
-                      <div className="mt-6 space-y-2 border-t border-border pt-6 text-base">
-                        {bid.status === "received" ? <>
-                          <p className="flex items-center gap-2 font-medium text-foreground"><Check className="h-4 w-4" /> Bid received</p>
-                          <p className="font-serif text-3xl tabular-nums text-foreground">${bid.amount.toLocaleString("en-US")}</p>
-                          <p className="text-muted-foreground">{bid.timelineWeeks} week installation</p>
-                          <p className="text-muted-foreground">Submitted {bid.submittedDays} {bid.submittedDays === 1 ? "day" : "days"} ago</p>
-                        </> : <p className="text-muted-foreground">{bid.status === "awaiting" ? "Awaiting bid" : "Declined to bid"}</p>}
-                      </div>
-                    ) : <>
+                    <>
                     <p className="mt-3 text-base text-muted-foreground">{w.specialty}</p>
                     <div className="mt-8 space-y-2 border-t border-border pt-6 text-base text-muted-foreground">
                       <p>{w.street}{locality ? `, ${locality}` : ""}</p>
@@ -436,7 +431,7 @@ export default function DeveloperNewProject() {
                     </div>
                     <a href={w.url} target="_blank" rel="noreferrer" className="mt-auto inline-flex items-center gap-2 pt-12 text-base text-foreground underline-offset-8 hover:underline">
                       Visit website <ArrowUpRight className="h-3.5 w-3.5" />
-                    </a></>}
+                    </a></>
                   </article>);
                 })}
               </div>}
@@ -464,7 +459,7 @@ export default function DeveloperNewProject() {
             {saveError && <p role="alert" className="w-full text-base text-destructive">{saveError}</p>}
             <Button size="lg" className="h-14 px-8 text-base" disabled={saving || !user || !name.trim() || !phases.length || (isEdit && !loaded)} onClick={handleSave}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? (isEdit ? "Saving changes" : "Creating project") : (isEdit ? "Save changes" : "Create project")}</Button>
           </div>
-        </fieldset>
+        </fieldset>}
       </main>
     </div>
   );

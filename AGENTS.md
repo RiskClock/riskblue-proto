@@ -1,5 +1,8 @@
 # Architecture rules
 
+- Management tables and Projects share the generic ColumnEditDropdown for visibility and order while each page owns its saved preferences; this preserves one consistent editor without coupling page-specific columns.
+- Developer bid metrics and assessments come from the shared deterministic mock catalog, and comparison and list counts use that same source so sample outcomes agree across views.
+
 - Developer intake selection stays local until explicit creation, with object URLs revoked on replacement or unmount; creation persists intake fields in projects.project_data and attachments in private uploaded-drawings under project folders, using copied requests without starting pipelines or consuming credits. Drawing-request choices remain local presentation state until request functionality is implemented, so they cannot send emails accidentally.
 - New-project email suppression is enforced server-side using the creator profile account type and persisted intake marker, so changing an account later cannot enable notifications for existing test intake projects.
 

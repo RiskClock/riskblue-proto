@@ -1,5 +1,9 @@
 # Roadmap
 
+- [x] Reuse reorderable column controls in Projects, Company Management and User Management; verified drag order and visibility persist after reload.
+- [x] Restore Drawings (optional) on creation and eliminate the existing-project title flash; verified the signed-in project title.
+- [x] Add side-by-side sample bid metrics and analysis; verified vendor removal/re-addition, hosted logos, contained mobile scrolling and 14 passing tests.
+
 - [x] Align developer drawing choices and specialist headers, fix highlighted text contrast, and suppress Developer project notifications; signed-in UI checks and notification-policy tests passed, email function deployed.
 
 - [x] Reorder developer intake, remove protection scope, add local drawing-request choices and company logos, use black highlights and Create project wording; verify interactions.

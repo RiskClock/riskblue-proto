@@ -20,17 +20,28 @@ export const MOCK_VENDORS: MockVendor[] = [
 
 export const DEFAULT_VENDOR_IDS = MOCK_VENDORS.filter((v) => v.recommended).map((v) => v.id);
 
-export type MockBid = { status: "received"; amount: number; submittedDays: number; timelineWeeks: number } | { status: "awaiting" | "declined" };
+export type MockBid = { status: "received"; amount: number; submittedDays: number; timelineWeeks: number;
+  airMovers: number; dehumidifiers: number; rentalDays: number; treatment: string;
+  assessment: "bloated" | "risk" | "aligned"; systemStatus: string; analysis: string;
+} | { status: "awaiting" | "declined" };
+
+const SAMPLE_SCOPES = [
+  { amount: 41_500, airMovers: 55, dehumidifiers: 12, rentalDays: 9, treatment: "Heavy Anti-microbial", assessment: "bloated" as const, systemStatus: "Bloated Scope", analysis: "Vendor is quoting 80% more equipment and 4 extra rental days than the baseline standard for a 5,000 sq ft space." },
+  { amount: 16_200, airMovers: 15, dehumidifiers: 2, rentalDays: 3, treatment: "None listed", assessment: "risk" as const, systemStatus: "High Liability Risk", analysis: "Scope fails to meet minimum drying standards. Insufficient dehumidification and missing mandatory anti-microbial treatment for Category 2 water." },
+  { amount: 26_800, airMovers: 32, dehumidifiers: 6, rentalDays: 5, treatment: "Standard Anti-microbial", assessment: "aligned" as const, systemStatus: "Baseline Aligned", analysis: "Scope and equipment density align 96% with industry standards. Pricing is within 4% of local baseline averages." },
+];
 
 const hash = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
 
 /** Deterministic sample bid per project and vendor so the list and detail page agree. */
 export function mockBid(projectId: string, vendorId: string, budget = 0): MockBid {
   const h = hash(`${projectId}:${vendorId}`);
+  const recommendedIndex = DEFAULT_VENDOR_IDS.indexOf(vendorId);
+  if (recommendedIndex >= 0) return { status: "received", ...SAMPLE_SCOPES[recommendedIndex], submittedDays: 1 + (h % 12), timelineWeeks: 4 + (h % 9) };
   const r = h % 10;
   if (r < 5) {
     const base = budget > 0 ? budget : 250_000;
-    return { status: "received", amount: Math.round((base * (0.8 + (h % 40) / 100)) / 1000) * 1000, submittedDays: 1 + (h % 12), timelineWeeks: 4 + (h % 9) };
+    return { status: "received", ...SAMPLE_SCOPES[h % 3], amount: Math.round((base * (0.8 + (h % 40) / 100)) / 1000) * 1000, submittedDays: 1 + (h % 12), timelineWeeks: 4 + (h % 9) };
   }
   return { status: r < 9 ? "awaiting" : "declined" };
 }
