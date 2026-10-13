@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { clampCoverage, snapCoverage, snapTolerance, developerProjectDetails } from "./developerIntake";
 
 describe("developer intake rules", () => {
+  test("new intake omits removed minimum protection scope", () => {
+    expect(developerProjectDetails("250,000", 1)).toEqual({ intake_type: "developer", water_mitigation_budget: 250_000, riskTolerance: "medium" });
+  });
   test("coverage ranges from zero to ten million", () => {
     expect(clampCoverage(-100)).toBe(0);
     expect(clampCoverage(10_000_001)).toBe(10_000_000);

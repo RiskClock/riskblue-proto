@@ -13,7 +13,7 @@ export function IntakeSlider({ label, value, max, ticks, onChange, onCommit, dis
       onPointerDown={() => setDragging(true)} onPointerUp={() => setDragging(false)} onPointerCancel={() => setDragging(false)}
       onValueChange={([next]) => onChange(next)} onValueCommit={([next]) => { setDragging(false); onCommit(next); }}>
       <SliderPrimitive.Track className="relative h-px w-full grow bg-border">
-        <SliderPrimitive.Range className="absolute h-full bg-foreground" />
+        <SliderPrimitive.Range className="absolute top-1/2 h-[3px] -translate-y-1/2 bg-foreground" />
       </SliderPrimitive.Track>
       <SliderPrimitive.Thumb aria-label={label} className={cn("block border-foreground bg-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50", dragging ? "h-5 w-5 rounded-full border-2" : "h-4 w-0.5 rounded-none border-0 bg-foreground")} />
     </SliderPrimitive.Root>
