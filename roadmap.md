@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Align developer drawing choices and specialist headers, fix highlighted text contrast, and suppress Developer project notifications; signed-in UI checks and notification-policy tests passed, email function deployed.
+
 - [x] Reorder developer intake, remove protection scope, add local drawing-request choices and company logos, use black highlights and Create project wording; verify interactions.
 
 - [x] Fix developer image control position and prevent layout shifts.

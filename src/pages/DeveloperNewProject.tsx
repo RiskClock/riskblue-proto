@@ -239,7 +239,8 @@ export default function DeveloperNewProject() {
                     className={cn(
                       "transition-colors",
                       i === 0 ? "text-left" : i === 1 ? "text-center" : "text-right",
-                      i === tolerance ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                      "hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground",
+                      i === tolerance ? "text-foreground" : "text-muted-foreground",
                     )}
                   >
                     {t.label}
@@ -254,7 +255,7 @@ export default function DeveloperNewProject() {
           </Section>
 
           <Section index="04" title="Drawings (optional)">
-            <RadioGroup aria-label="Drawing availability" value={drawingMode} onValueChange={setDrawingMode} disabled={saving} className="mb-6 flex flex-wrap gap-x-6 gap-y-4">
+            <RadioGroup aria-label="Drawing availability" value={drawingMode} onValueChange={setDrawingMode} disabled={saving} className="mb-6 flex flex-wrap gap-x-6 gap-y-4 md:pt-[3.25rem]">
               {[["upload", "Upload now"], ["later", "Provide later"], ["request", "Request from other"]].map(([value, label]) => (
                 <label key={value} className="flex cursor-pointer items-center gap-2 text-base">
                   <RadioGroupItem value={value} id={`drawings-${value}`} />{label}
@@ -317,7 +318,7 @@ export default function DeveloperNewProject() {
                        <Button variant="ghost"
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => choose(s)}
-                        className="h-auto w-full justify-start whitespace-normal px-6 py-4 text-left text-base text-popover-foreground hover:bg-muted"
+                        className="h-auto w-full justify-start whitespace-normal px-6 py-4 text-left text-base text-popover-foreground hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground"
                       >
                         {s.text}
                       </Button>
@@ -342,10 +343,10 @@ export default function DeveloperNewProject() {
               </div>
               <div className="grid gap-px overflow-hidden border border-border bg-border md:grid-cols-3">
                 {MOCK_WMSVS.map((w, i) => (
-                  <article key={w.name} className="flex flex-col bg-card p-10">
-                    <div className="mb-10 flex flex-wrap items-center justify-between gap-3">
-                      <img src={w.logo} alt={`${w.name} logo`} className="h-24 w-32 shrink-0 object-contain" />
-                      <span className="text-sm uppercase tracking-[0.1em] text-muted-foreground">
+                  <article key={w.name} className="flex min-w-0 flex-col bg-card p-6 lg:p-8">
+                    <div className="mb-10 grid h-24 grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+                      <img src={w.logo} alt={`${w.name} logo`} className="h-24 w-full max-w-32 object-contain object-left" />
+                      <span className="whitespace-nowrap text-sm uppercase tracking-[0.1em] text-muted-foreground">
                         {i === 0 ? "Best match" : `0${i + 1}`}
                       </span>
                     </div>
