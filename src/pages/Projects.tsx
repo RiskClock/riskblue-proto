@@ -278,9 +278,6 @@ const Projects = () => {
           </div>
         ) : (
           <>
-          <div className="mb-3 flex justify-end">
-            <ColumnEditDropdown columns={[{ id: "name", label: "Project Name" }, ...columnOptions.map(c => ({ id: c.value, label: c.label }))]} columnPrefs={columnPrefs} onChange={updateColumns} lockedColumns={["name"]} />
-          </div>
           <div className="bg-card rounded-lg border overflow-x-auto">
             <table className="w-full">
               <thead className="bg-muted/50 [&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-muted [&_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]">
