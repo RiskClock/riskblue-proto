@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Show received-bid status/count and scroll link, synchronize intro/image reveal, and widen bids to browser width; verify.
+
 - [x] Reuse reorderable column controls in Projects, Company Management and User Management; verified drag order and visibility persist after reload.
 - [x] Restore Drawings (optional) on creation and eliminate the existing-project title flash; verified the signed-in project title.
 - [x] Add side-by-side sample bid metrics and analysis; verified vendor removal/re-addition, hosted logos, contained mobile scrolling and 14 passing tests.

@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { mockBid, bidsReceived, DEFAULT_VENDOR_IDS } from "./developerVendors";
+import { mockBid, bidsReceived, hasReceivedBids, DEFAULT_VENDOR_IDS } from "./developerVendors";
 
 describe("sample bid metrics", () => {
+  test("receiving bids takes precedence only when a received bid exists", () => {
+    expect(hasReceivedBids("project", ["aquilon"])).toBe(true);
+    expect(hasReceivedBids("project", [])).toBe(false);
+    const pending = ["tidewall", "northbrook", "keystone", "bluecrest"].filter(id => mockBid("project", id).status !== "received");
+    expect(pending.length > 0).toBe(true);
+    expect(hasReceivedBids("project", pending)).toBe(false);
+  });
   test("total costs are six figures", () => {
     for (const id of DEFAULT_VENDOR_IDS) {
       const bid = mockBid("project", id);

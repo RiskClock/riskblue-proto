@@ -18,7 +18,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useIsSystemAdmin, useStaffUserIds } from "@/hooks/useIsSystemAdmin";
 import { useBetaAccess } from "@/hooks/useBetaAccess";
 import { ColumnEditDropdown, type ColumnPreferences } from "@/components/common/ColumnEditDropdown";
-import { bidsReceived, DEFAULT_VENDOR_IDS } from "@/lib/developerVendors";
+import { bidsReceived, hasReceivedBids, DEFAULT_VENDOR_IDS } from "@/lib/developerVendors";
 
 const PROJECT_STATUS_LABEL: Record<string, string> = { waiting_drawings: "Waiting for Drawings", processing: "Processing", processed: "Processed" };
 const PROTECTION_LABEL: Record<string, string> = { high: "Essential", medium: "Balanced", low: "Comprehensive" };
@@ -320,7 +320,9 @@ const Projects = () => {
                             : s === "waiting_drawings"
                             ? "bg-muted text-muted-foreground border-border"
                             : "bg-amber-100 text-amber-800 border-amber-300";
-                        const label = PROJECT_STATUS_LABEL[s] || "Processing";
+                        const pd = projectData.get(project.id);
+                        const receivingBids = isDeveloper && !!pd && hasReceivedBids(project.id, Array.isArray(pd.selected_vendor_ids) ? pd.selected_vendor_ids : DEFAULT_VENDOR_IDS);
+                        const label = receivingBids ? "Receiving Bids" : PROJECT_STATUS_LABEL[s] || "Processing";
                         return (
                           <Badge variant="outline" className={cls}>
                             {label}
