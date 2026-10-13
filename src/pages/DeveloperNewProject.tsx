@@ -431,7 +431,7 @@ export default function DeveloperNewProject() {
                     </div>
                     <a href={w.url} target="_blank" rel="noreferrer" className="mt-auto inline-flex items-center gap-2 pt-12 text-base text-foreground underline-offset-8 hover:underline">
                       Visit website <ArrowUpRight className="h-3.5 w-3.5" />
-                    </a></>}
+                    </a></>
                   </article>);
                 })}
               </div>}
