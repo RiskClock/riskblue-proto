@@ -30,3 +30,25 @@ test("saving attachments persists files without consuming credits or starting an
   expect(uploads).toEqual(["project/intro/image.png", "project/request/0_drawing.png"]);
   expect(writes.at(-1)?.values.project_data.project_image_path).toBe("project/intro/image.png");
 });
+const statusClient = (writes: any[]) => ({
+  from(table: string) {
+    const b: any = { upsert(v: any) { writes.push({ table, v }); return Promise.resolve({ error: null }); },
+      update(v: any) { writes.push({ table, v }); return b; }, select() { return b; }, eq() { return b; },
+      maybeSingle() { return Promise.resolve({ data: null, error: null }); },
+      then(r: any) { return Promise.resolve({ error: null }).then(r); } };
+    return b;
+  },
+  storage: { from() { return { upload() { return Promise.resolve({ error: null }); } }; } },
+}) as unknown as SupabaseClient<Database>;
+
+test("project without drawings is Waiting for Drawings", async () => {
+  const writes: any[] = [];
+  await saveDeveloperProject(statusClient(writes), { projectId: "p", requestId: "r", userId: "u", tenantId: null, name: "A", address: "", details: {}, image: null, drawings: [] });
+  expect(writes.find((w) => w.table === "projects").v.workbench_status).toBe("waiting_drawings");
+});
+
+test("project with drawings is Processing", async () => {
+  const writes: any[] = [];
+  await saveDeveloperProject(statusClient(writes), { projectId: "p", requestId: "r", userId: "u", tenantId: null, name: "A", address: "", details: {}, image: null, drawings: [new File(["d"], "d.png")] });
+  expect(writes.find((w) => w.table === "projects").v.workbench_status).toBe("processing");
+});
