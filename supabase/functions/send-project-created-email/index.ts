@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { isDeveloperTestProject } from "./notificationPolicy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,7 +46,7 @@ serve(async (req) => {
 
     const { data: project } = await admin
       .from("projects")
-      .select("id, name, user_id, created_at, selected_awp_class_names, selected_other_classes, selected_awp_subtypes, protection_phase")
+      .select("id, name, user_id, created_at, selected_awp_class_names, selected_other_classes, selected_awp_subtypes, protection_phase, project_data")
       .eq("id", projectId)
       .single();
 
@@ -70,9 +71,16 @@ serve(async (req) => {
 
     const { data: profile } = await admin
       .from("profiles")
-      .select("display_name")
+      .select("display_name, account_type")
       .eq("user_id", project.user_id)
       .maybeSingle();
+    if (isDeveloperTestProject(project.project_data, profile?.account_type)) {
+      console.log("[send-project-created-email] skipped developer test project", { projectId });
+      return new Response(JSON.stringify({ success: true, skipped: "developer_test_project" }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const creatorName = profile?.display_name || creatorEmail;
 
     const selectedNames: string[] = Array.isArray((project as any).selected_awp_class_names)
