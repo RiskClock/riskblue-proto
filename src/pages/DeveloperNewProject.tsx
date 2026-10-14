@@ -318,7 +318,7 @@ export default function DeveloperNewProject() {
           <Section index="04" title="Risk Extraction Scope">
             <div className="pt-4">
               <IntakeSlider label="Risk Extraction Scope" value={extractionScope} max={2} ticks={3} onChange={setExtractionScope} onCommit={(value) => setExtractionScope(snapTolerance(value))} />
-              <div className="mt-6 grid grid-cols-3 gap-2 text-base">
+              <div className="mt-6 grid grid-cols-1 gap-2 text-base sm:grid-cols-3">
                 {EXTRACTION_SCOPES.map((scope, index) => (
                   <Button key={scope.key} variant="ghost" onClick={() => setExtractionScope(index)} aria-pressed={extractionScope === index}
                     className={cn("h-auto min-h-16 whitespace-normal break-words px-2 py-3 text-base leading-relaxed hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground", extractionScope === index ? "text-foreground" : "text-muted-foreground")}>
