@@ -281,9 +281,11 @@ export default function DeveloperNewProject() {
             </>}
           </Section>
 
-          <div className="mx-auto flex max-w-5xl flex-col items-end gap-4 px-6 sm:px-8">
+          <div className="mx-auto max-w-5xl px-6 sm:px-8">
+            <div className="flex flex-col items-center gap-4 border-t border-border pt-8">
             {saveError && <p role="alert" className="w-full text-base text-destructive">{saveError}</p>}
-            <Button size="lg" className="h-14 px-8 text-base" disabled={saving || !user || !name.trim() || !isOwnershipIntent(ownershipIntent) || (isEdit && !loaded)} onClick={handleSave}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? (isEdit ? "Saving changes" : "Creating project") : (isEdit ? "Save changes" : "Create project")}</Button>
+            <Button size="lg" className={cn("h-14 px-8", isEdit ? "text-base" : "font-serif text-xl")} disabled={saving || !user || !name.trim() || !isOwnershipIntent(ownershipIntent) || (isEdit && !loaded)} onClick={handleSave}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? (isEdit ? "Saving changes" : "Creating project") : (isEdit ? "Save changes" : "Create project")}</Button>
+            </div>
           </div>
         </fieldset>
       </main>

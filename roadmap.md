@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Center and animate Overall Process expansion, restyle the centered serif create action and blue stepper, and enforce drawings-first list status; verify signed-in views and tests.
+
 - [x] Simplify project progress captions, subtly blur the backdrop, remove form numbering, collapse welcome descriptions and unify slider choice buttons; signed-in interaction checks passed, all choice buttons measure 40px, and 16 tests pass.
 
 - [x] Update developer welcome typography/icons, add project progress stepper, and remove vendor/bid lists on new and existing project pages; signed-in views verified, 19 tests pass.

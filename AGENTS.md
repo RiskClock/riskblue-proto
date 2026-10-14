@@ -1,6 +1,6 @@
 # Architecture rules
 
-- Developer welcome and project progress are isolated presentation components; progress derives from saved intake status and vendor selection without starting workflows, and standard account onboarding remains unchanged.
+- Developer welcome and project progress are isolated presentation components; progress and list status use shared developerProgress rules based on saved intake status and vendor selection, so sample bids cannot bypass intake or analysis and standard onboarding remains unchanged.
 - Developer protection and extraction slider labels share IntakeChoiceLabels so their sizing, accessibility and selection styling stay consistent.
 
 - Management tables and Projects share the generic ColumnEditDropdown for visibility and order while each page owns its saved preferences; this preserves one consistent editor without coupling page-specific columns.

@@ -1,5 +1,11 @@
 export type DeveloperProgress = { currentStep: number; waiting: boolean };
 
+/** Sample bids cannot bypass unfinished drawing intake or analysis. */
+export function developerListStatus(status: string | undefined, hasBids: boolean): string {
+  if (status === "processed" && hasBids) return "receiving_bids";
+  return status || "processing";
+}
+
 /** Present existing intake progress without starting analysis or vendor workflows. */
 export function developerProgress(isExisting: boolean, status?: string, vendorCount = 0): DeveloperProgress {
   if (!isExisting) return { currentStep: 0, waiting: false };

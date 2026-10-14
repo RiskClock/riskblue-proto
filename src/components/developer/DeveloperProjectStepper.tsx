@@ -1,4 +1,4 @@
-import { Check, Clock, FilePlus2, ScanSearch, Users, Mail, Trophy, ArrowRight } from "lucide-react";
+import { Check, Hourglass, FilePlus2, ScanSearch, Users, Mail, Trophy, ArrowRight } from "lucide-react";
 import { developerProgress } from "@/lib/developerProgress";
 import { cn } from "@/lib/utils";
 
@@ -20,7 +20,7 @@ export function DeveloperProjectStepper({ isExisting, status, vendorCount }: { i
             const completed = index < progress.currentStep;
             const current = index === progress.currentStep;
             const waiting = current && progress.waiting;
-            const Icon = completed ? Check : waiting ? Clock : step.icon;
+            const Icon = completed ? Check : waiting ? Hourglass : step.icon;
             return (
               <li key={step.label} aria-current={current ? "step" : undefined} className="flex min-w-0 flex-1 items-start gap-3">
                 <div className="flex min-w-0 flex-1 flex-col items-center gap-3 text-center">
