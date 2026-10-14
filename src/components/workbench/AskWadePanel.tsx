@@ -69,6 +69,8 @@ function extractActions(text: string): { visible: string; actions: any[] } {
 }
 
 
+const handledCalibrationNonces = new Set<number>();
+
 export function AskWadePanel({
   projectId,
   onClose,
