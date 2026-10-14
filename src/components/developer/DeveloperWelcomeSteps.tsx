@@ -1,4 +1,6 @@
-import { FilePlus2, ScanSearch, Users, Mail, Trophy } from "lucide-react";
+import { useState } from "react";
+import { FilePlus2, ScanSearch, Users, Mail, Trophy, ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const STEPS = [
   { title: "Define Project", icon: FilePlus2, body: "Set your target protection level and upload (or delegate) project drawings." },
@@ -9,17 +11,27 @@ const STEPS = [
 ];
 
 export function DeveloperWelcomeSteps() {
+  const [expanded, setExpanded] = useState(false);
   return (
-    <div className="mt-8 overflow-x-auto pb-3">
-      <ol className="grid min-w-[960px] grid-cols-5 gap-6">
+    <div className="mt-4 border-t border-border pt-3">
+      <div className="flex items-start gap-2">
+      <div className="min-w-0 flex-1 overflow-x-auto pb-1">
+      <ol id="developer-welcome-workflow" className="grid min-w-[960px] grid-cols-5 gap-6">
         {STEPS.map((step, index) => (
-          <li key={step.title} className="border-t border-border pt-4">
-            <span className="font-serif text-3xl text-muted-foreground">{String(index + 1).padStart(2, "0")}</span>
-            <h3 className="mt-3 flex items-center gap-2 text-base font-semibold text-foreground">{step.title}<step.icon className="h-4 w-4 shrink-0" aria-hidden="true" /></h3>
-            <p className="mt-2 text-base leading-relaxed text-muted-foreground">{step.body}</p>
+          <li key={step.title}>
+            <div className="flex h-8 items-center gap-2">
+              <span className="font-serif text-xl text-muted-foreground">{String(index + 1).padStart(2, "0")}</span>
+              <h3 className="flex items-center gap-2 text-base font-semibold text-foreground">{step.title}<step.icon className="h-4 w-4 shrink-0" aria-hidden="true" /></h3>
+            </div>
+            {expanded && <p className="mt-2 text-base leading-relaxed text-muted-foreground">{step.body}</p>}
           </li>
         ))}
       </ol>
+      </div>
+      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label={expanded ? "Collapse workflow descriptions" : "Expand workflow descriptions"} aria-expanded={expanded} aria-controls="developer-welcome-workflow" onClick={() => setExpanded(!expanded)}>
+        <ChevronDown className={expanded ? "h-4 w-4 rotate-180" : "h-4 w-4"} />
+      </Button>
+      </div>
     </div>
   );
 }
