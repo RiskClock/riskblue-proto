@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Update target protection level, extraction scope, ownership radios and drawings wording; 14 tests passed, signed-in creation/reopening/editing verified, and QA projects removed.
+
 - [x] Keep the existing-project page structure visible while its details load, without waiting for the backdrop image.
 
 - [x] Show received-bid status/count and scroll link, synchronize intro/image reveal, and widen bids to browser width; verified signed-in list and page, image readiness, full-width bounds, and 7 passing tests.
