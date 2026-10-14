@@ -13,8 +13,7 @@ const STEPS = [
 export function DeveloperWelcomeSteps() {
   const [expanded, setExpanded] = useState(false);
   return (
-    <div className="mt-3 border-t border-border pt-2">
-      <p className="mb-2 text-base font-semibold text-muted-foreground">Overall Process</p>
+    <div className="mt-3 -mb-3 border-t border-border pt-2">
       <div className="min-w-0 overflow-x-auto pb-1">
         <ol id="developer-welcome-workflow" className="grid min-w-[960px] grid-cols-5 gap-6">
           {STEPS.map((step, index) => (
@@ -31,10 +30,10 @@ export function DeveloperWelcomeSteps() {
         </ol>
       </div>
       {!expanded && (
-        <div className="mt-1 flex justify-center">
+        <div className="mt-6 flex justify-center">
           <button
             type="button"
-            className="cursor-pointer text-base text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+            className="cursor-pointer text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
             aria-expanded={expanded}
             aria-controls="developer-welcome-workflow"
             onClick={() => setExpanded(true)}
