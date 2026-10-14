@@ -20,8 +20,9 @@ import { useBetaAccess } from "@/hooks/useBetaAccess";
 import { ColumnEditDropdown, type ColumnPreferences } from "@/components/common/ColumnEditDropdown";
 import { bidsReceived, hasReceivedBids, DEFAULT_VENDOR_IDS } from "@/lib/developerVendors";
 import { DeveloperWelcomeSteps } from "@/components/developer/DeveloperWelcomeSteps";
+import { developerListStatus } from "@/lib/developerProgress";
 
-const PROJECT_STATUS_LABEL: Record<string, string> = { waiting_drawings: "Waiting for Drawings", processing: "Processing", processed: "Processed" };
+const PROJECT_STATUS_LABEL: Record<string, string> = { waiting_drawings: "Waiting for Drawings", processing: "Processing", processed: "Processed", receiving_bids: "Receiving Bids" };
 const PROTECTION_LABEL: Record<string, string> = { high: "Essential", medium: "Balanced", low: "Comprehensive" };
 
 interface Project {
@@ -324,7 +325,8 @@ const Projects = () => {
                             : "bg-amber-100 text-amber-800 border-amber-300";
                         const pd = projectData.get(project.id);
                         const receivingBids = isDeveloper && !!pd && hasReceivedBids(project.id, Array.isArray(pd.selected_vendor_ids) ? pd.selected_vendor_ids : DEFAULT_VENDOR_IDS);
-                        const label = receivingBids ? "Receiving Bids" : PROJECT_STATUS_LABEL[s] || "Processing";
+                        const displayStatus = isDeveloper ? developerListStatus(s, receivingBids) : s;
+                        const label = PROJECT_STATUS_LABEL[displayStatus] || "Processing";
                         return (
                           <Badge variant="outline" className={cls}>
                             {label}
