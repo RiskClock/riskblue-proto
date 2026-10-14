@@ -1,5 +1,8 @@
 # Roadmap
 
+- [x] Replace the welcome expand arrow with a plain centered "Learn More" text link that disappears once expanded, and set "Overall Process" to bold body-size text; signed-in preview verified.
+
+
 - [x] Center and animate Overall Process expansion, restyle the centered serif create action and blue stepper, and enforce drawings-first list status; signed-in expansion/collapse and status verified, 20 tests pass, preview build OK.
 
 - [x] Simplify project progress captions, subtly blur the backdrop, remove form numbering, collapse welcome descriptions and unify slider choice buttons; signed-in interaction checks passed, all choice buttons measure 40px, and 16 tests pass.
