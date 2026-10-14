@@ -24,7 +24,7 @@ export function DeveloperWelcomeSteps() {
               <span className="font-serif text-xl text-muted-foreground">{String(index + 1).padStart(2, "0")}</span>
               <h3 className={cn("flex items-center gap-2 text-base text-foreground", expanded ? "font-semibold" : "font-normal")}>{step.title}<step.icon className="h-4 w-4 shrink-0" aria-hidden="true" /></h3>
             </div>
-            <div inert={!expanded ? true : undefined} aria-hidden={!expanded} className={cn("grid transition-[grid-template-rows,opacity] duration-300 ease-in-out motion-reduce:transition-none", expanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}>
+            <div aria-hidden={!expanded} className={cn("grid transition-[grid-template-rows,opacity] duration-300 ease-in-out motion-reduce:transition-none", expanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}>
               <div className="overflow-hidden"><p className="pt-2 text-base leading-relaxed text-muted-foreground">{step.body}</p></div>
             </div>
           </li>
