@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { clampCoverage, snapCoverage, snapTolerance, developerProjectDetails, restoreDeveloperChoices, developerScopeDetails, isOwnershipIntent } from "./developerIntake";
+import { clampCoverage, snapCoverage, snapTolerance, developerProjectDetails, restoreDeveloperChoices, developerScopeDetails, isOwnershipIntent, extractionScopeLabel, ownershipIntentLabel } from "./developerIntake";
 
 describe("developer intake rules", () => {
   test("extraction scope defaults to Match Engineer's Design", () => {
@@ -51,5 +51,15 @@ describe("developer intake rules", () => {
       intake_type: "developer", water_mitigation_budget: 250_000, riskTolerance: "medium",
       minimum_protection_scope: { general_liability: 100_000, workers_compensation: 200_000, pollution_environmental_liability: 300_000, excess_umbrella_liability: 10_000_000 },
     });
+  });
+  test("list columns show concise labels for saved scope and ownership", () => {
+    expect(extractionScopeLabel("engineer_design")).toBe("Engineer's Design");
+    expect(extractionScopeLabel("design_upgrades")).toBe("Design + Upgrades");
+    expect(extractionScopeLabel("comprehensive")).toBe("Comprehensive");
+    expect(extractionScopeLabel(undefined)).toBe("-");
+    expect(ownershipIntentLabel("construction_only")).toBe("Construction Only");
+    expect(ownershipIntentLabel("smart_amenity")).toBe("Smart Amenity");
+    expect(ownershipIntentLabel("long_term_hold")).toBe("Long-Term Hold");
+    expect(ownershipIntentLabel("Operational")).toBe("-");
   });
 });
