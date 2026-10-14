@@ -44,6 +44,13 @@ All colors MUST be HSL.
     --intro-overlay: 0 0% 0%;
     --intro-overlay-foreground: 0 0% 100%;
 
+    --workflow-current: 217 91% 60%;
+    --workflow-completed: 142 76% 30%;
+    --workflow-waiting: 38 92% 50%;
+    --workflow-on-current: 0 0% 100%;
+    --workflow-on-completed: 0 0% 100%;
+    --workflow-on-waiting: 222 47% 11%;
+
     --control-blue: 217 70% 80%;
     --control-green: 160 50% 74%;
     --control-amber: 43 80% 72%;
@@ -152,6 +159,10 @@ All colors MUST be HSL.
 .bid-status-bloated { background: hsl(var(--warning)); }
 .bid-status-risk { background: hsl(var(--danger)); }
 .bid-status-aligned { background: hsl(var(--success)); }
+
+.project-step-current { background: hsl(var(--workflow-current)); border-color: hsl(var(--workflow-current)); color: hsl(var(--workflow-on-current)); }
+.project-step-completed { background: hsl(var(--workflow-completed)); border-color: hsl(var(--workflow-completed)); color: hsl(var(--workflow-on-completed)); }
+.project-step-waiting { background: hsl(var(--workflow-waiting)); border-color: hsl(var(--workflow-waiting)); color: hsl(var(--workflow-on-waiting)); }
 
 @layer base {
   * {

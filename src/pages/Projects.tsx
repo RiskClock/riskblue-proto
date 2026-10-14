@@ -255,8 +255,8 @@ const Projects = () => {
               >
                 <X className="h-4 w-4" />
               </Button>
-              <p className={isDeveloper ? "text-2xl font-semibold text-foreground mb-3 pr-10" : "text-sm text-foreground mb-3 pr-6"}>
-                <strong>{isDeveloper ? "Streamline Your Water Mitigation Procurement with RiskBlue!" : "👋 Welcome to RiskBlue!"}</strong>
+              <p className={isDeveloper ? "font-sans text-lg font-semibold text-foreground mb-3 pr-10" : "text-sm text-foreground mb-3 pr-6"}>
+                <strong>{isDeveloper ? "🚀 Streamline Your Water Mitigation Procurement with RiskBlue!" : "👋 Welcome to RiskBlue!"}</strong>
               </p>
               <p className={isDeveloper ? "text-base leading-relaxed text-muted-foreground" : "text-sm text-muted-foreground"}>
                 {isDeveloper ? "RiskBlue turns complex project drawings into standardized threat assessments so you can easily invite top specialists and compare bids side-by-side." : "RiskBlue helps builders identify project-specific water risks, determine the right mitigation strategies, and translate them into structured plans and coordinated execution. By unifying risk discovery, planning, and field operations, RiskBlue ensures consistent control, accountability, and rapid response across the entire water-mitigation lifecycle."}

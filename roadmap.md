@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Update developer welcome typography/icons, add project progress stepper, and remove vendor/bid lists on new and existing project pages; signed-in views verified, 19 tests pass.
+
 - [x] Simplify developer intake steps and alignment, shorten scope dial labels, move the drawings disclaimer first, and add the developer welcome workflow; signed-in preview verified, section tops align, and 14 tests pass.
 
 - [x] Update target protection level, extraction scope, ownership radios and drawings wording; 14 tests passed, signed-in creation/reopening/editing verified, and QA projects removed.
