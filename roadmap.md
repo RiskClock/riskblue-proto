@@ -1,5 +1,8 @@
 # Roadmap
 
+- [x] Replace the Budget project-list column with Extraction Scope and Ownership Intent (concise labels from saved intake values) and rename Protection Level to Target Protection Level; signed-in creation and column-editor checks passed.
+
+
 - [x] Replace the welcome expand arrow with a plain centered "Learn More" text link that disappears once expanded, and set "Overall Process" to bold body-size text; signed-in preview verified.
 
 
