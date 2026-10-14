@@ -10,7 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { snapTolerance, developerProjectDetails, EXTRACTION_SCOPES, OWNERSHIP_INTENTS, isOwnershipIntent, restoreDeveloperChoices, developerScopeDetails } from "@/lib/developerIntake";
 import { saveDeveloperProject } from "@/lib/saveDeveloperProject";
-import { ArrowLeft, ArrowUpRight, Loader2, MapPin, ShieldCheck, ImagePlus, Upload, FileText, X, Save } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Loader2, ShieldCheck, ImagePlus, Upload, FileText, X, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,7 +19,6 @@ import { BidComparison } from "@/components/developer/BidComparison";
 import { MOCK_VENDORS, DEFAULT_VENDOR_IDS, DEVELOPER_STATUS_LABEL, bidsReceived } from "@/lib/developerVendors";
 import { Search } from "lucide-react";
 
-type Suggestion = { placeId: string; text: string };
 type Place = { formattedAddress: string; lat?: number; lng?: number; city?: string | null; region?: string | null };
 
 const TOLERANCES = [
@@ -116,13 +115,7 @@ export default function DeveloperNewProject() {
   const [budget, setBudget] = useState("");
   const [tolerance, setTolerance] = useState(1);
   const [query, setQuery] = useState("");
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [open, setOpen] = useState(false);
   const [place, setPlace] = useState<Place | null>(null);
-  const [resolving, setResolving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const sessionToken = useRef<string>(crypto.randomUUID());
   const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
   const [readyBackdropUrl, setReadyBackdropUrl] = useState<string | null>(null);
   const bidsSection = useRef<HTMLElement>(null);
@@ -163,50 +156,6 @@ export default function DeveloperNewProject() {
       }
     })();
   }, [editId]);
-  const reqId = useRef(0);
-
-  useEffect(() => {
-    if (place && query === place.formattedAddress) return;
-    if (query.trim().length < 3) {
-      setSuggestions([]);
-      return;
-    }
-    const id = ++reqId.current;
-    const t = setTimeout(async () => {
-      setSearching(true);
-      const { data, error } = await supabase.functions.invoke("places-address", {
-        body: { action: "autocomplete", input: query, sessionToken: sessionToken.current },
-      });
-      if (id !== reqId.current) return;
-      setSearching(false);
-      if (error) {
-        setError("Address suggestions are unavailable right now.");
-        return;
-      }
-      setError(null);
-      setSuggestions(data?.suggestions || []);
-      setOpen(true);
-    }, 300);
-    return () => clearTimeout(t);
-  }, [query, place]);
-
-  const choose = async (s: Suggestion) => {
-    setOpen(false);
-    setQuery(s.text);
-    setResolving(true);
-    const { data, error } = await supabase.functions.invoke("places-address", {
-      body: { action: "details", placeId: s.placeId, sessionToken: sessionToken.current },
-    });
-    sessionToken.current = crypto.randomUUID();
-    setResolving(false);
-    if (error || !data?.formattedAddress) {
-      setPlace({ formattedAddress: s.text });
-    } else {
-      setPlace(data);
-      setQuery(data.formattedAddress);
-    }
-  };
-
   const tol = TOLERANCES[snapTolerance(tolerance)];
   const backdropUrl = imageUrl || existingImageUrl;
   const receivedCount = isEdit ? bidsReceived(editId || "", vendorIds) : 0;
@@ -271,26 +220,12 @@ export default function DeveloperNewProject() {
               aria-label="Project name"
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. The Aldwych Residences"
-              className="h-auto rounded-none border-0 border-b border-border bg-transparent px-0 py-4 font-serif text-2xl md:text-3xl shadow-none focus-visible:border-foreground focus-visible:ring-0"
+              className="h-auto rounded-none border-0 border-b border-border bg-transparent px-0 pb-4 pt-0 font-serif text-2xl md:text-3xl shadow-none focus-visible:border-foreground focus-visible:ring-0"
             />
           </Section>
 
-          <Section index="02" title="Water mitigation budget">
-            <div className="flex items-baseline gap-3 border-b border-border focus-within:border-foreground">
-              <span className="font-serif text-3xl text-muted-foreground">$</span>
-              <Input
-                inputMode="numeric"
-                aria-label="Water mitigation budget"
-                value={budget}
-                onChange={(e) => setBudget(formatCurrency(e.target.value))}
-                placeholder="250,000"
-                className="h-auto rounded-none border-0 bg-transparent px-0 py-4 font-serif text-2xl md:text-3xl tabular-nums shadow-none focus-visible:ring-0"
-              />
-            </div>
-          </Section>
-
-          <Section index="03" title="Target protection level">
-            <div className="pt-4">
+          <Section index="02" title="Target protection level">
+            <div>
                <IntakeSlider label="Target protection level" value={tolerance} max={2} ticks={3} onChange={setTolerance} onCommit={(value) => setTolerance(snapTolerance(value))} />
               <div className="mt-6 grid grid-cols-3 text-base">
                 {TOLERANCES.map((t, i) => (
@@ -315,14 +250,14 @@ export default function DeveloperNewProject() {
             </div>
           </Section>
 
-          <Section index="04" title="Risk Extraction Scope">
-            <div className="pt-4">
+          <Section index="03" title="Risk Extraction Scope">
+            <div>
               <IntakeSlider label="Risk Extraction Scope" value={extractionScope} max={2} ticks={3} onChange={setExtractionScope} onCommit={(value) => setExtractionScope(snapTolerance(value))} />
               <div className="mt-6 grid grid-cols-1 gap-2 text-base sm:grid-cols-3">
                 {EXTRACTION_SCOPES.map((scope, index) => (
                   <Button key={scope.key} variant="ghost" onClick={() => setExtractionScope(index)} aria-pressed={extractionScope === index}
                     className={cn("h-auto min-h-16 whitespace-normal break-words px-2 py-3 text-base leading-relaxed hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground", extractionScope === index ? "text-foreground" : "text-muted-foreground")}>
-                    <span className="min-w-0 [overflow-wrap:anywhere]">{scope.label}</span>
+                    <span className="min-w-0 [overflow-wrap:anywhere]">{["Engineer's Design", "Design + Upgrades", "Comprehensive"][index]}</span>
                   </Button>
                 ))}
               </div>
@@ -333,8 +268,8 @@ export default function DeveloperNewProject() {
             </div>
           </Section>
 
-          <Section index="05" title="System Ownership & Intent">
-            <RadioGroup aria-label="System Ownership & Intent" required value={ownershipIntent} onValueChange={setOwnershipIntent} className="gap-6 md:pt-5">
+          <Section index="04" title="System Ownership & Intent">
+            <RadioGroup aria-label="System Ownership & Intent" required value={ownershipIntent} onValueChange={setOwnershipIntent} className="gap-6">
               {OWNERSHIP_INTENTS.map((intent) => (
                 <label key={intent.key} className="flex cursor-pointer items-start gap-3 text-base">
                   <RadioGroupItem value={intent.key} aria-label={intent.label} className="mt-1 shrink-0" />
@@ -342,20 +277,19 @@ export default function DeveloperNewProject() {
                 </label>
               ))}
             </RadioGroup>
-            {!ownershipIntent && <p className="mt-4 text-base text-muted-foreground">Select an ownership intent to continue.</p>}
           </Section>
 
-          <Section index="06" title={isEdit ? "Drawings" : "Drawings (optional)"}>
-            <RadioGroup aria-label="Drawing availability" value={drawingMode} onValueChange={setDrawingMode} disabled={saving} className="mb-6 flex flex-wrap gap-x-6 gap-y-4 md:pt-[3.25rem]">
+          <Section index="05" title={isEdit ? "Drawings" : "Drawings (optional)"}>
+            <p className="mb-6 text-base leading-relaxed text-muted-foreground">🔒 Confidential &amp; Secure: Your drawings are never shared. RiskBlue securely processes these files to extract a list of risk areas. Vendors only see the extracted risks to provide their bids.</p>
+            <RadioGroup aria-label="Drawing availability" value={drawingMode} onValueChange={setDrawingMode} disabled={saving} className="mb-6 flex flex-wrap gap-x-6 gap-y-4">
               {[["upload", "Upload now"], ["later", "Provide later"], ["request", "Request from Architect/Engineer"]].map(([value, label]) => (
                 <label key={value} className="flex cursor-pointer items-center gap-2 text-base">
                   <RadioGroupItem value={value} id={`drawings-${value}`} />{label}
                 </label>
               ))}
             </RadioGroup>
-            <p className="mb-6 text-base leading-relaxed text-muted-foreground">🔒 Confidential &amp; Secure: Your drawings are never shared. RiskBlue securely processes these files to extract a list of risk areas. Vendors only see the extracted risks to provide their bids.</p>
             {drawingMode === "request" && <div className="space-y-5 border-l border-border pl-6">
-              <p className="text-base leading-relaxed text-muted-foreground">We'll send them a secure link to upload the files. They will not see your budget or target protection level.</p>
+              <p className="text-base leading-relaxed text-muted-foreground">We'll send them a secure link to upload the files. They will not see your target protection level.</p>
               <div className="space-y-2">
                 <label htmlFor="drawing-request-email" className="text-base font-medium">Email</label>
                 <Input id="drawing-request-email" type="email" value={requestEmail} onChange={(event) => setRequestEmail(event.target.value)} placeholder="name@company.com" className="text-base md:text-base" />
@@ -388,44 +322,6 @@ export default function DeveloperNewProject() {
             </>}
           </Section>
 
-          <Section index="07" title="Project address (optional)">
-            <div className="relative">
-              <div className="flex items-center gap-4 border-b border-border focus-within:border-foreground">
-                <MapPin className="h-5 w-5 shrink-0 text-muted-foreground" />
-                <Input
-                  value={query}
-                  aria-label="Project address"
-                  onChange={(e) => {
-                    setQuery(e.target.value);
-                    setPlace(null);
-                  }}
-                  onFocus={() => suggestions.length && setOpen(true)}
-                  onBlur={() => setTimeout(() => setOpen(false), 150)}
-                  placeholder="Start typing an address"
-                  className="h-auto rounded-none border-0 bg-transparent px-0 py-4 text-xl md:text-xl shadow-none focus-visible:ring-0"
-                />
-                {(searching || resolving) && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-              </div>
-              {open && suggestions.length > 0 && (
-                <ul className="absolute z-20 mt-2 w-full overflow-hidden border border-border bg-popover shadow-2xl">
-                  {suggestions.map((s) => (
-                    <li key={s.placeId}>
-                       <Button variant="ghost"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => choose(s)}
-                        className="h-auto w-full justify-start whitespace-normal px-6 py-4 text-left text-base text-popover-foreground hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground"
-                      >
-                        {s.text}
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
-            </div>
-          </Section>
-
-          {((place && !resolving) || isEdit) && (
             <section ref={bidsSection} id="project-bids" className={cn("scroll-mt-8 px-6 sm:px-8", !isEdit && "mx-auto max-w-5xl animate-fade-in")}>
               <div className="mb-14 flex items-end justify-between gap-8 border-t border-border pt-16">
                 <div>
@@ -487,7 +383,6 @@ export default function DeveloperNewProject() {
                 )}
               </div>
             </section>
-          )}
           <div className="mx-auto flex max-w-5xl flex-col items-end gap-4 px-6 sm:px-8">
             {saveError && <p role="alert" className="w-full text-base text-destructive">{saveError}</p>}
             <Button size="lg" className="h-14 px-8 text-base" disabled={saving || !user || !name.trim() || !isOwnershipIntent(ownershipIntent) || (isEdit && !loaded)} onClick={handleSave}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? (isEdit ? "Saving changes" : "Creating project") : (isEdit ? "Save changes" : "Create project")}</Button>
@@ -501,11 +396,11 @@ export default function DeveloperNewProject() {
 function Section({ index, title, children }: { index: string; title: string; children: React.ReactNode }) {
   return (
     <section className="mx-auto grid max-w-5xl gap-6 px-6 sm:px-8 md:grid-cols-[200px_minmax(0,1fr)]">
-      <div className="pt-5">
-        <p className="font-serif text-xl text-foreground/75">{index}</p>
+      <div>
+        <p className="font-serif text-3xl leading-9 text-foreground/75">{index}</p>
         <p className="mt-2 text-base font-medium text-foreground">{title}</p>
       </div>
-      <div>{children}</div>
+      <div className="min-w-0 md:pt-11">{children}</div>
     </section>
   );
 }
