@@ -163,11 +163,11 @@ export function AskWadePanel({
     }
   };
 
-  const lastNonce = useRef<number | null>(null);
   useEffect(() => {
     const r = calibration?.request;
-    if (!r || r.nonce === lastNonce.current || loading) return;
-    lastNonce.current = r.nonce;
+    // Handled nonces are tracked module-wide so remounted panels never replay a request.
+    if (!r || handledCalibrationNonces.has(r.nonce) || loading) return;
+    handledCalibrationNonces.add(r.nonce);
     startCalibration(r.cls, r.note);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calibration?.request, loading]);
