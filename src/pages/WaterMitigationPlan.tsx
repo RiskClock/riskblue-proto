@@ -1389,19 +1389,35 @@ export default function WaterMitigationPlan() {
     // their included_instance_ids (shared across controls) intact.
 
 
-    const cur = new Set((plan.excluded_instances || {})[controlId] || []);
-    const turningOff = !cur.has(instanceId);
-    cur.has(instanceId) ? cur.delete(instanceId) : cur.add(instanceId);
     const next: Record<string, string[]> = { ...(plan.excluded_instances || {}) };
-    if (cur.size > 0) next[controlId] = [...cur];
-    else delete next[controlId];
+    let nextIncluded = plan.included_instance_ids || [];
+    let turningOff: boolean;
+    if (isDrawingPlan(plan) && !nextIncluded.includes(instanceId)) {
+      // Adding a location outside the drawing plan: include it for this control
+      // only, keeping every other control excluded there.
+      turningOff = false;
+      nextIncluded = [...nextIncluded, instanceId];
+      controlRows.forEach((c) => {
+        const s = new Set(next[c.id] || []);
+        if (c.id === controlId) s.delete(instanceId);
+        else s.add(instanceId);
+        if (s.size > 0) next[c.id] = [...s];
+        else delete next[c.id];
+      });
+    } else {
+      const cur = new Set(next[controlId] || []);
+      turningOff = !cur.has(instanceId);
+      cur.has(instanceId) ? cur.delete(instanceId) : cur.add(instanceId);
+      if (cur.size > 0) next[controlId] = [...cur];
+      else delete next[controlId];
+    }
 
     queryClient.setQueryData(["wmp-plans", projectId], (old: Plan[] | undefined) =>
-      (old || []).map((p) => (p.id === planId ? { ...p, excluded_instances: next } : p)),
+      (old || []).map((p) => (p.id === planId ? { ...p, excluded_instances: next, included_instance_ids: nextIncluded } : p)),
     );
     const { error } = await supabase
       .from("project_mitigation_plans")
-      .update({ excluded_instances: next } as any)
+      .update({ excluded_instances: next, included_instance_ids: nextIncluded } as any)
       .eq("id", planId);
     if (error) {
       toast.error(getUserFriendlyError(error));
