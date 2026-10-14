@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
@@ -10,14 +10,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { snapTolerance, developerProjectDetails, EXTRACTION_SCOPES, OWNERSHIP_INTENTS, isOwnershipIntent, restoreDeveloperChoices, developerScopeDetails } from "@/lib/developerIntake";
 import { saveDeveloperProject } from "@/lib/saveDeveloperProject";
-import { ArrowLeft, ArrowUpRight, Loader2, ShieldCheck, ImagePlus, Upload, FileText, X, Save } from "lucide-react";
+import { ArrowLeft, Loader2, ImagePlus, Upload, FileText, X, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { BidComparison } from "@/components/developer/BidComparison";
-import { MOCK_VENDORS, DEFAULT_VENDOR_IDS, DEVELOPER_STATUS_LABEL, bidsReceived } from "@/lib/developerVendors";
-import { Search } from "lucide-react";
+import { DeveloperProjectStepper } from "@/components/developer/DeveloperProjectStepper";
+import { DEVELOPER_STATUS_LABEL } from "@/lib/developerVendors";
 
 type Place = { formattedAddress: string; lat?: number; lng?: number; city?: string | null; region?: string | null };
 
@@ -56,9 +54,6 @@ export default function DeveloperNewProject() {
   const [loaded, setLoaded] = useState<{ status: string; projectData: Record<string, any>; imagePath: string | null; drawingNames: string[]; legacyPhases: string[] } | null>(null);
   const [ownershipIntent, setOwnershipIntent] = useState("");
   const [extractionScope, setExtractionScope] = useState(0);
-  const [vendorIds, setVendorIds] = useState<string[]>(DEFAULT_VENDOR_IDS);
-  const [addedVendorIds, setAddedVendorIds] = useState<string[]>([]);
-  const [vendorQuery, setVendorQuery] = useState("");
   const { tenantPath, tenantId } = useTenant();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -78,7 +73,7 @@ export default function DeveloperNewProject() {
       await saveDeveloperProject(supabase, {
         ...saveIds.current, userId: user.id, tenantId, name, address: query,
         city: place?.city, region: place?.region,
-        details: { ...(loaded?.projectData || {}), ...developerProjectDetails(budget, tolerance), ...developerScopeDetails(extractionScope, ownershipIntent), selected_vendor_ids: vendorIds },
+        details: { ...(loaded?.projectData || {}), ...developerProjectDetails(budget, tolerance), ...developerScopeDetails(extractionScope, ownershipIntent) },
         image: projectImage, drawings: drawingMode === "upload" ? drawings : [],
         protectionPhase: loaded?.legacyPhases ?? [], isUpdate: isEdit, existingImagePath: projectImage ? null : loaded?.imagePath ?? null,
         workbenchStatus: loaded?.status === "processed" ? "processed"
@@ -118,7 +113,6 @@ export default function DeveloperNewProject() {
   const [place, setPlace] = useState<Place | null>(null);
   const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
   const [readyBackdropUrl, setReadyBackdropUrl] = useState<string | null>(null);
-  const bidsSection = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (!editId) return;
@@ -136,9 +130,6 @@ export default function DeveloperNewProject() {
       const choices = restoreDeveloperChoices(pd);
       setOwnershipIntent(choices.ownershipIntent);
       setExtractionScope(choices.extractionScope);
-      const ids: string[] = Array.isArray(pd.selected_vendor_ids) ? pd.selected_vendor_ids : DEFAULT_VENDOR_IDS;
-      setVendorIds(ids);
-      setAddedVendorIds(ids.filter((id) => !DEFAULT_VENDOR_IDS.includes(id)));
       const { data: reqs } = await supabase.from("analysis_requests").select("id").eq("project_id", editId);
       const reqIds = (reqs || []).map((r) => r.id);
       const { data: files } = reqIds.length
@@ -158,18 +149,6 @@ export default function DeveloperNewProject() {
   }, [editId]);
   const tol = TOLERANCES[snapTolerance(tolerance)];
   const backdropUrl = imageUrl || existingImageUrl;
-  const receivedCount = isEdit ? bidsReceived(editId || "", vendorIds) : 0;
-  const budgetValue = Number(budget.replace(/[^\d]/g, "")) || 0;
-  const shownVendors = MOCK_VENDORS.filter((v) => isEdit ? vendorIds.includes(v.id) : (v.recommended || addedVendorIds.includes(v.id)));
-  const vendorMatches = vendorQuery.trim()
-    ? MOCK_VENDORS.filter((v) => !shownVendors.some((s) => s.id === v.id) && v.name.toLowerCase().includes(vendorQuery.trim().toLowerCase()))
-    : [];
-  const toggleVendor = (id: string) => setVendorIds((c) => c.includes(id) ? c.filter((x) => x !== id) : [...c, id]);
-  const addVendor = (id: string) => { setAddedVendorIds((c) => [...c, id]); setVendorIds((c) => c.includes(id) ? c : [...c, id]); setVendorQuery(""); };
-  const locality = useMemo(
-    () => [place?.city, place?.region].filter(Boolean).join(", "),
-    [place],
-  );
 
   return (
     <div className="developer-intake min-h-screen bg-background">
@@ -179,6 +158,7 @@ export default function DeveloperNewProject() {
         </Button>
       } />
       <main className="pb-32">
+        <DeveloperProjectStepper isExisting={isEdit} status={loaded?.status} vendorCount={Array.isArray(loaded?.projectData.selected_vendor_ids) ? loaded.projectData.selected_vendor_ids.length : 0} />
         <header aria-busy={isEdit && !loaded} className={cn("relative isolate mb-16 overflow-hidden", (backdropUrl && readyBackdropUrl !== backdropUrl) && "invisible")}>
           {backdropUrl && <img src={backdropUrl} alt="Project backdrop" onLoad={() => setReadyBackdropUrl(backdropUrl)} onError={() => setReadyBackdropUrl(backdropUrl)} className="absolute inset-0 -z-10 h-full w-full object-cover" />}
           <div className="relative mx-auto max-w-5xl px-6 py-24 sm:px-8 sm:py-20">
@@ -198,7 +178,7 @@ export default function DeveloperNewProject() {
                 e.target.value = "";
               }} />
               <p className="mb-6 text-base font-medium uppercase tracking-[0.15em] text-muted-foreground">
-                {isEdit && receivedCount > 0 ? <Button variant="link" className="h-auto p-0 text-base text-inherit" onClick={() => bidsSection.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })}>{receivedCount} {receivedCount === 1 ? "bid" : "bids"} available</Button> : isEdit ? (loaded ? DEVELOPER_STATUS_LABEL[loaded.status] || "Processing" : "Loading project") : "New Project"}
+                {isEdit ? (loaded ? DEVELOPER_STATUS_LABEL[loaded.status] || "Processing" : "Loading project") : "New Project"}
               </p>
               <h1 className="break-words font-serif text-5xl font-medium leading-[1.1] sm:text-6xl">
                 {isEdit ? (name || "Loading project…") : "Begin with intent."}
@@ -322,67 +302,6 @@ export default function DeveloperNewProject() {
             </>}
           </Section>
 
-            <section ref={bidsSection} id="project-bids" className={cn("scroll-mt-8 px-6 sm:px-8", !isEdit && "mx-auto max-w-5xl animate-fade-in")}>
-              <div className="mb-14 flex items-end justify-between gap-8 border-t border-border pt-16">
-                <div>
-                  <p className="mb-4 text-base uppercase tracking-[0.1em] text-muted-foreground">{isEdit ? "Bids" : "Curated for this site"}</p>
-                  <h2 className="font-serif text-4xl font-medium text-foreground">{isEdit ? "Your water mitigation vendors" : "Your recommended specialists"}</h2>
-                </div>
-                {!isEdit && <p className="hidden max-w-xs text-right text-sm font-light text-muted-foreground md:block">
-                  Matched on proximity, project type and a {tol.label.toLowerCase()} target protection level. Untick any you do not want to invite.
-                </p>}
-              </div>
-              {shownVendors.length === 0 ? <p className="text-base text-muted-foreground">No vendors selected yet. Search below to add one.</p> :
-              isEdit ? <BidComparison vendors={shownVendors} projectId={editId || saveIds.current.projectId} budget={budgetValue} onRemove={toggleVendor} /> :
-              <div className="grid gap-px overflow-hidden border border-border bg-border md:grid-cols-3">
-                {shownVendors.map((w, i) => {
-                  const selected = vendorIds.includes(w.id);
-                  
-                  return (
-                  <article key={w.id} className={cn("flex min-w-0 flex-col bg-card p-6 transition-opacity lg:p-8", !selected && "opacity-50")}>
-                    <div className="mb-10 grid h-24 grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-                      {w.logo ? <img src={w.logo} alt={`${w.name} logo`} className="h-24 w-full max-w-32 object-contain object-left" />
-                        : <span className="flex h-20 w-20 items-center justify-center border border-border font-serif text-3xl text-foreground">{w.name[0]}</span>}
-                      {isEdit
-                        ? <Button variant="ghost" size="icon" aria-label={`Remove ${w.name}`} title={`Remove ${w.name}`} onClick={() => toggleVendor(w.id)}><X /></Button>
-                        : <label className="flex cursor-pointer items-center gap-2 whitespace-nowrap text-sm uppercase tracking-[0.1em] text-muted-foreground">
-                            {w.recommended ? (i === 0 ? "Best match" : `0${i + 1}`) : "Added"}
-                            <Checkbox checked={selected} onCheckedChange={() => toggleVendor(w.id)} aria-label={`Select ${w.name}`} />
-                          </label>}
-                    </div>
-                    <h3 className="font-serif text-2xl leading-tight text-card-foreground">{w.name}</h3>
-                    <>
-                    <p className="mt-3 text-base text-muted-foreground">{w.specialty}</p>
-                    <div className="mt-8 space-y-2 border-t border-border pt-6 text-base text-muted-foreground">
-                      <p>{w.street}{locality ? `, ${locality}` : ""}</p>
-                      <p className="tabular-nums">{w.km.toFixed(1)} km from site</p>
-                      <p className="flex items-center gap-2"><ShieldCheck className="h-4 w-4" /> {w.rating} rating, {w.years} years certified</p>
-                    </div>
-                    <a href={w.url} target="_blank" rel="noreferrer" className="mt-auto inline-flex items-center gap-2 pt-12 text-base text-foreground underline-offset-8 hover:underline">
-                      Visit website <ArrowUpRight className="h-3.5 w-3.5" />
-                    </a></>
-                  </article>);
-                })}
-              </div>}
-              <div className="relative mt-10">
-                <p className="mb-3 text-base font-medium text-foreground">Add another vendor</p>
-                <div className="flex items-center gap-4 border-b border-border focus-within:border-foreground">
-                  <Search className="h-5 w-5 shrink-0 text-muted-foreground" />
-                  <Input value={vendorQuery} onChange={(e) => setVendorQuery(e.target.value)} aria-label="Search vendors" placeholder="Search vendors by name"
-                    className="h-auto rounded-none border-0 bg-transparent px-0 py-4 text-xl md:text-xl shadow-none focus-visible:ring-0" />
-                </div>
-                {vendorQuery.trim() && (
-                  <ul className="absolute z-20 mt-2 w-full overflow-hidden border border-border bg-popover shadow-2xl">
-                    {vendorMatches.length === 0 ? <li className="px-6 py-4 text-base text-muted-foreground">No matching vendors</li> :
-                      vendorMatches.map((v) => <li key={v.id}>
-                        <Button variant="ghost" onClick={() => addVendor(v.id)} className="h-auto w-full justify-between whitespace-normal px-6 py-4 text-left text-base text-popover-foreground hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground">
-                          <span>{v.name}</span><span className="text-sm opacity-70">{v.specialty}</span>
-                        </Button>
-                      </li>)}
-                  </ul>
-                )}
-              </div>
-            </section>
           <div className="mx-auto flex max-w-5xl flex-col items-end gap-4 px-6 sm:px-8">
             {saveError && <p role="alert" className="w-full text-base text-destructive">{saveError}</p>}
             <Button size="lg" className="h-14 px-8 text-base" disabled={saving || !user || !name.trim() || !isOwnershipIntent(ownershipIntent) || (isEdit && !loaded)} onClick={handleSave}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? (isEdit ? "Saving changes" : "Creating project") : (isEdit ? "Save changes" : "Create project")}</Button>
