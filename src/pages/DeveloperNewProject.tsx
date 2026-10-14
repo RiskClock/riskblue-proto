@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useTenant } from "@/contexts/TenantContext";
 import { IntakeSlider } from "@/components/wizard/IntakeSlider";
+import { IntakeChoiceLabels } from "@/components/wizard/IntakeChoiceLabels";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { snapTolerance, developerProjectDetails, EXTRACTION_SCOPES, OWNERSHIP_INTENTS, isOwnershipIntent, restoreDeveloperChoices, developerScopeDetails } from "@/lib/developerIntake";
@@ -160,7 +161,7 @@ export default function DeveloperNewProject() {
       <main className="pb-32">
         <DeveloperProjectStepper isExisting={isEdit} status={loaded?.status} vendorCount={Array.isArray(loaded?.projectData.selected_vendor_ids) ? loaded.projectData.selected_vendor_ids.length : 0} />
         <header aria-busy={isEdit && !loaded} className={cn("relative isolate mb-16 overflow-hidden", (backdropUrl && readyBackdropUrl !== backdropUrl) && "invisible")}>
-          {backdropUrl && <img src={backdropUrl} alt="Project backdrop" onLoad={() => setReadyBackdropUrl(backdropUrl)} onError={() => setReadyBackdropUrl(backdropUrl)} className="absolute inset-0 -z-10 h-full w-full object-cover" />}
+          {backdropUrl && <img src={backdropUrl} alt="Project backdrop" onLoad={() => setReadyBackdropUrl(backdropUrl)} onError={() => setReadyBackdropUrl(backdropUrl)} className="absolute inset-0 -z-10 h-full w-full scale-[1.02] object-cover blur-[2px]" />}
           <div className="relative mx-auto max-w-5xl px-6 py-24 sm:px-8 sm:py-20">
             <div className="absolute right-6 top-4 z-20 flex items-center gap-2 sm:right-8">
               <Button variant="outline" disabled={saving} onClick={() => imageInput.current?.click()} className="text-base"><ImagePlus />{backdropUrl ? "Change project image" : "Add project image"}</Button>
@@ -194,7 +195,7 @@ export default function DeveloperNewProject() {
 
         {isEdit && !loaded && <div className="mx-auto mb-10 flex max-w-5xl items-center gap-3 px-6 text-muted-foreground sm:px-8" role="status"><Loader2 className="h-5 w-5 animate-spin" />{saveError || "Loading project details…"}</div>}
         <fieldset disabled={saving || (isEdit && !loaded)} aria-busy={isEdit && !loaded} className={cn("min-w-0 space-y-20 transition-opacity", isEdit && !loaded && "opacity-60")}>
-          <Section index="01" title="Project name">
+          <Section title="Project name">
             <Input
               value={name}
               aria-label="Project name"
@@ -204,25 +205,10 @@ export default function DeveloperNewProject() {
             />
           </Section>
 
-          <Section index="02" title="Target protection level">
+          <Section title="Target protection level">
             <div>
                <IntakeSlider label="Target protection level" value={tolerance} max={2} ticks={3} onChange={setTolerance} onCommit={(value) => setTolerance(snapTolerance(value))} />
-              <div className="mt-6 grid grid-cols-3 text-base">
-                {TOLERANCES.map((t, i) => (
-                  <Button variant="ghost"
-                    key={t.key}
-                    onClick={() => setTolerance(i)}
-                    className={cn(
-                      "transition-colors",
-                      i === 0 ? "text-left" : i === 1 ? "text-center" : "text-right",
-                      "hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground",
-                      i === tolerance ? "text-foreground" : "text-muted-foreground",
-                    )}
-                  >
-                    {t.label}
-                  </Button>
-                ))}
-              </div>
+              <IntakeChoiceLabels labels={TOLERANCES.map(t => t.label)} value={tolerance} onChange={setTolerance} />
               <div key={tol.key} className="mt-12 animate-fade-in border-l border-foreground/30 pl-8">
                 <p className="font-serif text-3xl text-foreground">{tol.title}</p>
                 <p className="mt-4 max-w-2xl font-light leading-relaxed text-muted-foreground">{tol.body}</p>
@@ -230,17 +216,10 @@ export default function DeveloperNewProject() {
             </div>
           </Section>
 
-          <Section index="03" title="Risk Extraction Scope">
+          <Section title="Risk Extraction Scope">
             <div>
               <IntakeSlider label="Risk Extraction Scope" value={extractionScope} max={2} ticks={3} onChange={setExtractionScope} onCommit={(value) => setExtractionScope(snapTolerance(value))} />
-              <div className="mt-6 grid grid-cols-1 gap-2 text-base sm:grid-cols-3">
-                {EXTRACTION_SCOPES.map((scope, index) => (
-                  <Button key={scope.key} variant="ghost" onClick={() => setExtractionScope(index)} aria-pressed={extractionScope === index}
-                    className={cn("h-auto min-h-16 whitespace-normal break-words px-2 py-3 text-base leading-relaxed hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground", extractionScope === index ? "text-foreground" : "text-muted-foreground")}>
-                    <span className="min-w-0 [overflow-wrap:anywhere]">{["Engineer's Design", "Design + Upgrades", "Comprehensive"][index]}</span>
-                  </Button>
-                ))}
-              </div>
+              <IntakeChoiceLabels labels={["Engineer's Design", "Design + Upgrades", "Comprehensive"]} value={extractionScope} onChange={setExtractionScope} />
               <div key={extractionScope} className="mt-12 animate-fade-in border-l border-foreground/30 pl-8">
                 <p className="font-serif text-3xl text-foreground">{EXTRACTION_SCOPES[extractionScope].label}</p>
                 <p className="mt-4 max-w-2xl font-light leading-relaxed text-muted-foreground">{EXTRACTION_SCOPES[extractionScope].body}</p>
@@ -248,7 +227,7 @@ export default function DeveloperNewProject() {
             </div>
           </Section>
 
-          <Section index="04" title="System Ownership & Intent">
+          <Section title="System Ownership & Intent">
             <RadioGroup aria-label="System Ownership & Intent" required value={ownershipIntent} onValueChange={setOwnershipIntent} className="gap-6">
               {OWNERSHIP_INTENTS.map((intent) => (
                 <label key={intent.key} className="flex cursor-pointer items-start gap-3 text-base">
@@ -259,7 +238,7 @@ export default function DeveloperNewProject() {
             </RadioGroup>
           </Section>
 
-          <Section index="05" title={isEdit ? "Drawings" : "Drawings (optional)"}>
+          <Section title={isEdit ? "Drawings" : "Drawings (optional)"}>
             <p className="mb-6 text-base leading-relaxed text-muted-foreground">🔒 Confidential &amp; Secure: Your drawings are never shared. RiskBlue securely processes these files to extract a list of risk areas. Vendors only see the extracted risks to provide their bids.</p>
             <RadioGroup aria-label="Drawing availability" value={drawingMode} onValueChange={setDrawingMode} disabled={saving} className="mb-6 flex flex-wrap gap-x-6 gap-y-4">
               {[["upload", "Upload now"], ["later", "Provide later"], ["request", "Request from Architect/Engineer"]].map(([value, label]) => (
@@ -312,14 +291,13 @@ export default function DeveloperNewProject() {
   );
 }
 
-function Section({ index, title, children }: { index: string; title: string; children: React.ReactNode }) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mx-auto grid max-w-5xl gap-6 px-6 sm:px-8 md:grid-cols-[200px_minmax(0,1fr)]">
       <div>
-        <p className="font-serif text-3xl leading-9 text-foreground/75">{index}</p>
-        <p className="mt-2 text-base font-medium text-foreground">{title}</p>
+        <p className="text-base font-medium text-foreground">{title}</p>
       </div>
-      <div className="min-w-0 md:pt-11">{children}</div>
+      <div className="min-w-0">{children}</div>
     </section>
   );
 }

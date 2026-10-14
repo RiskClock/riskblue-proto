@@ -28,7 +28,7 @@ export function DeveloperProjectStepper({ isExisting, status, vendorCount }: { i
                     <Icon className="h-5 w-5" aria-hidden="true" />
                   </span>
                   <span className={cn("text-sm leading-5", current || completed ? "font-semibold text-foreground" : "text-muted-foreground")}>{step.label}</span>
-                  <span className="text-xs text-muted-foreground">{completed ? "Completed" : waiting ? "Waiting for drawings" : current ? "Current step" : "Upcoming"}</span>
+                  {waiting && <span className="text-xs text-muted-foreground">Waiting for drawings</span>}
                 </div>
                 {index < STEPS.length - 1 && <ArrowRight aria-hidden="true" className="mt-3 h-4 w-4 shrink-0 text-muted-foreground" />}
               </li>
