@@ -219,7 +219,7 @@ export default function DeveloperNewProject() {
           <Section title="Risk Extraction Scope">
             <div>
               <IntakeSlider label="Risk Extraction Scope" value={extractionScope} max={2} ticks={3} onChange={setExtractionScope} onCommit={(value) => setExtractionScope(snapTolerance(value))} />
-              <IntakeChoiceLabels labels={["Engineer's Design", "Design + Upgrades", "Comprehensive"]} value={extractionScope} onChange={setExtractionScope} />
+              <IntakeChoiceLabels labels={EXTRACTION_SCOPES.map((scope) => scope.short)} value={extractionScope} onChange={setExtractionScope} />
               <div key={extractionScope} className="mt-12 animate-fade-in border-l border-foreground/30 pl-8">
                 <p className="font-serif text-3xl text-foreground">{EXTRACTION_SCOPES[extractionScope].label}</p>
                 <p className="mt-4 max-w-2xl font-light leading-relaxed text-muted-foreground">{EXTRACTION_SCOPES[extractionScope].body}</p>
