@@ -153,7 +153,7 @@ export default function DeveloperNewProject() {
   return (
     <div className="developer-intake min-h-screen bg-background">
       <AppHeader leftContent={
-        <Button variant="ghost" onClick={() => navigate(tenantPath("/projects"))} className="text-base">
+        <Button variant="ghost" onClick={() => navigate(tenantPath("/projects"))} className="hidden text-base sm:inline-flex">
           <ArrowLeft /> <span className="hidden sm:inline">Projects</span>
         </Button>
       } />
