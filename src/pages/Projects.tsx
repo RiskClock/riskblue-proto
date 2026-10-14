@@ -19,6 +19,7 @@ import { useIsSystemAdmin, useStaffUserIds } from "@/hooks/useIsSystemAdmin";
 import { useBetaAccess } from "@/hooks/useBetaAccess";
 import { ColumnEditDropdown, type ColumnPreferences } from "@/components/common/ColumnEditDropdown";
 import { bidsReceived, hasReceivedBids, DEFAULT_VENDOR_IDS } from "@/lib/developerVendors";
+import { extractionScopeLabel, ownershipIntentLabel } from "@/lib/developerIntake";
 import { DeveloperWelcomeSteps } from "@/components/developer/DeveloperWelcomeSteps";
 import { developerListStatus } from "@/lib/developerProgress";
 
@@ -78,7 +79,7 @@ const Projects = () => {
   const columnOptions = [
     { value: "status", label: "Status" }, { value: "created_by", label: "Created By" },
     { value: "created_on", label: "Created On" }, { value: "credits", label: "Credit Cost" },
-    ...(isDeveloper ? [{ value: "budget", label: "Budget" }, { value: "protection", label: "Protection Level" }, { value: "bids", label: "Bids Received" }] : []),
+    ...(isDeveloper ? [{ value: "protection", label: "Target Protection Level" }, { value: "extraction", label: "Extraction Scope" }, { value: "ownership", label: "Ownership Intent" }, { value: "bids", label: "Bids Received" }] : []),
   ];
   const columnsKey = `projects_columns_${user?.id}_${isDeveloper ? "dev" : "std"}`;
   const [columns, setColumns] = useState<ColumnPreferences<string> | null>(null);
@@ -359,11 +360,14 @@ const Projects = () => {
                     case "credits": return <td key={id} className="px-6 py-4 text-muted-foreground tabular-nums">
                       {typeof project.credits_consumed === "number" ? project.credits_consumed : "-"}
                     </td>;
-                    case "budget": return <td key={id} className="px-6 py-4 text-muted-foreground tabular-nums">
-                      {projectData.get(project.id)?.water_mitigation_budget ? `$${Number(projectData.get(project.id).water_mitigation_budget).toLocaleString("en-US")}` : "-"}
-                    </td>;
                     case "protection": return <td key={id} className="px-6 py-4 text-muted-foreground">
                       {PROTECTION_LABEL[projectData.get(project.id)?.riskTolerance] || "-"}
+                    </td>;
+                    case "extraction": return <td key={id} className="px-6 py-4 text-muted-foreground">
+                      {extractionScopeLabel(projectData.get(project.id)?.risk_extraction_scope)}
+                    </td>;
+                    case "ownership": return <td key={id} className="px-6 py-4 text-muted-foreground">
+                      {ownershipIntentLabel(projectData.get(project.id)?.system_ownership_intent)}
                     </td>;
                     case "bids": return <td key={id} className="px-6 py-4 text-muted-foreground tabular-nums">
                       {projectData.has(project.id) ? bidsReceived(project.id, Array.isArray(projectData.get(project.id)?.selected_vendor_ids) ? projectData.get(project.id).selected_vendor_ids : DEFAULT_VENDOR_IDS) : "-"}
