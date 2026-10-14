@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Simplify developer intake steps and alignment, shorten scope dial labels, move the drawings disclaimer first, and add the developer welcome workflow; verify the signed-in preview.
+
 - [x] Update target protection level, extraction scope, ownership radios and drawings wording; 14 tests passed, signed-in creation/reopening/editing verified, and QA projects removed.
 
 - [x] Keep the existing-project page structure visible while its details load, without waiting for the backdrop image.
