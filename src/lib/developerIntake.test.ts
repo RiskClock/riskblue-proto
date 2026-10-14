@@ -1,7 +1,30 @@
 import { describe, expect, test } from "bun:test";
-import { clampCoverage, snapCoverage, snapTolerance, developerProjectDetails } from "./developerIntake";
+import { clampCoverage, snapCoverage, snapTolerance, developerProjectDetails, restoreDeveloperChoices, developerScopeDetails, isOwnershipIntent } from "./developerIntake";
 
 describe("developer intake rules", () => {
+  test("extraction scope defaults to Match Engineer's Design", () => {
+    expect(restoreDeveloperChoices({}).extractionScope).toBe(0);
+    expect(developerScopeDetails(0, "construction_only").risk_extraction_scope).toBe("engineer_design");
+  });
+  test("ownership starts unselected and does not map legacy phases", () => {
+    expect(restoreDeveloperChoices({}).ownershipIntent).toBe("");
+    expect(restoreDeveloperChoices({ protection_phase: ["Construction", "Operational"] }).ownershipIntent).toBe("");
+    expect(isOwnershipIntent("")).toBe(false);
+  });
+  test("each extraction scope saves and restores independently of target protection", () => {
+    for (const [index, key] of ["engineer_design", "design_upgrades", "comprehensive"].entries()) {
+      const details = developerScopeDetails(index, "long_term_hold");
+      expect(details.risk_extraction_scope).toBe(key);
+      expect(restoreDeveloperChoices(details).extractionScope).toBe(index);
+    }
+  });
+  test("all three ownership intents save and restore as single choices", () => {
+    for (const intent of ["construction_only", "smart_amenity", "long_term_hold"] as const) {
+      expect(isOwnershipIntent(intent)).toBe(true);
+      expect(restoreDeveloperChoices(developerScopeDetails(1, intent)).ownershipIntent).toBe(intent);
+    }
+    expect(isOwnershipIntent("Operational")).toBe(false);
+  });
   test("new intake omits removed minimum protection scope", () => {
     expect(developerProjectDetails("250,000", 1)).toEqual({ intake_type: "developer", water_mitigation_budget: 250_000, riskTolerance: "medium" });
   });

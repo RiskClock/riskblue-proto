@@ -8,7 +8,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { IntakeSlider } from "@/components/wizard/IntakeSlider";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { snapTolerance, developerProjectDetails } from "@/lib/developerIntake";
+import { snapTolerance, developerProjectDetails, EXTRACTION_SCOPES, OWNERSHIP_INTENTS, isOwnershipIntent, restoreDeveloperChoices, developerScopeDetails } from "@/lib/developerIntake";
 import { saveDeveloperProject } from "@/lib/saveDeveloperProject";
 import { ArrowLeft, ArrowUpRight, Loader2, MapPin, ShieldCheck, ImagePlus, Upload, FileText, X, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -54,8 +54,9 @@ export default function DeveloperNewProject() {
   const initialName = (location.state as { projectName?: string } | null)?.projectName || "";
   const { id: editId } = useParams();
   const isEdit = !!editId;
-  const [loaded, setLoaded] = useState<{ status: string; projectData: Record<string, any>; imagePath: string | null; drawingNames: string[] } | null>(null);
-  const [phases, setPhases] = useState<string[]>([]);
+  const [loaded, setLoaded] = useState<{ status: string; projectData: Record<string, any>; imagePath: string | null; drawingNames: string[]; legacyPhases: string[] } | null>(null);
+  const [ownershipIntent, setOwnershipIntent] = useState("");
+  const [extractionScope, setExtractionScope] = useState(0);
   const [vendorIds, setVendorIds] = useState<string[]>(DEFAULT_VENDOR_IDS);
   const [addedVendorIds, setAddedVendorIds] = useState<string[]>([]);
   const [vendorQuery, setVendorQuery] = useState("");
@@ -70,7 +71,7 @@ export default function DeveloperNewProject() {
   const [requestEmail, setRequestEmail] = useState("");
   const [requestBody, setRequestBody] = useState("Hello,\n\nCould you please upload the project drawings using the secure upload link provided with this request? Architectural and plumbing drawings would be especially helpful.\n\nThank you.");
   const handleSave = async () => {
-    if (!user || !name.trim() || !phases.length || saveLock.current) return;
+    if (!user || !name.trim() || !isOwnershipIntent(ownershipIntent) || saveLock.current) return;
     saveLock.current = true;
     setSaving(true);
     setSaveError(null);
@@ -78,9 +79,9 @@ export default function DeveloperNewProject() {
       await saveDeveloperProject(supabase, {
         ...saveIds.current, userId: user.id, tenantId, name, address: query,
         city: place?.city, region: place?.region,
-        details: { ...(loaded?.projectData || {}), ...developerProjectDetails(budget, tolerance), selected_vendor_ids: vendorIds },
+        details: { ...(loaded?.projectData || {}), ...developerProjectDetails(budget, tolerance), ...developerScopeDetails(extractionScope, ownershipIntent), selected_vendor_ids: vendorIds },
         image: projectImage, drawings: drawingMode === "upload" ? drawings : [],
-        protectionPhase: phases, isUpdate: isEdit, existingImagePath: projectImage ? null : loaded?.imagePath ?? null,
+        protectionPhase: loaded?.legacyPhases ?? [], isUpdate: isEdit, existingImagePath: projectImage ? null : loaded?.imagePath ?? null,
         workbenchStatus: loaded?.status === "processed" ? "processed"
           : (loaded?.drawingNames.length || (drawingMode === "upload" && drawings.length)) ? "processing" : "waiting_drawings",
       });
@@ -139,7 +140,9 @@ export default function DeveloperNewProject() {
       const addr = (p as any).address_1 || (p as any).location || "";
       setQuery(addr);
       if (addr) setPlace({ formattedAddress: addr, city: (p as any).city, region: (p as any).state });
-      setPhases(((p as any).protection_phase as string[]) || []);
+      const choices = restoreDeveloperChoices(pd);
+      setOwnershipIntent(choices.ownershipIntent);
+      setExtractionScope(choices.extractionScope);
       const ids: string[] = Array.isArray(pd.selected_vendor_ids) ? pd.selected_vendor_ids : DEFAULT_VENDOR_IDS;
       setVendorIds(ids);
       setAddedVendorIds(ids.filter((id) => !DEFAULT_VENDOR_IDS.includes(id)));
@@ -147,7 +150,7 @@ export default function DeveloperNewProject() {
       const reqIds = (reqs || []).map((r) => r.id);
       const { data: files } = reqIds.length
         ? await supabase.from("analysis_request_files").select("name").in("analysis_request_id", reqIds) : { data: [] as { name: string }[] };
-      setLoaded({ status: (p as any).workbench_status || "processing", projectData: pd, imagePath: pd.project_image_path || null, drawingNames: (files || []).map((f) => f.name) });
+      setLoaded({ status: (p as any).workbench_status || "processing", projectData: pd, imagePath: pd.project_image_path || null, drawingNames: (files || []).map((f) => f.name), legacyPhases: p.protection_phase || [] });
       if (pd.project_image_path) {
         const { data: signed } = await supabase.storage.from(pd.project_image_bucket || "uploaded-drawings").createSignedUrl(pd.project_image_path, 3600);
         if (signed?.signedUrl) {
@@ -286,9 +289,9 @@ export default function DeveloperNewProject() {
             </div>
           </Section>
 
-          <Section index="03" title="Protection level">
+          <Section index="03" title="Target protection level">
             <div className="pt-4">
-               <IntakeSlider label="Protection level" value={tolerance} max={2} ticks={3} onChange={setTolerance} onCommit={(value) => setTolerance(snapTolerance(value))} />
+               <IntakeSlider label="Target protection level" value={tolerance} max={2} ticks={3} onChange={setTolerance} onCommit={(value) => setTolerance(snapTolerance(value))} />
               <div className="mt-6 grid grid-cols-3 text-base">
                 {TOLERANCES.map((t, i) => (
                   <Button variant="ghost"
@@ -312,27 +315,47 @@ export default function DeveloperNewProject() {
             </div>
           </Section>
 
-          <Section index="04" title="Protection phase">
-            <div className="flex flex-wrap gap-x-8 gap-y-4 md:pt-[3.25rem]">
-              {["Construction", "Operational"].map((ph) => (
-                <label key={ph} className="flex cursor-pointer items-center gap-3 text-base">
-                  <Checkbox checked={phases.includes(ph)} onCheckedChange={(v) => setPhases((c) => v ? [...c, ph] : c.filter((x) => x !== ph))} aria-label={ph} />{ph}
-                </label>
-              ))}
+          <Section index="04" title="Risk Extraction Scope">
+            <div className="pt-4">
+              <IntakeSlider label="Risk Extraction Scope" value={extractionScope} max={2} ticks={3} onChange={setExtractionScope} onCommit={(value) => setExtractionScope(snapTolerance(value))} />
+              <div className="mt-6 grid grid-cols-3 gap-2 text-base">
+                {EXTRACTION_SCOPES.map((scope, index) => (
+                  <Button key={scope.key} variant="ghost" onClick={() => setExtractionScope(index)} aria-pressed={extractionScope === index}
+                    className={cn("h-auto min-h-16 whitespace-normal break-words px-2 py-3 text-base leading-relaxed hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground", extractionScope === index ? "text-foreground" : "text-muted-foreground")}>
+                    {scope.label}
+                  </Button>
+                ))}
+              </div>
+              <div key={extractionScope} className="mt-12 animate-fade-in border-l border-foreground/30 pl-8">
+                <p className="font-serif text-3xl text-foreground">{EXTRACTION_SCOPES[extractionScope].label}</p>
+                <p className="mt-4 max-w-2xl font-light leading-relaxed text-muted-foreground">{EXTRACTION_SCOPES[extractionScope].body}</p>
+              </div>
             </div>
-            {!phases.length && <p className="mt-3 text-base text-muted-foreground">Select at least one phase.</p>}
           </Section>
 
-          <Section index="05" title={isEdit ? "Drawings" : "Drawings (optional)"}>
+          <Section index="05" title="System Ownership & Intent">
+            <RadioGroup aria-label="System Ownership & Intent" required value={ownershipIntent} onValueChange={setOwnershipIntent} className="gap-6 md:pt-5">
+              {OWNERSHIP_INTENTS.map((intent) => (
+                <label key={intent.key} className="flex cursor-pointer items-start gap-3 text-base">
+                  <RadioGroupItem value={intent.key} aria-label={intent.label} className="mt-1 shrink-0" />
+                  <span><span className="font-medium">{intent.label}</span><span className="mt-2 block leading-relaxed text-muted-foreground">{intent.body}</span></span>
+                </label>
+              ))}
+            </RadioGroup>
+            {!ownershipIntent && <p className="mt-4 text-base text-muted-foreground">Select an ownership intent to continue.</p>}
+          </Section>
+
+          <Section index="06" title={isEdit ? "Drawings" : "Drawings (optional)"}>
             <RadioGroup aria-label="Drawing availability" value={drawingMode} onValueChange={setDrawingMode} disabled={saving} className="mb-6 flex flex-wrap gap-x-6 gap-y-4 md:pt-[3.25rem]">
-              {[["upload", "Upload now"], ["later", "Provide later"], ["request", "Request from other"]].map(([value, label]) => (
+              {[["upload", "Upload now"], ["later", "Provide later"], ["request", "Request from Architect/Engineer"]].map(([value, label]) => (
                 <label key={value} className="flex cursor-pointer items-center gap-2 text-base">
                   <RadioGroupItem value={value} id={`drawings-${value}`} />{label}
                 </label>
               ))}
             </RadioGroup>
+            <p className="mb-6 text-base leading-relaxed text-muted-foreground">🔒 Confidential &amp; Secure: Your drawings are never shared. RiskBlue securely processes these files to extract a list of risk areas. Vendors only see the extracted risks to provide their bids.</p>
             {drawingMode === "request" && <div className="space-y-5 border-l border-border pl-6">
-              <p className="text-base leading-relaxed text-muted-foreground">We'll send them a secure link to upload the files. They will not see your budget or protection level.</p>
+              <p className="text-base leading-relaxed text-muted-foreground">We'll send them a secure link to upload the files. They will not see your budget or target protection level.</p>
               <div className="space-y-2">
                 <label htmlFor="drawing-request-email" className="text-base font-medium">Email</label>
                 <Input id="drawing-request-email" type="email" value={requestEmail} onChange={(event) => setRequestEmail(event.target.value)} placeholder="name@company.com" className="text-base md:text-base" />
@@ -365,7 +388,7 @@ export default function DeveloperNewProject() {
             </>}
           </Section>
 
-          <Section index="06" title="Project address (optional)">
+          <Section index="07" title="Project address (optional)">
             <div className="relative">
               <div className="flex items-center gap-4 border-b border-border focus-within:border-foreground">
                 <MapPin className="h-5 w-5 shrink-0 text-muted-foreground" />
@@ -410,7 +433,7 @@ export default function DeveloperNewProject() {
                   <h2 className="font-serif text-4xl font-medium text-foreground">{isEdit ? "Your water mitigation vendors" : "Your recommended specialists"}</h2>
                 </div>
                 {!isEdit && <p className="hidden max-w-xs text-right text-sm font-light text-muted-foreground md:block">
-                  Matched on proximity, project type and a {tol.label.toLowerCase()} protection level. Untick any you do not want to invite.
+                  Matched on proximity, project type and a {tol.label.toLowerCase()} target protection level. Untick any you do not want to invite.
                 </p>}
               </div>
               {shownVendors.length === 0 ? <p className="text-base text-muted-foreground">No vendors selected yet. Search below to add one.</p> :
@@ -467,7 +490,7 @@ export default function DeveloperNewProject() {
           )}
           <div className="mx-auto flex max-w-5xl flex-col items-end gap-4 px-6 sm:px-8">
             {saveError && <p role="alert" className="w-full text-base text-destructive">{saveError}</p>}
-            <Button size="lg" className="h-14 px-8 text-base" disabled={saving || !user || !name.trim() || !phases.length || (isEdit && !loaded)} onClick={handleSave}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? (isEdit ? "Saving changes" : "Creating project") : (isEdit ? "Save changes" : "Create project")}</Button>
+            <Button size="lg" className="h-14 px-8 text-base" disabled={saving || !user || !name.trim() || !isOwnershipIntent(ownershipIntent) || (isEdit && !loaded)} onClick={handleSave}>{saving ? <Loader2 className="animate-spin" /> : <Save />}{saving ? (isEdit ? "Saving changes" : "Creating project") : (isEdit ? "Save changes" : "Create project")}</Button>
           </div>
         </fieldset>
       </main>

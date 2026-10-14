@@ -4,6 +4,7 @@
 - Developer bid metrics and assessments come from the shared deterministic mock catalog, and comparison and list counts use that same source so sample outcomes agree across views.
 
 - Developer intake selection stays local until explicit creation, with object URLs revoked on replacement or unmount; creation persists intake fields in projects.project_data and attachments in private uploaded-drawings under project folders, using copied requests without starting pipelines or consuming credits. Drawing-request choices remain local presentation state until request functionality is implemented, so they cannot send emails accidentally.
+- Developer extraction scope and ownership intent are independent project_data choices; legacy protection_phase values remain untouched on edit and never infer ownership, so presentation changes do not rewrite historical phase data or alter extraction execution.
 - New-project email suppression is enforced server-side using the creator profile account type and persisted intake marker, so changing an account later cannot enable notifications for existing test intake projects.
 
 - Risk Radar writes immutable per-class history to `risk_radar_run_history` while `analysis_request_files.risk_element_results` remains the latest-result snapshot; this keeps older runs inspectable without changing existing consumers.
