@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Update target protection level, extraction scope, ownership radios and drawings wording; verify selections and saved values.
+- [x] Update target protection level, extraction scope, ownership radios and drawings wording; 14 tests passed, signed-in creation/reopening/editing verified, and QA projects removed.
 
 - [x] Keep the existing-project page structure visible while its details load, without waiting for the backdrop image.
 

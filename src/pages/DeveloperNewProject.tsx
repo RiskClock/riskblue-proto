@@ -322,7 +322,7 @@ export default function DeveloperNewProject() {
                 {EXTRACTION_SCOPES.map((scope, index) => (
                   <Button key={scope.key} variant="ghost" onClick={() => setExtractionScope(index)} aria-pressed={extractionScope === index}
                     className={cn("h-auto min-h-16 whitespace-normal break-words px-2 py-3 text-base leading-relaxed hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground", extractionScope === index ? "text-foreground" : "text-muted-foreground")}>
-                    {scope.label}
+                    <span className="min-w-0 [overflow-wrap:anywhere]">{scope.label}</span>
                   </Button>
                 ))}
               </div>
