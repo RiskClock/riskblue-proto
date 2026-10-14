@@ -30,10 +30,10 @@ export function DeveloperWelcomeSteps() {
         </ol>
       </div>
       {!expanded && (
-        <div className="mt-1 flex justify-center">
+        <div className="mt-6 flex justify-center">
           <button
             type="button"
-            className="cursor-pointer text-base text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+            className="cursor-pointer text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
             aria-expanded={expanded}
             aria-controls="developer-welcome-workflow"
             onClick={() => setExpanded(true)}
