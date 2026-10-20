@@ -15,6 +15,13 @@
       "when": 1791907236655,
       "tag": "0001_workbench_status_waiting_drawings",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792518380535,
+      "tag": "0002_scope_project_policies_to_authenticated",
+      "breakpoints": true
     }
   ]
 }
