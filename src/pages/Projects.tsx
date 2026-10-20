@@ -9,7 +9,8 @@ import { useHeapIdentify } from "@/hooks/useHeapIdentify";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import { formatDateShort } from "@/lib/reportGenerator";
 import { AppHeader } from "@/components/AppHeader";
-import { Trash2, X } from "lucide-react";
+import { Trash2, X, MoreVertical, ClipboardList, LayoutGrid, HardHat, Building2 } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CreateProjectModal } from "@/components/CreateProjectModal";
@@ -375,28 +376,49 @@ const Projects = () => {
                     default: return null;
                     } })}
                     <td className="px-6 py-4">
-                      <div className="h-9 flex items-center justify-end gap-1">
-                        {hasBetaAccess && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(tenantPath(`/project/${project.id}/mitigation-plan`));
-                            }}
-                          >
-                            Plan Builder
-                          </Button>
-                        )}
-                        {userProjectRoles.get(project.id) === "admin" && canDeleteProject && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => handleDeleteProject(project.id, e)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
+                      <div className="h-9 flex items-center justify-end">
+                        {(() => {
+                          const canDelete = userProjectRoles.get(project.id) === "admin" && canDeleteProject;
+                          if (!hasBetaAccess && !canDelete && !isStaffViewer) return null;
+                          const go = (path: string) => navigate(tenantPath(path), { state: { projectName: project.name } });
+                          return (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="icon" aria-label="Project actions">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                {hasBetaAccess && (
+                                  <DropdownMenuItem className="cursor-pointer" onClick={() => go(`/project/${project.id}/mitigation-plan`)}>
+                                    <ClipboardList className="h-4 w-4 mr-2" />Plan Builder
+                                  </DropdownMenuItem>
+                                )}
+                                {isStaffViewer && (
+                                  <>
+                                    <DropdownMenuItem className="cursor-pointer" onClick={() => go(`/workbench/project/${project.id}`)}>
+                                      <LayoutGrid className="h-4 w-4 mr-2" />Workbench
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="cursor-pointer" onClick={() => go(`/project/${project.id}`)}>
+                                      <HardHat className="h-4 w-4 mr-2" />Contractor Portal
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="cursor-pointer" onClick={() => go(`/developer/project/${project.id}`)}>
+                                      <Building2 className="h-4 w-4 mr-2" />Developer Portal
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                                {canDelete && (
+                                  <>
+                                    {(hasBetaAccess || isStaffViewer) && <DropdownMenuSeparator />}
+                                    <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive" onClick={(e) => handleDeleteProject(project.id, e as unknown as React.MouseEvent)}>
+                                      <Trash2 className="h-4 w-4 mr-2" />Delete Project
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          );
+                        })()}
                       </div>
                     </td>
                   </tr>
