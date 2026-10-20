@@ -308,7 +308,7 @@ const Projects = () => {
                             ? `/workbench/project/${project.id}`
                             : `/project/${project.id}`,
                         ),
-                        { state: { projectName: project.name } },
+                        { state: { projectName: project.name, returnTo: tenantPath("/projects") } },
                       )
                     }
                   >
@@ -380,7 +380,7 @@ const Projects = () => {
                         {(() => {
                           const canDelete = userProjectRoles.get(project.id) === "admin" && canDeleteProject;
                           if (!hasBetaAccess && !canDelete && !isStaffViewer) return null;
-                          const go = (path: string) => navigate(tenantPath(path), { state: { projectName: project.name } });
+                          const go = (path: string) => navigate(tenantPath(path), { state: { projectName: project.name, returnTo: tenantPath("/projects") } });
                           return (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>

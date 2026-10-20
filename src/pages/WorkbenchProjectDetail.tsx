@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { workbenchBackPath } from "@/lib/workbenchNavigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -359,6 +360,7 @@ export default function WorkbenchProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>();
   const { user, session } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { tenantId, tenantPath } = useTenant();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -4569,7 +4571,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 shrink-0"
-                onClick={() => navigate(canManage && !tenantId ? "/workbench" : tenantPath("/projects"))}
+                onClick={() => navigate(workbenchBackPath(location.state?.returnTo, canManage && !tenantId ? "/workbench" : tenantPath("/projects")))}
                 aria-label="Back"
               >
                 <ArrowLeft className="h-4 w-4" />
