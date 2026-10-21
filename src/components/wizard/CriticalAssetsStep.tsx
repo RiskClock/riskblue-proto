@@ -292,20 +292,8 @@ export const CriticalAssetsStep = ({
         shouldPersist = true;
       }
       
-      // Initialize control selection (all controls selected by default)
-      if (!data.selectedAssetControls || data.selectedAssetControls.length === 0) {
-        const allControlIds = new Set<string>();
-        assetItems.forEach(item => {
-          (item.controls || []).forEach(control => {
-            allControlIds.add(getControlId(item.id, control));
-          });
-        });
-        const controlArray = Array.from(allControlIds);
-        setSelectedControlIds(allControlIds);
-        lastSavedRef.current.controls = controlArray;
-        controlIds = controlArray;
-        shouldPersist = true;
-      }
+      // Controls start unselected; applying them is an intentional user choice.
+      // Protection-level (risk tolerance) changes still pick controls separately.
 
       // Clean up orphaned controls (controls whose parent instance is not selected)
       if (data.selectedAssetControls && data.selectedAssetControls.length > 0 

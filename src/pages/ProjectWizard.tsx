@@ -2243,13 +2243,12 @@ const ProjectWizardContent = () => {
             
             const newItems = categoryItems.filter(i => !oldItemIds.has(i.id));
             const newInstanceIds = newItems.map(i => i.id);
-            const newControlIds = newItems.flatMap(i =>
-              (i.controls || []).map(c => `${i.id}::${c}`)
-            );
+            // New instances are selected, but their controls stay unselected:
+            // applying controls is an intentional, separate user choice.
             
             return {
               instances: [...survivingInstances, ...newInstanceIds],
-              controls: [...survivingControls, ...newControlIds],
+              controls: [...survivingControls],
             };
           };
           
