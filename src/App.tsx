@@ -111,6 +111,8 @@ const App = () => (
               <Route path="users" element={<UserManagement />} />
               <Route path="controls" element={<Controls />} />
               <Route path="project/:id" element={<ProjectWizard />} />
+              <Route path="developer/new-project" element={<DeveloperNewProject />} />
+              <Route path="developer/project/:id" element={<DeveloperNewProject />} />
               <Route path="workbench/project/:projectId" element={<WorkbenchProjectDetail />} />
               <Route path="project/:projectId/mitigation-plan" element={<WaterMitigationPlan />} />
             </Route>
