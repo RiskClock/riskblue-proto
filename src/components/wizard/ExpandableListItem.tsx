@@ -512,11 +512,11 @@ export const ExpandableListItem = ({
               return sum;
             }, 0);
 
-            // Instance checkbox state tracks the instance only; controls are a
-            // separate, intentional selection layer.
+            // Keep instance-only selection visible, but show partial protection
+            // when some (not all) of its controls have been deliberately chosen.
             const instanceCheckboxState = {
-              all: isInstanceSelected,
-              partial: false,
+              all: isInstanceSelected && !controlState.partial,
+              partial: isInstanceSelected && controlState.partial,
               none: !isInstanceSelected
             };
 
