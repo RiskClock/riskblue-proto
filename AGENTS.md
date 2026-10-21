@@ -1,5 +1,7 @@
 # Architecture rules
 
+- Contractor selection screens share intentionalControlSelection through ExpandableListItem; explicit control picks include only their parent location before toggling the control, keeping location and control intent consistent across all categories.
+
 - Projects passes its tenant-aware list URL in navigation state when opening project views; Workbench restores an allowlisted list URL for Back and retains its role-based fallback for direct entries, so returning does not depend on browser history.
 
 - Developer welcome and project progress are isolated presentation components; progress and list status use shared developerProgress rules based on saved intake status and vendor selection, so sample bids cannot bypass intake or analysis and standard onboarding remains unchanged.

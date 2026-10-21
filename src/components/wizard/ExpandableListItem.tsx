@@ -19,6 +19,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { format } from "date-fns";
 import { useVendorMapByControlName, type ControlVendors } from "@/hooks/useControlVendorOfferings";
+import { toggleControlWithParent } from "@/lib/intentionalControlSelection";
 
 interface ControlPoints {
   points: number;
@@ -306,9 +307,10 @@ export const ExpandableListItem = ({
     }
   }, [selectedInstanceIds, getInstanceControlIds, onToggleInstance, onToggleAllControls]);
 
-  const handleControlToggle = useCallback((controlId: string) => {
-    onToggleControl(controlId);
-  }, [onToggleControl]);
+  const handleControlToggle = useCallback((instanceId: string, controlId: string) => {
+    toggleControlWithParent(instanceId, controlId, selectedInstanceIds, selectedControlIds,
+      onToggleAll, onToggleControl);
+  }, [selectedInstanceIds, selectedControlIds, onToggleAll, onToggleControl]);
 
   const toggleInstanceExpanded = useCallback((instanceId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -660,7 +662,7 @@ export const ExpandableListItem = ({
                         >
                           <Checkbox
                             checked={isControlSelected}
-                            onCheckedChange={() => handleControlToggle(controlId)}
+                            onCheckedChange={() => handleControlToggle(instance.id, controlId)}
                             className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                           />
                           <div className="flex-1 min-w-0">
