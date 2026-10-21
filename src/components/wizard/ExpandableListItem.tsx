@@ -266,34 +266,28 @@ export const ExpandableListItem = ({
     };
   }, [selectedControlIds, getInstanceControlIds]);
 
-  // Calculate overall selection state including controls
+  // Overall checkbox state tracks instances only; controls are a separate,
+  // intentional selection layer and must not make the class look unchecked.
   const overallSelectionState = useMemo(() => {
-    // Check if all instances are selected and all their controls are selected
-    const allInstancesSelected = isAllSelected;
-    const allControlsSelected = allControlIds.length === 0 || 
-      allControlIds.every(id => selectedControlIds.has(id));
-    
-    const someInstancesSelected = selectedCount > 0;
-    const someControlsSelected = allControlIds.some(id => selectedControlIds.has(id));
-    
-    if (allInstancesSelected && allControlsSelected) {
+    if (isAllSelected) {
       return { all: true, partial: false, none: false };
     }
-    if (!someInstancesSelected && !someControlsSelected) {
+    if (selectedCount === 0) {
       return { all: false, partial: false, none: true };
     }
     return { all: false, partial: true, none: false };
-  }, [isAllSelected, allControlIds, selectedControlIds, selectedCount]);
+  }, [isAllSelected, selectedCount]);
 
   const handleParentCheckboxClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     // If all or partial selected, deselect all. If none selected, select all.
+    // Selecting a class only selects its instances; applying controls is an
+    // intentional, separate user choice. Deselecting still clears controls.
     if (overallSelectionState.all || overallSelectionState.partial) {
       onToggleAll(allInstanceIds, false);
       onToggleAllControls(allControlIds, false);
     } else {
       onToggleAll(allInstanceIds, true);
-      onToggleAllControls(allControlIds, true);
     }
   }, [overallSelectionState, allInstanceIds, allControlIds, onToggleAll, onToggleAllControls]);
 
@@ -303,13 +297,12 @@ export const ExpandableListItem = ({
     const controlIds = getInstanceControlIds(instance);
     
     if (isSelected) {
-      // Deselect instance and all its controls
+      // Deselect instance and its controls
       onToggleInstance(instance.id);
       onToggleAllControls(controlIds, false);
     } else {
-      // Select instance and all its controls
+      // Select instance only; its controls stay unselected until chosen
       onToggleInstance(instance.id);
-      onToggleAllControls(controlIds, true);
     }
   }, [selectedInstanceIds, getInstanceControlIds, onToggleInstance, onToggleAllControls]);
 
@@ -517,12 +510,12 @@ export const ExpandableListItem = ({
               return sum;
             }, 0);
 
-            // Instance checkbox state (considers controls too)
-            const hasAnyControlSelected = hasControls && !controlState.none;
+            // Instance checkbox state tracks the instance only; controls are a
+            // separate, intentional selection layer.
             const instanceCheckboxState = {
-              all: isInstanceSelected && (controlState.all || !hasControls),
-              partial: (isInstanceSelected && controlState.partial) || (!isInstanceSelected && hasAnyControlSelected),
-              none: !isInstanceSelected && !hasAnyControlSelected
+              all: isInstanceSelected,
+              partial: false,
+              none: !isInstanceSelected
             };
 
             return (
