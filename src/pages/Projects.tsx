@@ -178,7 +178,7 @@ const Projects = () => {
   const handleNewProject = () => {
     logActivity("add_new_clicked");
     if (accountType === "developer") {
-      navigate("/developer/new-project");
+      navigate(tenantPath("/developer/new-project"));
       return;
     }
     setShowCreateModal(true);
@@ -402,7 +402,7 @@ const Projects = () => {
                                     <DropdownMenuItem className="cursor-pointer" onClick={() => go(`/project/${project.id}`)}>
                                       <HardHat className="h-4 w-4 mr-2" />Contractor Portal
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem className="cursor-pointer" onClick={() => navigate(`/developer/project/${project.id}`, { state: { projectName: project.name, returnTo: tenantPath("/projects") } })}>
+                                    <DropdownMenuItem className="cursor-pointer" onClick={() => navigate(tenantPath(`/developer/project/${project.id}`), { state: { projectName: project.name, returnTo: tenantPath("/projects") } })}>
                                       <Building2 className="h-4 w-4 mr-2" />Developer Portal
                                     </DropdownMenuItem>
                                   </>
