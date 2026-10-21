@@ -1,5 +1,8 @@
 # Roadmap
 
+- [x] Keep developer project pages inside the company you are in (open, create and return to the same list); signed-in click-through verified in Quensus, no console errors.
+- [ ] Move "The Aldwych Residences" into a company; blocked on which company the user wants.
+
 - [x] Replace the Budget project-list column with Extraction Scope and Ownership Intent (concise labels from saved intake values) and rename Protection Level to Target Protection Level; signed-in creation and column-editor checks passed.
 - [x] Remove the Overall Process heading from the developer welcome card, make Learn More smaller (14px), widen the gap above it and tighten the gap below it to the card edge; measured and screenshotted in the signed-in preview.
 
