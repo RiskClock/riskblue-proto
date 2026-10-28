@@ -11,23 +11,23 @@ test("Autodesk verified email automatically selects the existing RiskBlue accoun
 test("an unverified Autodesk email cannot auto-link", async () => {
   let lookedUp = false;
   const result = await findAutodeskAccount("autodesk", { email: account.email, emailVerified: false }, async () => { lookedUp = true; return [account]; });
-  expect(result).toBeNull();
+  expect(result).toBe(null);
   expect(lookedUp).toBe(false);
 });
 
 test("Procore never auto-links by matching email", async () => {
   const result = await findAutodeskAccount("procore", { email: account.email, emailVerified: true }, async () => [account]);
-  expect(result).toBeNull();
+  expect(result).toBe(null);
 });
 
 test("an unconfirmed RiskBlue email is not eligible for auto-linking", async () => {
   const result = await findAutodeskAccount("autodesk", { email: account.email, emailVerified: true }, async () => [{ ...account, email_confirmed_at: undefined }]);
-  expect(result).toBeNull();
+  expect(result).toBe(null);
 });
 
 test("a different email cannot select another RiskBlue account", async () => {
   const result = await findAutodeskAccount("autodesk", { email: "different@example.com", emailVerified: true }, async () => [account]);
-  expect(result).toBeNull();
+  expect(result).toBe(null);
 });
 
 test("matching accounts beyond the first page remain discoverable", async () => {
