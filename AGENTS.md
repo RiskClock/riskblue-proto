@@ -26,4 +26,4 @@
 - Wade skill system prompts and schemas are stored in `app_settings` and appended to the base Wade prompt only when the skill runs; this keeps everyday Wade calls lean.
 
 - Class Calibration is additive: the saved project override is the shared class prompt verbatim plus a generated project addendum (kept in `calibration_notes.project_addendum`); this stops calibration from summarizing away the base taxonomy.
-- External sign-in is custom via external-auth with one owner per provider identity; Autodesk may auto-link only a server-fetched verified email to a confirmed account, otherwise linking requires a signed-in session. Procore always requires explicit linking. Neither path touches tenant membership, preserving account isolation.
+- External sign-in is custom via external-auth with one owner per provider identity; the shared Autodesk/Procore matcher requires provider-verified email and a confirmed account, otherwise linking requires a signed-in session. Keep Procore emailVerified false until its API supplies documented verification evidence; email presence and OAuth alone are insufficient. Neither path touches tenant membership, preserving account isolation.
