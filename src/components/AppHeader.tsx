@@ -195,6 +195,10 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
                 <UserCog className="h-4 w-4 mr-2" />
                 Edit Profile
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => runAfterMenuCloses(() => navigate("/account"))} className="cursor-pointer">
+                <Settings className="h-4 w-4 mr-2" />
+                Account Settings
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => runAfterMenuCloses(() => setChangePasswordOpen(true))} className="cursor-pointer">
                 <KeyRound className="h-4 w-4 mr-2" />
                 Change Password
