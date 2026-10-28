@@ -1,6 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { findVerifiedProviderAccount } from "./accountLinking.ts";
+import { findVerifiedProviderAccount, findEmailAccount, canConfirmLink } from "./accountLinking.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -131,6 +131,29 @@ Deno.serve(async (req) => {
   const action = url.searchParams.get("action");
 
   try {
+    if (action === "confirm-link" && req.method === "POST") {
+      const user = await getUser(req);
+      if (!user) return json({ error: "Sign in using the email confirmation link first" }, 401);
+      const body = await req.json().catch(() => ({}));
+      if (typeof body.token !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(body.token)) return json({ error: "Invalid confirmation link" }, 400);
+      const tokenHash = await sha256(body.token);
+      const { data: pending, error } = await admin.from("external_link_confirmations").select("*").eq("token_hash", tokenHash).eq("user_id", user.id).maybeSingle();
+      if (error) throw error;
+      if (!pending || !canConfirmLink(pending.user_id, user.id, pending.expires_at, Date.now())) return json({ error: "Confirmation link expired or already used. Start Procore sign-in again." }, 400);
+      const { data: consumed, error: consumeError } = await admin.from("external_link_confirmations").delete().eq("id", pending.id).eq("user_id", user.id).gt("expires_at", new Date().toISOString()).select("id");
+      if (consumeError) throw consumeError;
+      if (!consumed?.length) return json({ error: "Confirmation link already used" }, 400);
+      const { data: owner, error: ownerError } = await admin.from("user_external_identities").select("user_id,provider_user_id").eq("provider", "procore").eq("provider_user_id", pending.provider_user_id).maybeSingle();
+      if (ownerError) throw ownerError;
+      if (owner && owner.user_id !== user.id) return json({ error: "This Procore account belongs to another RiskBlue account" }, 409);
+      if (!owner) {
+        const { error: linkError } = await admin.from("user_external_identities").insert({ user_id: user.id, provider: "procore", provider_user_id: pending.provider_user_id, email: pending.email });
+        if (linkError) return json({ error: "This account already has a Procore login linked" }, 409);
+      }
+      const { error: saveError } = await admin.from("user_procore_tokens").upsert({ user_id: user.id, access_token: "ENCRYPTED", refresh_token: null, encrypted_access_token: pending.encrypted_access_token, encrypted_refresh_token: pending.encrypted_refresh_token, is_encrypted: true, token_expiry: pending.token_expiry, procore_email: pending.email, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+      if (saveError) throw saveError;
+      return json({ ok: true });
+    }
     // ---------- Start ----------
     if (action === "start" && req.method === "POST") {
       const body = await req.json().catch(() => ({}));
@@ -276,6 +299,33 @@ Deno.serve(async (req) => {
             user_metadata: { full_name: ident.name ?? undefined, signup_method: provider },
           });
           if (error || !created.user) {
+            if (provider === "procore") {
+              const account = await findEmailAccount(ident.email, async page => {
+                const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+                if (error) throw error;
+                return data.users;
+              });
+              if (account?.email) {
+                if (!ENCRYPTION_KEY) throw new Error("Token encryption unavailable");
+                await admin.from("external_link_confirmations").delete().lt("expires_at", new Date().toISOString());
+                const confirmationToken = randomToken();
+                const { data: pending, error: pendingError } = await admin.from("external_link_confirmations").insert({
+                  token_hash: await sha256(confirmationToken), user_id: account.id, provider, provider_user_id: ident.id,
+                  email: account.email, app_origin: origin,
+                  encrypted_access_token: await encryptToken(tok.access_token, ENCRYPTION_KEY),
+                  encrypted_refresh_token: tok.refresh_token ? await encryptToken(tok.refresh_token, ENCRYPTION_KEY) : null,
+                  token_expiry: new Date(Date.now() + (tok.expires_in || 7200) * 1000).toISOString(),
+                }).select("id").single();
+                if (pendingError) throw pendingError;
+                const emailClient = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+                const { error: sendError } = await emailClient.auth.signInWithOtp({ email: account.email, options: { shouldCreateUser: false, emailRedirectTo: `${origin}/auth/external?confirm_procore=${confirmationToken}` } });
+                if (sendError) {
+                  await admin.from("external_link_confirmations").delete().eq("id", pending.id);
+                  return fail("Could not send the confirmation email. Please wait and try Procore sign-in again.");
+                }
+                return Response.redirect(`${origin}/auth?external_notice=${encodeURIComponent("Check your RiskBlue account email for a sign-in link, then confirm linking Procore. The linking request expires in 15 minutes.")}`, 302);
+              }
+            }
             return fail(
               `This email already has a RiskBlue account. ${!ident.emailVerified ? `${label} did not provide verified email ownership. ` : ""}Sign in with your email and password, then link ${label} in Account Settings.`,
             );

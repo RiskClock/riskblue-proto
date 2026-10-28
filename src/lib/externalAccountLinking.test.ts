@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { findVerifiedProviderAccount } from "../../supabase/functions/external-auth/accountLinking";
+import { findVerifiedProviderAccount, canConfirmLink } from "../../supabase/functions/external-auth/accountLinking";
 
 const account = { id: "existing-riskblue-user", email: "owner@example.com", email_confirmed_at: "2026-10-28T14:28:00Z" };
 
@@ -55,4 +55,16 @@ test("Procore cannot auto-link an unconfirmed RiskBlue email", async () => {
 test("unsupported providers cannot auto-link", async () => {
   const result = await findVerifiedProviderAccount("unknown", { email: account.email, emailVerified: true }, async () => [account]);
   expect(result).toBe(null);
+});
+
+test("email confirmation only authorizes the intended RiskBlue account", () => {
+  expect(canConfirmLink("owner", "other-user", "2026-10-28T15:00:00Z", Date.parse("2026-10-28T14:45:00Z"))).toBe(false);
+  expect(canConfirmLink("owner", "owner", "2026-10-28T15:00:00Z", Date.parse("2026-10-28T14:45:00Z"))).toBe(true);
+});
+
+test("email linking request expires after 15 minutes", () => {
+  const issued = Date.parse("2026-10-28T14:35:00Z");
+  const expires = new Date(issued + 15 * 60 * 1000).toISOString();
+  expect(canConfirmLink("owner", "owner", expires, issued + 14 * 60 * 1000)).toBe(true);
+  expect(canConfirmLink("owner", "owner", expires, issued + 15 * 60 * 1000)).toBe(false);
 });
