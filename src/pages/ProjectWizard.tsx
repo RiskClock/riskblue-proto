@@ -28,12 +28,14 @@ import { RiskTimelineChart3D } from "@/components/wizard/RiskTimelineChart3D";
 import { useRiskTimelineData } from "@/hooks/useRiskTimelineData";
 import { AWPEditModal } from "@/components/wizard/AWPEditModal";
 import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnectionDialog";
-import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDialog";
 import { MitigationResponsePlanStep } from "@/components/wizard/MitigationResponsePlanStep";
 import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigationGuidelinesStep";
 import { ProcoreExportDialog } from "@/components/wizard/ProcoreExportDialog";
 import { AppliedEpicExportDialog } from "@/components/wizard/AppliedEpicExportDialog";
-import procoreIcon from "@/assets/icon_procore.png";
+import { CloudProviderButton, CloudProviderLogo } from "@/components/cloud/CloudProviderButton";
+import { CloudDrawingPicker } from "@/components/cloud/CloudDrawingPicker";
+import { FormaExportDialog } from "@/components/cloud/FormaExportDialog";
+import { queueCloudImports, type CloudProvider, type CloudSelection } from "@/lib/cloudImport";
 import epicIcon from "@/assets/logo_appliedepic.png";
 import ams360Icon from "@/assets/logo_ams360.png";
 import { CollaboratorManagementStep } from "@/components/wizard/CollaboratorManagementStep";
@@ -136,7 +138,8 @@ const ProjectWizardContent = () => {
   // Standalone Google Drive connection dialog
   const [showDriveConnectionDialog, setShowDriveConnectionDialog] = useState(false);
   // Standalone Procore connection dialog
-  const [showProcoreConnectionDialog, setShowProcoreConnectionDialog] = useState(false);
+  const [cloudImportProvider, setCloudImportProvider] = useState<CloudProvider | null>(null);
+  const [pdfBlobForFormaMain, setPdfBlobForFormaMain] = useState<Blob | null>(null);
   
   // Procore export state for guideline tab
   const [showProcoreExportMain, setShowProcoreExportMain] = useState(false);
@@ -1420,6 +1423,112 @@ const ProjectWizardContent = () => {
     }
   }, [id, projectData, flush]);
 
+  const exportMainReportTo = async (target: "procore" | "forma") => {
+                    logActivity("export_clicked", id);
+                    
+                    toast({
+                      title: "Preparing report...",
+                      description: `Generating PDF for ${target === "forma" ? "Autodesk Forma" : "Procore"} export...`,
+                    });
+                    
+                    let preparedByName = "";
+                    let createdByName = "";
+                    
+                    const userIdsToFetch = [user?.id, projectData.user_id].filter(Boolean) as string[];
+                    const uniqueUserIds = [...new Set(userIdsToFetch)];
+                    
+                    if (uniqueUserIds.length > 0) {
+                      try {
+                        const { data: profilesData } = await supabase
+                          .from('profiles')
+                          .select('user_id, display_name')
+                          .in('user_id', uniqueUserIds);
+                        
+                        const profilesMap = new Map(
+                          (profilesData || []).map(p => [p.user_id, p.display_name])
+                        );
+                        
+                        preparedByName = profilesMap.get(user?.id || "") || user?.email || "";
+                        createdByName = profilesMap.get(projectData.user_id) || preparedByName;
+                      } catch (e) {
+                        preparedByName = user?.email || "";
+                        createdByName = preparedByName;
+                      }
+                    }
+                    
+                    const riskCounts = {
+                      assets: analysisItems.filter(i => i.category === "Asset" && (projectData.selectedAssetInstances || []).includes(i.id)).length,
+                      systems: analysisItems.filter(i => i.category === "Water System" && (projectData.selectedSystemInstances || []).includes(i.id)).length,
+                      processes: analysisItems.filter(i => i.category === "Process" && (projectData.selectedProcessInstances || []).includes(i.id)).length,
+                    };
+                    
+                    const allControlIds = new Set([
+                      ...(projectData.selectedAssetControls || []),
+                      ...(projectData.selectedSystemControls || []),
+                      ...(projectData.selectedProcessControls || []),
+                    ]);
+                    const controlCount = allControlIds.size;
+                    
+                    let executiveSummaryText = "";
+                    try {
+                      const { data: summaryData, error } = await supabase.functions.invoke('generate-executive-summary', {
+                        body: { projectData, riskCounts, controlCount }
+                      });
+                      if (!error && summaryData?.summary) {
+                        executiveSummaryText = summaryData.summary;
+                      }
+                    } catch (e) {
+                      console.error("Failed to generate executive summary:", e);
+                    }
+                    
+                    // Render report offscreen and generate PDF blob
+                    const reportContainer = document.createElement('div');
+                    reportContainer.style.position = 'absolute';
+                    reportContainer.style.left = '-9999px';
+                    reportContainer.style.width = '210mm';
+                    document.body.appendChild(reportContainer);
+                    
+                    const root = document.createElement('div');
+                    reportContainer.appendChild(root);
+                    
+                    const { createRoot } = await import('react-dom/client');
+                    const reactRoot = createRoot(root);
+                    reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} executiveSummaryText={executiveSummaryText} preparedBy={preparedByName} createdBy={createdByName} riskTimelineData={riskTimelineForPdf.hasData ? { months: riskTimelineForPdf.months, totalPerMonth: riskTimelineForPdf.totalPerMonth, totalDeriskPerMonth: riskTimelineForPdf.totalDeriskPerMonth || [], todayMonthIndex: riskTimelineForPdf.todayMonthIndex } : undefined} />);
+                    
+                    // Wait for render + images
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    
+                    const { generatePdfFromElement, getImageBase64 } = await import('@/lib/pdfExporter');
+                    const logoBase64 = await getImageBase64(await resolveBrandLogoUrl());
+                    
+                    const coverElProcore = reportContainer.querySelector('#cover-page') as HTMLElement | null;
+                    const bodyElProcore = reportContainer.querySelector('#report-body') as HTMLElement || reportContainer;
+                    
+                    const blob = await generatePdfFromElement(bodyElProcore, {
+                      filename: generateReportFilename(projectData.name || "unnamed_project", "Water Mitigation Guideline"),
+                      margins: { top: 10, right: 10, bottom: 15, left: 10 },
+                      logoBase64,
+                      skipLogoOnFirstPage: true,
+                      returnBlob: true,
+                      fullBleedFirstPage: true,
+                      coverElement: coverElProcore || undefined,
+                    });
+                    
+                    reactRoot.unmount();
+                    document.body.removeChild(reportContainer);
+                    
+                    if (blob instanceof Blob) {
+                      if (target === "forma") {
+                        setPdfBlobForFormaMain(blob);
+                      } else {
+                        setPdfBlobForProcoreMain(blob);
+                        setShowProcoreExportMain(true);
+                      }
+                    } else {
+                      toast({ title: "Error", description: "Failed to generate PDF for export.", variant: "destructive" });
+                    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Print-only header */}
@@ -1579,10 +1688,17 @@ const ProjectWizardContent = () => {
                             Google Drive
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => setShowProcoreConnectionDialog(true)}
+                            onClick={() => setCloudImportProvider("forma")}
                             className="gap-2"
                           >
-                            <img src="/icons/icon_procore.png" alt="" className="w-4 h-4" />
+                            <CloudProviderLogo provider="forma" />
+                            <span>Autodesk Forma</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setCloudImportProvider("procore")}
+                            className="gap-2"
+                          >
+                            <CloudProviderLogo provider="procore" />
                             <span>Procore</span>
                             {isProcoreConnected && (
                               <span className="ml-auto flex h-2 w-2 rounded-full bg-green-500" />
@@ -1641,18 +1757,12 @@ const ProjectWizardContent = () => {
                             <img src="/icons/icon_googledrive.png" alt="" className="w-4 h-4" />
                             Google Drive
                           </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setShowProcoreConnectionDialog(true)}
-                            className="gap-2"
-                          >
-                            <img src="/icons/icon_procore.png" alt="" className="w-4 h-4" />
-                            Procore
+                          <CloudProviderButton provider="forma" size="sm" onClick={() => setCloudImportProvider("forma")} />
+                          <CloudProviderButton provider="procore" size="sm" onClick={() => setCloudImportProvider("procore")}>
                             {isProcoreConnected && (
                               <span className="flex h-2 w-2 rounded-full bg-green-500" />
                             )}
-                          </Button>
+                          </CloudProviderButton>
                         </div>
                       </div>
                     </div>
@@ -1864,109 +1974,13 @@ const ProjectWizardContent = () => {
                     <Download className="h-4 w-4 mr-2" />
                     Download as PDF
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={async () => {
-                    logActivity("export_clicked", id);
-                    
-                    toast({
-                      title: "Preparing report...",
-                      description: "Generating PDF for Procore export...",
-                    });
-                    
-                    let preparedByName = "";
-                    let createdByName = "";
-                    
-                    const userIdsToFetch = [user?.id, projectData.user_id].filter(Boolean) as string[];
-                    const uniqueUserIds = [...new Set(userIdsToFetch)];
-                    
-                    if (uniqueUserIds.length > 0) {
-                      try {
-                        const { data: profilesData } = await supabase
-                          .from('profiles')
-                          .select('user_id, display_name')
-                          .in('user_id', uniqueUserIds);
-                        
-                        const profilesMap = new Map(
-                          (profilesData || []).map(p => [p.user_id, p.display_name])
-                        );
-                        
-                        preparedByName = profilesMap.get(user?.id || "") || user?.email || "";
-                        createdByName = profilesMap.get(projectData.user_id) || preparedByName;
-                      } catch (e) {
-                        preparedByName = user?.email || "";
-                        createdByName = preparedByName;
-                      }
-                    }
-                    
-                    const riskCounts = {
-                      assets: analysisItems.filter(i => i.category === "Asset" && (projectData.selectedAssetInstances || []).includes(i.id)).length,
-                      systems: analysisItems.filter(i => i.category === "Water System" && (projectData.selectedSystemInstances || []).includes(i.id)).length,
-                      processes: analysisItems.filter(i => i.category === "Process" && (projectData.selectedProcessInstances || []).includes(i.id)).length,
-                    };
-                    
-                    const allControlIds = new Set([
-                      ...(projectData.selectedAssetControls || []),
-                      ...(projectData.selectedSystemControls || []),
-                      ...(projectData.selectedProcessControls || []),
-                    ]);
-                    const controlCount = allControlIds.size;
-                    
-                    let executiveSummaryText = "";
-                    try {
-                      const { data: summaryData, error } = await supabase.functions.invoke('generate-executive-summary', {
-                        body: { projectData, riskCounts, controlCount }
-                      });
-                      if (!error && summaryData?.summary) {
-                        executiveSummaryText = summaryData.summary;
-                      }
-                    } catch (e) {
-                      console.error("Failed to generate executive summary:", e);
-                    }
-                    
-                    // Render report offscreen and generate PDF blob
-                    const reportContainer = document.createElement('div');
-                    reportContainer.style.position = 'absolute';
-                    reportContainer.style.left = '-9999px';
-                    reportContainer.style.width = '210mm';
-                    document.body.appendChild(reportContainer);
-                    
-                    const root = document.createElement('div');
-                    reportContainer.appendChild(root);
-                    
-                    const { createRoot } = await import('react-dom/client');
-                    const reactRoot = createRoot(root);
-                    reactRoot.render(<WaterRiskReport data={projectData} analysisItems={analysisItems} controlDetails={controlDetails} executiveSummaryText={executiveSummaryText} preparedBy={preparedByName} createdBy={createdByName} riskTimelineData={riskTimelineForPdf.hasData ? { months: riskTimelineForPdf.months, totalPerMonth: riskTimelineForPdf.totalPerMonth, totalDeriskPerMonth: riskTimelineForPdf.totalDeriskPerMonth || [], todayMonthIndex: riskTimelineForPdf.todayMonthIndex } : undefined} />);
-                    
-                    // Wait for render + images
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    
-                    const { generatePdfFromElement, getImageBase64 } = await import('@/lib/pdfExporter');
-                    const logoBase64 = await getImageBase64(await resolveBrandLogoUrl());
-                    
-                    const coverElProcore = reportContainer.querySelector('#cover-page') as HTMLElement | null;
-                    const bodyElProcore = reportContainer.querySelector('#report-body') as HTMLElement || reportContainer;
-                    
-                    const blob = await generatePdfFromElement(bodyElProcore, {
-                      filename: generateReportFilename(projectData.name || "unnamed_project", "Water Mitigation Guideline"),
-                      margins: { top: 10, right: 10, bottom: 15, left: 10 },
-                      logoBase64,
-                      skipLogoOnFirstPage: true,
-                      returnBlob: true,
-                      fullBleedFirstPage: true,
-                      coverElement: coverElProcore || undefined,
-                    });
-                    
-                    reactRoot.unmount();
-                    document.body.removeChild(reportContainer);
-                    
-                    if (blob instanceof Blob) {
-                      setPdfBlobForProcoreMain(blob);
-                      setShowProcoreExportMain(true);
-                    } else {
-                      toast({ title: "Error", description: "Failed to generate PDF for export.", variant: "destructive" });
-                    }
-                  }}>
-                    <img src={procoreIcon} alt="Procore" className="h-4 w-4 mr-2" />
+                  <DropdownMenuItem onSelect={() => exportMainReportTo("procore")}>
+                    <CloudProviderLogo provider="procore" className="h-4 w-4 mr-2" />
                     Upload to Procore
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => exportMainReportTo("forma")}>
+                    <CloudProviderLogo provider="forma" className="h-4 w-4 mr-2" />
+                    Upload to Autodesk Forma
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => {
                     logActivity("export_clicked", id);
@@ -2080,6 +2094,13 @@ const ProjectWizardContent = () => {
                 isOpen={showProcoreExportMain}
                 onClose={() => { setShowProcoreExportMain(false); setPdfBlobForProcoreMain(null); }}
                 pdfBlob={pdfBlobForProcoreMain}
+                fileName={generateReportFilename(projectData.name || "unnamed_project", "Water Mitigation Guideline") + ".pdf"}
+              />
+
+              <FormaExportDialog
+                isOpen={!!pdfBlobForFormaMain}
+                onClose={() => setPdfBlobForFormaMain(null)}
+                pdfBlob={pdfBlobForFormaMain}
                 fileName={generateReportFilename(projectData.name || "unnamed_project", "Water Mitigation Guideline") + ".pdf"}
               />
 
@@ -2291,19 +2312,23 @@ const ProjectWizardContent = () => {
         }}
       />
       
-      {/* Standalone Procore Connection Dialog */}
-      <ProcoreConnectionDialog
-        isOpen={showProcoreConnectionDialog}
-        onClose={() => setShowProcoreConnectionDialog(false)}
-        projectId={id || "new"}
-        projectName={projectData.name}
-        onAnalysisStarted={() => {
-          toast({
-            title: "Analysis Queued",
-            description: "Your Procore files are being analyzed. This may take up to 48 hours.",
-          });
-        }}
-      />
+      {/* Cloud drawing import (Autodesk Forma / Procore): queued server-side, never starts analysis */}
+      {cloudImportProvider && (
+        <CloudDrawingPicker
+          provider={cloudImportProvider}
+          open={!!cloudImportProvider}
+          onOpenChange={(o) => !o && setCloudImportProvider(null)}
+          confirmLabel="Import"
+          onConfirm={async (sel: CloudSelection) => {
+            if (!id || id === "new" || !user) throw new Error("Save the project before importing drawings.");
+            await queueCloudImports(id, user.id, [sel]);
+            toast({
+              title: "Import started",
+              description: "Drawings are importing in the background. You can close this page; the project will show Ready for Analysis when they arrive.",
+            });
+          }}
+        />
+      )}
       
       {/* Hidden file input for drawings upload */}
       <input
@@ -2437,6 +2462,7 @@ const ProjectWizard = () => {
       </div>
     );
   }
+
 
   return (
     <ProjectProvider projectId={projectId} initialData={initialData}>

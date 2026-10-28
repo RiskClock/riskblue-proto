@@ -90,7 +90,7 @@
 - [x] Classify existing British Library Tenant Connection markers as detail markers.
 - [x] Workbench: Wade button (internal only, floating window) with actions on the open page: place annotation, update class prompt (approval), run Risk Radar (approval)
 - [x] Workbench: Show [Count | Drawing] toggle; Drawing shows the drawing viewer inline for page rows
-- [ ] Cloud drawing import: Forma + Procore buttons in Developer portal and new project popup ({logo} {title}); pick files, create project, import runs in background, no analysis.
-- [ ] Contractor portal: add Forma import between Google Drive and Procore; switch Procore/Forma imports to background, import-only (no analysis).
-- [ ] Project status: Importing drawings, then Ready for analysis.
-- [ ] Contractor portal: Upload to Autodesk Forma (like Upload to Procore).
+- [x] Cloud drawing import: Forma + Procore buttons in Developer portal and new project popup ({logo} {title}); pick files, create project, import runs in background, no analysis.
+- [x] Contractor portal: add Forma import between Google Drive and Procore; switch Procore/Forma imports to background, import-only (no analysis).
+- [x] Project status: Importing drawings, then Ready for analysis.
+- [x] Contractor portal: Upload to Autodesk Forma (like Upload to Procore).

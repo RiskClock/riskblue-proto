@@ -10,7 +10,8 @@ export function developerListStatus(status: string | undefined, hasBids: boolean
 export function developerProgress(isExisting: boolean, status?: string, vendorCount = 0): DeveloperProgress {
   if (!isExisting) return { currentStep: 0, waiting: false };
   if (status === "waiting_drawings") return { currentStep: 1, waiting: true };
-  if (!status || status === "processing") return { currentStep: 1, waiting: false };
+  if (!status || status === "processing" || status === "importing_drawings" || status === "ready_for_analysis") return { currentStep: 1, waiting: false };
+  if (status === "import_failed") return { currentStep: 1, waiting: true };
   if (status === "processed") return { currentStep: vendorCount > 0 ? 3 : 2, waiting: false };
   return { currentStep: 1, waiting: false };
 }

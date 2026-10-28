@@ -17,6 +17,9 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { DeveloperProjectStepper } from "@/components/developer/DeveloperProjectStepper";
 import { DEVELOPER_STATUS_LABEL } from "@/lib/developerVendors";
+import { CloudDrawingPicker } from "@/components/cloud/CloudDrawingPicker";
+import { CloudProviderButton, CloudProviderLogo } from "@/components/cloud/CloudProviderButton";
+import { CLOUD_PROVIDER_LABEL, mergeSelection, queueCloudImports, removeCloudFile, type CloudProvider, type CloudSelection } from "@/lib/cloudImport";
 
 type Place = { formattedAddress: string; lat?: number; lng?: number; city?: string | null; region?: string | null };
 
@@ -78,8 +81,13 @@ export default function DeveloperNewProject() {
         image: projectImage, drawings: drawingMode === "upload" ? drawings : [],
         protectionPhase: loaded?.legacyPhases ?? [], isUpdate: isEdit, existingImagePath: projectImage ? null : loaded?.imagePath ?? null,
         workbenchStatus: loaded?.status === "processed" ? "processed"
+          : (drawingMode === "upload" && cloudPicks.length) ? "importing_drawings"
           : (loaded?.drawingNames.length || (drawingMode === "upload" && drawings.length)) ? "processing" : "waiting_drawings",
       });
+      if (drawingMode === "upload" && cloudPicks.length) {
+        await queueCloudImports(saveIds.current.projectId, user.id, cloudPicks);
+        setCloudPicks([]);
+      }
       if (isEdit) saveIds.current.requestId = crypto.randomUUID();
       toast({ title: isEdit ? "Changes saved" : "Project created", description: "Your project and attachments have been saved. No credits were charged." });
       navigate(tenantPath("/projects"));
@@ -91,6 +99,8 @@ export default function DeveloperNewProject() {
     }
   };
   const [drawings, setDrawings] = useState<File[]>([]);
+  const [cloudPicks, setCloudPicks] = useState<CloudSelection[]>([]);
+  const [pickerProvider, setPickerProvider] = useState<CloudProvider | null>(null);
   const [projectImage, setProjectImage] = useState<File | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [drawingError, setDrawingError] = useState<string | null>(null);
@@ -270,6 +280,18 @@ export default function DeveloperNewProject() {
               e.target.value = "";
             }} />
             <Button variant="outline" className="h-14 w-full justify-start border-dashed px-5 text-base" onClick={() => drawingInput.current?.click()}><Upload /> Upload drawings</Button>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <CloudProviderButton provider="forma" label="Connect Autodesk Forma" className="h-14 justify-start px-5 text-base" onClick={() => setPickerProvider("forma")} />
+              <CloudProviderButton provider="procore" label="Connect Procore" className="h-14 justify-start px-5 text-base" onClick={() => setPickerProvider("procore")} />
+            </div>
+            {pickerProvider && <CloudDrawingPicker provider={pickerProvider} open={!!pickerProvider} onOpenChange={(o) => !o && setPickerProvider(null)} onConfirm={(sel) => setCloudPicks((cur) => mergeSelection(cur, sel))} />}
+            {cloudPicks.length > 0 && <ul className="mt-4 divide-y divide-border">
+              {cloudPicks.flatMap((sel) => sel.files.map((f) => <li key={`${sel.provider}-${f.id}`} className="flex items-center gap-3 py-3">
+                <CloudProviderLogo provider={sel.provider} className="h-5 w-5" />
+                <div className="min-w-0 flex-1"><p className="break-words text-base">{f.name}</p><p className="text-sm text-muted-foreground">{CLOUD_PROVIDER_LABEL[sel.provider]}{sel.projectName ? `, ${sel.projectName}` : ""}. Imports after you create the project.</p></div>
+                <Button variant="ghost" size="icon" aria-label={`Remove ${f.name}`} title={`Remove ${f.name}`} onClick={() => setCloudPicks((cur) => removeCloudFile(cur, sel.provider, f.id))}><X /></Button>
+              </li>))}
+            </ul>}
             {drawings.length > 0 && <ul className="mt-4 divide-y divide-border">
               {drawings.map((file, i) => <li key={`${file.name}-${file.size}-${i}`} className="flex items-center gap-3 py-3">
                 <FileText className="h-5 w-5 shrink-0 text-muted-foreground" />

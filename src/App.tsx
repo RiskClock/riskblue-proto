@@ -31,6 +31,7 @@ const SharePointConnect = lazyWithRetry(() => import("./pages/SharePointConnect"
 const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword"));
 const ExternalAuthCallback = lazyWithRetry(() => import("./pages/ExternalAuthCallback"));
 const AccountSettings = lazyWithRetry(() => import("./pages/AccountSettings"));
+const AutodeskConnectDone = lazyWithRetry(() => import("./pages/AutodeskConnectDone"));
 const SetupAccount = lazyWithRetry(() => import("./pages/SetupAccount"));
 const InternalWorkbench = lazyWithRetry(routeLoaders.workbench);
 const WorkbenchProjectDetail = lazyWithRetry(() => import("./pages/WorkbenchProjectDetail"));
@@ -126,6 +127,7 @@ const App = () => (
             <Route path="/oauth/callback" element={<OAuthCallback />} />
             <Route path="/connect/google-drive" element={<GoogleDriveConnect />} />
             <Route path="/connect/procore" element={<ProcoreConnect />} />
+            <Route path="/connect/autodesk/done" element={<AutodeskConnectDone />} />
             <Route path="/connect/sharepoint" element={<SharePointConnect />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/setup-account" element={<SetupAccount />} />

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { IMPORT_PROJECT_STATUS_LABEL } from "@/lib/cloudImport";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,7 +25,7 @@ import { extractionScopeLabel, ownershipIntentLabel } from "@/lib/developerIntak
 import { DeveloperWelcomeSteps } from "@/components/developer/DeveloperWelcomeSteps";
 import { developerListStatus } from "@/lib/developerProgress";
 
-const PROJECT_STATUS_LABEL: Record<string, string> = { waiting_drawings: "Waiting for Drawings", processing: "Processing", processed: "Processed", receiving_bids: "Receiving Bids" };
+const PROJECT_STATUS_LABEL: Record<string, string> = { waiting_drawings: "Waiting for Drawings", processing: "Processing", processed: "Processed", receiving_bids: "Receiving Bids", ...IMPORT_PROJECT_STATUS_LABEL };
 const PROTECTION_LABEL: Record<string, string> = { high: "Essential", medium: "Balanced", low: "Comprehensive" };
 
 interface Project {
@@ -320,8 +321,10 @@ const Projects = () => {
                       {(() => {
                         const s = project.workbench_status || "processing";
                         const cls =
-                          s === "processed"
+                          s === "processed" || s === "ready_for_analysis"
                             ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                            : s === "import_failed"
+                            ? "bg-destructive/10 text-destructive border-destructive/30"
                             : s === "waiting_drawings"
                             ? "bg-muted text-muted-foreground border-border"
                             : "bg-amber-100 text-amber-800 border-amber-300";

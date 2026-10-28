@@ -439,12 +439,17 @@ export type Database = {
           error_message: string | null
           file_count: number | null
           id: string
+          import_attempts: number
+          import_claimed_at: string | null
+          import_next_attempt_at: string | null
+          import_status: string | null
           pipeline_phase: string | null
           pipeline_phase_override: string | null
           pipeline_progress_done: number
           pipeline_progress_total: number
           pipeline_stop_requested: boolean
           project_id: string
+          requested_files: Json | null
           sheet_normalization_enabled: boolean
           source_type: string
           space_hierarchy_error: string | null
@@ -471,12 +476,17 @@ export type Database = {
           error_message?: string | null
           file_count?: number | null
           id?: string
+          import_attempts?: number
+          import_claimed_at?: string | null
+          import_next_attempt_at?: string | null
+          import_status?: string | null
           pipeline_phase?: string | null
           pipeline_phase_override?: string | null
           pipeline_progress_done?: number
           pipeline_progress_total?: number
           pipeline_stop_requested?: boolean
           project_id: string
+          requested_files?: Json | null
           sheet_normalization_enabled?: boolean
           source_type?: string
           space_hierarchy_error?: string | null
@@ -503,12 +513,17 @@ export type Database = {
           error_message?: string | null
           file_count?: number | null
           id?: string
+          import_attempts?: number
+          import_claimed_at?: string | null
+          import_next_attempt_at?: string | null
+          import_status?: string | null
           pipeline_phase?: string | null
           pipeline_phase_override?: string | null
           pipeline_progress_done?: number
           pipeline_progress_total?: number
           pipeline_stop_requested?: boolean
           project_id?: string
+          requested_files?: Json | null
           sheet_normalization_enabled?: boolean
           source_type?: string
           space_hierarchy_error?: string | null
@@ -1498,6 +1513,7 @@ export type Database = {
           created_at: string
           mode: string
           provider: string
+          return_path: string | null
           state: string
           user_id: string | null
         }
@@ -1507,6 +1523,7 @@ export type Database = {
           created_at?: string
           mode: string
           provider: string
+          return_path?: string | null
           state: string
           user_id?: string | null
         }
@@ -1516,6 +1533,7 @@ export type Database = {
           created_at?: string
           mode?: string
           provider?: string
+          return_path?: string | null
           state?: string
           user_id?: string | null
         }
@@ -3367,6 +3385,36 @@ export type Database = {
           },
         ]
       }
+      user_autodesk_tokens: {
+        Row: {
+          autodesk_email: string | null
+          created_at: string
+          encrypted_access_token: string
+          encrypted_refresh_token: string | null
+          token_expiry: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          autodesk_email?: string | null
+          created_at?: string
+          encrypted_access_token: string
+          encrypted_refresh_token?: string | null
+          token_expiry?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          autodesk_email?: string | null
+          created_at?: string
+          encrypted_access_token?: string
+          encrypted_refresh_token?: string | null
+          token_expiry?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_drive_tokens: {
         Row: {
           access_token: string
@@ -3821,6 +3869,52 @@ export type Database = {
       can_manage_tenant_controls: {
         Args: { _tenant_id: string; _user_id: string }
         Returns: boolean
+      }
+      claim_cloud_imports: {
+        Args: { p_batch?: number }
+        Returns: {
+          analysis_run_id: string | null
+          analyze_model: string | null
+          analyze_tokens_used: number | null
+          created_at: string
+          disabled_awp_classes: string[]
+          drive_folder_id: string | null
+          error_message: string | null
+          file_count: number | null
+          id: string
+          import_attempts: number
+          import_claimed_at: string | null
+          import_next_attempt_at: string | null
+          import_status: string | null
+          pipeline_phase: string | null
+          pipeline_phase_override: string | null
+          pipeline_progress_done: number
+          pipeline_progress_total: number
+          pipeline_stop_requested: boolean
+          project_id: string
+          requested_files: Json | null
+          sheet_normalization_enabled: boolean
+          source_type: string
+          space_hierarchy_error: string | null
+          space_hierarchy_json: Json | null
+          space_hierarchy_status: string | null
+          space_hierarchy_updated_at: string | null
+          started_at: string | null
+          status: string
+          storage_path: string | null
+          summary_data: Json | null
+          total_size_bytes: number | null
+          triage_model: string | null
+          triage_tokens_used: number | null
+          updated_at: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "analysis_requests"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       claim_next_analysis_jobs: {
         Args: { p_batch_size?: number; p_worker_id: string }

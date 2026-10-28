@@ -29,4 +29,11 @@ describe("developer progress", () => {
   test("processed projects with vendors move to bidding", () => {
     expect(developerProgress(true, "processed", 3)).toEqual({ currentStep: 3, waiting: false });
   });
+  test("importing drawings keeps the project at analysis, not bids", () => {
+    expect(developerProgress(true, "importing_drawings", 3)).toEqual({ currentStep: 1, waiting: false });
+    expect(developerListStatus("importing_drawings", true)).toBe("importing_drawings");
+  });
+  test("ready for analysis does not skip analysis", () => {
+    expect(developerProgress(true, "ready_for_analysis", 3)).toEqual({ currentStep: 1, waiting: false });
+  });
 });

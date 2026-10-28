@@ -25,6 +25,9 @@ import { BuyCreditsModal } from "@/components/BuyCreditsModal";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import { useTenant } from "@/contexts/TenantContext";
 import { CURRENCY_OPTIONS, normalizeCurrencyCode, type CurrencyCode } from "@/lib/currency";
+import { CloudDrawingPicker } from "@/components/cloud/CloudDrawingPicker";
+import { CloudProviderButton, CloudProviderLogo } from "@/components/cloud/CloudProviderButton";
+import { CLOUD_PROVIDER_LABEL, mergeSelection, queueCloudImports, removeCloudFile, type CloudProvider, type CloudSelection } from "@/lib/cloudImport";
 
 interface CreateProjectModalProps {
   open: boolean;
@@ -172,6 +175,8 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
   const [activeIdentifyTab, setActiveIdentifyTab] = useState<IdentifyTab>("water_systems");
   const [currencyCode, setCurrencyCode] = useState<CurrencyCode>(normalizeCurrencyCode(tenant?.default_currency));
   const [files, setFiles] = useState<File[]>([]);
+  const [cloudPicks, setCloudPicks] = useState<CloudSelection[]>([]);
+  const [pickerProvider, setPickerProvider] = useState<CloudProvider | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showBuyCredits, setShowBuyCredits] = useState(false);
   const [expandedClasses, setExpandedClasses] = useState<Set<string>>(new Set());
@@ -188,6 +193,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
       setActiveIdentifyTab("water_systems");
       setCurrencyCode(normalizeCurrencyCode(tenant?.default_currency));
       setFiles([]);
+      setCloudPicks([]);
       setSubmitting(false);
       setExpandedClasses(new Set(["Kitchen Equipment", "Washroom Fixtures", "Laundry Equipment"]));
       setSubtypesByClass({});
@@ -319,7 +325,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
     !contact &&
     cost != null &&
     hasAnyClass &&
-    files.length > 0 &&
+    (files.length > 0 || cloudPicks.length > 0) &&
     protectionPhase.size > 0 &&
     !submitting;
 
@@ -484,6 +490,11 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
         })();
       }
 
+      if (cloudPicks.length > 0) {
+        await queueCloudImports(project.id, user.id, cloudPicks);
+        await supabase.from("projects").update({ workbench_status: "importing_drawings" } as any).eq("id", project.id);
+      }
+
       toast({
         title: "Project created",
         description: `"${projectName}" was created and ${cost} credit${cost === 1 ? "" : "s"} consumed.`,
@@ -561,16 +572,45 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
                 Drawings <span className="text-destructive">*</span>
               </Label>
               <div className="pt-1">
+              <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => fileInputRef.current?.click()}
                   type="button"
+                  className="gap-2"
                 >
-                  <Upload className="w-4 h-4 mr-1" />
-                  Upload from Computer
+                  <Upload className="w-4 h-4" />
+                  Upload drawings
                 </Button>
+                <CloudProviderButton provider="forma" size="sm" onClick={() => setPickerProvider("forma")} />
+                <CloudProviderButton provider="procore" size="sm" onClick={() => setPickerProvider("procore")} />
               </div>
+              </div>
+              {pickerProvider && (
+                <CloudDrawingPicker
+                  provider={pickerProvider}
+                  open={!!pickerProvider}
+                  onOpenChange={(o) => !o && setPickerProvider(null)}
+                  onConfirm={(sel) => setCloudPicks((cur) => mergeSelection(cur, sel))}
+                />
+              )}
+              {cloudPicks.length > 0 && (
+                <div className="border rounded-md p-2 space-y-1 max-h-40 overflow-y-auto">
+                  {cloudPicks.flatMap((sel) => sel.files.map((f) => (
+                    <div key={`${sel.provider}-${f.id}`} className="flex items-center justify-between text-sm px-2 py-1 bg-muted/50 rounded">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <CloudProviderLogo provider={sel.provider} className="w-3.5 h-3.5" />
+                        <span className="truncate">{f.name}</span>
+                        <span className="text-muted-foreground text-xs shrink-0">{CLOUD_PROVIDER_LABEL[sel.provider]}</span>
+                      </div>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0" type="button" aria-label={`Remove ${f.name}`} onClick={() => setCloudPicks((cur) => removeCloudFile(cur, sel.provider, f.id))}>
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  )))}
+                </div>
+              )}
               <input
                 ref={fileInputRef}
                 type="file"

@@ -177,6 +177,9 @@ const CREATOR_TYPE_OPTIONS = [
 ];
 
 const WB_STATUS_OPTIONS = [
+  { value: "importing_drawings", label: "Importing Drawings" },
+  { value: "ready_for_analysis", label: "Ready for Analysis" },
+  { value: "import_failed", label: "Import Failed" },
   { value: "processing", label: "Processing" },
   { value: "processed", label: "Processed" },
 ];

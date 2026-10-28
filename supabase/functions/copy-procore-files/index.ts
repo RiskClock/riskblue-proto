@@ -1,9 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { finalizeImport, isInternalCall, markImporting, requestedFiles, safeRelativePath } from "../_shared/cloudImport.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-invocation",
 };
 
 const PROCORE_API_BASE = "https://sandbox.procore.com/rest/v1.0";
@@ -330,10 +331,14 @@ async function copyFiles(
     // List all files recursively, scoped to folder if specified
     const scopeLabel = scopedFolderId ? `folder ${scopedFolderId}` : "root";
     console.log(`Listing Procore files for company ${companyId}, project ${procoreProjectId}, scope: ${scopeLabel}`);
-    const files = await listProcoreFilesRecursively(
-      companyId, procoreProjectId, accessToken,
-      scopedFolderId || undefined
-    );
+    if (request.import_status) await markImporting(supabase, request.project_id);
+    const picked = requestedFiles(request);
+    const files = picked
+      ? picked.map((f) => ({ file: { id: Number(f.id), name: f.name, size: f.size ?? undefined } as ProcoreFile, relativePath: safeRelativePath(f.path || f.name) }))
+      : await listProcoreFilesRecursively(
+          companyId, procoreProjectId, accessToken,
+          scopedFolderId || undefined
+        );
     console.log(`Found ${files.length} files to copy`);
 
     // Insert file records - infer MIME from filename for files Procore tags as octet-stream
@@ -347,10 +352,19 @@ async function copyFiles(
       copy_status: "pending",
     }));
 
-    if (fileRecords.length > 0) {
+    // Retries keep already-copied files and replace unfinished records.
+    const { data: existingRows } = await supabase
+      .from("analysis_request_files")
+      .select("drive_file_id, copy_status, size_bytes")
+      .eq("analysis_request_id", analysisRequestId);
+    const alreadyCopied = new Set((existingRows ?? []).filter((r: any) => r.copy_status === "copied").map((r: any) => r.drive_file_id));
+    await supabase.from("analysis_request_files").delete().eq("analysis_request_id", analysisRequestId).neq("copy_status", "copied");
+    const pendingRecords = fileRecords.filter((r) => !alreadyCopied.has(r.drive_file_id));
+
+    if (pendingRecords.length > 0) {
       const { error: insertError } = await supabase
         .from("analysis_request_files")
-        .insert(fileRecords);
+        .insert(pendingRecords);
 
       if (insertError) {
         throw new Error(`Failed to insert file records: ${insertError.message}`);
@@ -368,10 +382,11 @@ async function copyFiles(
       .eq("id", analysisRequestId);
 
     // Copy each file to storage
-    let copiedCount = 0;
+    let copiedCount = alreadyCopied.size;
     let totalSize = 0;
 
     for (const { file, relativePath } of files) {
+      if (alreadyCopied.has(`procore:${file.id}`)) continue;
       try {
         console.log(`Copying: ${relativePath}`);
         const blob = await downloadProcoreFile(file.id, companyId, procoreProjectId, accessToken);
@@ -410,39 +425,31 @@ async function copyFiles(
       }
     }
 
-    const finalStatus = files.length === 0 ? "copied" : (copiedCount === files.length ? "copied" : "failed");
-    await supabase
-      .from("analysis_requests")
-      .update({
-        status: finalStatus,
-        total_size_bytes: totalSize,
-        error_message: finalStatus === "failed" ? `Copied ${copiedCount}/${files.length} files` : null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", analysisRequestId);
-
-    console.log(`Completed copying ${copiedCount}/${files.length} Procore files`);
-
-    // Auto-trigger split phase (bounded - no downstream agents).
-    if (copiedCount > 0) {
-      try {
-        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-        const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-        await fetch(`${supabaseUrl}/functions/v1/run-analysis-pipeline`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${serviceKey}`,
-            apikey: serviceKey,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ analysisRequestId, phaseOverride: "split" }),
-        });
-      } catch (e) {
-        console.error("[copy-procore-files] auto-split kickoff failed:", e);
-      }
+    if (request.import_status) {
+      await supabase.from("analysis_requests").update({ total_size_bytes: totalSize }).eq("id", analysisRequestId);
+      await finalizeImport(supabase, request, { copied: copiedCount, total: files.length });
+    } else {
+      const finalStatus = files.length === 0 ? "copied" : (copiedCount === files.length ? "copied" : "failed");
+      await supabase
+        .from("analysis_requests")
+        .update({
+          status: finalStatus,
+          total_size_bytes: totalSize,
+          error_message: finalStatus === "failed" ? `Copied ${copiedCount}/${files.length} files` : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", analysisRequestId);
     }
+
+    // Importing never starts analysis; users start it when ready.
+    console.log(`Completed copying ${copiedCount}/${files.length} Procore files`);
   } catch (error) {
     console.error("Copy error:", error);
+    const { data: reqRow } = await supabase.from("analysis_requests").select("id, project_id, import_status, import_attempts").eq("id", analysisRequestId).maybeSingle();
+    if (reqRow?.import_status) {
+      await finalizeImport(supabase, reqRow as any, { copied: 0, total: 1, error: error instanceof Error ? error.message : "Unknown error" });
+      return;
+    }
     await supabase
       .from("analysis_requests")
       .update({
@@ -460,6 +467,12 @@ serve(async (req) => {
   }
 
   try {
+    if (isInternalCall(req)) {
+      const { analysisRequestId } = await req.json();
+      if (!analysisRequestId) return new Response(JSON.stringify({ error: "analysisRequestId is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      await copyFiles(analysisRequestId, Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(

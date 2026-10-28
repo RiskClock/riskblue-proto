@@ -6,7 +6,7 @@ export async function saveDeveloperProject(client: SupabaseClient<Database>, inp
   projectId: string; requestId: string; userId: string; tenantId: string | null;
   name: string; address: string; city?: string | null; region?: string | null;
   details: Record<string, unknown>; image: File | null; drawings: File[];
-  protectionPhase?: string[]; workbenchStatus?: "waiting_drawings" | "processing" | "processed";
+  protectionPhase?: string[]; workbenchStatus?: "waiting_drawings" | "processing" | "processed" | "importing_drawings";
   existingImagePath?: string | null; isUpdate?: boolean;
 }) {
   const check = (error: unknown) => { if (error) throw error; };
