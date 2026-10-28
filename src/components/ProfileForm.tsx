@@ -1,14 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,10 +9,6 @@ import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import { Upload, Trash2 } from "lucide-react";
 
-interface EditProfileModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}
 
 const splitName = (full: string | null | undefined): { first: string; last: string } => {
   const trimmed = (full ?? "").trim();
@@ -29,7 +17,7 @@ const splitName = (full: string | null | undefined): { first: string; last: stri
   return { first: parts[0], last: parts.slice(1).join(" ") };
 };
 
-export const EditProfileModal = ({ open, onOpenChange }: EditProfileModalProps) => {
+export const ProfileForm = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -42,7 +30,7 @@ export const EditProfileModal = ({ open, onOpenChange }: EditProfileModalProps) 
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!open || !user?.id) return;
+    if (!user?.id) return;
     setLoading(true);
     supabase
       .from("profiles")
@@ -56,7 +44,7 @@ export const EditProfileModal = ({ open, onOpenChange }: EditProfileModalProps) 
         setAvatarUrl(data?.avatar_url ?? null);
         setLoading(false);
       });
-  }, [open, user?.id]);
+  }, [user?.id]);
 
   const initial = (
     ((firstName?.[0] ?? "") + (lastName?.[0] ?? "")) ||
@@ -127,7 +115,6 @@ export const EditProfileModal = ({ open, onOpenChange }: EditProfileModalProps) 
       if (error) throw error;
 
       toast({ title: "Profile updated" });
-      onOpenChange(false);
     } catch (error) {
       toast({
         title: "Error",
@@ -140,12 +127,7 @@ export const EditProfileModal = ({ open, onOpenChange }: EditProfileModalProps) 
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Edit Profile</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-5 rounded-lg border border-border p-5">
           <div className="flex items-center gap-4">
             <Avatar className="h-20 w-20">
               {avatarUrl && <AvatarImage src={avatarUrl} alt="Profile photo" />}
@@ -218,21 +200,11 @@ export const EditProfileModal = ({ open, onOpenChange }: EditProfileModalProps) 
             </p>
           </div>
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
+          <div className="flex justify-end">
             <Button type="submit" disabled={saving || uploading || loading}>
               {saving ? "Saving..." : "Save changes"}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
-      </DialogContent>
-    </Dialog>
   );
 };

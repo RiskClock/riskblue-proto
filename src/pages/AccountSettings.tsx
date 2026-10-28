@@ -5,7 +5,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Mail, Link2, Unlink } from "lucide-react";
+import { Mail, Unlink } from "lucide-react";
+import { AppHeader } from "@/components/AppHeader";
+import { ProfileForm } from "@/components/ProfileForm";
+import { PROVIDER_LOGOS } from "@/lib/providerLogos";
 import { EXTERNAL_PROVIDERS, startExternalAuth, unlinkExternalAuth, type ExternalProvider } from "@/lib/externalAuth";
 
 const AccountSettings = () => {
@@ -62,14 +65,15 @@ const AccountSettings = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <AppHeader title="Account Settings" />
       <div className="max-w-2xl mx-auto px-6 py-10 space-y-8">
-        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-4 w-4" /> Back
-        </button>
-        <div>
-          <h1 className="text-3xl font-serif font-bold text-foreground">Account Settings</h1>
-          <p className="text-muted-foreground mt-1">{user?.email}</p>
-        </div>
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Profile</h2>
+            <p className="text-sm text-muted-foreground">Your name and photo as shown to collaborators.</p>
+          </div>
+          <ProfileForm />
+        </section>
 
         <section className="space-y-4">
           <div>
@@ -93,7 +97,7 @@ const AccountSettings = () => {
               return (
                 <div key={id} className="flex items-center justify-between p-4">
                   <div className="flex items-center gap-3">
-                    <Link2 className="h-5 w-5 text-muted-foreground" />
+                    <img src={PROVIDER_LOGOS[id]} alt="" aria-hidden="true" className="h-5 w-5 object-contain" />
                     <div>
                       <div className="font-medium text-foreground">{label}</div>
                       <div className="text-sm text-muted-foreground">{linked ? `Linked${linked.email ? ` as ${linked.email}` : ""}` : "Not linked"}</div>

@@ -25,7 +25,6 @@ import { preloadRoute, preloadRoutes, type RouteKey } from "@/lib/routePreload";
 import { useCredits } from "@/hooks/useCredits";
 import { BuyCreditsModal } from "@/components/BuyCreditsModal";
 import { ChangePasswordModal } from "@/components/ChangePasswordModal";
-import { EditProfileModal } from "@/components/EditProfileModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { isPaymentsTestMode } from "@/lib/stripe";
@@ -53,7 +52,6 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
   const [switchCompanyOpen, setSwitchCompanyOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
-  const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const updateAvailable = useUpdateAvailable();
@@ -191,12 +189,8 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
                   <DropdownMenuSeparator />
                 </>
               )}
-              <DropdownMenuItem onClick={() => runAfterMenuCloses(() => setEditProfileOpen(true))} className="cursor-pointer">
-                <UserCog className="h-4 w-4 mr-2" />
-                Edit Profile
-              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => runAfterMenuCloses(() => navigate("/account"))} className="cursor-pointer">
-                <Settings className="h-4 w-4 mr-2" />
+                <UserCog className="h-4 w-4 mr-2" />
                 Account Settings
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => runAfterMenuCloses(() => setChangePasswordOpen(true))} className="cursor-pointer">
@@ -282,7 +276,6 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
         />
       )}
       <ChangePasswordModal open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
-      <EditProfileModal open={editProfileOpen} onOpenChange={setEditProfileOpen} />
       {infoContent && (
         <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
           <DialogContent>
