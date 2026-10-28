@@ -1,5 +1,6 @@
 # Roadmap
 
+- [ ] Enable Procore verified-email auto-linking with Autodesk-equivalent safeguards; first establish trustworthy provider email-verification evidence.
 - [x] Allow Autodesk auto-linking only with provider-verified email ownership; six account-matching tests pass and function deployed. Full provider sign-in awaits the user's provider session.
 - [x] Check Procore sign-in after the registered callback update; reaches Procore sandbox sign-in without redirect rejection. Full provider sign-in awaits the user's provider session.
 
