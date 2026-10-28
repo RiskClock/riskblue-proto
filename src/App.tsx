@@ -29,6 +29,8 @@ const GoogleDriveConnect = lazyWithRetry(() => import("./pages/GoogleDriveConnec
 const ProcoreConnect = lazyWithRetry(() => import("./pages/ProcoreConnect"));
 const SharePointConnect = lazyWithRetry(() => import("./pages/SharePointConnect"));
 const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword"));
+const ExternalAuthCallback = lazyWithRetry(() => import("./pages/ExternalAuthCallback"));
+const AccountSettings = lazyWithRetry(() => import("./pages/AccountSettings"));
 const SetupAccount = lazyWithRetry(() => import("./pages/SetupAccount"));
 const InternalWorkbench = lazyWithRetry(routeLoaders.workbench);
 const WorkbenchProjectDetail = lazyWithRetry(() => import("./pages/WorkbenchProjectDetail"));
@@ -85,6 +87,8 @@ const App = () => (
             <Suspense fallback={<FullScreenLoader />}>
             <Routes>
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
+            <Route path="/auth/external" element={<ExternalAuthCallback />} />
+            <Route path="/account" element={<ProtectedRoute><AccountSettings /></ProtectedRoute>} />
             <Route path="/projects" element={<ProtectedRoute><RootRedirect fallback={<Projects />} /></ProtectedRoute>} />
             <Route path="/developer/new-project" element={<ProtectedRoute><DeveloperNewProject /></ProtectedRoute>} />
             <Route path="/developer/project/:id" element={<ProtectedRoute><DeveloperNewProject /></ProtectedRoute>} />

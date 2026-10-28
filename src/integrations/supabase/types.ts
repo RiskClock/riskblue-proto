@@ -1491,6 +1491,36 @@ export type Database = {
         }
         Relationships: []
       }
+      external_auth_states: {
+        Row: {
+          app_origin: string
+          code_verifier: string | null
+          created_at: string
+          mode: string
+          provider: string
+          state: string
+          user_id: string | null
+        }
+        Insert: {
+          app_origin: string
+          code_verifier?: string | null
+          created_at?: string
+          mode: string
+          provider: string
+          state: string
+          user_id?: string | null
+        }
+        Update: {
+          app_origin?: string
+          code_verifier?: string | null
+          created_at?: string
+          mode?: string
+          provider?: string
+          state?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       mitigation_controls: {
         Row: {
           action: string
@@ -3330,6 +3360,33 @@ export type Database = {
           refresh_token?: string | null
           token_expiry?: string | null
           updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_external_identities: {
+        Row: {
+          email: string | null
+          id: string
+          linked_at: string
+          provider: string
+          provider_user_id: string
+          user_id: string
+        }
+        Insert: {
+          email?: string | null
+          id?: string
+          linked_at?: string
+          provider: string
+          provider_user_id: string
+          user_id: string
+        }
+        Update: {
+          email?: string | null
+          id?: string
+          linked_at?: string
+          provider?: string
+          provider_user_id?: string
           user_id?: string
         }
         Relationships: []

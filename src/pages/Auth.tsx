@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { signInSchema } from "@/lib/validation";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
+import { EXTERNAL_PROVIDERS, startExternalAuth, type ExternalProvider } from "@/lib/externalAuth";
 import {
   Dialog,
   DialogContent,
@@ -51,6 +52,16 @@ const Auth = () => {
   const { signIn, user, loading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [externalBusy, setExternalBusy] = useState<ExternalProvider | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const err = params.get("external_error");
+    if (err) {
+      toast({ title: "Could not sign in", description: err, variant: "destructive" });
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, [toast]);
 
   // One-time warning if AuthContext forced a sign-out due to a session swap.
   useEffect(() => {
@@ -334,11 +345,8 @@ const Auth = () => {
             <Button type="submit" className="w-full">Log In</Button>
           </form>
 
-          <div className="mt-8 pt-6 border-t border-border text-center space-y-2">
+          <div className="mt-8 text-center space-y-2">
             <p className="text-sm font-medium text-foreground">Don't have an account?</p>
-            <p className="text-sm text-muted-foreground">
-              RiskBlue is available by invitation for approved organizations.
-            </p>
             <button
               type="button"
               onClick={() => setShowRequestModal(true)}
@@ -346,6 +354,29 @@ const Auth = () => {
             >
               Request Access
             </button>
+          </div>
+
+          <div className="space-y-3">
+            {EXTERNAL_PROVIDERS.map(({ id, label }) => (
+              <Button
+                key={id}
+                type="button"
+                variant="outline"
+                className="w-full"
+                disabled={externalBusy !== null}
+                onClick={async () => {
+                  setExternalBusy(id);
+                  try {
+                    await startExternalAuth(id, "login");
+                  } catch (e) {
+                    toast({ title: `Could not continue with ${label}`, description: (e as Error).message, variant: "destructive" });
+                    setExternalBusy(null);
+                  }
+                }}
+              >
+                Continue with {label}
+              </Button>
+            ))}
           </div>
         </div>
       </div>
