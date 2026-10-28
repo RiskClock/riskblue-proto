@@ -28,7 +28,6 @@ import { RiskTimelineChart3D } from "@/components/wizard/RiskTimelineChart3D";
 import { useRiskTimelineData } from "@/hooks/useRiskTimelineData";
 import { AWPEditModal } from "@/components/wizard/AWPEditModal";
 import { RepositoryConnectionDialog } from "@/components/wizard/RepositoryConnectionDialog";
-import { ProcoreConnectionDialog } from "@/components/wizard/ProcoreConnectionDialog";
 import { MitigationResponsePlanStep } from "@/components/wizard/MitigationResponsePlanStep";
 import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigationGuidelinesStep";
 import { ProcoreExportDialog } from "@/components/wizard/ProcoreExportDialog";

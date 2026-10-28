@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { IMPORT_PROJECT_STATUS_LABEL } from "@/lib/cloudImport";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { workbenchBackPath } from "@/lib/workbenchNavigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -4616,6 +4617,9 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="importing_drawings">Importing Drawings</SelectItem>
+                    <SelectItem value="ready_for_analysis">Ready for Analysis</SelectItem>
+                    <SelectItem value="import_failed">Import Failed</SelectItem>
                     <SelectItem value="processing">Processing</SelectItem>
                     <SelectItem value="processed">Processed</SelectItem>
                   </SelectContent>
@@ -4629,7 +4633,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                       : "bg-amber-100 text-amber-800 border-amber-300";
                   return (
                     <Badge variant="outline" className={cls}>
-                      {s === "processed" ? "Processed" : "Processing"}
+                      {s === "processed" ? "Processed" : IMPORT_PROJECT_STATUS_LABEL[s] ?? "Processing"}
                     </Badge>
                   );
                 })()
