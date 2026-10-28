@@ -1521,6 +1521,51 @@ export type Database = {
         }
         Relationships: []
       }
+      external_link_confirmations: {
+        Row: {
+          app_origin: string
+          created_at: string
+          email: string
+          encrypted_access_token: string
+          encrypted_refresh_token: string | null
+          expires_at: string
+          id: string
+          provider: string
+          provider_user_id: string
+          token_expiry: string
+          token_hash: string
+          user_id: string
+        }
+        Insert: {
+          app_origin: string
+          created_at?: string
+          email: string
+          encrypted_access_token: string
+          encrypted_refresh_token?: string | null
+          expires_at?: string
+          id?: string
+          provider: string
+          provider_user_id: string
+          token_expiry: string
+          token_hash: string
+          user_id: string
+        }
+        Update: {
+          app_origin?: string
+          created_at?: string
+          email?: string
+          encrypted_access_token?: string
+          encrypted_refresh_token?: string | null
+          expires_at?: string
+          id?: string
+          provider?: string
+          provider_user_id?: string
+          token_expiry?: string
+          token_hash?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       mitigation_controls: {
         Row: {
           action: string
