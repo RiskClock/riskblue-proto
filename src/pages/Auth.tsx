@@ -58,6 +58,11 @@ const Auth = () => {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const err = params.get("external_error");
+    const notice = params.get("external_notice");
+    if (notice) {
+      toast({ title: "Confirm Procore by email", description: notice, duration: 15000 });
+      window.history.replaceState(null, "", window.location.pathname);
+    }
     if (err) {
       toast({ title: "Could not sign in", description: err, variant: "destructive" });
       window.history.replaceState(null, "", window.location.pathname);
