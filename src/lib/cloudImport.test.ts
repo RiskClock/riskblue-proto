@@ -1,7 +1,5 @@
-import { describe, expect, test, mock } from "bun:test";
-
-mock.module("@/integrations/supabase/client", () => ({ supabase: {} }));
-const { isDrawingFile, mergeSelection, removeCloudFile, IMPORT_PROJECT_STATUS_LABEL } = await import("./cloudImport");
+import { describe, expect, test } from "bun:test";
+import { isDrawingFile, mergeSelection, removeCloudFile, IMPORT_PROJECT_STATUS_LABEL } from "./cloudImportRules";
 
 describe("cloud drawing import", () => {
   test("only drawing file types can be picked", () => {
@@ -13,7 +11,7 @@ describe("cloud drawing import", () => {
     const a = { provider: "forma" as const, containerId: "h", projectId: "p", files: [{ id: "1", name: "a.pdf" }] };
     const b = { ...a, files: [{ id: "1", name: "a.pdf" }, { id: "2", name: "b.pdf" }] };
     const out = mergeSelection([a], b);
-    expect(out).toHaveLength(1);
+    expect(out.length).toBe(1);
     expect(out[0].files.map((f) => f.id)).toEqual(["1", "2"]);
   });
   test("removing the last file drops the selection", () => {
