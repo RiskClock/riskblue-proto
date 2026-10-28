@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { findAutodeskAccount } from "./accountLinking.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -64,7 +65,8 @@ async function sha256(s: string) {
 }
 
 async function encryptToken(plaintext: string, keyHex: string) {
-  const keyBytes = new Uint8Array(keyHex.match(/.{1,2}/g)!.map((b) => parseInt(b, 16)));
+  if (!/^[a-fA-F0-9]{64}$/.test(keyHex)) throw new Error("Invalid encryption key");
+  const keyBytes = new Uint8Array((keyHex.match(/.{1,2}/g) ?? []).map((b) => parseInt(b, 16)));
   const key = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["encrypt"]);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(plaintext)));
@@ -89,12 +91,18 @@ async function fetchIdentity(provider: Provider, accessToken: string) {
     });
     if (!r.ok) throw new Error("Could not read Autodesk profile");
     const d = await r.json();
-    return { id: String(d.sub), email: (d.email as string | undefined)?.toLowerCase() ?? null, name: d.name ?? null };
+    if (typeof d.sub !== "string" || !d.sub) throw new Error("Invalid Autodesk identity");
+    return {
+      id: d.sub,
+      email: typeof d.email === "string" ? d.email.trim().toLowerCase() : null,
+      emailVerified: d.email_verified === true,
+      name: d.name ?? null,
+    };
   }
   const r = await fetch(`${PROCORE_BASE}/rest/v1.0/me`, { headers: { Authorization: `Bearer ${accessToken}` } });
   if (!r.ok) throw new Error("Could not read Procore profile");
   const d = await r.json();
-  return { id: String(d.id), email: ((d.login || d.email_address) as string | undefined)?.toLowerCase() ?? null, name: d.name ?? null };
+  return { id: String(d.id), email: ((d.login || d.email_address) as string | undefined)?.toLowerCase() ?? null, emailVerified: false, name: d.name ?? null };
 }
 
 async function saveProcoreTokens(userId: string, tok: any, email: string | null) {
@@ -221,12 +229,13 @@ Deno.serve(async (req) => {
       }
 
       const ident = await fetchIdentity(provider, tok.access_token);
-      const { data: existing } = await admin
+      const { data: existing, error: identityError } = await admin
         .from("user_external_identities")
         .select("user_id")
         .eq("provider", provider)
         .eq("provider_user_id", ident.id)
         .maybeSingle();
+      if (identityError) throw identityError;
 
       // ----- Link mode: bind to the signed-in RiskBlue account only -----
       if (st.mode === "link") {
@@ -252,23 +261,32 @@ Deno.serve(async (req) => {
         email = data.user?.email ?? null;
       } else {
         if (!ident.email) return fail(`Your ${label} account has no email address.`);
-        const { data: created, error } = await admin.auth.admin.createUser({
-          email: ident.email,
-          email_confirm: true,
-          user_metadata: { full_name: ident.name ?? undefined, signup_method: provider },
+        const matched = await findAutodeskAccount(provider, ident, async (page) => {
+          const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+          if (error) throw error;
+          return data.users;
         });
-        if (error || !created.user) {
-          // Never auto-link on matching email: the owner must prove access first.
-          return fail(
-            `This email already has a RiskBlue account. Sign in with your email and password, then link ${label} in Account Settings.`,
-          );
+        if (matched) {
+          userId = matched.id;
+          email = matched.email ?? null;
+        } else {
+          const { data: created, error } = await admin.auth.admin.createUser({
+            email: ident.email,
+            email_confirm: true,
+            user_metadata: { full_name: ident.name ?? undefined, signup_method: provider },
+          });
+          if (error || !created.user) {
+            return fail(
+              `This email already has a RiskBlue account. ${provider === "autodesk" && !ident.emailVerified ? "Autodesk did not verify email ownership. " : ""}Sign in with your email and password, then link ${label} in Account Settings.`,
+            );
+          }
+          userId = created.user.id;
+          email = ident.email;
         }
-        userId = created.user.id;
-        email = ident.email;
         const { error: linkErr } = await admin.from("user_external_identities").insert({
           user_id: userId, provider, provider_user_id: ident.id, email: ident.email,
         });
-        if (linkErr) throw linkErr;
+        if (linkErr) return fail(`This account already has a ${label} login linked. Sign in using its existing login method.`);
       }
       if (!email) return fail("Could not sign you in.");
       if (provider === "procore") await saveProcoreTokens(userId, tok, ident.email);
