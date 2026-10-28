@@ -158,15 +158,17 @@ Deno.serve(async (req) => {
     if (action === "start" && req.method === "POST") {
       const body = await req.json().catch(() => ({}));
       const provider = body.provider as Provider;
-      const mode = body.mode as "login" | "link";
+      const mode = body.mode as "login" | "link" | "files";
       const appOrigin = String(body.appOrigin ?? "");
-      if (!(provider in PROVIDERS) || !["login", "link"].includes(mode)) return json({ error: "Invalid request" }, 400);
+      const returnPath = typeof body.returnPath === "string" && /^\/[A-Za-z0-9/_\-?=&.%]*$/.test(body.returnPath) && !body.returnPath.startsWith("//") ? body.returnPath : "/account";
+      if (!(provider in PROVIDERS) || !["login", "link", "files"].includes(mode)) return json({ error: "Invalid request" }, 400);
+      if (mode === "files" && provider !== "autodesk") return json({ error: "Invalid request" }, 400);
       if (!allowedOrigin(appOrigin)) return json({ error: "Origin not allowed" }, 400);
       const cfg = PROVIDERS[provider];
       if (!cfg.clientId()) return json({ error: `${PROVIDER_LABEL[provider]} sign-in is not configured yet` }, 503);
 
       let userId: string | null = null;
-      if (mode === "link") {
+      if (mode === "link" || mode === "files") {
         const user = await getUser(req);
         if (!user) return json({ error: "Sign in first to link an account" }, 401);
         userId = user.id;
@@ -179,6 +181,7 @@ Deno.serve(async (req) => {
       const verifier = provider === "autodesk" ? randomToken(48) : null;
       const { error } = await admin.from("external_auth_states").insert({
         state, provider, mode, user_id: userId, code_verifier: verifier, app_origin: appOrigin,
+        return_path: mode === "files" ? returnPath : null,
       });
       if (error) throw error;
 
@@ -187,7 +190,8 @@ Deno.serve(async (req) => {
       authUrl.searchParams.set("redirect_uri", CALLBACK);
       authUrl.searchParams.set("response_type", "code");
       authUrl.searchParams.set("state", state);
-      if (cfg.scope) authUrl.searchParams.set("scope", cfg.scope);
+      const scope = mode === "files" ? "data:read data:write data:create" : cfg.scope;
+      if (scope) authUrl.searchParams.set("scope", scope);
       if (verifier) {
         authUrl.searchParams.set("code_challenge", await sha256(verifier));
         authUrl.searchParams.set("code_challenge_method", "S256");
@@ -227,8 +231,8 @@ Deno.serve(async (req) => {
       const provider = st.provider as Provider;
       const label = PROVIDER_LABEL[provider];
       const fail = (msg: string) => {
-        const target = st.mode === "link" ? `${origin}/account` : `${origin}/auth`;
-        return Response.redirect(`${target}?external_error=${encodeURIComponent(msg)}`, 302);
+        const target = st.mode === "files" ? `${origin}${st.return_path || "/account"}` : st.mode === "link" ? `${origin}/account` : `${origin}/auth`;
+        return Response.redirect(`${target}${target.includes("?") ? "&" : "?"}external_error=${encodeURIComponent(msg)}`, 302);
       };
 
       if (Date.now() - new Date(st.created_at).getTime() > STATE_TTL_MS) return fail("Sign-in took too long. Please try again.");
@@ -249,6 +253,21 @@ Deno.serve(async (req) => {
       if (!tr.ok || !tok.access_token) {
         console.error("token exchange failed", provider, tr.status);
         return fail(`Could not complete ${label} sign-in.`);
+      }
+
+      // ----- Files mode: store Autodesk file-access tokens for the signed-in user -----
+      if (st.mode === "files") {
+        if (!ENCRYPTION_KEY) return fail("Token encryption unavailable");
+        const { error: saveErr } = await admin.from("user_autodesk_tokens").upsert({
+          user_id: st.user_id,
+          encrypted_access_token: await encryptToken(tok.access_token, ENCRYPTION_KEY),
+          encrypted_refresh_token: tok.refresh_token ? await encryptToken(tok.refresh_token, ENCRYPTION_KEY) : null,
+          token_expiry: new Date(Date.now() + (Number(tok.expires_in) || 3600) * 1000).toISOString(),
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "user_id" });
+        if (saveErr) return fail("Could not save Autodesk connection.");
+        const back = `${origin}${st.return_path || "/account"}`;
+        return Response.redirect(`${back}${back.includes("?") ? "&" : "?"}forma_connected=1`, 302);
       }
 
       const ident = await fetchIdentity(provider, tok.access_token);
