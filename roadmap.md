@@ -1,5 +1,8 @@
 # Roadmap
 
+- [ ] Allow Autodesk auto-linking only with provider-verified email ownership; preserve identity uniqueness and company membership.
+- [ ] Check Procore sign-in after the registered callback update; full provider sign-in requires the user's provider session.
+
 - [x] Keep developer project pages inside the company you are in (open, create and return to the same list); signed-in click-through verified in Quensus, no console errors.
 - [ ] Move "The Aldwych Residences" into a company; blocked on which company the user wants.
 
