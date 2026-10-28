@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { signInSchema } from "@/lib/validation";
 import { getUserFriendlyError } from "@/lib/errorHandling";
@@ -355,6 +356,8 @@ const Auth = () => {
               Request Access
             </button>
           </div>
+
+          <Separator className="my-8" />
 
           <div className="space-y-3">
             {EXTERNAL_PROVIDERS.map(({ id, label }) => (
