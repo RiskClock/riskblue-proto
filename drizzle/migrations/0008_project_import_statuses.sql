@@ -1,0 +1,2 @@
+ALTER TABLE public.projects DROP CONSTRAINT projects_workbench_status_check;
+ALTER TABLE public.projects ADD CONSTRAINT projects_workbench_status_check CHECK (workbench_status = ANY (ARRAY['waiting_drawings'::text, 'processing'::text, 'processed'::text, 'importing_drawings'::text, 'ready_for_analysis'::text, 'import_failed'::text]));
