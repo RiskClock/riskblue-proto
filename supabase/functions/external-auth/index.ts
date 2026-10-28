@@ -1,6 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { findAutodeskAccount } from "./accountLinking.ts";
+import { findVerifiedProviderAccount } from "./accountLinking.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -261,7 +261,7 @@ Deno.serve(async (req) => {
         email = data.user?.email ?? null;
       } else {
         if (!ident.email) return fail(`Your ${label} account has no email address.`);
-        const matched = await findAutodeskAccount(provider, ident, async (page) => {
+        const matched = await findVerifiedProviderAccount(provider, ident, async (page) => {
           const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
           if (error) throw error;
           return data.users;
@@ -277,7 +277,7 @@ Deno.serve(async (req) => {
           });
           if (error || !created.user) {
             return fail(
-              `This email already has a RiskBlue account. ${provider === "autodesk" && !ident.emailVerified ? "Autodesk did not verify email ownership. " : ""}Sign in with your email and password, then link ${label} in Account Settings.`,
+              `This email already has a RiskBlue account. ${!ident.emailVerified ? `${label} did not provide verified email ownership. ` : ""}Sign in with your email and password, then link ${label} in Account Settings.`,
             );
           }
           userId = created.user.id;
