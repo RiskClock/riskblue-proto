@@ -13,6 +13,7 @@ import { signInSchema } from "@/lib/validation";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import { EXTERNAL_PROVIDERS, startExternalAuth, type ExternalProvider } from "@/lib/externalAuth";
+import { PROVIDER_LOGOS } from "@/lib/providerLogos";
 import {
   Dialog,
   DialogContent,
@@ -382,6 +383,7 @@ const Auth = () => {
                   }
                 }}
               >
+                <img src={PROVIDER_LOGOS[id]} alt="" aria-hidden="true" className="h-5 w-auto max-w-[32px] object-contain mr-2" />
                 Continue with {label}
               </Button>
             ))}
