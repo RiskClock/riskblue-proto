@@ -33,7 +33,10 @@ import { MitigationResponsePlanStep } from "@/components/wizard/MitigationRespon
 import { WaterMitigationGuidelinesStep } from "@/components/wizard/WaterMitigationGuidelinesStep";
 import { ProcoreExportDialog } from "@/components/wizard/ProcoreExportDialog";
 import { AppliedEpicExportDialog } from "@/components/wizard/AppliedEpicExportDialog";
-import procoreIcon from "@/assets/icon_procore.png";
+import { CloudProviderButton, CloudProviderLogo } from "@/components/cloud/CloudProviderButton";
+import { CloudDrawingPicker } from "@/components/cloud/CloudDrawingPicker";
+import { FormaExportDialog } from "@/components/cloud/FormaExportDialog";
+import { queueCloudImports, type CloudProvider, type CloudSelection } from "@/lib/cloudImport";
 import epicIcon from "@/assets/logo_appliedepic.png";
 import ams360Icon from "@/assets/logo_ams360.png";
 import { CollaboratorManagementStep } from "@/components/wizard/CollaboratorManagementStep";
@@ -136,7 +139,8 @@ const ProjectWizardContent = () => {
   // Standalone Google Drive connection dialog
   const [showDriveConnectionDialog, setShowDriveConnectionDialog] = useState(false);
   // Standalone Procore connection dialog
-  const [showProcoreConnectionDialog, setShowProcoreConnectionDialog] = useState(false);
+  const [cloudImportProvider, setCloudImportProvider] = useState<CloudProvider | null>(null);
+  const [pdfBlobForFormaMain, setPdfBlobForFormaMain] = useState<Blob | null>(null);
   
   // Procore export state for guideline tab
   const [showProcoreExportMain, setShowProcoreExportMain] = useState(false);
@@ -1685,10 +1689,17 @@ const ProjectWizardContent = () => {
                             Google Drive
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => setShowProcoreConnectionDialog(true)}
+                            onClick={() => setCloudImportProvider("forma")}
                             className="gap-2"
                           >
-                            <img src="/icons/icon_procore.png" alt="" className="w-4 h-4" />
+                            <CloudProviderLogo provider="forma" />
+                            <span>Autodesk Forma</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setCloudImportProvider("procore")}
+                            className="gap-2"
+                          >
+                            <CloudProviderLogo provider="procore" />
                             <span>Procore</span>
                             {isProcoreConnected && (
                               <span className="ml-auto flex h-2 w-2 rounded-full bg-green-500" />
@@ -1747,18 +1758,12 @@ const ProjectWizardContent = () => {
                             <img src="/icons/icon_googledrive.png" alt="" className="w-4 h-4" />
                             Google Drive
                           </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setShowProcoreConnectionDialog(true)}
-                            className="gap-2"
-                          >
-                            <img src="/icons/icon_procore.png" alt="" className="w-4 h-4" />
-                            Procore
+                          <CloudProviderButton provider="forma" size="sm" onClick={() => setCloudImportProvider("forma")} />
+                          <CloudProviderButton provider="procore" size="sm" onClick={() => setCloudImportProvider("procore")}>
                             {isProcoreConnected && (
                               <span className="flex h-2 w-2 rounded-full bg-green-500" />
                             )}
-                          </Button>
+                          </CloudProviderButton>
                         </div>
                       </div>
                     </div>
@@ -2093,6 +2098,13 @@ const ProjectWizardContent = () => {
                 fileName={generateReportFilename(projectData.name || "unnamed_project", "Water Mitigation Guideline") + ".pdf"}
               />
 
+              <FormaExportDialog
+                isOpen={!!pdfBlobForFormaMain}
+                onClose={() => setPdfBlobForFormaMain(null)}
+                pdfBlob={pdfBlobForFormaMain}
+                fileName={generateReportFilename(projectData.name || "unnamed_project", "Water Mitigation Guideline") + ".pdf"}
+              />
+
               <AppliedEpicExportDialog
                 isOpen={showEpicExportMain}
                 onClose={() => { setShowEpicExportMain(false); setPdfBlobForEpicMain(null); }}
@@ -2301,19 +2313,23 @@ const ProjectWizardContent = () => {
         }}
       />
       
-      {/* Standalone Procore Connection Dialog */}
-      <ProcoreConnectionDialog
-        isOpen={showProcoreConnectionDialog}
-        onClose={() => setShowProcoreConnectionDialog(false)}
-        projectId={id || "new"}
-        projectName={projectData.name}
-        onAnalysisStarted={() => {
-          toast({
-            title: "Analysis Queued",
-            description: "Your Procore files are being analyzed. This may take up to 48 hours.",
-          });
-        }}
-      />
+      {/* Cloud drawing import (Autodesk Forma / Procore): queued server-side, never starts analysis */}
+      {cloudImportProvider && (
+        <CloudDrawingPicker
+          provider={cloudImportProvider}
+          open={!!cloudImportProvider}
+          onOpenChange={(o) => !o && setCloudImportProvider(null)}
+          confirmLabel="Import"
+          onConfirm={async (sel: CloudSelection) => {
+            if (!id || id === "new" || !user) throw new Error("Save the project before importing drawings.");
+            await queueCloudImports(id, user.id, [sel]);
+            toast({
+              title: "Import started",
+              description: "Drawings are importing in the background. You can close this page; the project will show Ready for Analysis when they arrive.",
+            });
+          }}
+        />
+      )}
       
       {/* Hidden file input for drawings upload */}
       <input
