@@ -1513,6 +1513,7 @@ export type Database = {
           created_at: string
           mode: string
           provider: string
+          return_path: string | null
           state: string
           user_id: string | null
         }
@@ -1522,6 +1523,7 @@ export type Database = {
           created_at?: string
           mode: string
           provider: string
+          return_path?: string | null
           state: string
           user_id?: string | null
         }
@@ -1531,6 +1533,7 @@ export type Database = {
           created_at?: string
           mode?: string
           provider?: string
+          return_path?: string | null
           state?: string
           user_id?: string | null
         }
