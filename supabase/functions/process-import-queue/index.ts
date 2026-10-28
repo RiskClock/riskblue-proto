@@ -9,10 +9,17 @@ const json = (body: unknown, status = 200) =>
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const secret = Deno.env.get("ANALYSIS_WORKER_SECRET");
-  if (!secret || req.headers.get("x-worker-secret") !== secret) return json({ error: "Unauthorized" }, 401);
-
   const url = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  if (!secret) return json({ error: "Worker not configured" }, 503);
+  if (req.headers.get("x-worker-secret") !== secret) {
+    // Signed-in users may wake the queue right after queueing an import; the work itself stays server-side.
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) return json({ error: "Unauthorized" }, 401);
+    const userClient = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
+    const { data: { user } } = await userClient.auth.getUser();
+    if (!user) return json({ error: "Unauthorized" }, 401);
+  }
   const admin = createClient(url, serviceKey);
 
   const { data: claimed, error } = await admin.rpc("claim_cloud_imports", { p_batch: 3 });
