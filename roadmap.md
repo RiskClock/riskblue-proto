@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Fix cloud drawing picker overflow and add Autodesk empty-hub guidance with request diagnostics and retry.
+- [x] Fix cloud drawing picker overflow and add Autodesk empty-hub guidance with request diagnostics and retry; real signed-in browsing and drawing selection verified at desktop/mobile sizes, simulated empty/error responses and retry verified, four existing tests pass.
 
 - [x] Implement Procore email-confirmation linking: server-only encrypted pending request, email sign-in to the existing account, explicit approval and single-use owner-checked completion; eleven tests pass, notice and signed-out rejection verified, function deployed.
 - [ ] Verify real Procore sign-in, confirmation email receipt and completed linking; blocked on the user's Procore session and mailbox access.
