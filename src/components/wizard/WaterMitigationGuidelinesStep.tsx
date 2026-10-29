@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { flushSync } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Download, Send, ChevronDown } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -162,6 +163,8 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
     // Create a temporary container for the report
     const reportContainer = document.createElement('div');
     reportContainer.className = 'print-report-container';
+    reportContainer.style.display = 'block';
+    reportContainer.style.width = '210mm';
     reportContainer.style.position = 'absolute';
     reportContainer.style.left = '-9999px';
     reportContainer.style.top = '0';
@@ -178,8 +181,9 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
       console.table(resolvedItems.filter(i => i.drawingUrl).map(i => ({ name: i.name, urlPrefix: i.drawingUrl?.slice(0, 40) })));
       
       const reactRoot = createRoot(root);
-      reactRoot.render(
-        <WaterRiskReport brandLogoUrl={await resolveBrandLogoUrl()} 
+      const brandLogoUrl = await resolveBrandLogoUrl();
+      flushSync(() => reactRoot.render(
+        <WaterRiskReport brandLogoUrl={brandLogoUrl}
           data={data} 
           analysisItems={resolvedItems} 
           controlDetails={controlDetails}
@@ -187,7 +191,7 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
           createdBy={createdByName}
           riskTimelineData={riskTimelineData}
         />
-      );
+      ));
       
       // Wait for React to commit, then for images to load
       await new Promise(requestAnimationFrame);
@@ -282,9 +286,11 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
       try {
         // Find the cover page element for separate capture
         const coverEl = reportContainer.querySelector('#cover-page') as HTMLElement | null;
+        const bodyEl = reportContainer.querySelector('#report-body') as HTMLElement | null;
+        if (!coverEl || !bodyEl) throw new Error('Report did not render');
 
         // Generate PDF using jsPDF + html2canvas directly
-        await generatePdfFromElement(reportContainer, {
+        await generatePdfFromElement(bodyEl, {
           filename,
           margins: {
             top: 15,
@@ -347,6 +353,8 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
 
     const reportContainer = document.createElement('div');
     reportContainer.className = 'print-report-container';
+    reportContainer.style.display = 'block';
+    reportContainer.style.width = '210mm';
     reportContainer.style.position = 'absolute';
     reportContainer.style.left = '-9999px';
     reportContainer.style.top = '0';
@@ -359,8 +367,9 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
     const resolvedItems = await resolveDrawingUrls(analysisItems);
 
     const reactRoot = createRoot(root);
-    reactRoot.render(
-      <WaterRiskReport brandLogoUrl={await resolveBrandLogoUrl()}
+    const brandLogoUrl = await resolveBrandLogoUrl();
+    flushSync(() => reactRoot.render(
+      <WaterRiskReport brandLogoUrl={brandLogoUrl}
         data={data}
         analysisItems={resolvedItems}
         controlDetails={controlDetails}
@@ -368,7 +377,7 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
         createdBy={createdByName}
         riskTimelineData={riskTimelineData}
       />
-    );
+    ));
 
     await new Promise(requestAnimationFrame);
     await new Promise(requestAnimationFrame);
@@ -377,8 +386,10 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
 
     try {
       const coverEl = reportContainer.querySelector('#cover-page') as HTMLElement | null;
+      const bodyEl = reportContainer.querySelector('#report-body') as HTMLElement | null;
+      if (!coverEl || !bodyEl) throw new Error('Report did not render');
 
-      const blob = await generatePdfFromElement(reportContainer, {
+      const blob = await generatePdfFromElement(bodyEl, {
         filename,
         margins: { top: 15, right: 15, bottom: 25, left: 15 },
         logoBase64,
