@@ -18,7 +18,7 @@ const PROVIDERS = {
     clientSecret: () => Deno.env.get("AUTODESK_CLIENT_SECRET") ?? "",
     authUrl: "https://developer.api.autodesk.com/authentication/v2/authorize",
     tokenUrl: "https://developer.api.autodesk.com/authentication/v2/token",
-    scope: "openid data:read",
+    scope: "openid data:read data:write data:create",
   },
   procore: {
     clientId: () => Deno.env.get("PROCORE_SANDBOX_CLIENT_ID") ?? "",
@@ -103,6 +103,17 @@ async function fetchIdentity(provider: Provider, accessToken: string) {
   if (!r.ok) throw new Error("Could not read Procore profile");
   const d = await r.json();
   return { id: String(d.id), email: ((d.login || d.email_address) as string | undefined)?.toLowerCase() ?? null, emailVerified: false, name: d.name ?? null };
+}
+
+async function saveAutodeskTokens(userId: string, tok: any) {
+  if (!ENCRYPTION_KEY) return;
+  await admin.from("user_autodesk_tokens").upsert({
+    user_id: userId,
+    encrypted_access_token: await encryptToken(tok.access_token, ENCRYPTION_KEY),
+    encrypted_refresh_token: tok.refresh_token ? await encryptToken(tok.refresh_token, ENCRYPTION_KEY) : null,
+    token_expiry: new Date(Date.now() + (Number(tok.expires_in) || 3600) * 1000).toISOString(),
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "user_id" });
 }
 
 async function saveProcoreTokens(userId: string, tok: any, email: string | null) {
@@ -292,6 +303,7 @@ Deno.serve(async (req) => {
           if (error) return fail(`This RiskBlue account already has a ${label} account linked.`);
         }
         if (provider === "procore") await saveProcoreTokens(userId, tok, ident.email);
+        if (provider === "autodesk") await saveAutodeskTokens(userId, tok);
         return Response.redirect(`${origin}/account?linked=${provider}`, 302);
       }
 
@@ -359,6 +371,7 @@ Deno.serve(async (req) => {
       }
       if (!email) return fail("Could not sign you in.");
       if (provider === "procore") await saveProcoreTokens(userId, tok, ident.email);
+      if (provider === "autodesk") await saveAutodeskTokens(userId, tok);
 
       const { data: link, error: linkError } = await admin.auth.admin.generateLink({ type: "magiclink", email });
       if (linkError || !link.properties?.hashed_token) return fail("Could not sign you in.");
