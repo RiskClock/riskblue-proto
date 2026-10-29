@@ -581,10 +581,10 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: CreateProj
                   className="gap-2"
                 >
                   <Upload className="w-4 h-4" />
-                  Upload drawings
+                  Upload from computer
                 </Button>
-                <CloudProviderButton provider="forma" size="sm" onClick={() => setPickerProvider("forma")} />
-                <CloudProviderButton provider="procore" size="sm" onClick={() => setPickerProvider("procore")} />
+                <CloudProviderButton provider="forma" label="Import from Forma" size="sm" onClick={() => setPickerProvider("forma")} />
+                <CloudProviderButton provider="procore" label="Import from Procore" size="sm" onClick={() => setPickerProvider("procore")} />
               </div>
               </div>
               {pickerProvider && (

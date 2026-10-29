@@ -48,7 +48,7 @@ export function CloudDrawingPicker({ provider, open, onOpenChange, onConfirm, co
   const procore = useProcoreToken();
   const autodesk = useAutodeskConnection();
   const connected = provider === "procore" ? procore.isConnected : !!autodesk.connected;
-  const checking = provider === "forma" && autodesk.connected === null;
+  const checking = provider === "forma" ? autodesk.connected === null : procore.loading && !procore.isConnected;
   const label = CLOUD_PROVIDER_LABEL[provider];
 
   const [connecting, setConnecting] = useState(false);
@@ -178,7 +178,7 @@ export function CloudDrawingPicker({ provider, open, onOpenChange, onConfirm, co
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><CloudProviderLogo provider={provider} className="h-5 w-5" /> {label}</DialogTitle>
-          <DialogDescription>Choose drawings to import. They copy in the background, so you can close the page once you are done.</DialogDescription>
+          <DialogDescription>Choose drawings to import.</DialogDescription>
         </DialogHeader>
 
         {checking ? (
