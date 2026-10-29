@@ -1,5 +1,7 @@
 # Architecture rules
 
+- Planning guideline exports explicitly display their offscreen print container, synchronously commit the report, and capture cover/body separately; screen-only print CSS must not hide the PDF capture surface or duplicate the cover.
+
 - Contractor selection screens share intentionalControlSelection through ExpandableListItem; explicit control picks include only their parent location before toggling the control, keeping location and control intent consistent across all categories.
 
 - Projects passes its tenant-aware list URL in navigation state when opening project views; Workbench restores an allowlisted list URL for Back and retains its role-based fallback for direct entries, so returning does not depend on browser history.

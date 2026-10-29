@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Fix Planning > Guideline > Download: visible capture container, synchronous report commit and separate cover/body capture. Signed-in Sonder download verified with cover, project details and drawing content; discovery-complete gating was simulated locally without modifying saved project data or tenant membership. Preview build OK.
+
 - [x] Fix cloud drawing picker overflow and add Autodesk empty-hub guidance with request diagnostics and retry; real signed-in browsing and drawing selection verified at desktop/mobile sizes, simulated empty/error responses and retry verified, four existing tests pass.
 
 - [x] Implement Procore email-confirmation linking: server-only encrypted pending request, email sign-in to the existing account, explicit approval and single-use owner-checked completion; eleven tests pass, notice and signed-out rejection verified, function deployed.
