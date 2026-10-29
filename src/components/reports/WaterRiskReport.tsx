@@ -9,7 +9,6 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsToolti
 
 import riskBlueLogo from "@/assets/logo-riskblue.png";
 import riskBlueLogoWhite from "@/assets/logo-riskblue-white.png";
-import { useBrandLogo } from "@/hooks/useBrandLogo";
 import coverPageBg from "@/assets/img_coverpage.jpg";
 import residentialImg from "@/assets/type1-residential.avif";
 import mixedUseImg from "@/assets/type2-mixeduse.avif";
@@ -164,10 +163,13 @@ interface WaterRiskReportProps {
   preparedBy?: string;
   createdBy?: string;
   riskTimelineData?: RiskTimelineChartData;
+  /** Resolved brand logo URL. Passed in because the report is rendered in a detached root without app providers. */
+  brandLogoUrl?: string;
 }
 
-export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [], executiveSummaryText, preparedBy, createdBy, riskTimelineData }: WaterRiskReportProps) => {
-  const { logoUrl, isCompanyLogo } = useBrandLogo();
+export const WaterRiskReport = ({ data, analysisItems = [], controlDetails = [], executiveSummaryText, preparedBy, createdBy, riskTimelineData, brandLogoUrl }: WaterRiskReportProps) => {
+  const logoUrl = brandLogoUrl || riskBlueLogo;
+  const isCompanyLogo = !!brandLogoUrl && brandLogoUrl !== riskBlueLogo;
   const timelinePhases = getTimelinePhases(data);
 
   

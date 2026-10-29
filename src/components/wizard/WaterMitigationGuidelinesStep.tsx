@@ -179,7 +179,7 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
       
       const reactRoot = createRoot(root);
       reactRoot.render(
-        <WaterRiskReport 
+        <WaterRiskReport brandLogoUrl={await resolveBrandLogoUrl()} 
           data={data} 
           analysisItems={resolvedItems} 
           controlDetails={controlDetails}
@@ -360,7 +360,7 @@ export const WaterMitigationGuidelinesStep = ({ data, analysisItems = [], onBack
 
     const reactRoot = createRoot(root);
     reactRoot.render(
-      <WaterRiskReport
+      <WaterRiskReport brandLogoUrl={await resolveBrandLogoUrl()}
         data={data}
         analysisItems={resolvedItems}
         controlDetails={controlDetails}
