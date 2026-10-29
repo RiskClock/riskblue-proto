@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, FileText, Folder, Loader2 } from "lucide-react";
+import { AlertCircle, ChevronRight, FileText, Folder, Loader2, RefreshCw } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -61,6 +61,8 @@ export function CloudDrawingPicker({ provider, open, onOpenChange, onConfirm, co
   const [loading, setLoading] = useState<"containers" | "projects" | "folder" | null>(null);
   const [picked, setPicked] = useState<Map<string, CloudFile>>(new Map());
   const [submitting, setSubmitting] = useState(false);
+  const [hubResult, setHubResult] = useState<{ outcome: "success" | "error"; count: number; checkedAt: string; message?: string } | null>(null);
+  const [reload, setReload] = useState(0);
 
   const fail = (e: unknown, what: string) => {
     toast({ title: `Could not load ${what}`, description: (e as any)?.message, variant: "destructive" });
@@ -69,18 +71,27 @@ export function CloudDrawingPicker({ provider, open, onOpenChange, onConfirm, co
 
   useEffect(() => {
     if (!open || !connected) return;
+    let active = true;
+    setContainers([]); setContainerId(""); setPicked(new Map()); setHubResult(null);
     setLoading("containers");
     (provider === "procore"
       ? callProcore("list-companies", {}).then((r) => (r.companies ?? []).map((c: any) => ({ id: String(c.id), name: c.name })))
       : callForma<{ hubs: Option[] }>("list-forma-files", { action: "hubs" }).then((r) => r.hubs))
       .then((list: Option[]) => {
+        if (!active) return;
         setContainers(list);
+        if (provider === "forma") setHubResult({ outcome: "success", count: list.length, checkedAt: new Date().toISOString() });
         if (list.length === 1) setContainerId(list[0].id);
       })
-      .catch((e) => fail(e, provider === "procore" ? "companies" : "hubs"))
-      .finally(() => setLoading(null));
+      .catch((e) => {
+        if (!active) return;
+        if (provider === "forma") setHubResult({ outcome: "error", count: 0, checkedAt: new Date().toISOString(), message: (e as any)?.message || "Request failed" });
+        fail(e, provider === "procore" ? "companies" : "hubs");
+      })
+      .finally(() => { if (active) setLoading(null); });
+    return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, connected, provider]);
+  }, [open, connected, provider, reload]);
 
   useEffect(() => {
     setProjects([]); setProjectId(""); setTrail([]); setListing({ folders: [], files: [] });
@@ -175,7 +186,7 @@ export function CloudDrawingPicker({ provider, open, onOpenChange, onConfirm, co
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="w-[calc(100%-2rem)] max-w-2xl max-h-[calc(100dvh-2rem)] min-w-0 overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><CloudProviderLogo provider={provider} className="h-5 w-5" /> {label}</DialogTitle>
           <DialogDescription>Choose drawings to import.</DialogDescription>
@@ -193,32 +204,54 @@ export function CloudDrawingPicker({ provider, open, onOpenChange, onConfirm, co
             </Button>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
+          <div className="min-w-0 space-y-4">
+            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="min-w-0 space-y-1.5">
                 <Label>{provider === "procore" ? "Company" : "Hub"}</Label>
                 <Select value={containerId} onValueChange={setContainerId} disabled={loading === "containers"}>
-                  <SelectTrigger><SelectValue placeholder={loading === "containers" ? "Loading..." : "Select"} /></SelectTrigger>
-                  <SelectContent>{containers.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                  <SelectTrigger aria-label={provider === "procore" ? "Company" : "Hub"} className="min-w-0 [&>span]:min-w-0 [&>span]:truncate [&>svg]:shrink-0"><SelectValue placeholder={loading === "containers" ? "Loading..." : "Select"} /></SelectTrigger>
+                  <SelectContent className="max-w-[calc(100vw-2rem)]">{containers.map((c) => <SelectItem key={c.id} value={c.id}><span className="block truncate">{c.name}</span></SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5">
+              <div className="min-w-0 space-y-1.5">
                 <Label>Project</Label>
                 <Select value={projectId} onValueChange={setProjectId} disabled={!containerId || loading === "projects"}>
-                  <SelectTrigger><SelectValue placeholder={loading === "projects" ? "Loading..." : "Select"} /></SelectTrigger>
-                  <SelectContent>{projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                  <SelectTrigger aria-label="Project" className="min-w-0 [&>span]:min-w-0 [&>span]:truncate [&>svg]:shrink-0"><SelectValue placeholder={loading === "projects" ? "Loading..." : "Select"} /></SelectTrigger>
+                  <SelectContent className="max-w-[calc(100vw-2rem)]">{projects.map((p) => <SelectItem key={p.id} value={p.id}><span className="block truncate">{p.name}</span></SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>
 
+            {provider === "forma" && hubResult && (hubResult.outcome === "error" || hubResult.count === 0) && (
+              <section className="min-w-0 space-y-3 rounded-md border border-border bg-muted/40 p-4" aria-live="polite">
+                <h3 className="flex items-center gap-2 text-sm font-semibold"><AlertCircle className="h-4 w-4 shrink-0" />{hubResult.outcome === "error" ? "Could not load Autodesk hubs" : "No Autodesk hubs available"}</h3>
+                <p className="text-sm text-muted-foreground">{hubResult.outcome === "error" ? "The hub request failed. Review the details below and try again." : "Autodesk returned no hubs accessible to this connection. This can be caused by account permissions or missing integration access."}</p>
+                <ul className="list-disc space-y-2 pl-4 text-sm text-muted-foreground">
+                  <li>Confirm you connected the Autodesk account that has access to the project's Docs files.</li>
+                  <li>Ask your Autodesk account administrator to check RiskBlue's integration access in account administration, not project settings. Depending on the account, this appears under Custom Integrations or Apps.</li>
+                  <li>If that section is missing, your administrator may need to confirm the account's API access with Autodesk.</li>
+                </ul>
+                <details className="min-w-0 text-xs text-muted-foreground">
+                  <summary className="cursor-pointer font-medium text-foreground">Diagnostic details</summary>
+                  <dl className="mt-2 space-y-1 break-words">
+                    <div><dt className="inline font-medium">Request: </dt><dd className="inline">Autodesk Data Management: list hubs</dd></div>
+                    <div><dt className="inline font-medium">Result: </dt><dd className="inline">{hubResult.outcome === "success" ? `Successful response, ${hubResult.count} hubs returned` : "Request failed"}</dd></div>
+                    <div><dt className="inline font-medium">Checked at (UTC): </dt><dd className="inline">{hubResult.checkedAt}</dd></div>
+                    {hubResult.message && <div><dt className="inline font-medium">Error: </dt><dd className="inline">{hubResult.message}</dd></div>}
+                  </dl>
+                </details>
+                <Button variant="outline" size="sm" className="gap-2" onClick={() => setReload((n) => n + 1)}><RefreshCw className="h-4 w-4" />Retry hubs</Button>
+              </section>
+            )}
+
             {projectId && (
-              <div className="rounded-md border border-border">
+              <div className="min-w-0 overflow-hidden rounded-md border border-border">
                 <div className="flex flex-wrap items-center gap-1 border-b border-border px-3 py-2 text-xs text-muted-foreground">
-                  <button type="button" className="hover:text-foreground" onClick={() => goTo(-1)}>Project files</button>
+                  <Button type="button" variant="link" className="h-auto p-0 text-xs text-muted-foreground" onClick={() => goTo(-1)}>Project files</Button>
                   {trail.map((t, i) => (
-                    <span key={t.id} className="flex items-center gap-1">
-                      <ChevronRight className="h-3 w-3" />
-                      <button type="button" className="hover:text-foreground" onClick={() => goTo(i)}>{t.name}</button>
+                    <span key={t.id} className="flex min-w-0 items-center gap-1">
+                      <ChevronRight className="h-3 w-3 shrink-0" />
+                      <Button type="button" variant="link" className="h-auto min-w-0 whitespace-normal break-words p-0 text-left text-xs text-muted-foreground" onClick={() => goTo(i)}>{t.name}</Button>
                     </span>
                   ))}
                 </div>
@@ -228,10 +261,10 @@ export function CloudDrawingPicker({ provider, open, onOpenChange, onConfirm, co
                   ) : (
                     <>
                       {listing.folders.map((f) => (
-                        <button key={f.id} type="button" onClick={() => openFolder(f)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted">
-                          <Folder className="h-4 w-4 text-muted-foreground" /> <span className="flex-1 truncate">{f.name}</span>
-                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                        </button>
+                        <Button key={f.id} type="button" variant="ghost" onClick={() => openFolder(f)} className="flex h-auto w-full min-w-0 justify-start gap-2 rounded-none px-3 py-2 text-left text-sm font-normal">
+                          <Folder className="h-4 w-4 shrink-0 text-muted-foreground" /> <span className="min-w-0 flex-1 truncate" title={f.name}>{f.name}</span>
+                          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        </Button>
                       ))}
                       {listing.files.length > 0 && (
                         <label className="flex items-center gap-2 border-t border-border px-3 py-2 text-xs font-medium text-muted-foreground">
@@ -239,10 +272,10 @@ export function CloudDrawingPicker({ provider, open, onOpenChange, onConfirm, co
                         </label>
                       )}
                       {listing.files.map((f) => (
-                        <label key={f.id} className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-muted">
-                          <Checkbox checked={picked.has(f.id)} onCheckedChange={() => toggle(f)} />
-                          <FileText className="h-4 w-4 text-muted-foreground" />
-                          <span className="flex-1 truncate">{f.name}</span>
+                        <label key={f.id} className="flex min-w-0 cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-muted">
+                          <Checkbox className="shrink-0" checked={picked.has(f.id)} onCheckedChange={() => toggle(f)} />
+                          <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="min-w-0 flex-1 truncate" title={f.name}>{f.name}</span>
                         </label>
                       ))}
                       {listing.folders.length === 0 && listing.files.length === 0 && (
@@ -256,7 +289,7 @@ export function CloudDrawingPicker({ provider, open, onOpenChange, onConfirm, co
           </div>
         )}
 
-        <DialogFooter>
+        <DialogFooter className="min-w-0 gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           {connected && (
             <Button onClick={confirm} disabled={picked.size === 0 || submitting}>
