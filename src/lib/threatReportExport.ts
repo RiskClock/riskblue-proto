@@ -585,7 +585,7 @@ export async function runThreatReportExport(
       ),
     }),
     para([], { spacing: { before: 300 } }),
-    para([text("Assets at Risk Detections", { bold: true, size: 24 })], {
+    para([text("Detection Overview", { bold: true, size: 24 })], {
       spacing: { before: 200, after: 100 },
     }),
   );
