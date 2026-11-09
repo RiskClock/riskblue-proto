@@ -2404,6 +2404,8 @@ export const FileViewerModal = ({
                       setActivePlanId(null);
                     }}
                     devices={devicesApi}
+                    allLevelPlans={allLevelPlans ?? []}
+                    allLevelPlanOverrides={allLevelPlanOverrides}
                     onFocusInstance={focusInstance}
                   />
                   </div>
@@ -3033,6 +3035,8 @@ export interface DevicesApi {
 }
 
 interface DetectionsPanelProps {
+  allLevelPlans?: ParsedFloorPlan[];
+  allLevelPlanOverrides?: Record<string, { units?: string[] }>;
   rotationByPage: Record<number, number>;
   viewerApiRef: React.RefObject<any>;
   awpClasses: AwpClassOption[];
@@ -3556,6 +3560,23 @@ const DetectionsPanel = ({
                         {row.diam && <Badge variant="outline" className="max-w-28 truncate rounded px-1.5 py-0.5 text-xs font-medium">{row.diam}</Badge>}
                         {row.type && <Badge variant="outline" className="max-w-32 truncate rounded px-1.5 py-0.5 text-xs font-medium">{subtypeAbbr(c.name, row.type) || row.type}</Badge>}
                       </div>}
+                      {(() => {
+                        const refs = referencedForItems(row.items);
+                        if (refs.length === 0) return null;
+                        const total = refs.reduce((n, r) => n + r.count, 0);
+                        return (
+                          <div className="flex items-start gap-1 mt-1 text-xs text-muted-foreground">
+                            <span className="font-medium shrink-0">Referenced in ({total}):</span>
+                            <div className="flex flex-wrap gap-1">
+                              {refs.map((r) => (
+                                <span key={`${r.name}::${r.page}`} className="px-1.5 py-0.5 rounded bg-muted text-foreground text-xs font-mono">
+                                  {formatReferencingLevel(r)}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                   {devices.beta && <DeviceButton row={row} devices={devices} />}
