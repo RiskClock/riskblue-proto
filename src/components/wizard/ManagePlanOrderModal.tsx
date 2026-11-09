@@ -14,7 +14,7 @@ import {
   getEffectiveLabel,
   type ParsedFloorPlan,
 } from "@/lib/surveyFloorPlans";
-import { awpClassColor } from "@/lib/awpColor";
+import { floorPlanTypeColor } from "@/lib/awpColor";
 
 const TYPE_LABELS: Record<string, string> = {
   level_floor_plan: "Level floor plan",
@@ -186,9 +186,7 @@ export const ManagePlanOrderModal = ({
             </div>
           )}
           {rows.map((r, idx) => {
-            const color = awpClassColor(
-              r.type === "unit_floor_plan" ? "Unit Floor Plan" : "Level Floor Plan",
-            );
+            const color = floorPlanTypeColor(r.type);
             return (
               <div
                 key={r.planId}

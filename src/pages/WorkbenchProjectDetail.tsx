@@ -116,6 +116,7 @@ import {
   type DocumentSourceDescriptor,
 } from "@/components/viewer/hooks/useDocumentSource";
 import { useAWPOptions, groupAWPOptionsByCategory } from "@/hooks/useAWPOptions";
+import { useMitigationControls } from "@/hooks/useMitigationControls";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import {
   acquireAgentLock,
@@ -960,11 +961,56 @@ export default function WorkbenchProjectDetail() {
       });
       return;
     }
-    const merged = {
+    const merged: Record<string, any> = {
       ...activeFloorPlanOverrides,
       [planId]: { ...(activeFloorPlanOverrides[planId] ?? {}), ...next },
     };
+    // Renaming a unit/detail box cascades to every level plan in this file
+    // that references it by its previous name.
+    const norm = (v: unknown) => (typeof v === "string" ? v.trim().toLowerCase() : "");
+    const renamedPlan = activeFileAllUnitPlans.find((p) => p.plan_id === planId)
+      ?? activePageFloorPlans.find((p) => p.plan_id === planId);
+    const prevOvrName = activeFloorPlanOverrides[planId]?.name;
+    const oldName = (typeof prevOvrName === "string" && prevOvrName.trim()) || renamedPlan?.reference_id || "";
+    const newName = typeof next.name === "string" ? next.name.trim() : "";
+    const renameKey = norm(oldName);
+    const shouldCascade = "name" in next && !!renameKey && !!newName && renameKey !== norm(newName);
+    const renameUnits = (ovr: Record<string, any>): boolean => {
+      let changed = false;
+      for (const [id, v] of Object.entries(ovr)) {
+        if (id.startsWith("__")) continue;
+        const units = (v as any)?.units;
+        if (!Array.isArray(units) || !units.some((u) => norm(u) === renameKey)) continue;
+        ovr[id] = { ...(v as any), units: units.map((u) => (norm(u) === renameKey ? newName : u)) };
+        changed = true;
+      }
+      return changed;
+    };
+    const otherSheetUpdates: { id: string; overrides: Record<string, any> }[] = [];
+    if (shouldCascade) {
+      // Parsed level plans on this page store refs on the plan itself.
+      for (const lvl of activePageFloorPlans) {
+        if (merged[lvl.plan_id]?.units) continue;
+        const refs = lvl.referenced_unit_ids ?? [];
+        if (refs.some((u) => norm(u) === renameKey)) {
+          merged[lvl.plan_id] = { ...(merged[lvl.plan_id] ?? {}), units: [...refs] };
+        }
+      }
+      renameUnits(merged);
+      const fileId = activePageView?.file.id;
+      for (const sh of rows?.sheets ?? []) {
+        if (sh.id === activeSheetIdForPage || sh.parent_file_id !== fileId) continue;
+        const ovr = { ...((sh.floor_plan_overrides as Record<string, any> | null) ?? {}) };
+        if (renameUnits(ovr)) otherSheetUpdates.push({ id: sh.id, overrides: ovr });
+      }
+    }
     setActiveFloorPlanOverrides(merged);
+    if (otherSheetUpdates.length > 0) {
+      await Promise.all(otherSheetUpdates.map((u) =>
+        supabase.from("analysis_request_sheets").update({ floor_plan_overrides: u.overrides } as any).eq("id", u.id),
+      ));
+      queryClient.invalidateQueries({ queryKey: ["workbench-rows", requestId] });
+    }
     // Coalesce-safe: we re-write the full object derived from prior fetch
     // (the column has a NOT NULL DEFAULT '{}' so the row is never null).
     const { error } = await supabase
@@ -1942,6 +1988,7 @@ const isChildPlanType = (t: string) =>
 
   // AWP options + global column preferences
   const { data: awpOptions } = useAWPOptions();
+  const { data: manageControls } = useMitigationControls();
   const eligibleOptions = useMemo(
     () =>
       (awpOptions || []).filter(
@@ -4294,7 +4341,10 @@ const isChildPlanType = (t: string) =>
     );
   }
 
-  const grouped = awpOptions ? groupAWPOptionsByCategory(eligibleOptions) : {};
+  const grouped: Record<string, any[]> = awpOptions ? { ...groupAWPOptionsByCategory(eligibleOptions) } : {};
+  if (awpOptions && (manageControls || []).length > 0) {
+    grouped["Controls"] = (manageControls || []).map((c) => ({ id: c.id, name: c.name, idPrefix: null }));
+  }
 
   const stickyHeadFirst = "sticky left-0 z-30 bg-card min-w-[260px] max-w-[420px] w-[420px] border-r";
   const stickyCellFirstBase = "sticky left-0 z-10 border-r transition-colors max-w-[420px] w-[420px]";
