@@ -45,7 +45,7 @@ export interface PlanEditorClass {
   id: string;
   name: string;
   code: string;
-  kind: "Asset" | "Water System";
+  kind: "Asset" | "Water System" | "Control";
   count: number;
   /** Detected pipe size in millimetres, used to suggest matching products. */
   pipeSizeMm?: number | null;
