@@ -8049,7 +8049,7 @@ function InstancesReportModal({
                       </TableCell>
                     );
                   })}
-                </TableRow>
+                </TableRow>)}
                 </Fragment>
               );
 
