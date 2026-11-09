@@ -3235,6 +3235,7 @@ export type Database = {
           image_path: string | null
           installation_cost: number | null
           maint_interval: string
+          mitigation_control_ids: string[]
           monthly_maint_cost: number | null
           name: string
           one_time_cost: number | null
@@ -3260,6 +3261,7 @@ export type Database = {
           image_path?: string | null
           installation_cost?: number | null
           maint_interval?: string
+          mitigation_control_ids?: string[]
           monthly_maint_cost?: number | null
           name: string
           one_time_cost?: number | null
@@ -3285,6 +3287,7 @@ export type Database = {
           image_path?: string | null
           installation_cost?: number | null
           maint_interval?: string
+          mitigation_control_ids?: string[]
           monthly_maint_cost?: number | null
           name?: string
           one_time_cost?: number | null
