@@ -15,6 +15,7 @@ import {
   type ParsedFloorPlan,
 } from "@/lib/surveyFloorPlans";
 import { floorPlanTypeColor } from "@/lib/awpColor";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const TYPE_LABELS: Record<string, string> = {
   level_floor_plan: "Level floor plan",
@@ -179,6 +180,7 @@ export const ManagePlanOrderModal = ({
           )}
         </div>
 
+        <TooltipProvider delayDuration={150}>
         <div className="max-h-[50vh] overflow-y-auto rounded-md border divide-y">
           {rows.length === 0 && (
             <div className="p-3 text-sm italic text-muted-foreground">
@@ -208,19 +210,22 @@ export const ManagePlanOrderModal = ({
                 <span className="w-6 text-sm tabular-nums text-muted-foreground shrink-0">
                   {idx + 1}
                 </span>
-                <span
-                  className="h-2.5 w-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: color }}
-                />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      className="h-2.5 w-2.5 rounded-full shrink-0 cursor-help"
+                      style={{ backgroundColor: color }}
+                      aria-label={TYPE_LABELS[r.type] ?? r.type}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent>{TYPE_LABELS[r.type] ?? r.type}</TooltipContent>
+                </Tooltip>
                 <span className="flex-1 min-w-0 truncate" title={r.label}>
                   {r.label}
                 </span>
-                <span className="text-sm text-muted-foreground shrink-0">
-                  {TYPE_LABELS[r.type] ?? r.type}
-                </span>
-                <span className="text-sm tabular-nums text-muted-foreground shrink-0 w-24 text-right">
+                <span className="text-sm tabular-nums text-muted-foreground shrink-0 w-32 text-right">
                   {Number.isFinite(r.x)
-                    ? `${Math.round(r.x)}, ${Math.round(r.y)}`
+                    ? `(x: ${Math.round(r.x)}, y: ${Math.round(r.y)})`
                     : "-"}
                 </span>
                 {onDeletePlan && (
@@ -240,6 +245,7 @@ export const ManagePlanOrderModal = ({
             );
           })}
         </div>
+        </TooltipProvider>
 
         {removed.length > 0 && (
           <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 space-y-1">

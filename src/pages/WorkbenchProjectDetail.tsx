@@ -117,6 +117,7 @@ import {
 } from "@/components/viewer/hooks/useDocumentSource";
 import { useAWPOptions, groupAWPOptionsByCategory } from "@/hooks/useAWPOptions";
 import { useMitigationControls } from "@/hooks/useMitigationControls";
+import { isIntakeControlCategory } from "@/lib/intakeControlCategories";
 import { getUserFriendlyError } from "@/lib/errorHandling";
 import {
   acquireAgentLock,
@@ -4342,8 +4343,8 @@ const isChildPlanType = (t: string) =>
   }
 
   const grouped: Record<string, any[]> = awpOptions ? { ...groupAWPOptionsByCategory(eligibleOptions) } : {};
-  if (awpOptions && (manageControls || []).length > 0) {
-    grouped["Controls"] = (manageControls || []).map((c) => ({ id: c.id, name: c.name, idPrefix: null }));
+  if (awpOptions && (manageControls || []).some((c) => isIntakeControlCategory(c.category))) {
+    grouped["Controls"] = (manageControls || []).filter((c) => isIntakeControlCategory(c.category)).map((c) => ({ id: c.id, name: c.name, idPrefix: null }));
   }
 
   const stickyHeadFirst = "sticky left-0 z-30 bg-card min-w-[260px] max-w-[420px] w-[420px] border-r";
