@@ -64,6 +64,13 @@
       "when": 1793211632556,
       "tag": "0008_project_import_statuses",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794253106002,
+      "tag": "0009_migration",
+      "breakpoints": true
     }
   ]
 }

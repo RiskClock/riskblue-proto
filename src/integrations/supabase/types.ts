@@ -3225,6 +3225,7 @@ export type Database = {
         Row: {
           applied_in_any_plan: boolean
           control_id: string | null
+          control_type: string | null
           created_at: string
           created_by: string | null
           critical_asset_ids: string[]
@@ -3249,6 +3250,7 @@ export type Database = {
         Insert: {
           applied_in_any_plan?: boolean
           control_id?: string | null
+          control_type?: string | null
           created_at?: string
           created_by?: string | null
           critical_asset_ids?: string[]
@@ -3273,6 +3275,7 @@ export type Database = {
         Update: {
           applied_in_any_plan?: boolean
           control_id?: string | null
+          control_type?: string | null
           created_at?: string
           created_by?: string | null
           critical_asset_ids?: string[]

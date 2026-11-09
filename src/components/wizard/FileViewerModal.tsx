@@ -1,3 +1,4 @@
+import { controlNeedsPipeDiameter } from "@/lib/controlPipeDiameter";
 import * as React from "react";
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -136,6 +137,14 @@ interface DrawingInstanceRow {
   metadata: Record<string, any> | null;
 }
 
+// Control classes always get a Type field on drawings.
+const CONTROL_CLASS_NAMES = new Set([
+  "water meter", "flow sensor", "flow sensors", "lumber moisture content", "automatic shut off valve",
+  "presence of water monitoring", "ultrasonic flow sensors", "inline flow sensors",
+  "domestic hot water run flow patterns", "relative humidity sensors",
+]);
+const isIntakeControlName = (n: string) => CONTROL_CLASS_NAMES.has(n) || controlNeedsPipeDiameter(n);
+
 // Classes that support the pipe-diameter metadata popover.
 // Matched as a case-insensitive substring against the class name.
 // Pipe size is optional for Cold Water, Hot Water, and Fire Suppression System.
@@ -147,6 +156,7 @@ const DIAMETER_ENABLED_MATCHERS = [
 ];
 const isDiameterEnabledClass = (name: string): boolean => {
   const n = (name || "").toLowerCase();
+  if (controlNeedsPipeDiameter(name)) return true;
   return DIAMETER_ENABLED_MATCHERS.some((m) => n.includes(m));
 };
 
@@ -158,6 +168,7 @@ const SUBTYPED_CLASS_KEYS = new Set(
 const isTypeEnabledClass = (name: string): boolean => {
   const n = (name || "").trim().toLowerCase();
   if (!n) return false;
+  if (isIntakeControlName(n)) return true;
   if (SUBTYPED_CLASS_KEYS.has(n)) return true;
   for (const key of SUBTYPED_CLASS_KEYS) {
     if (n.includes(key)) return true;

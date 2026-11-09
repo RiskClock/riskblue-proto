@@ -1,0 +1,1 @@
+ALTER TABLE public.tenant_products ADD COLUMN IF NOT EXISTS control_type text;
