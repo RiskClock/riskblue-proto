@@ -1,3 +1,4 @@
+import { levelCountLabel } from "@/lib/threatReportBuildings";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { IMPORT_PROJECT_STATUS_LABEL } from "@/lib/cloudImport";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
@@ -7680,7 +7681,7 @@ function InstancesReportModal({
   );
   const spaceGroupStart = useMemo(() => {
     const m = new Map<string, string>();
-    for (const g of spaceGroups ?? []) if (g.spaces[0]) m.set(g.spaces[0], `${g.label} (${g.spaces.length})`);
+    for (const g of spaceGroups ?? []) if (g.spaces[0]) m.set(g.spaces[0], `${g.label} (${levelCountLabel(g.spaces.length)})`);
     return m;
   }, [spaceGroups]);
   // Building groups are collapsible (expanded by default) in Spaces and Summary.
@@ -7963,39 +7964,84 @@ function InstancesReportModal({
           {overviewEntries.length === 0 ? (
             <div className="text-sm text-muted-foreground">No detections yet.</div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-              {overviewEntries.map((e) => (
-                <ThreatOverviewCard
-                  key={e.key}
-                  code={e.displayPrefix}
-                  name={e.displayName}
-                  count={overviewEntryTotals.get(e.key) || 0}
-                />
-              ))}
+            <div className="rounded-lg border-2 border-primary/30 bg-primary/5 p-3">
+              {(spaceGroups ?? []).length > 0 && (
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-primary mb-2">
+                  Project Total
+                </div>
+              )}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+                {overviewEntries.map((e) => (
+                  <ThreatOverviewCard
+                    key={e.key}
+                    code={e.displayPrefix}
+                    name={e.displayName}
+                    count={overviewEntryTotals.get(e.key) || 0}
+                  />
+                ))}
+              </div>
             </div>
           )}
 
-          {overviewEntries.length > 0 &&
-            (spaceGroups ?? []).map((g) => (
-              <div key={g.key} className="mt-4">
-                <h4 className="text-sm font-semibold mb-2">
-                  {g.label} ({g.spaces.length})
-                </h4>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-                  {overviewEntries.map((e) => (
-                    <ThreatOverviewCard
-                      key={e.key}
-                      code={e.displayPrefix}
-                      name={e.displayName}
-                      count={g.spaces.reduce(
-                        (acc, sp) => acc + (summaryEntryMatrix.get(sp)?.get(e.key) || 0),
-                        0,
-                      )}
-                    />
-                  ))}
-                </div>
+          {overviewEntries.length > 0 && (spaceGroups ?? []).length > 0 && (
+            <div className="mt-5">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                By Building
               </div>
-            ))}
+              <div className="rounded-lg border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className={compactRow}>
+                      <TableHead className={`${compactHead} bg-muted/40`}>Building</TableHead>
+                      {overviewEntries.map((e) => (
+                        <TableHead key={e.key} className={`${compactHead} bg-muted/40 text-center whitespace-nowrap`}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="cursor-help">{e.displayPrefix}</span>
+                            </TooltipTrigger>
+                            <TooltipContent>{e.displayName}</TooltipContent>
+                          </Tooltip>
+                        </TableHead>
+                      ))}
+                      <TableHead className={`${compactHead} bg-muted/40 text-center`}>Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(spaceGroups ?? []).map((g) => {
+                      const counts = overviewEntries.map((e) =>
+                        g.spaces.reduce(
+                          (acc, sp) => acc + (summaryEntryMatrix.get(sp)?.get(e.key) || 0),
+                          0,
+                        ),
+                      );
+                      const total = counts.reduce((a, b) => a + b, 0);
+                      return (
+                        <TableRow key={g.key} className={compactRow}>
+                          <TableCell className={`${compactCell} font-medium whitespace-nowrap`}>
+                            {g.label}
+                            <span className="ml-2 text-[11px] font-normal text-muted-foreground">
+                              {levelCountLabel(g.spaces.length)}
+                            </span>
+                          </TableCell>
+                          {counts.map((c, i) => (
+                            <TableCell
+                              key={overviewEntries[i].key}
+                              className={`${compactCell} text-center tabular-nums ${c === 0 ? "text-muted-foreground/60" : "font-semibold"}`}
+                            >
+                              {c}
+                            </TableCell>
+                          ))}
+                          <TableCell className={`${compactCell} text-center tabular-nums font-bold bg-muted/20`}>
+                            {total}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
 
           <p className="text-[11px] text-muted-foreground mt-2">
             Note: Detection totals are derived from the occurrence tables that follow. The
@@ -8931,7 +8977,7 @@ function InstancesReportModal({
         sourceDrawings,
         overviewClasses,
         overviewGroups: (spaceGroups ?? []).map((g) => ({
-          label: `${g.label} (${g.spaces.length})`,
+          label: `${g.label} (${levelCountLabel(g.spaces.length)})`,
           counts: classEntries.map((e) => ({
             name: e.displayName,
             idPrefix: e.idPrefix,
