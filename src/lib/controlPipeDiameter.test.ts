@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, test as it, expect } from "bun:test";
 import { controlNeedsPipeDiameter } from "./controlPipeDiameter";
 
 describe("controlNeedsPipeDiameter", () => {
