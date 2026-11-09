@@ -7967,6 +7967,7 @@ function InstancesReportModal({
                     );
                   })}
                 </TableRow>
+                </Fragment>
               );
 
             })}
@@ -8826,6 +8827,7 @@ function InstancesReportModal({
         overviewClasses,
         summary,
         spaces: withRotations,
+        spaceGroups: spaceGroups ?? undefined,
       };
       await runThreatReportExport(payload, (p) => setExportProgress(p));
 

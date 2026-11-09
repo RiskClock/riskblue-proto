@@ -190,6 +190,8 @@ export interface ThreatReportPayload {
     matrix: Record<string, Record<string, number>>;
   };
   spaces: ThreatReportSpace[];
+  /** Building groups (Building A, Shared Spaces, Unassigned) in report order. */
+  spaceGroups?: Array<{ key: string; label: string; spaces: string[] }>;
 }
 
 export interface ExportProgress {
@@ -631,6 +633,9 @@ export async function runThreatReportExport(
   }
   docChildren.push(para([new PageBreak()]));
 
+  const groupStart = new Map<string, string>();
+  for (const g of payload.spaceGroups ?? []) if (g.spaces[0]) groupStart.set(g.spaces[0], g.label);
+
   // ── Summary matrix ────────────────────────────────────────────────────
   docChildren.push(
     para([text("Summary", { bold: true, size: 32, color: HEAD_FILL })], {
@@ -659,15 +664,30 @@ export async function runThreatReportExport(
               ...cols.map((c) => tableHeaderCell(c.idPrefix || c.name, colW)),
             ],
           }),
-          ...payload.summary.spaces.map((sp) => {
+          ...payload.summary.spaces.flatMap((sp) => {
             const label = sp === "__unassigned__" ? "Unassigned" : sp;
             const inner = payload.summary.matrix[sp] || {};
-            return new TableRow({
+            const row = new TableRow({
               children: [
                 tableBodyCell(label, labelW),
                 ...cols.map((c) => tableBodyCell(String(inner[c.name] || 0), colW)),
               ],
             });
+            const gl = groupStart.get(sp);
+            if (!gl) return [row];
+            const header = new TableRow({
+              children: [
+                new TableCell({
+                  borders: cellBorders,
+                  columnSpan: cols.length + 1,
+                  width: { size: tableW, type: WidthType.DXA },
+                  shading: { fill: "E5E7EB", type: ShadingType.CLEAR, color: "auto" },
+                  margins: { top: 60, bottom: 60, left: 120, right: 120 },
+                  children: [new Paragraph({ children: [new TextRun({ text: gl, bold: true, size: 18 })] })],
+                }),
+              ],
+            });
+            return [header, row];
           }),
         ],
       }),
@@ -679,6 +699,15 @@ export async function runThreatReportExport(
   for (let si = 0; si < payload.spaces.length; si++) {
     const sp = payload.spaces[si];
     const label = sp.name === "__unassigned__" ? "Unassigned" : sp.name;
+    const groupLabel = groupStart.get(sp.name);
+    if (groupLabel) {
+      docChildren.push(
+        para([text(groupLabel, { bold: true, size: 36, color: HEAD_FILL })], {
+          heading: HeadingLevel.TITLE,
+          spacing: { after: 200 },
+        }),
+      );
+    }
     docChildren.push(
       para([text(label, { bold: true, size: 28, color: HEAD_FILL })], {
         heading: HeadingLevel.HEADING_1,
