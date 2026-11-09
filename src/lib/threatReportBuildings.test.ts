@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, test as it, expect } from "bun:test";
 import { groupSpacesByBuilding } from "./threatReportBuildings";
 
 const parsed = {
@@ -18,6 +18,6 @@ describe("groupSpacesByBuilding", () => {
     expect(g[3].spaces).toEqual(["__unassigned__"]);
   });
   it("keeps the flat list for single-building projects", () => {
-    expect(groupSpacesByBuilding(["L1"], { buildings: [{ id: "a", name: "A" }] })).toBeNull();
+    expect(groupSpacesByBuilding(["L1"], { buildings: [{ id: "a", name: "A" }] })).toBe(null);
   });
 });
