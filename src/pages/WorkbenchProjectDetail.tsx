@@ -49,6 +49,8 @@ import { expandSubtypeLabel, expandSubtypeLabelWithSuffix, isSubtypeSplitClass, 
 
 import { ActivityHistoryPanel } from "@/components/workbench/ActivityHistoryPanel";
 import { normalizeScoutResponse } from "@/lib/scoutResponseNormalizer";
+const isReportCategory = (c: string | null | undefined) =>
+  c === "Asset" || c === "Water System" || c === "Control";
 import { groupSpacesByBuilding, spaceDisplayLabels } from "@/lib/threatReportBuildings";
 import {
   runThreatReportExport,
@@ -1997,6 +1999,15 @@ const isChildPlanType = (t: string) =>
       ),
     [awpOptions],
   );
+  // Threat Report also counts Controls (e.g. Water Meter) as detections.
+  const reportOptionByName = useMemo(() => {
+    const m = new Map<string, { name: string; idPrefix: string | null; category: string }>();
+    for (const c of (manageControls as any[]) || []) {
+      if (c?.name) m.set(c.name, { name: c.name, idPrefix: c.id_prefix ?? c.idPrefix ?? null, category: "Control" });
+    }
+    for (const o of awpOptions || []) m.set(o.name, { name: o.name, idPrefix: o.idPrefix, category: o.category });
+    return m;
+  }, [awpOptions, manageControls]);
   const optionByName = useMemo(() => {
     const m = new Map<string, { name: string; idPrefix: string | null; category: string }>();
     for (const o of awpOptions || [])
@@ -6674,7 +6685,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
           requestId={requestId}
           projectId={projectId!}
           fileGroups={fileGroups}
-          optionByName={optionByName}
+          optionByName={reportOptionByName}
           pageSpaceMap={mergedPageSpaceMap}
           pageSpaceUnitMap={mergedPageSpaceUnitMap}
           pageUnitPlansMap={pageUnitPlansMap}
@@ -7682,12 +7693,12 @@ function InstancesReportModal({
     // still appear in Overview/Summary - 0 is meaningful information.
     for (const name of enabledClassNames || []) {
       const cat = optionByName.get(name)?.category;
-      if (cat === "Asset" || cat === "Water System") map.set(name, cat);
+      if (isReportCategory(cat)) map.set(name, cat!);
     }
     // Also include any class present in the data even if not in enabled list
     // (defensive: matches prior behavior for classes outside the toggle set).
     for (const r of expanded) {
-      if (r.category === "Asset" || r.category === "Water System") {
+      if (isReportCategory(r.category)) {
         if (!map.has(r.awpClassName)) map.set(r.awpClassName, r.category);
       }
     }
@@ -7703,7 +7714,7 @@ function InstancesReportModal({
     const m = new Map<string, number>();
     const seenConsolidated = new Set<string>();
     for (const r of expanded) {
-      if (r.category !== "Asset" && r.category !== "Water System") continue;
+      if (!isReportCategory(r.category)) continue;
       // A consolidated logical instance counts ONCE regardless of how many
       // spaces it spans (the riser unifier intentionally collapses these).
       // Plain annotations still count per row (per-space).
@@ -7720,7 +7731,7 @@ function InstancesReportModal({
   const summaryMatrix = useMemo(() => {
     const m = new Map<string, Map<string, number>>();
     for (const r of expanded) {
-      if (r.category !== "Asset" && r.category !== "Water System") continue;
+      if (!isReportCategory(r.category)) continue;
       const space = r.spaceName && levelNames.has(r.spaceName) ? r.spaceName : "__unassigned__";
       const inner = m.get(space) || new Map<string, number>();
       inner.set(r.awpClassName, (inner.get(r.awpClassName) || 0) + 1);
@@ -7777,7 +7788,7 @@ function InstancesReportModal({
       const combos = new Map<string, { type: string; diameter: string }>();
       for (const r of expanded) {
         if (r.awpClassName !== c.name) continue;
-        if (r.category !== "Asset" && r.category !== "Water System") continue;
+        if (!isReportCategory(r.category)) continue;
         const type = typeOf(r);
         const diameter = diameterOf(r);
         combos.set(`${type}::${diameter}`, { type, diameter });
@@ -7843,7 +7854,7 @@ function InstancesReportModal({
     const m = new Map<string, number>();
     const seen = new Set<string>();
     for (const r of expanded) {
-      if (r.category !== "Asset" && r.category !== "Water System") continue;
+      if (!isReportCategory(r.category)) continue;
       const key = entryKeyForRow(r);
       if (r.logicalKey.startsWith("cons::")) {
         const dedup = `${key}::${r.annotationBaseId}`;
@@ -7858,7 +7869,7 @@ function InstancesReportModal({
   const summaryEntryMatrix = useMemo(() => {
     const m = new Map<string, Map<string, number>>();
     for (const r of expanded) {
-      if (r.category !== "Asset" && r.category !== "Water System") continue;
+      if (!isReportCategory(r.category)) continue;
       const space =
         r.spaceName && levelNames.has(r.spaceName) ? r.spaceName : "__unassigned__";
       const key = entryKeyForRow(r);
@@ -7934,7 +7945,7 @@ function InstancesReportModal({
           </Table>
         </div>
         <div>
-          <h3 className="text-base font-bold mb-2">Assets at Risk Detections</h3>
+          <h3 className="text-base font-bold mb-2">Detection Overview</h3>
           {overviewEntries.length === 0 ? (
             <div className="text-sm text-muted-foreground">No detections yet.</div>
           ) : (
@@ -8694,7 +8705,7 @@ function InstancesReportModal({
         const combos = new Map<string, { type: string; diameter: string }>();
         for (const r of expanded) {
           if (r.awpClassName !== c.name) continue;
-          if (r.category !== "Asset" && r.category !== "Water System") continue;
+          if (!isReportCategory(r.category)) continue;
           const t = typeGroupOf(r);
           const d = diameterOf(r);
           combos.set(`${t}::${d}`, { type: t, diameter: d });
@@ -8742,7 +8753,7 @@ function InstancesReportModal({
       const spaceCountsPerKey = new Map<string, Map<string, number>>();
       const seenConsGlobal = new Set<string>();
       for (const r of expanded) {
-        if (r.category !== "Asset" && r.category !== "Water System") continue;
+        if (!isReportCategory(r.category)) continue;
         const key = entryKeyForRow(r);
         if (r.logicalKey.startsWith("cons::")) {
           const dedup = `${key}::${r.annotationBaseId}`;
@@ -8768,7 +8779,7 @@ function InstancesReportModal({
         const seenCons = new Set<string>();
         for (const r of expanded) {
           if (entryKeyForRow(r) !== e.key) continue;
-          if (r.category !== "Asset" && r.category !== "Water System") continue;
+          if (!isReportCategory(r.category)) continue;
           if (r.logicalKey.startsWith("cons::")) {
             const dedup = `${e.key}::${r.annotationBaseId}`;
             if (seenCons.has(dedup)) continue;
