@@ -1,3 +1,4 @@
+import { INTAKE_CONTROL_CATEGORIES } from "@/lib/intakeControlCategories";
 import { toStorageSafeFileName } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -52,7 +53,6 @@ const IDENTIFY_TABS: { id: IdentifyTab; label: string }[] = [
   { id: "controls", label: "Controls" },
 ];
 
-const INTAKE_CONTROL_CATEGORIES = new Set(["risk detection", "valve and automation controls"]);
 
 export type ProjectSizeTier = "small" | "medium" | "large" | "enterprise";
 
