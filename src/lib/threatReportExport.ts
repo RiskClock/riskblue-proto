@@ -42,6 +42,7 @@ async function renderPageWithOverlays(
   rotation: 0 | 90 | 180 | 270 = 0,
 ): Promise<{ blob: Blob; width: number; height: number } | null> {
   try {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
     const data = await pdfBlob.arrayBuffer();
     const doc = await pdfjsLib.getDocument({ data }).promise;
     if (pageIdx < 1 || pageIdx > doc.numPages) return null;
@@ -629,6 +630,37 @@ export async function runThreatReportExport(
         ],
       }),
     );
+    for (const g of payload.overviewGroups ?? []) {
+      docChildren.push(
+        para([text(g.label, { bold: true, size: 22, color: HEAD_FILL })], {
+          spacing: { before: 300, after: 100 },
+        }),
+        new Table({
+          width: { size: 9360, type: WidthType.DXA },
+          columnWidths: [2000, 5360, 2000],
+          rows: [
+            new TableRow({
+              tableHeader: true,
+              children: [
+                tableHeaderCell("Prefix", 2000),
+                tableHeaderCell("Class", 5360),
+                tableHeaderCell("Count", 2000),
+              ],
+            }),
+            ...g.counts.map(
+              (c) =>
+                new TableRow({
+                  children: [
+                    tableBodyCell(c.idPrefix, 2000, { mono: true }),
+                    tableBodyCell(c.name, 5360),
+                    tableBodyCell(String(c.count), 2000),
+                  ],
+                }),
+            ),
+          ],
+        }),
+      );
+    }
   } else {
     docChildren.push(para([text("No detections yet.", { italics: true, color: "6B7280" })]));
   }

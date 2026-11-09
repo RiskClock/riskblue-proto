@@ -1,10 +1,8 @@
+import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import * as pdfjsLib from 'pdfjs-dist';
 
 // Configure PDF.js worker - use the bundled worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.mjs',
-  import.meta.url
-).toString();
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 export interface PDFPageData {
   pageNumber: number;
