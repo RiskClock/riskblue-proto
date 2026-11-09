@@ -138,8 +138,18 @@ export function SpatialArchitectModal({
 
 
   // Load editable state from payload whenever it changes / modal opens.
+  // Background polling hands us fresh payload/catalog references every few
+  // seconds; only re-sync while the user has no unsaved edits so deletions
+  // and building assignments are never silently restored.
+  const initializedRef = useRef(false);
+  const dirtyRef = useRef(false);
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      initializedRef.current = false;
+      return;
+    }
+    if (initializedRef.current && dirtyRef.current) return;
+    initializedRef.current = true;
     const parsed = payload?.parsed;
     const records: any[] = Array.isArray(parsed?.spatial_records)
       ? parsed.spatial_records
@@ -257,6 +267,7 @@ export function SpatialArchitectModal({
       bboxSerialized !== initialBboxSerialized.current,
     [levels, buildings, bboxSerialized],
   );
+  dirtyRef.current = isDirty;
 
   const hasBuildings = buildings.length > 0;
   const visibleLevels = useMemo(
