@@ -7680,9 +7680,23 @@ function InstancesReportModal({
   );
   const spaceGroupStart = useMemo(() => {
     const m = new Map<string, string>();
-    for (const g of spaceGroups ?? []) if (g.spaces[0]) m.set(g.spaces[0], g.label);
+    for (const g of spaceGroups ?? []) if (g.spaces[0]) m.set(g.spaces[0], `${g.label} (${g.spaces.length})`);
     return m;
   }, [spaceGroups]);
+  // Building groups are collapsible (expanded by default) in Spaces and Summary.
+  const spaceGroupKeyOf = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const g of spaceGroups ?? []) for (const sp of g.spaces) m.set(sp, g.key);
+    return m;
+  }, [spaceGroups]);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = (key: string) =>
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   const spaceShortLabel = useMemo(() => spaceDisplayLabels(spaceGroups), [spaceGroups]);
 
 
@@ -8000,19 +8014,25 @@ function InstancesReportModal({
               const inner = summaryEntryMatrix.get(space);
               const label = space === "__unassigned__" ? "Unassigned" : (spaceShortLabel.get(space) ?? space);
               const groupLabel = spaceGroupStart.get(space);
+              const groupKey = spaceGroupKeyOf.get(space);
+              const isCollapsed = !!groupKey && collapsedGroups.has(groupKey);
               return (
                 <Fragment key={space}>
                 {groupLabel && (
                   <TableRow className={compactRow}>
                     <TableCell
                       colSpan={overviewEntries.length + 1}
-                      className={`${compactCell} bg-muted/30 font-semibold text-xs uppercase tracking-wide`}
+                      className={`${compactCell} bg-muted/30 font-semibold text-xs uppercase tracking-wide cursor-pointer select-none`}
+                      onClick={() => groupKey && toggleGroup(groupKey)}
                     >
-                      {groupLabel}
+                      <span className="inline-flex items-center gap-1">
+                        {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                        {groupLabel}
+                      </span>
                     </TableCell>
                   </TableRow>
                 )}
-                <TableRow className={compactRow}>
+                {!isCollapsed && (<TableRow className={compactRow}>
                   <TableCell
                     className={`${compactCell} sticky left-0 z-10 bg-background font-medium`}
                   >
@@ -9080,14 +9100,21 @@ function InstancesReportModal({
             {spaceList.map((space) => {
               const label = space === "__unassigned__" ? "Unassigned" : (spaceShortLabel.get(space) ?? space);
               const groupLabel = spaceGroupStart.get(space);
+              const groupKey = spaceGroupKeyOf.get(space);
+              const isCollapsed = !!groupKey && collapsedGroups.has(groupKey);
               return (
                 <Fragment key={space}>
                 {groupLabel && (
-                  <div className="text-[11px] font-semibold text-foreground px-3 pt-3 pb-1 border-b bg-muted/10">
+                  <button
+                    type="button"
+                    onClick={() => groupKey && toggleGroup(groupKey)}
+                    className="w-full flex items-center gap-1 text-left text-[11px] font-semibold text-foreground px-3 pt-3 pb-1 border-b bg-muted/10 hover:bg-muted/30"
+                  >
+                    {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                     {groupLabel}
-                  </div>
+                  </button>
                 )}
-                <button
+                {!isCollapsed && <button
                   type="button"
                   onClick={() => setSelected(space)}
                   className={`w-full text-left px-3 py-2 text-sm border-b hover:bg-muted/40 ${
@@ -9095,7 +9122,7 @@ function InstancesReportModal({
                   }`}
                 >
                   {label}
-                </button>
+                </button>}
                 </Fragment>
               );
             })}
