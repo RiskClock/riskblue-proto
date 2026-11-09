@@ -1,3 +1,4 @@
+import { controlNeedsPipeDiameter } from "@/lib/controlPipeDiameter";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -85,6 +86,7 @@ interface TenantProduct {
   maint_interval: "monthly" | "yearly" | null;
   applied_in_any_plan: boolean;
   pipe_diameter_inches: number | null;
+  control_type: string | null;
   scope_customized: boolean;
   critical_asset_ids: string[];
   water_system_ids: string[];
@@ -108,9 +110,9 @@ export interface NewProductInput {
   description: string;
   controlId: string | null;
   pipeDiameterInches: number | null;
+  controlType: string | null;
 }
 
-const PIPE_DIAMETER_TYPES = new Set(["automatic shut off valve", "flow sensor", "water meter"]);
 
 export default function Controls() {
   const { user } = useAuth();
@@ -322,6 +324,7 @@ export default function Controls() {
         description: input.description || null,
         control_id: input.controlId,
         pipe_diameter_inches: input.pipeDiameterInches,
+        control_type: input.controlType,
         one_time_cost: control?.one_time_cost ?? null,
         monthly_maint_cost: control?.monthly_maint_cost ?? null,
         maint_interval: recurringDefault,
@@ -375,6 +378,7 @@ export default function Controls() {
   const [codeDraft, setCodeDraft] = useState("");
   const [descDraft, setDescDraft] = useState("");
   const [diameterDraft, setDiameterDraft] = useState("");
+  const [typeDraft, setTypeDraft] = useState("");
   const [costDraft, setCostDraft] = useState({ one: "", install: "", maint: "" });
 
   useEffect(() => {
@@ -383,6 +387,7 @@ export default function Controls() {
     setCodeDraft(selected.product_code ?? "");
     setDescDraft(selected.description ?? "");
     setDiameterDraft(selected.pipe_diameter_inches == null ? "" : String(selected.pipe_diameter_inches));
+    setTypeDraft(selected.control_type ?? "");
     const control = selected.control_id ? controlMap.get(selected.control_id) : undefined;
     setCostDraft({
       one: String(selected.one_time_cost ?? control?.one_time_cost ?? 0),
@@ -396,6 +401,7 @@ export default function Controls() {
     selected?.monthly_maint_cost,
     selected?.control_id,
     selected?.pipe_diameter_inches,
+    selected?.control_type,
     controlMap,
   ]);
 
@@ -498,7 +504,7 @@ export default function Controls() {
   const scopeItems = allCatalogItems.filter((item) => item.category !== "processes");
   const selectedScopeItems = scopeItems.filter((item) => scope[item.category].includes(item.id));
   const selectedControl = selected?.control_id ? controlMap.get(selected.control_id) : undefined;
-  const needsPipeDiameter = PIPE_DIAMETER_TYPES.has(selectedControl?.name.toLowerCase() ?? "");
+  const needsPipeDiameter = controlNeedsPipeDiameter(selectedControl?.name);
   const selectedHasRecurringValue = selected?.monthly_maint_cost !== null && selected?.monthly_maint_cost !== undefined;
   const selectedRecurringInterval = selectedHasRecurringValue && (selected?.maint_interval === "yearly" || selected?.maint_interval === "monthly")
     ? selected.maint_interval
@@ -708,6 +714,26 @@ export default function Controls() {
                           selectedId={selected.control_id}
                           disabled={!canEdit}
                            onSelect={(controlId) => void patchProduct(selected.id, { control_id: controlId, scope_customized: false })}
+                        />
+                      </div>
+
+                      <div className="space-y-1.5 w-full">
+                        <Label className="text-xs text-muted-foreground uppercase tracking-wide">Type</Label>
+                        <Input
+                          value={typeDraft}
+                          disabled={!canEdit}
+                          placeholder="Type"
+                          onChange={(e) => setTypeDraft(e.target.value)}
+                          onBlur={() => {
+                            const v = typeDraft.trim();
+                            if (v !== (selected.control_type ?? "")) {
+                              void patchProduct(selected.id, { control_type: v || null });
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                          }}
+                          className="h-9 w-full"
                         />
                       </div>
 
@@ -1061,11 +1087,12 @@ function AddProductModal({
   const [description, setDescription] = useState("");
   const [controlId, setControlId] = useState<string | null | undefined>(undefined);
   const [pipeDiameter, setPipeDiameter] = useState("");
+  const [controlType, setControlType] = useState("");
   const [saving, setSaving] = useState(false);
 
   const canSave = !!name.trim() || !!productCode.trim();
   const selectedControl = controls.find((control) => control.id === controlId);
-  const needsPipeDiameter = PIPE_DIAMETER_TYPES.has(selectedControl?.name.toLowerCase() ?? "");
+  const needsPipeDiameter = controlNeedsPipeDiameter(selectedControl?.name);
 
   const submit = async () => {
     if (!canSave) return;
@@ -1082,6 +1109,7 @@ function AddProductModal({
         description: description.trim(),
         controlId: controlId ?? null,
         pipeDiameterInches: needsPipeDiameter ? parsedDiameter : null,
+        controlType: controlType.trim() || null,
       });
     } finally {
       setSaving(false);
@@ -1123,6 +1151,10 @@ function AddProductModal({
           <div className="space-y-1.5">
             <Label>Product Type</Label>
             <SearchableControlSelect controls={controls} selectedId={controlId} onSelect={setControlId} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="new-product-type">Type</Label>
+            <Input id="new-product-type" value={controlType} onChange={(e) => setControlType(e.target.value)} placeholder="Type" />
           </div>
           {needsPipeDiameter && (
             <div className="space-y-1.5">
