@@ -67,6 +67,18 @@ export function awpClassColorForType(
  * stay stable for the same drawing while neighbouring rows land far apart.
  */
 export function drawingRiskColors(keys: string[]): Map<string, string> {
+  // Colors come from the text of each row key so the same class/type/diameter
+  // reads identically on every page and file.
+  const result = new Map<string, string>();
+  for (const key of new Set(keys)) {
+    const [name, type, diameter] = key.split("::");
+    result.set(key, awpClassColorForType(name, type, diameter));
+  }
+  return result;
+}
+
+/** Legacy per-page evenly-spaced palette (kept for reference). */
+export function drawingRiskColorsSpaced(keys: string[]): Map<string, string> {
   const unique = [...new Set(keys)].sort();
   const n = unique.length;
   const result = new Map<string, string>();

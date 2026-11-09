@@ -2404,6 +2404,8 @@ export const FileViewerModal = ({
                       setActivePlanId(null);
                     }}
                     devices={devicesApi}
+                    allLevelPlans={allLevelPlans ?? []}
+                    allLevelPlanOverrides={allLevelPlanOverrides}
                     onFocusInstance={focusInstance}
                   />
                   </div>
@@ -3033,6 +3035,8 @@ export interface DevicesApi {
 }
 
 interface DetectionsPanelProps {
+  allLevelPlans?: ParsedFloorPlan[];
+  allLevelPlanOverrides?: Record<string, { units?: string[] }>;
   rotationByPage: Record<number, number>;
   viewerApiRef: React.RefObject<any>;
   awpClasses: AwpClassOption[];
@@ -3085,6 +3089,42 @@ const findContainingPlan = (
   return best;
 };
 
+
+type ReferencingLevel = { name: string; page: number; count: number };
+const formatReferencingLevel = (m: ReferencingLevel) => `${m.name} (p${m.page})${m.count > 1 ? ` x${m.count}` : ""}`;
+// For a unit/detail plan, list the level plans that reference it. Matches the
+// unit's override name, reference_id and plan_id case-insensitively.
+function computeReferencingLevels(
+  unit: ParsedFloorPlan,
+  overrides: Record<string, any>,
+  allLevelPlans: ParsedFloorPlan[],
+  allLevelPlanOverrides?: Record<string, { units?: string[] }>,
+): ReferencingLevel[] {
+  const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
+  const unitOvr = overrides[unit.plan_id];
+  const unitKeys = new Set<string>();
+  const overrideName = typeof unitOvr?.name === "string" ? unitOvr.name : null;
+  if (overrideName) unitKeys.add(norm(overrideName));
+  unitKeys.add(norm(unitPlanRefKey(unit)));
+  unitKeys.add(norm(unit.reference_id));
+  unitKeys.add(norm(unit.plan_id));
+  unitKeys.delete("");
+  const counts = new Map<string, ReferencingLevel>();
+  for (const lvl of allLevelPlans) {
+    const localOvr = overrides[lvl.plan_id];
+    const fileOvr = allLevelPlanOverrides?.[lvl.plan_id];
+    const effUnits: string[] = localOvr?.units ?? fileOvr?.units ?? lvl.referenced_unit_ids ?? [];
+    const matchCount = effUnits.reduce((n, u) => n + (unitKeys.has(norm(u)) ? 1 : 0), 0);
+    if (matchCount <= 0) continue;
+    const nameOvr = typeof localOvr?.name === "string" ? localOvr.name : null;
+    const name = (nameOvr ?? lvl.reference_id ?? lvl.plan_id ?? "").trim() || "Level";
+    const key = `${name}::${lvl.page_number}`;
+    const existing = counts.get(key);
+    if (existing) existing.count += matchCount;
+    else counts.set(key, { name, page: lvl.page_number, count: matchCount });
+  }
+  return Array.from(counts.values()).sort((a, b) => a.page - b.page || a.name.localeCompare(b.name));
+}
 
 interface DetectionRowModel {
   key: string;
@@ -3402,7 +3442,25 @@ const DetectionsPanel = ({
   onSelectRow,
   devices,
   onFocusInstance,
+  allLevelPlans = [],
+  allLevelPlanOverrides,
 }: DetectionsPanelProps) => {
+  const referencedForItems = (items: DrawingInstanceRow[]): ReferencingLevel[] => {
+    const agg = new Map<string, ReferencingLevel>();
+    for (const i of items) {
+      const plan = findContainingPlan(floorPlans, i.nx, i.ny, floorPlanOverrides);
+      if (!plan) continue;
+      const t = getEffectiveType(plan, floorPlanOverrides);
+      if (t !== "unit_floor_plan" && t !== "typical_detail_block") continue;
+      for (const r of computeReferencingLevels(plan, floorPlanOverrides, allLevelPlans, allLevelPlanOverrides)) {
+        const k = `${r.name}::${r.page}`;
+        const e = agg.get(k);
+        if (e) e.count += r.count;
+        else agg.set(k, { ...r });
+      }
+    }
+    return Array.from(agg.values()).sort((a, b) => a.page - b.page || a.name.localeCompare(b.name));
+  };
   const showPlanBadges = (floorPlans?.length ?? 0) > 0;
   const rows = useMemo(() => buildDetectionRows(awpClasses, instancesByClassThisFile), [awpClasses, instancesByClassThisFile]);
   return (
@@ -3502,6 +3560,23 @@ const DetectionsPanel = ({
                         {row.diam && <Badge variant="outline" className="max-w-28 truncate rounded px-1.5 py-0.5 text-xs font-medium">{row.diam}</Badge>}
                         {row.type && <Badge variant="outline" className="max-w-32 truncate rounded px-1.5 py-0.5 text-xs font-medium">{subtypeAbbr(c.name, row.type) || row.type}</Badge>}
                       </div>}
+                      {(() => {
+                        const refs = referencedForItems(row.items);
+                        if (refs.length === 0) return null;
+                        const total = refs.reduce((n, r) => n + r.count, 0);
+                        return (
+                          <div className="flex items-start gap-1 mt-1 text-xs text-muted-foreground">
+                            <span className="font-medium shrink-0">Referenced in ({total}):</span>
+                            <div className="flex flex-wrap gap-1">
+                              {refs.map((r) => (
+                                <span key={`${r.name}::${r.page}`} className="px-1.5 py-0.5 rounded bg-muted text-foreground text-xs font-mono">
+                                  {formatReferencingLevel(r)}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                   {devices.beta && <DeviceButton row={row} devices={devices} />}
@@ -3729,39 +3804,8 @@ const FloorPlansPanel = ({
   // reference_id, AND its plan_id — all case-insensitively / trimmed — so a
   // level plan whose `referenced_unit_ids` was captured as "detail 22" still
   // matches a unit whose reference_id is "Detail 22".
-  const findReferencingLevels = (unit: ParsedFloorPlan): string[] => {
-    const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
-    const unitOvr = overrides[unit.plan_id];
-    const unitKeys = new Set<string>();
-    const overrideName = typeof unitOvr?.name === "string" ? unitOvr.name : null;
-    if (overrideName) unitKeys.add(norm(overrideName));
-    unitKeys.add(norm(unitPlanRefKey(unit)));
-    unitKeys.add(norm(unit.reference_id));
-    unitKeys.add(norm(unit.plan_id));
-    unitKeys.delete("");
-
-    const counts = new Map<string, { name: string; page: number; count: number }>();
-    for (const lvl of allLevelPlans) {
-      const localOvr = overrides[lvl.plan_id];
-      const fileOvr = allLevelPlanOverrides?.[lvl.plan_id];
-      const effUnits: string[] =
-        localOvr?.units ?? fileOvr?.units ?? lvl.referenced_unit_ids ?? [];
-      const matchCount = effUnits.reduce(
-        (n, u) => n + (unitKeys.has(norm(u)) ? 1 : 0),
-        0,
-      );
-      if (matchCount <= 0) continue;
-      const nameOvr = typeof localOvr?.name === "string" ? localOvr.name : null;
-      const name = (nameOvr ?? lvl.reference_id ?? lvl.plan_id ?? "").trim() || "Level";
-      const key = `${name}::${lvl.page_number}`;
-      const existing = counts.get(key);
-      if (existing) existing.count += matchCount;
-      else counts.set(key, { name, page: lvl.page_number, count: matchCount });
-    }
-    return Array.from(counts.values())
-      .sort((a, b) => a.page - b.page || a.name.localeCompare(b.name))
-      .map((m) => `${m.name} (p${m.page})${m.count > 1 ? ` x${m.count}` : ""}`);
-  };
+  const findReferencingLevels = (unit: ParsedFloorPlan): string[] =>
+    computeReferencingLevels(unit, overrides, allLevelPlans, allLevelPlanOverrides).map(formatReferencingLevel);
 
 
   // Compute per-plan annotation membership purely by bbox containment of the
