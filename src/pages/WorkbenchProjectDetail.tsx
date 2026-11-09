@@ -49,6 +49,7 @@ import { expandSubtypeLabel, expandSubtypeLabelWithSuffix, isSubtypeSplitClass, 
 
 import { ActivityHistoryPanel } from "@/components/workbench/ActivityHistoryPanel";
 import { normalizeScoutResponse } from "@/lib/scoutResponseNormalizer";
+import { groupSpacesByBuilding } from "@/lib/threatReportBuildings";
 import {
   runThreatReportExport,
   type ExportProgress,
@@ -7581,6 +7582,21 @@ function InstancesReportModal({
   }, [spaceHierarchyPayload]);
 
   const spaceList = useMemo(() => {
+    const flat = spaceListFlat;
+    const groups = groupSpacesByBuilding(flat, spaceHierarchyPayload?.parsed);
+    return groups ? groups.flatMap((g) => g.spaces) : flat;
+  }, [spaceListFlat, spaceHierarchyPayload]);
+  const spaceGroups = useMemo(
+    () => groupSpacesByBuilding(spaceList, spaceHierarchyPayload?.parsed),
+    [spaceList, spaceHierarchyPayload],
+  );
+  const spaceGroupStart = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const g of spaceGroups ?? []) if (g.spaces[0]) m.set(g.spaces[0], g.label);
+    return m;
+  }, [spaceGroups]);
+
+  const spaceListFlat = useMemo(() => {
     const set = new Set<string>();
     // Only physical spaces (levels) from spatial_records belong in the report
     // spaces list. Units (unit_templates) are sub-spaces and should appear in
