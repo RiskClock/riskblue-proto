@@ -1,0 +1,1 @@
+ALTER TABLE public.tenant_products ADD COLUMN IF NOT EXISTS mitigation_control_ids uuid[] NOT NULL DEFAULT '{}'::uuid[];

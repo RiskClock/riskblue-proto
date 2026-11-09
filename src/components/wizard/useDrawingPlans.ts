@@ -1,3 +1,4 @@
+import { isIntakeControlCategory } from "@/lib/intakeControlCategories";
 import { useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -80,7 +81,7 @@ export function useDrawingPlans(projectId: string | null | undefined, enabled: b
   const { data: controls = [] } = useQuery({
     queryKey: ["drawing-plans-controls"],
     queryFn: async () => {
-      const { data } = await supabase.from("mitigation_controls").select("id, name").eq("is_active", true);
+      const { data } = await supabase.from("mitigation_controls").select("id, name, category").eq("is_active", true);
       return (data || []) as any[];
     },
     enabled: on,
@@ -91,7 +92,7 @@ export function useDrawingPlans(projectId: string | null | undefined, enabled: b
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenant_products")
-        .select("id, name, product_code, control_id, applied_in_any_plan, fixed_quantity, pipe_diameter_inches, scope_customized, critical_asset_ids, water_system_ids")
+        .select("id, name, product_code, control_id, applied_in_any_plan, fixed_quantity, pipe_diameter_inches, scope_customized, critical_asset_ids, water_system_ids, mitigation_control_ids")
         .eq("tenant_id", tenantId!)
         .order("created_at");
       if (error) throw error;
@@ -119,7 +120,7 @@ export function useDrawingPlans(projectId: string | null | undefined, enabled: b
   });
 
   const catalogEntryByName = useMemo(() => {
-    const m = new Map<string, { id: string; kind: "Asset" | "Water System"; prefix: string | null; defaults: string[] }>();
+    const m = new Map<string, { id: string; kind: "Asset" | "Water System" | "Control"; prefix: string | null; defaults: string[] }>();
     if (!catalog) return m;
     (catalog.critical_assets || []).forEach((e: any) =>
       m.set((e.name || "").toLowerCase().trim(), { id: e.id, kind: "Asset", prefix: e.id_prefix, defaults: e.default_control_ids || [] }),
@@ -127,8 +128,14 @@ export function useDrawingPlans(projectId: string | null | undefined, enabled: b
     (catalog.water_systems || []).forEach((e: any) =>
       m.set((e.name || "").toLowerCase().trim(), { id: e.id, kind: "Water System", prefix: e.id_prefix, defaults: e.default_control_ids || [] }),
     );
+    (controls as any[])
+      .filter((c) => isIntakeControlCategory(c.category))
+      .forEach((c) => {
+        const key = (c.name || "").toLowerCase().trim();
+        if (!m.has(key)) m.set(key, { id: c.id, kind: "Control", prefix: null, defaults: [c.id] });
+      });
     return m;
-  }, [catalog]);
+  }, [catalog, controls]);
 
   const catalogFor = useCallback(
     (className: string) => catalogEntryByName.get((className || "").toLowerCase().trim()) ?? null,
@@ -159,7 +166,7 @@ export function useDrawingPlans(projectId: string | null | undefined, enabled: b
         .filter((p) => {
           if (!p.control_id) return false;
           if (p.scope_customized) {
-            return [...(p.critical_asset_ids || []), ...(p.water_system_ids || [])].includes(entry.id);
+            return [...(p.critical_asset_ids || []), ...(p.water_system_ids || []), ...(p.mitigation_control_ids || [])].includes(entry.id);
           }
           return entry.defaults.includes(p.control_id);
         })

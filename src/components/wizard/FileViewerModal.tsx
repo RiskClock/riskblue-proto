@@ -3238,7 +3238,7 @@ const DeviceButton = ({ row, devices }: { row: DetectionRowModel; devices: Devic
   ) : (
     <PopoverTrigger asChild>
         <Button type="button" variant="ghost" size="sm" className="h-7 px-1.5 text-sm text-primary" disabled={disabled} onClick={(e) => e.stopPropagation()}>
-          + Control
+          + Product
       </Button>
     </PopoverTrigger>
   );

@@ -1,3 +1,4 @@
+import { isIntakeControlCategory } from "@/lib/intakeControlCategories";
 import { controlNeedsPipeDiameter } from "@/lib/controlPipeDiameter";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -66,11 +67,12 @@ interface MitigationControl {
 interface CatalogItem {
   id: string;
   name: string;
-  kind: "Critical Asset" | "Water System" | "Process";
+  kind: "Critical Asset" | "Water System" | "Process" | "Control";
   category: CategoryKey;
 }
 
-type CategoryKey = "critical_assets" | "water_systems" | "processes";
+type CategoryKey = "critical_assets" | "water_systems" | "processes" | "controls";
+type ScopeSelection = { critical_assets: string[]; water_systems: string[]; controls: string[] };
 
 interface TenantProduct {
   id: string;
@@ -91,6 +93,7 @@ interface TenantProduct {
   critical_asset_ids: string[];
   water_system_ids: string[];
   process_ids: string[];
+  mitigation_control_ids: string[];
   created_at: string;
 }
 
@@ -239,8 +242,11 @@ export default function Controls() {
     (catalogRows.processes || []).forEach((r) =>
       items.push({ id: r.id, name: r.name, kind: "Process", category: "processes" }),
     );
+    allControls
+      .filter((control) => isIntakeControlCategory(control.category))
+      .forEach((control) => items.push({ id: control.id, name: control.name, kind: "Control", category: "controls" }));
     return items;
-  }, [catalogRows]);
+  }, [catalogRows, allControls]);
 
   const selected = useMemo(
     () => products.find((p) => p.id === selectedId) ?? null,
@@ -254,7 +260,7 @@ export default function Controls() {
 
   // Default mitigation scope, derived from the Risk-Control Map.
   const defaultScope = useMemo(() => {
-    const result = { critical_assets: [] as string[], water_systems: [] as string[], processes: [] as string[] };
+    const result = { critical_assets: [] as string[], water_systems: [] as string[], processes: [] as string[], controls: selected?.control_id ? [selected.control_id] : [] };
     const controlId = selected?.control_id;
     if (!controlId) return result;
     (catalogRows.critical_assets || []).forEach((r) => {
@@ -272,6 +278,7 @@ export default function Controls() {
         critical_assets: selected.critical_asset_ids || [],
         water_systems: selected.water_system_ids || [],
         processes: [],
+        controls: selected.mitigation_control_ids || [],
       };
     }
     return defaultScope;
@@ -429,6 +436,7 @@ export default function Controls() {
       critical_asset_ids: [],
       water_system_ids: [],
       process_ids: [],
+      mitigation_control_ids: [],
     });
   };
 
@@ -960,7 +968,7 @@ export default function Controls() {
       {scopePickerOpen && selected && (
         <ScopePickerModal
           items={scopeItems}
-          selectedIds={{ critical_assets: scope.critical_assets, water_systems: scope.water_systems }}
+          selectedIds={{ critical_assets: scope.critical_assets, water_systems: scope.water_systems, controls: scope.controls }}
           canReset={selected.scope_customized}
           onClose={() => setScopePickerOpen(false)}
           onReset={() => {
@@ -972,6 +980,7 @@ export default function Controls() {
               critical_asset_ids: next.critical_assets,
               water_system_ids: next.water_systems,
               process_ids: [],
+              mitigation_control_ids: next.controls,
               scope_customized: true,
             });
             setScopePickerOpen(false);
@@ -1013,11 +1022,11 @@ function ScopePickerModal({
   onSave,
 }: {
   items: CatalogItem[];
-  selectedIds: { critical_assets: string[]; water_systems: string[] };
+  selectedIds: ScopeSelection;
   canReset: boolean;
   onClose: () => void;
   onReset: () => void;
-  onSave: (value: { critical_assets: string[]; water_systems: string[] }) => void;
+  onSave: (value: ScopeSelection) => void;
 }) {
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState(selectedIds);
@@ -1044,16 +1053,16 @@ function ScopePickerModal({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Edit Mitigation Scope</DialogTitle>
-          <DialogDescription>Select the assets and water systems this product protects.</DialogDescription>
+          <DialogDescription>Select the assets, water systems, and controls this product protects.</DialogDescription>
         </DialogHeader>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search assets and water systems" className="pl-9" />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search assets, water systems, and controls" className="pl-9" />
         </div>
         <div className="max-h-[50vh] overflow-y-auto rounded-md border p-1">
           {filtered.map((item) => (
             <label key={`${item.category}-${item.id}`} className="flex items-center gap-2 rounded px-2 py-2 hover:bg-muted/50 cursor-pointer">
-              <Checkbox checked={draft[item.category as "critical_assets" | "water_systems"].includes(item.id)} onCheckedChange={() => toggle(item)} />
+              <Checkbox checked={draft[item.category as keyof ScopeSelection].includes(item.id)} onCheckedChange={() => toggle(item)} />
               <span className="text-sm flex-1">{item.name}</span>
               <span className="text-xs text-muted-foreground">{item.kind}</span>
             </label>
