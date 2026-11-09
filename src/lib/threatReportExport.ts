@@ -179,6 +179,10 @@ export interface ThreatReportPayload {
   projectName: string;
   reportDate: string;
   sourceDrawings: string[];
+  overviewGroups?: Array<{
+    label: string;
+    counts: Array<{ name: string; idPrefix: string; count: number }>;
+  }>;
   overviewClasses: Array<{
     name: string;
     idPrefix: string;
