@@ -48,3 +48,19 @@ export function groupSpacesByBuilding(spaces: string[], parsed: any): SpaceGroup
   if (unassigned.length) groups.push({ key: UNASSIGNED_GROUP_KEY, label: "Unassigned", spaces: unassigned });
   return groups;
 }
+
+/** Short label for a space shown under its building header ("Level 0"). */
+export function spaceDisplayLabels(groups: SpaceGroup[] | null | undefined): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const g of groups ?? []) {
+    if (g.key === SHARED_GROUP_KEY || g.key === UNASSIGNED_GROUP_KEY) continue;
+    const prefix = g.label.trim().toLowerCase() + " ";
+    for (const s of g.spaces) {
+      if (s.toLowerCase().startsWith(prefix)) {
+        const rest = s.slice(prefix.length).trim();
+        if (rest) m.set(s, rest);
+      }
+    }
+  }
+  return m;
+}

@@ -21,3 +21,10 @@ describe("groupSpacesByBuilding", () => {
     expect(groupSpacesByBuilding(["L1"], { buildings: [{ id: "a", name: "A" }] })).toBe(null);
   });
 });
+
+import { spaceDisplayLabels as _sdl } from "./threatReportBuildings";
+test("building levels display without building prefix", () => {
+  const m = _sdl([{ key: "b1", label: "Block B", spaces: ["Block B Level 0", "Roof"] }]);
+  expect(m.get("Block B Level 0")).toBe("Level 0");
+  expect(m.has("Roof")).toBe(false);
+});

@@ -49,7 +49,7 @@ import { expandSubtypeLabel, expandSubtypeLabelWithSuffix, isSubtypeSplitClass, 
 
 import { ActivityHistoryPanel } from "@/components/workbench/ActivityHistoryPanel";
 import { normalizeScoutResponse } from "@/lib/scoutResponseNormalizer";
-import { groupSpacesByBuilding } from "@/lib/threatReportBuildings";
+import { groupSpacesByBuilding, spaceDisplayLabels } from "@/lib/threatReportBuildings";
 import {
   runThreatReportExport,
   type ExportProgress,
@@ -7672,6 +7672,7 @@ function InstancesReportModal({
     for (const g of spaceGroups ?? []) if (g.spaces[0]) m.set(g.spaces[0], g.label);
     return m;
   }, [spaceGroups]);
+  const spaceShortLabel = useMemo(() => spaceDisplayLabels(spaceGroups), [spaceGroups]);
 
 
 
@@ -7986,7 +7987,7 @@ function InstancesReportModal({
           <TableBody>
             {spaceList.map((space) => {
               const inner = summaryEntryMatrix.get(space);
-              const label = space === "__unassigned__" ? "Unassigned" : space;
+              const label = space === "__unassigned__" ? "Unassigned" : (spaceShortLabel.get(space) ?? space);
               const groupLabel = spaceGroupStart.get(space);
               return (
                 <Fragment key={space}>
@@ -9066,7 +9067,7 @@ function InstancesReportModal({
               Spaces
             </div>
             {spaceList.map((space) => {
-              const label = space === "__unassigned__" ? "Unassigned" : space;
+              const label = space === "__unassigned__" ? "Unassigned" : (spaceShortLabel.get(space) ?? space);
               const groupLabel = spaceGroupStart.get(space);
               return (
                 <Fragment key={space}>

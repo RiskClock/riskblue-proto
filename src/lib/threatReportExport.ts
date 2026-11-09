@@ -1,3 +1,4 @@
+import { spaceDisplayLabels } from "@/lib/threatReportBuildings";
 // Threat Report → DOCX export pipeline.
 // Runs entirely client-side, then hands off to an edge function for email delivery.
 //
@@ -635,6 +636,7 @@ export async function runThreatReportExport(
 
   const groupStart = new Map<string, string>();
   for (const g of payload.spaceGroups ?? []) if (g.spaces[0]) groupStart.set(g.spaces[0], g.label);
+  const shortLabel = spaceDisplayLabels(payload.spaceGroups as any);
 
   // ── Summary matrix ────────────────────────────────────────────────────
   docChildren.push(
@@ -665,7 +667,7 @@ export async function runThreatReportExport(
             ],
           }),
           ...payload.summary.spaces.flatMap((sp) => {
-            const label = sp === "__unassigned__" ? "Unassigned" : sp;
+            const label = sp === "__unassigned__" ? "Unassigned" : (shortLabel.get(sp) ?? sp);
             const inner = payload.summary.matrix[sp] || {};
             const row = new TableRow({
               children: [
