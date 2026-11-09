@@ -49,6 +49,7 @@ import { expandSubtypeLabel, expandSubtypeLabelWithSuffix, isSubtypeSplitClass, 
 
 import { ActivityHistoryPanel } from "@/components/workbench/ActivityHistoryPanel";
 import { normalizeScoutResponse } from "@/lib/scoutResponseNormalizer";
+import { groupSpacesByBuilding } from "@/lib/threatReportBuildings";
 import {
   runThreatReportExport,
   type ExportProgress,
@@ -7580,7 +7581,7 @@ function InstancesReportModal({
     return s;
   }, [spaceHierarchyPayload]);
 
-  const spaceList = useMemo(() => {
+  const spaceListFlat = useMemo(() => {
     const set = new Set<string>();
     // Only physical spaces (levels) from spatial_records belong in the report
     // spaces list. Units (unit_templates) are sub-spaces and should appear in
@@ -7605,6 +7606,22 @@ function InstancesReportModal({
     if (hasUnassigned) arr.push("__unassigned__");
     return arr;
   }, [expanded, spaceIndexMap, levelNames]);
+
+  const spaceList = useMemo(() => {
+    const flat = spaceListFlat;
+    const groups = groupSpacesByBuilding(flat, spaceHierarchyPayload?.parsed);
+    return groups ? groups.flatMap((g) => g.spaces) : flat;
+  }, [spaceListFlat, spaceHierarchyPayload]);
+  const spaceGroups = useMemo(
+    () => groupSpacesByBuilding(spaceList, spaceHierarchyPayload?.parsed),
+    [spaceList, spaceHierarchyPayload],
+  );
+  const spaceGroupStart = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const g of spaceGroups ?? []) if (g.spaces[0]) m.set(g.spaces[0], g.label);
+    return m;
+  }, [spaceGroups]);
+
 
 
   const classCols = useMemo(() => {
@@ -7919,8 +7936,20 @@ function InstancesReportModal({
             {spaceList.map((space) => {
               const inner = summaryEntryMatrix.get(space);
               const label = space === "__unassigned__" ? "Unassigned" : space;
+              const groupLabel = spaceGroupStart.get(space);
               return (
-                <TableRow key={space} className={compactRow}>
+                <Fragment key={space}>
+                {groupLabel && (
+                  <TableRow className={compactRow}>
+                    <TableCell
+                      colSpan={overviewEntries.length + 1}
+                      className={`${compactCell} bg-muted/30 font-semibold text-xs uppercase tracking-wide`}
+                    >
+                      {groupLabel}
+                    </TableCell>
+                  </TableRow>
+                )}
+                <TableRow className={compactRow}>
                   <TableCell
                     className={`${compactCell} sticky left-0 z-10 bg-background font-medium`}
                   >
@@ -7938,6 +7967,7 @@ function InstancesReportModal({
                     );
                   })}
                 </TableRow>
+                </Fragment>
               );
 
             })}
@@ -8797,6 +8827,7 @@ function InstancesReportModal({
         overviewClasses,
         summary,
         spaces: withRotations,
+        spaceGroups: spaceGroups ?? undefined,
       };
       await runThreatReportExport(payload, (p) => setExportProgress(p));
 
@@ -8985,9 +9016,15 @@ function InstancesReportModal({
             </div>
             {spaceList.map((space) => {
               const label = space === "__unassigned__" ? "Unassigned" : space;
+              const groupLabel = spaceGroupStart.get(space);
               return (
+                <Fragment key={space}>
+                {groupLabel && (
+                  <div className="text-[11px] font-semibold text-foreground px-3 pt-3 pb-1 border-b bg-muted/10">
+                    {groupLabel}
+                  </div>
+                )}
                 <button
-                  key={space}
                   type="button"
                   onClick={() => setSelected(space)}
                   className={`w-full text-left px-3 py-2 text-sm border-b hover:bg-muted/40 ${
@@ -8996,6 +9033,7 @@ function InstancesReportModal({
                 >
                   {label}
                 </button>
+                </Fragment>
               );
             })}
           </div>
