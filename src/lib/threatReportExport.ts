@@ -634,30 +634,35 @@ export async function runThreatReportExport(
         ],
       }),
     );
-    for (const g of payload.overviewGroups ?? []) {
+    const groups = payload.overviewGroups ?? [];
+    if (groups.length > 0) {
+      const classes = groups[0].counts;
+      const nameW = 2800;
+      const totalW = 1000;
+      const colW = Math.max(600, Math.floor((9360 - nameW - totalW) / Math.max(1, classes.length)));
       docChildren.push(
-        para([text(g.label, { bold: true, size: 22, color: HEAD_FILL })], {
+        para([text("By Building", { bold: true, size: 22, color: HEAD_FILL })], {
           spacing: { before: 300, after: 100 },
         }),
         new Table({
-          width: { size: 9360, type: WidthType.DXA },
-          columnWidths: [2000, 5360, 2000],
+          width: { size: nameW + totalW + colW * classes.length, type: WidthType.DXA },
+          columnWidths: [nameW, ...classes.map(() => colW), totalW],
           rows: [
             new TableRow({
               tableHeader: true,
               children: [
-                tableHeaderCell("Prefix", 2000),
-                tableHeaderCell("Class", 5360),
-                tableHeaderCell("Count", 2000),
+                tableHeaderCell("Building", nameW),
+                ...classes.map((c) => tableHeaderCell(c.idPrefix, colW)),
+                tableHeaderCell("Total", totalW),
               ],
             }),
-            ...g.counts.map(
-              (c) =>
+            ...groups.map(
+              (g) =>
                 new TableRow({
                   children: [
-                    tableBodyCell(c.idPrefix, 2000, { mono: true }),
-                    tableBodyCell(c.name, 5360),
-                    tableBodyCell(String(c.count), 2000),
+                    tableBodyCell(g.label, nameW),
+                    ...g.counts.map((c) => tableBodyCell(String(c.count), colW)),
+                    tableBodyCell(String(g.counts.reduce((x, c) => x + c.count, 0)), totalW),
                   ],
                 }),
             ),
