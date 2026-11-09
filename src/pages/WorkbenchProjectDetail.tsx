@@ -7975,6 +7975,28 @@ function InstancesReportModal({
             </div>
           )}
 
+          {overviewEntries.length > 0 &&
+            (spaceGroups ?? []).map((g) => (
+              <div key={g.key} className="mt-4">
+                <h4 className="text-sm font-semibold mb-2">
+                  {g.label} ({g.spaces.length})
+                </h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+                  {overviewEntries.map((e) => (
+                    <ThreatOverviewCard
+                      key={e.key}
+                      code={e.displayPrefix}
+                      name={e.displayName}
+                      count={g.spaces.reduce(
+                        (acc, sp) => acc + (summaryEntryMatrix.get(sp)?.get(e.key) || 0),
+                        0,
+                      )}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+
           <p className="text-[11px] text-muted-foreground mt-2">
             Note: Detection totals are derived from the occurrence tables that follow. The
             per-space pages retain the original table + drawing evidence format.
@@ -8908,6 +8930,17 @@ function InstancesReportModal({
         }),
         sourceDrawings,
         overviewClasses,
+        overviewGroups: (spaceGroups ?? []).map((g) => ({
+          label: `${g.label} (${g.spaces.length})`,
+          counts: classEntries.map((e) => ({
+            name: e.displayName,
+            idPrefix: e.idPrefix,
+            count: g.spaces.reduce(
+              (acc, sp) => acc + (spaceCountsPerKey.get(sp)?.get(e.key) || 0),
+              0,
+            ),
+          })),
+        })),
         summary,
         spaces: withRotations,
         spaceGroups: spaceGroups ?? undefined,
