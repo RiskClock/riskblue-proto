@@ -45,7 +45,7 @@ export interface PlanEditorClass {
   id: string;
   name: string;
   code: string;
-  kind: "Asset" | "Water System";
+  kind: "Asset" | "Water System" | "Control";
   count: number;
   /** Detected pipe size in millimetres, used to suggest matching products. */
   pipeSizeMm?: number | null;
@@ -539,7 +539,7 @@ export function PlanEditorModal({ open, mode, initialName, initialDescription, i
                         <PopoverTrigger asChild>
                           <Button type="button" variant="ghost" size="sm" className="h-7 self-center px-2 text-xs font-medium text-primary hover:bg-primary/10">
                             <Plus className="h-3 w-3" />
-                            Add Control
+                            Add Product
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent align="start" className="w-80 p-0">

@@ -1,3 +1,4 @@
+import { isIntakeControlCategory } from "@/lib/intakeControlCategories";
 import { Fragment, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -425,7 +426,7 @@ export default function WaterMitigationPlan() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("mitigation_controls")
-        .select("id, name, one_time_cost")
+        .select("id, name, one_time_cost, category")
         .eq("is_active", true)
         .order("display_order");
       if (error) throw error;
@@ -755,6 +756,10 @@ export default function WaterMitigationPlan() {
         (catalog[key] || []).forEach((entry: any) => byName.set((entry.name || "").toLowerCase().trim(), entry.id));
       });
     }
+    (controls as any[]).filter((c) => isIntakeControlCategory(c.category)).forEach((c) => {
+      const key = (c.name || "").toLowerCase().trim();
+      if (!byName.has(key)) byName.set(key, c.id);
+    });
     return (drawing.instances as any[]).map((d) => {
       let space = UNASSIGNED;
       const entry = d.sheet_id ? sheetPlans.get(d.sheet_id) : undefined;
@@ -809,7 +814,7 @@ export default function WaterMitigationPlan() {
         pipeSizeMm: parsePipeSizeMm(pipeDiameter),
       };
     });
-  }, [drawing, sheetPlans, catalog]);
+  }, [drawing, sheetPlans, catalog, controls]);
 
   // Every space in the spatial model, in model order, then any extra spaces
   // that only appear on detections, with the unassigned bucket last.
@@ -1237,6 +1242,19 @@ export default function WaterMitigationPlan() {
           products: productChoices(entry.id, entry.default_control_ids || []),
         }));
       });
+    });
+    (controls as any[]).filter((c) => isIntakeControlCategory(c.category)).forEach((control) => {
+      [...detected.entries()]
+        .filter(([, value]) => value.catalogId === control.id)
+        .forEach(([assignmentId, value]) => rows.push({
+          id: assignmentId,
+          name: value.name || control.name,
+          code: value.code ? `${control.name}-${value.code}` : control.name,
+          kind: "Control",
+          count: value.count,
+          pipeSizeMm: value.pipeSizeMm,
+          products: productChoices(control.id, [control.id]),
+        }));
     });
     return rows.sort((a, b) => a.name.localeCompare(b.name));
   }, [catalog, controls, detectionRows, items, products]);
