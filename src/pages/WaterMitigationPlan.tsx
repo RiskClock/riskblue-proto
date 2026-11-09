@@ -455,7 +455,7 @@ export default function WaterMitigationPlan() {
       const { data, error } = await supabase
         .from("tenant_products")
         .select(
-          "id, name, product_code, control_id, one_time_cost, installation_cost, monthly_maint_cost, maint_interval, applied_in_any_plan, fixed_quantity, pipe_diameter_inches, scope_customized, critical_asset_ids, water_system_ids, process_ids",
+          "id, name, product_code, control_id, one_time_cost, installation_cost, monthly_maint_cost, maint_interval, applied_in_any_plan, fixed_quantity, pipe_diameter_inches, scope_customized, critical_asset_ids, water_system_ids, process_ids, mitigation_control_ids",
         )
         .eq("tenant_id", planTenantId!)
         .order("created_at");
@@ -878,7 +878,9 @@ export default function WaterMitigationPlan() {
       return cell;
     };
 
-    (items as any[]).forEach((item) => {
+    // Drawing-backed projects list only classes that were actually detected;
+    // intake items are a fallback for projects without drawing detections.
+    if (detected.size === 0) (items as any[]).forEach((item) => {
       const table = CATEGORY_TABLE[item.category];
       if (!table) return;
       const catalogId = byName.get(`${table}::${(item.name || "").toLowerCase()}`);
@@ -1203,6 +1205,7 @@ export default function WaterMitigationPlan() {
             return [
               ...((product.critical_asset_ids as string[]) || []),
               ...((product.water_system_ids as string[]) || []),
+              ...((product.mitigation_control_ids as string[]) || []),
             ].includes(catalogId);
           }
           return defaultControlIds.includes(product.control_id);
