@@ -7766,7 +7766,16 @@ function InstancesReportModal({
     displayPrefix: string;
     typeGroup: string | null;
   };
-  const isTypedClassName = useCallback((n: string) => isSubtypeSplitClass(n), []);
+  // Controls split by Type + pipe diameter like Cold/Hot Water and Risers.
+  const reportControlClassNames = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of expanded) if (r.category === "Control") set.add(r.awpClassName);
+    return set;
+  }, [expanded]);
+  const isTypedClassName = useCallback(
+    (n: string) => isSubtypeSplitClass(n) || reportControlClassNames.has(n),
+    [reportControlClassNames],
+  );
 
   const overviewEntries = useMemo<OverviewEntry[]>(() => {
     const typeOf = (r: (typeof expanded)[number]) =>
@@ -8728,7 +8737,7 @@ function InstancesReportModal({
       name: space,
       rows: rowsForSpace.map((r) => ({
         instanceId: r.instanceId,
-        awpClassName: isSubtypeSplitClass(r.awpClassName)
+        awpClassName: isTypedClassName(r.awpClassName)
           ? displayNameByEntryKey.get(entryKeyForRow(r)) || displayClassName(r.awpClassName)
           : displayClassName(r.awpClassName),
         unitName: r.unitName ?? null,
@@ -8757,7 +8766,6 @@ function InstancesReportModal({
       // Cold Water, Hot Water and Riser are split into per (Type, Diameter)
       // virtual classes so the Overview and Summary matrix show a separate
       // row/column for each combination (e.g. "Riser Main Mechanical 100mm").
-      const isTypedClassName = (n: string) => isSubtypeSplitClass(n);
 
       const typeGroupOf = (r: (typeof expanded)[number]) =>
         r.pipeType && r.pipeType.trim() ? r.pipeType.trim() : "(untyped)";
