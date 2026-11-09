@@ -1,3 +1,4 @@
+import { qualifyLevelName, stripBuildingPrefix } from "@/lib/buildingLevelNames";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Plus, ChevronUp, ChevronDown, Trash2, Copy, Check, Building2, Pencil } from "lucide-react";
 import {
@@ -58,6 +59,13 @@ function isLevelCategory(cat: unknown): boolean {
   if (typeof cat !== "string") return true; // missing → treat as level
   const c = cat.toLowerCase();
   return !c || c === "level" || c === "contiguous storey";
+}
+
+// Stored/linked name: short level name qualified by its single building when
+// the project has multiple buildings, so "Level 0" stays unique per building.
+function qualifiedFor(l: { name: string; building_ids: string[] }, buildings: Array<{ id: string; name: string }>): string {
+  if (buildings.length < 2 || l.building_ids.length !== 1) return l.name.trim();
+  return qualifyLevelName(l.name, buildings.find((b) => b.id === l.building_ids[0])?.name);
 }
 
 interface BuildingDraft {
@@ -179,11 +187,14 @@ export function SpatialArchitectModal({
         }
         const { standardized_space_name, space_category, space_index, matched_sources, building_ids, ...extra } =
           r || {};
-        const name = typeof standardized_space_name === "string" ? standardized_space_name : "";
+        const rawName = typeof standardized_space_name === "string" ? standardized_space_name : "";
         let bIds: string[] = (Array.isArray(building_ids) ? building_ids : []).filter(
           (x: unknown): x is string => typeof x === "string" && validIds.has(x),
         );
         if (loadedBuildings.length > 0 && bIds.length === 0) bIds = [loadedBuildings[0].id];
+        const name = bIds.length === 1 && loadedBuildings.length > 1
+          ? stripBuildingPrefix(rawName, loadedBuildings.find((b) => b.id === bIds[0])?.name)
+          : rawName;
         const mergeKey = name.trim()
           ? `${name.trim().toLowerCase()}\u0000${bIds.slice().sort().join(",")}`
           : "";
@@ -237,10 +248,24 @@ export function SpatialArchitectModal({
     // (explicit assignment → bbox label → single-bbox page backfill).
     const seeded: Record<string, string[]> = {};
     for (const l of lvl) {
-      const nm = l.name.trim().toLowerCase();
+      const nm = qualifiedFor(l, loadedBuildings).toLowerCase();
       if (!nm) continue;
+      const short = l.name.trim().toLowerCase();
+      // Legacy links use the short name ("Level 0"); only accept those when the
+      // floor plan's own label names this level's building.
+      const bName =
+        loadedBuildings.length > 1 && l.building_ids.length === 1
+          ? (loadedBuildings.find((b) => b.id === l.building_ids[0])?.name || "").trim().toLowerCase()
+          : "";
       seeded[l.uid] = bboxCatalog
-        .filter((b) => b.effectiveLevels.some((x) => x.trim().toLowerCase() === nm))
+        .filter((b) =>
+          b.effectiveLevels.some((x) => {
+            const v = x.trim().toLowerCase();
+            if (v === nm) return true;
+            if (v !== short || !bName) return v === nm;
+            return b.label.trim().toLowerCase().startsWith(bName + " ");
+          }),
+        )
         .map((b) => b.key);
     }
     setBboxByLevel(seeded);
@@ -588,7 +613,7 @@ export function SpatialArchitectModal({
     try {
       const editedLevels = levels.map((l) => ({
         ...l.extra,
-        standardized_space_name: l.name.trim(),
+        standardized_space_name: qualifiedFor(l, buildings),
         space_category: LEVEL_CATEGORY,
         space_index: l.space_index,
         applies_to_levels: [],
@@ -619,7 +644,7 @@ export function SpatialArchitectModal({
         const levelsByKey = new Map<string, string[]>();
         for (const b of bboxCatalog) levelsByKey.set(b.key, []);
         for (const l of levels) {
-          const nm = l.name.trim();
+          const nm = qualifiedFor(l, buildings);
           for (const k of bboxByLevel[l.uid] || []) {
             const arr = levelsByKey.get(k);
             if (arr && !arr.includes(nm)) arr.push(nm);
