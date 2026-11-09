@@ -260,7 +260,7 @@ export default function Controls() {
 
   // Default mitigation scope, derived from the Risk-Control Map.
   const defaultScope = useMemo(() => {
-    const result = { critical_assets: [] as string[], water_systems: [] as string[], processes: [] as string[], controls: controlIdForScope(selected?.control_id) };
+    const result = { critical_assets: [] as string[], water_systems: [] as string[], processes: [] as string[], controls: selected?.control_id ? [selected.control_id] : [] };
     const controlId = selected?.control_id;
     if (!controlId) return result;
     (catalogRows.critical_assets || []).forEach((r) => {
