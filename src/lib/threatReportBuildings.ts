@@ -64,3 +64,8 @@ export function spaceDisplayLabels(groups: SpaceGroup[] | null | undefined): Map
   }
   return m;
 }
+
+/** "1 level" / "17 levels" label used for building group headings. */
+export function levelCountLabel(n: number): string {
+  return `${n} ${n === 1 ? "level" : "levels"}`;
+}
