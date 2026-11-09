@@ -250,8 +250,22 @@ export function SpatialArchitectModal({
     for (const l of lvl) {
       const nm = qualifiedFor(l, loadedBuildings).toLowerCase();
       if (!nm) continue;
+      const short = l.name.trim().toLowerCase();
+      // Legacy links use the short name ("Level 0"); only accept those when the
+      // floor plan's own label names this level's building.
+      const bName =
+        loadedBuildings.length > 1 && l.building_ids.length === 1
+          ? (loadedBuildings.find((b) => b.id === l.building_ids[0])?.name || "").trim().toLowerCase()
+          : "";
       seeded[l.uid] = bboxCatalog
-        .filter((b) => b.effectiveLevels.some((x) => x.trim().toLowerCase() === nm))
+        .filter((b) =>
+          b.effectiveLevels.some((x) => {
+            const v = x.trim().toLowerCase();
+            if (v === nm) return true;
+            if (v !== short || !bName) return v === nm;
+            return b.label.trim().toLowerCase().startsWith(bName + " ");
+          }),
+        )
         .map((b) => b.key);
     }
     setBboxByLevel(seeded);
