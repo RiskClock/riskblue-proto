@@ -878,9 +878,7 @@ export default function WaterMitigationPlan() {
       return cell;
     };
 
-    // Drawing-backed projects list only classes that were actually detected;
-    // intake items are a fallback for projects without drawing detections.
-    if (detected.size === 0) (items as any[]).forEach((item) => {
+    (items as any[]).forEach((item) => {
       const table = CATEGORY_TABLE[item.category];
       if (!table) return;
       const catalogId = byName.get(`${table}::${(item.name || "").toLowerCase()}`);
@@ -1188,7 +1186,9 @@ export default function WaterMitigationPlan() {
         pipeSizeMm: current?.pipeSizeMm ?? row.pipeSizeMm,
       });
     });
-    (items as any[]).forEach((item) => {
+    // Drawing-backed projects list only classes that were actually detected;
+    // intake items are a fallback for projects without drawing detections.
+    if (detected.size === 0) (items as any[]).forEach((item) => {
       const table = CATEGORY_TABLE[item.category];
       if (table !== "critical_assets" && table !== "water_systems") return;
       const entry = (catalog[table] || []).find((candidate: any) =>
