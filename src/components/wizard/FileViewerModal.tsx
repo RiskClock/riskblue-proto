@@ -639,6 +639,7 @@ export const FileViewerModal = ({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [draftPlanVisual, setDraftPlanVisual] = useState<{ color: string; ids: Set<string> } | null>(null);
   const [hoveredPlanIds, setHoveredPlanIds] = useState<Set<string>>(new Set());
+  const [planFocusIds, setPlanFocusIds] = useState<string[]>([]);
   const handleDraftVisualChange = useCallback((color: string, ids: Set<string>) => setDraftPlanVisual({ color, ids }), []);
   const { user } = useAuth();
   const drawingPlans = useDrawingPlans(persistKey, isOpen && !!awpClasses);
@@ -1960,7 +1961,7 @@ export const FileViewerModal = ({
   // OverlayLayer multiplies by the rendered page size so the browser's native
   // layout keeps the boxes in sync on any resize or zoom level.
   const floorPlanOverlays: OverlayInput[] = useMemo(() => {
-    if (readOnly || (activeTab !== "floor-plans" && activeTab !== "detections")) return [];
+    if (readOnly) return [];
     if (!floorPlans || floorPlans.length === 0) return [];
     const out: OverlayInput[] = [];
     for (const fp of floorPlans) {
@@ -1992,14 +1993,40 @@ export const FileViewerModal = ({
 
   // Legacy markers have no type and remain unit-pink. New detail markers
   // carry their kind in metadata so the color persists across sessions.
+  // Plans tab: only markers inside level boxes that reference a unit/detail
+  // box containing a checked or clicked instance.
+  const planLinkedLevels = useMemo(() => {
+    if (activeTab !== "plans" || !floorPlans?.length) return null;
+    const ovr = floorPlanOverrides ?? {};
+    const ids = new Set<string>(planFocusIds);
+    (newPlanOpen ? draftPlanVisual?.ids : activePlan ? new Set(activePlan.included_instance_ids) : null)?.forEach((id) => ids.add(id));
+    const norm = (v: string | null | undefined) => (v ?? "").trim().toLowerCase();
+    const keys = new Set<string>();
+    for (const i of instances) {
+      if (!ids.has(i.id) || i.file_id !== parentFileId || i.page_index !== effectivePage) continue;
+      const box = findContainingPlan(floorPlans, i.nx, i.ny, ovr);
+      if (!box) continue;
+      const t = getEffectiveType(box, ovr);
+      if (t !== "unit_floor_plan" && t !== "typical_detail_block") continue;
+      const n = typeof ovr[box.plan_id]?.name === "string" ? ovr[box.plan_id].name : null;
+      [n, unitPlanRefKey(box), box.reference_id, box.plan_id].forEach((k) => { if (norm(k)) keys.add(norm(k)); });
+    }
+    return floorPlans.filter((lvl) => {
+      const units: string[] = ovr[lvl.plan_id]?.units ?? lvl.referenced_unit_ids ?? [];
+      return units.some((u) => keys.has(norm(u)));
+    });
+  }, [activeTab, floorPlans, floorPlanOverrides, planFocusIds, newPlanOpen, draftPlanVisual, activePlan, instances, parentFileId, effectivePage]);
+
   const unitMarkerOverlays: OverlayInput[] = useMemo(() => {
-    if (readOnly || (activeTab !== "floor-plans" && activeTab !== "detections")) return [];
+    if (readOnly) return [];
+    if (activeTab === "plans" && !planLinkedLevels?.length) return [];
     return instances
       .filter(
         (i) =>
           i.awp_class_name === UNIT_MARKER_CLASS &&
           i.file_id === parentFileId &&
-          i.page_index === effectivePage,
+          i.page_index === effectivePage &&
+          (activeTab !== "plans" || planLinkedLevels!.some((lvl) => isPointInsidePlan(lvl, floorPlanOverrides ?? {}, i.nx, i.ny))),
       )
       .map((i) => ({
         id: `um-${i.id}`,
@@ -2009,7 +2036,7 @@ export const FileViewerModal = ({
          color: floorPlanTypeColor(i.metadata?.marker_type === "detail" ? "typical_detail_block" : "unit_floor_plan"),
         variant: "dot" as const,
       }));
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, readOnly, activeTab]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, readOnly, activeTab, planLinkedLevels, floorPlanOverrides]);
 
   const overlays = [
     ...detectionOverlays,
@@ -2500,8 +2527,8 @@ export const FileViewerModal = ({
                      onCancel={() => { setNewPlanOpen(false); setEditPlanId(null); setDraftPlanVisual(null); setHoveredPlanIds(new Set()); }}
                      onHoverInstances={(ids) => setHoveredPlanIds(new Set(ids))}
                      onVisualChange={handleDraftVisualChange}
-                      onFocusInstances={focusInstances}
-                      onFocusInstance={focusInstance}
+                      onFocusInstances={(items) => { setPlanFocusIds(items.map((i) => i.id)); focusInstances(items); }}
+                      onFocusInstance={(i) => { setPlanFocusIds([i.id]); focusInstance(i); }}
                     onSave={async (value) => {
                       setSavingNewPlan(true);
                       try {
