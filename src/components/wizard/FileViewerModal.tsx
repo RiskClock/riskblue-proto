@@ -3939,7 +3939,7 @@ const FloorPlansPanel = ({
             floorPlanDisplayLabel({ ...fp, floors: effFloors });
           const isUnit = effType === "unit_floor_plan" || effType === "typical_detail_block";
           const isLevel = effType === "level_floor_plan" || effType === "schematic_level_row";
-          const referencedIn = isUnit ? findReferencingLevels(fp) : [];
+          const referencedRefs = isUnit ? computeReferencingLevels(fp, overrides, allLevelPlans, allLevelPlanOverrides) : [];
           const planAnns = annotationsByPlan.get(fp.plan_id) ?? [];
           const isEditingThis = editingPlan?.planId === fp.plan_id;
           const displayLabel = isEditingThis ? editingPlan!.name : fallbackLabel;
