@@ -718,7 +718,8 @@ export const FileViewerModal = ({
   useEffect(() => { editingPlanRef.current = editingPlan; }, [editingPlan]);
   const { hasBetaAccess } = useBetaAccess();
   // Always default to the first tab when a drawing opens.
-  const [activeTab, setActiveTab] = useState<"floor-plans" | "detections" | "plans">("floor-plans");
+  const [activeTab, setActiveTabState] = useState<"floor-plans" | "detections" | "plans">(() => lastViewerTab);
+  const setActiveTab = useCallback((t: "floor-plans" | "detections" | "plans") => { lastViewerTab = t; setActiveTabState(t); }, []);
   useEffect(() => {
     if (!hasBetaAccess && activeTab === "plans") setActiveTab("floor-plans");
   }, [hasBetaAccess, activeTab]);
@@ -3101,6 +3102,21 @@ const findContainingPlan = (
 };
 
 
+let lastViewerTab: "floor-plans" | "detections" | "plans" = "floor-plans";
+const ReferencedTimes = ({ refs }: { refs: ReferencingLevel[] }) => {
+  const total = refs.reduce((n, r) => n + r.count, 0);
+  if (total === 0) return null;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="shrink-0 text-sm text-muted-foreground cursor-default underline decoration-dotted">Referenced {total} {total === 1 ? "time" : "times"}</span>
+      </TooltipTrigger>
+      <TooltipContent side="left" className="max-w-xs">
+        <div className="space-y-0.5 text-xs font-mono">{refs.map((r) => <div key={`${r.name}::${r.page}`}>{formatReferencingLevel(r)}</div>)}</div>
+      </TooltipContent>
+    </Tooltip>
+  );
+};
 type ReferencingLevel = { name: string; page: number; count: number };
 const formatReferencingLevel = (m: ReferencingLevel) => `${m.name} (p${m.page})${m.count > 1 ? ` x${m.count}` : ""}`;
 // For a unit/detail plan, list the level plans that reference it. Matches the
@@ -3571,23 +3587,6 @@ const DetectionsPanel = ({
                         {row.diam && <Badge variant="outline" className="max-w-28 truncate rounded px-1.5 py-0.5 text-xs font-medium">{row.diam}</Badge>}
                         {row.type && <Badge variant="outline" className="max-w-32 truncate rounded px-1.5 py-0.5 text-xs font-medium">{subtypeAbbr(c.name, row.type) || row.type}</Badge>}
                       </div>}
-                      {(() => {
-                        const refs = referencedForItems(row.items);
-                        if (refs.length === 0) return null;
-                        const total = refs.reduce((n, r) => n + r.count, 0);
-                        return (
-                          <div className="flex items-start gap-1 mt-1 text-xs text-muted-foreground">
-                            <span className="font-medium shrink-0">Referenced in ({total}):</span>
-                            <div className="flex flex-wrap gap-1">
-                              {refs.map((r) => (
-                                <span key={`${r.name}::${r.page}`} className="px-1.5 py-0.5 rounded bg-muted text-foreground text-xs font-mono">
-                                  {formatReferencingLevel(r)}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })()}
                     </div>
                   </div>
                   {devices.beta && <DeviceButton row={row} devices={devices} />}
@@ -3650,6 +3649,7 @@ const DetectionsPanel = ({
                               {instanceLabel(i)}
                               {i.page_index !== effectivePage ? ` (p.${i.page_index})` : ""}
                             </span>
+                            <ReferencedTimes refs={referencedForItems([i])} />
                             {planLabel && (() => {
                               const effT = getEffectiveType(containingPlan!, floorPlanOverrides);
                                const cc = floorPlanTypeColor(effT);
@@ -3939,7 +3939,7 @@ const FloorPlansPanel = ({
             floorPlanDisplayLabel({ ...fp, floors: effFloors });
           const isUnit = effType === "unit_floor_plan" || effType === "typical_detail_block";
           const isLevel = effType === "level_floor_plan" || effType === "schematic_level_row";
-          const referencedIn = isUnit ? findReferencingLevels(fp) : [];
+          const referencedRefs = isUnit ? computeReferencingLevels(fp, overrides, allLevelPlans, allLevelPlanOverrides) : [];
           const planAnns = annotationsByPlan.get(fp.plan_id) ?? [];
           const isEditingThis = editingPlan?.planId === fp.plan_id;
           const displayLabel = isEditingThis ? editingPlan!.name : fallbackLabel;
@@ -4080,22 +4080,8 @@ const FloorPlansPanel = ({
               )}
 
               {isUnit && (
-                <div className="flex items-start gap-1 text-sm text-muted-foreground">
-                  <span className="font-medium shrink-0">Referenced in:</span>
-                  {referencedIn.length === 0 ? (
-                    <span className="italic">none</span>
-                  ) : (
-                    <div className="flex flex-wrap gap-1">
-                      {referencedIn.map((r) => (
-                        <span
-                          key={r}
-                          className="px-1.5 py-0.5 rounded bg-muted text-foreground text-xs font-mono"
-                        >
-                          {r}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                <div className="text-sm text-muted-foreground">
+                  {referencedRefs.length === 0 ? "Referenced 0 times" : <ReferencedTimes refs={referencedRefs} />}
                 </div>
               )}
 
