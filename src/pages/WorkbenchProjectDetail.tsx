@@ -1,5 +1,5 @@
 import { levelCountLabel } from "@/lib/threatReportBuildings";
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type ComponentProps, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { IMPORT_PROJECT_STATUS_LABEL } from "@/lib/cloudImport";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { workbenchBackPath } from "@/lib/workbenchNavigation";
@@ -7235,7 +7235,7 @@ function ExtractedTextBody({ fileId, sheetId }: { fileId?: string; sheetId?: str
   );
 }
 
-export type InstanceReportDataProps = Pick<React.ComponentProps<typeof InstancesReportModal>, "open" | "requestId" | "fileGroups" | "optionByName" | "pageSpaceMap" | "pageSpaceUnitMap" | "pageUnitPlansMap" | "pageLevelPlansMap" | "spaceHierarchyPayload" | "enabledClassNames" | "consolidations" | "aliasMap" | "aliasPrefixMap">;
+export type InstanceReportDataProps = Pick<ComponentProps<typeof InstancesReportModal>, "open" | "requestId" | "fileGroups" | "optionByName" | "pageSpaceMap" | "pageSpaceUnitMap" | "pageUnitPlansMap" | "pageLevelPlansMap" | "spaceHierarchyPayload" | "enabledClassNames" | "consolidations" | "aliasMap" | "aliasPrefixMap">;
 
 type OverviewEntry = {
   key: string;
@@ -7456,6 +7456,8 @@ function useInstanceReportData({ open, requestId, fileGroups, optionByName, page
       // rows, the (level, unit) pair is folded into the key so each
       // (level, unit) expansion counts as its own logical instance.
       logicalKey: string;
+      /** drawing_instances ids represented by this row (consolidated rows list every member). */
+      sourceIds: string[];
     };
     const rows: Row[] = [];
 
@@ -7502,7 +7504,8 @@ function useInstanceReportData({ open, requestId, fileGroups, optionByName, page
         nx: Number(inst.nx) || 0,
         ny: Number(inst.ny) || 0,
         pipeDiameter: diameter,
-        pipeType,
+        pipeType        pipeType,
+        sourceIds: [inst.id as string],
       };
       if (pairs.length === 0) {
         rows.push({
@@ -7566,6 +7569,7 @@ function useInstanceReportData({ open, requestId, fileGroups, optionByName, page
           nx: Number(m.nx) || 0,
           ny: Number(m.ny) || 0,
           pipeDiameter: null, pipeType: null,
+          sourceIds: members.map((mm: any) => mm.id as string),
           logicalKey: `cons::${groupKey}`,
         });
       } else {
@@ -7582,6 +7586,7 @@ function useInstanceReportData({ open, requestId, fileGroups, optionByName, page
             nx: Number(member.nx) || 0,
             ny: Number(member.ny) || 0,
             pipeDiameter: null, pipeType: null,
+          sourceIds: members.map((mm: any) => mm.id as string),
             logicalKey: `cons::${groupKey}::${k}`,
           });
         }
