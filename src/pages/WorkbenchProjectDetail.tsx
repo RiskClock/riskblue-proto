@@ -5269,7 +5269,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
 
               {isSystemAdmin && pageInfoRows.length > 0 && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Show:</span>
+                  <span className="text-sm font-medium text-muted-foreground">View:</span>
                   <div className="inline-flex rounded-md border bg-card p-0.5">
                     {(["count", "drawing"] as const).map((m) => (
                       <Button
