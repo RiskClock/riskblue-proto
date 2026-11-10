@@ -276,6 +276,8 @@ interface FileViewerModalProps {
   singlePageOnly?: boolean;
   /** Floor-plan items for the current page (parsed from survey response). */
   floorPlans?: ParsedFloorPlan[];
+  /** Bounding boxes and overrides for any (file, page) in the project. */
+  resolvePagePlans?: (fileId: string, page: number) => { plans: ParsedFloorPlan[]; overrides: Record<string, any> };
   /** All unit_floor_plan items across the parent file, used as the "Add unit" picker. */
   allUnitPlans?: ParsedFloorPlan[];
   /** All level_floor_plan items across the parent file, used to show where a unit is referenced. */
@@ -401,6 +403,7 @@ export const FileViewerModal = ({
   titleAccessory,
   singlePageOnly = false,
   floorPlans,
+  resolvePagePlans,
   allUnitPlans,
   allLevelPlans,
   floorPlanOverrides,
@@ -2531,6 +2534,8 @@ export const FileViewerModal = ({
                      instanceLabel={instanceLabel}
                      floorPlans={floorPlans ?? []}
                      floorPlanOverrides={floorPlanOverrides ?? {}}
+                     resolvePagePlans={resolvePagePlans}
+                     parentFileId={parentFileId}
                      effectivePage={effectivePage}
                     baseProducts={drawingPlans.baseProducts}
                     saving={savingNewPlan}
@@ -3396,11 +3401,13 @@ const PlansPanel = ({ plans, activePlanId, onSelectPlan, onNewPlan, onEditPlan, 
 
 const randomPlanColor = () => awpClassColor(`plan-${Date.now()}-${Math.random()}`);
 
-const InlinePlanEditor = ({ initialPlan, toggleRef, defaultName, instances, classes, baseProducts, saving, onCancel, onSave, onHoverInstances, onVisualChange, onFocusInstances, onFocusInstance, numberByInstanceId, instanceLabel, floorPlans, floorPlanOverrides, effectivePage }: {
+const InlinePlanEditor = ({ initialPlan, toggleRef, defaultName, instances, classes, baseProducts, saving, onCancel, onSave, onHoverInstances, onVisualChange, onFocusInstances, onFocusInstance, numberByInstanceId, instanceLabel, floorPlans, floorPlanOverrides, effectivePage, resolvePagePlans, parentFileId }: {
   initialPlan: DrawingPlan | null;
   toggleRef: import("react").MutableRefObject<((id: string) => void) | null>;
   defaultName: string;
   instances: DrawingInstanceRow[];
+  resolvePagePlans?: (fileId: string, page: number) => { plans: ParsedFloorPlan[]; overrides: Record<string, any> };
+  parentFileId?: string;
   classes: AwpClassOption[];
   baseProducts: PlanEditorProduct[];
   saving: boolean;
@@ -3467,9 +3474,11 @@ const InlinePlanEditor = ({ initialPlan, toggleRef, defaultName, instances, clas
               <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={(e) => { e.stopPropagation(); setExpanded((prev) => { const next = new Set(prev); next.has(row.key) ? next.delete(row.key) : next.add(row.key); return next; }); }} aria-label={isExpanded ? "Collapse" : "Expand"}>{isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</Button>
             </div>
             {isExpanded && <div className="bg-muted/20 px-8 py-1">{items.slice().sort((a, b) => (numberByInstanceId.get(a.id) ?? 0) - (numberByInstanceId.get(b.id) ?? 0)).map((i) => {
-              const containingPlan = findContainingPlan(floorPlans, i.nx, i.ny, floorPlanOverrides);
-              const planLabel = containingPlan ? getEffectiveLabel(containingPlan, floorPlanOverrides) : null;
-              const planColor = containingPlan ? floorPlanTypeColor(getEffectiveType(containingPlan, floorPlanOverrides)) : null;
+              const own = i.file_id === parentFileId && i.page_index === effectivePage;
+              const ctx = own || !resolvePagePlans ? { plans: floorPlans, overrides: floorPlanOverrides } : resolvePagePlans(i.file_id, i.page_index);
+              const containingPlan = findContainingPlan(ctx.plans, i.nx, i.ny, ctx.overrides);
+              const planLabel = containingPlan ? getEffectiveLabel(containingPlan, ctx.overrides) : null;
+              const planColor = containingPlan ? floorPlanTypeColor(getEffectiveType(containingPlan, ctx.overrides)) : null;
               return <div key={i.id} className="flex items-center gap-2 py-1 text-sm hover:bg-muted/50 cursor-pointer" onClick={() => onFocusInstance(i)} onMouseEnter={() => onHoverInstances([i.id])} onMouseLeave={() => onHoverInstances(items.map((item) => item.id))}>
                 <Checkbox checked={selected.has(i.id)} onCheckedChange={(v) => toggleIds([i.id], v === true)} onClick={(e) => e.stopPropagation()} style={{ borderColor: color, backgroundColor: selected.has(i.id) ? color : undefined }} />
                 <span className="min-w-0 flex-1 truncate font-mono">{instanceLabel(i)}{i.page_index !== effectivePage ? ` (p.${i.page_index})` : ""}</span>

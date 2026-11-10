@@ -5888,6 +5888,10 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
             sheetId={activeSheetIdForPage}
             pageIndex={activePageView.page}
             floorPlans={activePageFloorPlans}
+            resolvePagePlans={(fileId, page) => ({
+              plans: floorPlansByFile.get(fileId)?.get(page) ?? [],
+              overrides: (rows?.sheets ?? []).find((s) => s.parent_file_id === fileId && s.page_index === page)?.floor_plan_overrides ?? {},
+            })}
             canScoutPage={canManage && !processingLock}
             isInternal={isInternal}
             onScoutPage={handleScoutPage}
