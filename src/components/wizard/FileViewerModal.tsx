@@ -1997,7 +1997,7 @@ export const FileViewerModal = ({
   // box containing a checked or clicked instance.
   const planLinkedLevels = useMemo(() => {
     if (activeTab !== "plans" || !floorPlans?.length) return null;
-    const ovr = floorPlanOverrides ?? {};
+    const ovr: Record<string, any> = floorPlanOverrides ?? {};
     const ids = new Set<string>(planFocusIds);
     (newPlanOpen ? draftPlanVisual?.ids : activePlan ? new Set(activePlan.included_instance_ids) : null)?.forEach((id) => ids.add(id));
     const norm = (v: string | null | undefined) => (v ?? "").trim().toLowerCase();
