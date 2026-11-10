@@ -3250,7 +3250,7 @@ function buildDetectionRows(
   return rows;
 }
 
-const DeviceButton = ({ row, devices }: { row: DetectionRowModel; devices: DevicesApi }) => {
+export const DeviceButton = ({ row, devices }: { row: { cls: { name: string }; type: string; diam: string }; devices: DevicesApi }) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   if (!devices.mapped(row.cls.name)) return null;
