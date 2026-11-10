@@ -257,6 +257,14 @@ export function InstancesGridView(props: Props) {
     }
     return ids;
   }, [selection, cellsByRow]);
+  const selectedCount = useMemo(() => {
+    let n = 0;
+    for (const id of selection) {
+      const i = id.lastIndexOf("|");
+      n += cellsByRow.get(id.slice(0, i))?.get(id.slice(i + 1))?.count ?? 0;
+    }
+    return n;
+  }, [selection, cellsByRow]);
 
   const plansWithSelection = useMemo(
     () => drawingPlans.plans.filter((p) => p.included_instance_ids.some((id) => selectedIds.has(id))),
@@ -487,7 +495,7 @@ export function InstancesGridView(props: Props) {
           style={{ left: popupPos.x, top: popupPos.y }}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <span className="px-2 text-xs text-muted-foreground whitespace-nowrap">{selectedIds.size} instances</span>
+          <span className="px-2 text-xs text-muted-foreground whitespace-nowrap">{selectedCount} instances</span>
           <Button size="sm" variant="ghost" className="h-7" disabled={saving || selectedIds.size === 0} onClick={() => setCreateOpen(true)}>
             Create a Plan
           </Button>
@@ -530,7 +538,7 @@ export function InstancesGridView(props: Props) {
           <div className="space-y-3">
             <Input value={planName} onChange={(e) => setPlanName(e.target.value)} placeholder="Plan name" autoFocus />
             <Textarea value={planDesc} onChange={(e) => setPlanDesc(e.target.value)} placeholder="Description" className="min-h-20" />
-            <p className="text-xs text-muted-foreground">{selectedIds.size} instances will be added.</p>
+            <p className="text-xs text-muted-foreground">{selectedCount} instances will be added.</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={saving}>Cancel</Button>
