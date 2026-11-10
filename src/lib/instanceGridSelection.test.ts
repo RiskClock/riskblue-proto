@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { addRange, cellId, rectCells, toggleCell } from "./instanceGridSelection";
 
 const rows = ["L0", "L1", "L2"];
