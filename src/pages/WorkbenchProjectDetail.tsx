@@ -7235,52 +7235,17 @@ function ExtractedTextBody({ fileId, sheetId }: { fileId?: string; sheetId?: str
   );
 }
 
-// ---------------------------------------------------------------------------
-// InstancesReportModal - translates annotations to per-space instance IDs
-// ---------------------------------------------------------------------------
-function InstancesReportModal({
-  open,
-  onOpenChange,
-  requestId,
-  projectId,
-  fileGroups,
-  optionByName,
-  pageSpaceMap,
-  pageSpaceUnitMap,
-  pageUnitPlansMap,
-  pageLevelPlansMap,
-  spaceHierarchyPayload,
-  projectName,
-  enabledClassNames,
-  consolidations,
-  aliasMap,
-  aliasPrefixMap,
-  canManage = true,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  requestId: string | undefined;
-  projectId: string;
-  fileGroups: Array<{ file: FileRow; sheets: SheetRow[] }>;
-  optionByName: Map<string, { idPrefix: string | null; category: string }>;
-  pageSpaceMap: Map<string, string[]>;
-  pageSpaceUnitMap: Map<string, Array<{ level: string; unit?: string }>>;
-  pageUnitPlansMap: Map<string, Array<{ unitLabel: string; levels: string[]; levelsWithCounts: Array<{ level: string; count: number }>; bbox: [number, number, number, number] | null; planType?: string }>>;
-  pageLevelPlansMap: Map<string, Array<{ levels: string[]; bbox: [number, number, number, number] | null; planType?: string }>>;
-  spaceHierarchyPayload: any | null | undefined;
-  projectName: string;
-  enabledClassNames: string[];
-  consolidations: Array<{
-    id: string;
-    awp_class_name: string;
-    label: string;
-    instance_number: number | null;
-    member_annotation_ids: string[];
-  }>;
-  aliasMap: Record<string, string>;
-  aliasPrefixMap: Record<string, string>;
-  canManage?: boolean;
-}) {
+export type InstanceReportDataProps = Pick<React.ComponentProps<typeof InstancesReportModal>, "open" | "requestId" | "fileGroups" | "optionByName" | "pageSpaceMap" | "pageSpaceUnitMap" | "pageUnitPlansMap" | "pageLevelPlansMap" | "spaceHierarchyPayload" | "enabledClassNames" | "consolidations" | "aliasMap" | "aliasPrefixMap">;
+
+type OverviewEntry = {
+  key: string;
+  canonicalName: string;
+  displayName: string;
+  displayPrefix: string;
+  typeGroup: string | null;
+};
+
+function useInstanceReportData({ open, requestId, fileGroups, optionByName, pageSpaceMap, pageSpaceUnitMap, pageUnitPlansMap, pageLevelPlansMap, spaceHierarchyPayload, enabledClassNames, consolidations, aliasMap, aliasPrefixMap }: InstanceReportDataProps) {
   const displayClassName = useCallback(
     (name: string) => aliasMap[name] || name,
     [aliasMap],
@@ -7292,7 +7257,6 @@ function InstancesReportModal({
       name.slice(0, 3).toUpperCase(),
     [aliasPrefixMap, optionByName],
   );
-  const { logActivity } = useActivityLogger();
 
 
 
@@ -7300,11 +7264,8 @@ function InstancesReportModal({
     () => new Set(enabledClassNames || []),
     [enabledClassNames],
   );
-  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [instances, setInstances] = useState<any[]>([]);
-  const [selected, setSelected] = useState<string>("__overview__");
-  const [wadeOpen, setWadeOpen] = useState(false);
   
 
   useEffect(() => {
@@ -7321,7 +7282,6 @@ function InstancesReportModal({
       if (!cancelled) {
         setInstances((data as any[]) || []);
         setLoading(false);
-        setSelected("__overview__");
       }
     })();
     return () => {
@@ -7763,13 +7723,6 @@ function InstancesReportModal({
   // (Overview tiles + Summary matrix) and the DOCX export payload. Cold
   // Water / Hot Water classes expand into one entry per distinct Type value
   // (with a "(untyped)" bucket); every other class stays as-is.
-  type OverviewEntry = {
-    key: string;
-    canonicalName: string;
-    displayName: string;
-    displayPrefix: string;
-    typeGroup: string | null;
-  };
   // Controls split by Type + pipe diameter like Cold/Hot Water and Risers.
   const reportControlClassNames = useMemo(() => {
     const set = new Set<string>();
@@ -7876,6 +7829,61 @@ function InstancesReportModal({
     },
     [isTypedClassName],
   );
+  return { displayClassName, displayPrefix, enabledClassSet, loading, setLoading, instances, setInstances, fileNameById, sheetByFilePage, spaceIndexMap, consolidationByAnnId, pairsForPage, encodeSuffix, expanded, levelNames, spaceListFlat, spaceList, spaceGroups, spaceGroupStart, spaceGroupKeyOf, collapsedGroups, setCollapsedGroups, toggleGroup, spaceShortLabel, classCols, overviewTotals, summaryMatrix, reportControlClassNames, isTypedClassName, overviewEntries, entryKeyForRow };
+}
+
+// ---------------------------------------------------------------------------
+// InstancesReportModal - translates annotations to per-space instance IDs
+// ---------------------------------------------------------------------------
+function InstancesReportModal({
+  open,
+  onOpenChange,
+  requestId,
+  projectId,
+  fileGroups,
+  optionByName,
+  pageSpaceMap,
+  pageSpaceUnitMap,
+  pageUnitPlansMap,
+  pageLevelPlansMap,
+  spaceHierarchyPayload,
+  projectName,
+  enabledClassNames,
+  consolidations,
+  aliasMap,
+  aliasPrefixMap,
+  canManage = true,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  requestId: string | undefined;
+  projectId: string;
+  fileGroups: Array<{ file: FileRow; sheets: SheetRow[] }>;
+  optionByName: Map<string, { idPrefix: string | null; category: string }>;
+  pageSpaceMap: Map<string, string[]>;
+  pageSpaceUnitMap: Map<string, Array<{ level: string; unit?: string }>>;
+  pageUnitPlansMap: Map<string, Array<{ unitLabel: string; levels: string[]; levelsWithCounts: Array<{ level: string; count: number }>; bbox: [number, number, number, number] | null; planType?: string }>>;
+  pageLevelPlansMap: Map<string, Array<{ levels: string[]; bbox: [number, number, number, number] | null; planType?: string }>>;
+  spaceHierarchyPayload: any | null | undefined;
+  projectName: string;
+  enabledClassNames: string[];
+  consolidations: Array<{
+    id: string;
+    awp_class_name: string;
+    label: string;
+    instance_number: number | null;
+    member_annotation_ids: string[];
+  }>;
+  aliasMap: Record<string, string>;
+  aliasPrefixMap: Record<string, string>;
+  canManage?: boolean;
+}) {
+  const { logActivity } = useActivityLogger();
+  const { toast } = useToast();
+  const [selected, setSelected] = useState<string>("__overview__");
+  const [wadeOpen, setWadeOpen] = useState(false);
+  useEffect(() => { if (open) setSelected("__overview__"); }, [open, requestId]);
+  const { displayClassName, displayPrefix, enabledClassSet, loading, setLoading, instances, setInstances, fileNameById, sheetByFilePage, spaceIndexMap, consolidationByAnnId, pairsForPage, encodeSuffix, expanded, levelNames, spaceListFlat, spaceList, spaceGroups, spaceGroupStart, spaceGroupKeyOf, collapsedGroups, setCollapsedGroups, toggleGroup, spaceShortLabel, classCols, overviewTotals, summaryMatrix, reportControlClassNames, isTypedClassName, overviewEntries, entryKeyForRow } = useInstanceReportData({ open, requestId, fileGroups, optionByName, pageSpaceMap, pageSpaceUnitMap, pageUnitPlansMap, pageLevelPlansMap, spaceHierarchyPayload, enabledClassNames, consolidations, aliasMap, aliasPrefixMap });
 
 
   const overviewEntryTotals = useMemo(() => {
