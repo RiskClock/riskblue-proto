@@ -58,18 +58,13 @@ const handler = async (req: Request): Promise<Response> => {
 
     const userIds = userIdsParam.split(",").filter(Boolean);
 
-    // Get all users
-    const { data: { users }, error: usersError } = await supabaseAdmin.auth.admin.listUsers();
-    if (usersError) throw usersError;
-
-    // Build email map for requested user IDs
+    // Look up each requested user directly so results are not limited by listUsers paging.
     const emails: Record<string, string> = {};
-    for (const userId of userIds) {
-      const authUser = users?.find(u => u.id === userId);
-      if (authUser?.email) {
-        emails[userId] = authUser.email;
-      }
-    }
+    const unique = Array.from(new Set(userIds)).slice(0, 500);
+    await Promise.all(unique.map(async (userId) => {
+      const { data, error } = await supabaseAdmin.auth.admin.getUserById(userId);
+      if (!error && data?.user?.email) emails[userId] = data.user.email;
+    }));
 
     return new Response(
       JSON.stringify({ success: true, emails }),
