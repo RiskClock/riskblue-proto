@@ -1995,11 +1995,13 @@ export const FileViewerModal = ({
   // carry their kind in metadata so the color persists across sessions.
   // Plans tab: only markers inside level boxes that reference a unit/detail
   // box containing a checked or clicked instance.
-  const planLinkedLevels = useMemo(() => {
+  const planCheckedIds = useMemo(
+    () => new Set<string>(newPlanOpen ? draftPlanVisual?.ids ?? [] : activePlan?.included_instance_ids ?? []),
+    [newPlanOpen, draftPlanVisual, activePlan],
+  );
+  const linkedLevelsFor = useCallback((ids: Set<string>) => {
     if (activeTab !== "plans" || !floorPlans?.length) return null;
     const ovr: Record<string, any> = floorPlanOverrides ?? {};
-    const ids = new Set<string>(planFocusIds);
-    (newPlanOpen ? draftPlanVisual?.ids : activePlan ? new Set(activePlan.included_instance_ids) : null)?.forEach((id) => ids.add(id));
     const norm = (v: string | null | undefined) => (v ?? "").trim().toLowerCase();
     const keys = new Set<string>();
     for (const i of instances) {
@@ -2015,7 +2017,13 @@ export const FileViewerModal = ({
       const units: string[] = ovr[lvl.plan_id]?.units ?? lvl.referenced_unit_ids ?? [];
       return units.some((u) => keys.has(norm(u)));
     });
-  }, [activeTab, floorPlans, floorPlanOverrides, planFocusIds, newPlanOpen, draftPlanVisual, activePlan, instances, parentFileId, effectivePage]);
+  }, [activeTab, floorPlans, floorPlanOverrides, instances, parentFileId, effectivePage]);
+  // Checked instances light markers in their type color; clicked-only ones stay grey.
+  const planCheckedLevels = useMemo(() => linkedLevelsFor(planCheckedIds), [linkedLevelsFor, planCheckedIds]);
+  const planLinkedLevels = useMemo(
+    () => linkedLevelsFor(new Set<string>([...planFocusIds, ...planCheckedIds])),
+    [linkedLevelsFor, planFocusIds, planCheckedIds],
+  );
 
   const unitMarkerOverlays: OverlayInput[] = useMemo(() => {
     if (readOnly) return [];
@@ -2033,10 +2041,12 @@ export const FileViewerModal = ({
         bbox: [i.nx, i.ny, 0, 0] as [number, number, number, number],
         coordSpace: "normalized" as const,
         page: singlePageOnly ? currentPage : sheetId ? 1 : i.page_index,
-         color: floorPlanTypeColor(i.metadata?.marker_type === "detail" ? "typical_detail_block" : "unit_floor_plan"),
+        color: activeTab === "plans" && !planCheckedLevels?.some((lvl) => isPointInsidePlan(lvl, floorPlanOverrides ?? {}, i.nx, i.ny))
+          ? "hsl(var(--muted-foreground))"
+          : floorPlanTypeColor(i.metadata?.marker_type === "detail" ? "typical_detail_block" : "unit_floor_plan"),
         variant: "dot" as const,
       }));
-  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, readOnly, activeTab, planLinkedLevels, floorPlanOverrides]);
+  }, [instances, effectivePage, sheetId, singlePageOnly, currentPage, parentFileId, readOnly, activeTab, planLinkedLevels, planCheckedLevels, floorPlanOverrides]);
 
   const overlays = [
     ...detectionOverlays,
