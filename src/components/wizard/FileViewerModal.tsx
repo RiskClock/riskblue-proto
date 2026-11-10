@@ -3399,7 +3399,7 @@ const PlansPanel = ({ plans, activePlanId, onSelectPlan, onNewPlan, onEditPlan, 
   );
 };
 
-const randomPlanColor = () => awpClassColor(`plan-${Date.now()}-${Math.random()}`);
+export const randomPlanColor = () => awpClassColor(`plan-${Date.now()}-${Math.random()}`);
 
 const InlinePlanEditor = ({ initialPlan, toggleRef, defaultName, instances, classes, baseProducts, saving, onCancel, onSave, onHoverInstances, onVisualChange, onFocusInstances, onFocusInstance, numberByInstanceId, instanceLabel, floorPlans, floorPlanOverrides, effectivePage, resolvePagePlans, parentFileId }: {
   initialPlan: DrawingPlan | null;
