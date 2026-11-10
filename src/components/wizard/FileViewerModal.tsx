@@ -3645,11 +3645,13 @@ const DetectionsPanel = ({
                             onMouseLeave={() => onHoverInstance?.(null)}
                           >
                             <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
-                            <span className="flex-1 min-w-0 font-mono truncate">
-                              {instanceLabel(i)}
-                              {i.page_index !== effectivePage ? ` (p.${i.page_index})` : ""}
+                            <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+                              <span className="font-mono truncate">
+                                {instanceLabel(i)}
+                                {i.page_index !== effectivePage ? ` (p.${i.page_index})` : ""}
+                              </span>
+                              <ReferencedTimes refs={referencedForItems([i])} />
                             </span>
-                            <ReferencedTimes refs={referencedForItems([i])} />
                             {planLabel && (() => {
                               const effT = getEffectiveType(containingPlan!, floorPlanOverrides);
                                const cc = floorPlanTypeColor(effT);
