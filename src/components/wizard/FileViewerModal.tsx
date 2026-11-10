@@ -4084,8 +4084,6 @@ const FloorPlansPanel = ({
                   {referencedRefs.length === 0 ? "Referenced 0 times" : <ReferencedTimes refs={referencedRefs} />}
                 </div>
               )}
-                </div>
-              )}
 
               <div className="space-y-1">
                 <div className="text-xs font-medium text-muted-foreground">
