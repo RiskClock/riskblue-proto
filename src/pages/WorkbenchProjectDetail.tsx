@@ -1,5 +1,5 @@
 import { levelCountLabel } from "@/lib/threatReportBuildings";
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type ComponentProps, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { IMPORT_PROJECT_STATUS_LABEL } from "@/lib/cloudImport";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { workbenchBackPath } from "@/lib/workbenchNavigation";
@@ -90,6 +90,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FileViewerModal } from "@/components/wizard/FileViewerModal";
+import { InstancesGridView } from "@/components/workbench/InstancesGridView";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -503,9 +504,9 @@ export default function WorkbenchProjectDetail() {
     }
   });
   const [activePageView, setActivePageView] = useState<{ file: PageInfoRow; page: number } | null>(null);
-  const [showModeRaw, setShowMode] = useState<"count" | "drawing">("count");
-  // Drawing mode is restricted to system admins.
-  const showMode: "count" | "drawing" = isSystemAdmin ? showModeRaw : "count";
+  const [showModeRaw, setShowMode] = useState<"count" | "drawing" | "instances" | "plans">("count");
+  // Drawing, Instances and Plans views are restricted to system admins.
+  const showMode: "count" | "drawing" | "instances" | "plans" = isSystemAdmin ? showModeRaw : "count";
   const [drawingHost, setDrawingHost] = useState<HTMLDivElement | null>(null);
   const [viewerReloadKey, setViewerReloadKey] = useState(0);
   const [wbWadeOpen, setWbWadeOpen] = useState(false);
@@ -4626,6 +4627,35 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
     [activePageView, requestId, projectId, enabledCols, wadeClassLabel, activeSheetIdForPage, askWadeConfirm, aliasMap, bboxPagesByFile, queryClient],
   );
 
+  // Instances view (system admins): shares the Threat Report attribution.
+  const instancesViewData = useInstanceReportData({
+    open: showMode === "instances",
+    requestId,
+    fileGroups,
+    optionByName: reportOptionByName,
+    pageSpaceMap: mergedPageSpaceMap,
+    pageSpaceUnitMap: mergedPageSpaceUnitMap,
+    pageUnitPlansMap,
+    pageLevelPlansMap,
+    spaceHierarchyPayload,
+    enabledClassNames: enabledCols,
+    consolidations: consolidations || [],
+    aliasMap,
+    aliasPrefixMap,
+  });
+  const instancesViewPageCounts = useMemo(
+    () => new Map(pageInfoRows.map((r) => [r.id, r.page_count ?? 1])),
+    [pageInfoRows],
+  );
+  const instancesViewPageLevels = useMemo(() => {
+    const m = new Map<string, string[]>();
+    const add = (k: string, levels: string[]) => m.set(k, Array.from(new Set([...(m.get(k) || []), ...levels.filter(Boolean)])));
+    mergedPageSpaceMap.forEach((v, k) => add(k, v));
+    pageLevelPlansMap.forEach((v, k) => v.forEach((lp) => add(k, lp.levels)));
+    pageUnitPlansMap.forEach((v, k) => v.forEach((up) => add(k, up.levels)));
+    return m;
+  }, [mergedPageSpaceMap, pageLevelPlansMap, pageUnitPlansMap]);
+
   return (
     <TooltipProvider delayDuration={150}>
       <div className="h-screen flex flex-col bg-background overflow-hidden">
@@ -5271,7 +5301,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-muted-foreground">View:</span>
                   <div className="inline-flex rounded-md border bg-card p-0.5">
-                    {(["count", "drawing"] as const).map((m) => (
+                    {(["count", "drawing", "instances", "plans"] as const).map((m) => (
                       <Button
                         key={m}
                         type="button"
@@ -5298,13 +5328,35 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                           }
                         }}
                       >
-                        {m === "count" ? "Count" : "Drawing"}
+                        {m === "count" ? "Count" : m === "drawing" ? "Drawing" : m === "instances" ? "Instances" : "Plans"}
                       </Button>
                     ))}
                   </div>
                 </div>
               )}
-              {pageInfoRows.length === 0 ? (
+              {showMode === "instances" ? (
+                <InstancesGridView
+                  projectId={projectId!}
+                  loading={instancesViewData.loading}
+                  rows={instancesViewData.expanded}
+                  entries={instancesViewData.overviewEntries}
+                  entryKeyForRow={instancesViewData.entryKeyForRow}
+                  levelNames={instancesViewData.levelNames}
+                  spaceList={instancesViewData.spaceList}
+                  spaceGroups={instancesViewData.spaceGroups}
+                  spaceShortLabel={instancesViewData.spaceShortLabel}
+                  fileNameById={instancesViewData.fileNameById}
+                  pageCountByFileId={instancesViewPageCounts}
+                  pageLevelsByKey={instancesViewPageLevels}
+                  canEdit={canManage && !processingLock}
+                  onOpenDrawing={(fileId, page) => {
+                    const row = pageInfoRows.find((r) => r.id === fileId);
+                    if (row) setActivePageView({ file: row, page });
+                  }}
+                />
+              ) : showMode === "plans" ? (
+                <div className="rounded-lg border bg-card p-10" />
+              ) : pageInfoRows.length === 0 ? (
                 <div className="text-sm text-muted-foreground text-center py-6 space-y-3">
                   <div>{pageInfoLoading ? "Loading…" : "No files in this request."}</div>
                   {!pageInfoLoading && (
@@ -7235,52 +7287,17 @@ function ExtractedTextBody({ fileId, sheetId }: { fileId?: string; sheetId?: str
   );
 }
 
-// ---------------------------------------------------------------------------
-// InstancesReportModal - translates annotations to per-space instance IDs
-// ---------------------------------------------------------------------------
-function InstancesReportModal({
-  open,
-  onOpenChange,
-  requestId,
-  projectId,
-  fileGroups,
-  optionByName,
-  pageSpaceMap,
-  pageSpaceUnitMap,
-  pageUnitPlansMap,
-  pageLevelPlansMap,
-  spaceHierarchyPayload,
-  projectName,
-  enabledClassNames,
-  consolidations,
-  aliasMap,
-  aliasPrefixMap,
-  canManage = true,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  requestId: string | undefined;
-  projectId: string;
-  fileGroups: Array<{ file: FileRow; sheets: SheetRow[] }>;
-  optionByName: Map<string, { idPrefix: string | null; category: string }>;
-  pageSpaceMap: Map<string, string[]>;
-  pageSpaceUnitMap: Map<string, Array<{ level: string; unit?: string }>>;
-  pageUnitPlansMap: Map<string, Array<{ unitLabel: string; levels: string[]; levelsWithCounts: Array<{ level: string; count: number }>; bbox: [number, number, number, number] | null; planType?: string }>>;
-  pageLevelPlansMap: Map<string, Array<{ levels: string[]; bbox: [number, number, number, number] | null; planType?: string }>>;
-  spaceHierarchyPayload: any | null | undefined;
-  projectName: string;
-  enabledClassNames: string[];
-  consolidations: Array<{
-    id: string;
-    awp_class_name: string;
-    label: string;
-    instance_number: number | null;
-    member_annotation_ids: string[];
-  }>;
-  aliasMap: Record<string, string>;
-  aliasPrefixMap: Record<string, string>;
-  canManage?: boolean;
-}) {
+export type InstanceReportDataProps = Pick<ComponentProps<typeof InstancesReportModal>, "open" | "requestId" | "fileGroups" | "optionByName" | "pageSpaceMap" | "pageSpaceUnitMap" | "pageUnitPlansMap" | "pageLevelPlansMap" | "spaceHierarchyPayload" | "enabledClassNames" | "consolidations" | "aliasMap" | "aliasPrefixMap">;
+
+type OverviewEntry = {
+  key: string;
+  canonicalName: string;
+  displayName: string;
+  displayPrefix: string;
+  typeGroup: string | null;
+};
+
+function useInstanceReportData({ open, requestId, fileGroups, optionByName, pageSpaceMap, pageSpaceUnitMap, pageUnitPlansMap, pageLevelPlansMap, spaceHierarchyPayload, enabledClassNames, consolidations, aliasMap, aliasPrefixMap }: InstanceReportDataProps) {
   const displayClassName = useCallback(
     (name: string) => aliasMap[name] || name,
     [aliasMap],
@@ -7292,7 +7309,6 @@ function InstancesReportModal({
       name.slice(0, 3).toUpperCase(),
     [aliasPrefixMap, optionByName],
   );
-  const { logActivity } = useActivityLogger();
 
 
 
@@ -7300,11 +7316,8 @@ function InstancesReportModal({
     () => new Set(enabledClassNames || []),
     [enabledClassNames],
   );
-  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [instances, setInstances] = useState<any[]>([]);
-  const [selected, setSelected] = useState<string>("__overview__");
-  const [wadeOpen, setWadeOpen] = useState(false);
   
 
   useEffect(() => {
@@ -7321,7 +7334,6 @@ function InstancesReportModal({
       if (!cancelled) {
         setInstances((data as any[]) || []);
         setLoading(false);
-        setSelected("__overview__");
       }
     })();
     return () => {
@@ -7496,6 +7508,8 @@ function InstancesReportModal({
       // rows, the (level, unit) pair is folded into the key so each
       // (level, unit) expansion counts as its own logical instance.
       logicalKey: string;
+      /** drawing_instances ids represented by this row (consolidated rows list every member). */
+      sourceIds: string[];
     };
     const rows: Row[] = [];
 
@@ -7543,6 +7557,7 @@ function InstancesReportModal({
         ny: Number(inst.ny) || 0,
         pipeDiameter: diameter,
         pipeType,
+        sourceIds: [inst.id as string],
       };
       if (pairs.length === 0) {
         rows.push({
@@ -7606,6 +7621,7 @@ function InstancesReportModal({
           nx: Number(m.nx) || 0,
           ny: Number(m.ny) || 0,
           pipeDiameter: null, pipeType: null,
+          sourceIds: members.map((mm: any) => mm.id as string),
           logicalKey: `cons::${groupKey}`,
         });
       } else {
@@ -7622,6 +7638,7 @@ function InstancesReportModal({
             nx: Number(member.nx) || 0,
             ny: Number(member.ny) || 0,
             pipeDiameter: null, pipeType: null,
+          sourceIds: members.map((mm: any) => mm.id as string),
             logicalKey: `cons::${groupKey}::${k}`,
           });
         }
@@ -7763,13 +7780,6 @@ function InstancesReportModal({
   // (Overview tiles + Summary matrix) and the DOCX export payload. Cold
   // Water / Hot Water classes expand into one entry per distinct Type value
   // (with a "(untyped)" bucket); every other class stays as-is.
-  type OverviewEntry = {
-    key: string;
-    canonicalName: string;
-    displayName: string;
-    displayPrefix: string;
-    typeGroup: string | null;
-  };
   // Controls split by Type + pipe diameter like Cold/Hot Water and Risers.
   const reportControlClassNames = useMemo(() => {
     const set = new Set<string>();
@@ -7876,6 +7886,61 @@ function InstancesReportModal({
     },
     [isTypedClassName],
   );
+  return { displayClassName, displayPrefix, enabledClassSet, loading, setLoading, instances, setInstances, fileNameById, sheetByFilePage, spaceIndexMap, consolidationByAnnId, pairsForPage, encodeSuffix, expanded, levelNames, spaceListFlat, spaceList, spaceGroups, spaceGroupStart, spaceGroupKeyOf, collapsedGroups, setCollapsedGroups, toggleGroup, spaceShortLabel, classCols, overviewTotals, summaryMatrix, reportControlClassNames, isTypedClassName, overviewEntries, entryKeyForRow };
+}
+
+// ---------------------------------------------------------------------------
+// InstancesReportModal - translates annotations to per-space instance IDs
+// ---------------------------------------------------------------------------
+function InstancesReportModal({
+  open,
+  onOpenChange,
+  requestId,
+  projectId,
+  fileGroups,
+  optionByName,
+  pageSpaceMap,
+  pageSpaceUnitMap,
+  pageUnitPlansMap,
+  pageLevelPlansMap,
+  spaceHierarchyPayload,
+  projectName,
+  enabledClassNames,
+  consolidations,
+  aliasMap,
+  aliasPrefixMap,
+  canManage = true,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  requestId: string | undefined;
+  projectId: string;
+  fileGroups: Array<{ file: FileRow; sheets: SheetRow[] }>;
+  optionByName: Map<string, { idPrefix: string | null; category: string }>;
+  pageSpaceMap: Map<string, string[]>;
+  pageSpaceUnitMap: Map<string, Array<{ level: string; unit?: string }>>;
+  pageUnitPlansMap: Map<string, Array<{ unitLabel: string; levels: string[]; levelsWithCounts: Array<{ level: string; count: number }>; bbox: [number, number, number, number] | null; planType?: string }>>;
+  pageLevelPlansMap: Map<string, Array<{ levels: string[]; bbox: [number, number, number, number] | null; planType?: string }>>;
+  spaceHierarchyPayload: any | null | undefined;
+  projectName: string;
+  enabledClassNames: string[];
+  consolidations: Array<{
+    id: string;
+    awp_class_name: string;
+    label: string;
+    instance_number: number | null;
+    member_annotation_ids: string[];
+  }>;
+  aliasMap: Record<string, string>;
+  aliasPrefixMap: Record<string, string>;
+  canManage?: boolean;
+}) {
+  const { logActivity } = useActivityLogger();
+  const { toast } = useToast();
+  const [selected, setSelected] = useState<string>("__overview__");
+  const [wadeOpen, setWadeOpen] = useState(false);
+  useEffect(() => { if (open) setSelected("__overview__"); }, [open, requestId]);
+  const { displayClassName, displayPrefix, enabledClassSet, loading, setLoading, instances, setInstances, fileNameById, sheetByFilePage, spaceIndexMap, consolidationByAnnId, pairsForPage, encodeSuffix, expanded, levelNames, spaceListFlat, spaceList, spaceGroups, spaceGroupStart, spaceGroupKeyOf, collapsedGroups, setCollapsedGroups, toggleGroup, spaceShortLabel, classCols, overviewTotals, summaryMatrix, reportControlClassNames, isTypedClassName, overviewEntries, entryKeyForRow } = useInstanceReportData({ open, requestId, fileGroups, optionByName, pageSpaceMap, pageSpaceUnitMap, pageUnitPlansMap, pageLevelPlansMap, spaceHierarchyPayload, enabledClassNames, consolidations, aliasMap, aliasPrefixMap });
 
 
   const overviewEntryTotals = useMemo(() => {

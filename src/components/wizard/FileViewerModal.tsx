@@ -3250,7 +3250,7 @@ function buildDetectionRows(
   return rows;
 }
 
-const DeviceButton = ({ row, devices }: { row: DetectionRowModel; devices: DevicesApi }) => {
+export const DeviceButton = ({ row, devices }: { row: { cls: { name: string }; type: string; diam: string }; devices: DevicesApi }) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   if (!devices.mapped(row.cls.name)) return null;
@@ -3399,7 +3399,7 @@ const PlansPanel = ({ plans, activePlanId, onSelectPlan, onNewPlan, onEditPlan, 
   );
 };
 
-const randomPlanColor = () => awpClassColor(`plan-${Date.now()}-${Math.random()}`);
+export const randomPlanColor = () => awpClassColor(`plan-${Date.now()}-${Math.random()}`);
 
 const InlinePlanEditor = ({ initialPlan, toggleRef, defaultName, instances, classes, baseProducts, saving, onCancel, onSave, onHoverInstances, onVisualChange, onFocusInstances, onFocusInstance, numberByInstanceId, instanceLabel, floorPlans, floorPlanOverrides, effectivePage, resolvePagePlans, parentFileId }: {
   initialPlan: DrawingPlan | null;
