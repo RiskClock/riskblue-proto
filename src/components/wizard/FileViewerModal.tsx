@@ -3482,7 +3482,7 @@ const InlinePlanEditor = ({ initialPlan, toggleRef, defaultName, instances, clas
               return <div key={i.id} className="flex items-center gap-2 py-1 text-sm hover:bg-muted/50 cursor-pointer" onClick={() => onFocusInstance(i)} onMouseEnter={() => onHoverInstances([i.id])} onMouseLeave={() => onHoverInstances(items.map((item) => item.id))}>
                 <Checkbox checked={selected.has(i.id)} onCheckedChange={(v) => toggleIds([i.id], v === true)} onClick={(e) => e.stopPropagation()} style={{ borderColor: color, backgroundColor: selected.has(i.id) ? color : undefined }} />
                 <span className="min-w-0 flex-1 truncate font-mono">{instanceLabel(i)}{i.page_index !== effectivePage ? ` (p.${i.page_index})` : ""}</span>
-                {planLabel && planColor && <span className="shrink-0 px-1.5 py-0.5 rounded text-xs font-medium max-w-[100px] truncate border" style={{ backgroundColor: softBgFrom(planColor), color: planColor, borderColor: planColor }} title={`In ${planLabel}`}>{planLabel}</span>}
+                {planLabel && planColor && <span className="shrink-0 whitespace-nowrap px-1.5 py-0.5 rounded text-xs font-medium border" style={{ backgroundColor: softBgFrom(planColor), color: planColor, borderColor: planColor }} title={`In ${planLabel}`}>{planLabel}</span>}
               </div>;
             })}</div>}
           </div>;
@@ -3703,7 +3703,7 @@ const DetectionsPanel = ({
                                const cc = floorPlanTypeColor(effT);
                               return (
                                 <span
-                                  className="shrink-0 px-1.5 py-0.5 rounded text-xs font-medium max-w-[100px] truncate border"
+                                  className="shrink-0 whitespace-nowrap px-1.5 py-0.5 rounded text-xs font-medium border"
                                   style={{ backgroundColor: softBgFrom(cc), color: cc, borderColor: cc }}
                                   title={`In ${planLabel}`}
                                 >
