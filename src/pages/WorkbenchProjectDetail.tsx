@@ -90,6 +90,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FileViewerModal } from "@/components/wizard/FileViewerModal";
+import { InstancesGridView } from "@/components/workbench/InstancesGridView";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -503,9 +504,9 @@ export default function WorkbenchProjectDetail() {
     }
   });
   const [activePageView, setActivePageView] = useState<{ file: PageInfoRow; page: number } | null>(null);
-  const [showModeRaw, setShowMode] = useState<"count" | "drawing">("count");
-  // Drawing mode is restricted to system admins.
-  const showMode: "count" | "drawing" = isSystemAdmin ? showModeRaw : "count";
+  const [showModeRaw, setShowMode] = useState<"count" | "drawing" | "instances" | "plans">("count");
+  // Drawing, Instances and Plans views are restricted to system admins.
+  const showMode: "count" | "drawing" | "instances" | "plans" = isSystemAdmin ? showModeRaw : "count";
   const [drawingHost, setDrawingHost] = useState<HTMLDivElement | null>(null);
   const [viewerReloadKey, setViewerReloadKey] = useState(0);
   const [wbWadeOpen, setWbWadeOpen] = useState(false);
@@ -4626,6 +4627,35 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
     [activePageView, requestId, projectId, enabledCols, wadeClassLabel, activeSheetIdForPage, askWadeConfirm, aliasMap, bboxPagesByFile, queryClient],
   );
 
+  // Instances view (system admins): shares the Threat Report attribution.
+  const instancesViewData = useInstanceReportData({
+    open: showMode === "instances",
+    requestId,
+    fileGroups,
+    optionByName: reportOptionByName,
+    pageSpaceMap: mergedPageSpaceMap,
+    pageSpaceUnitMap: mergedPageSpaceUnitMap,
+    pageUnitPlansMap,
+    pageLevelPlansMap,
+    spaceHierarchyPayload,
+    enabledClassNames: enabledCols,
+    consolidations: consolidations || [],
+    aliasMap,
+    aliasPrefixMap,
+  });
+  const instancesViewPageCounts = useMemo(
+    () => new Map(pageInfoRows.map((r) => [r.id, r.page_count ?? 1])),
+    [pageInfoRows],
+  );
+  const instancesViewPageLevels = useMemo(() => {
+    const m = new Map<string, string[]>();
+    const add = (k: string, levels: string[]) => m.set(k, Array.from(new Set([...(m.get(k) || []), ...levels.filter(Boolean)])));
+    mergedPageSpaceMap.forEach((v, k) => add(k, v));
+    pageLevelPlansMap.forEach((v, k) => v.forEach((lp) => add(k, lp.levels)));
+    pageUnitPlansMap.forEach((v, k) => v.forEach((up) => add(k, up.levels)));
+    return m;
+  }, [mergedPageSpaceMap, pageLevelPlansMap, pageUnitPlansMap]);
+
   return (
     <TooltipProvider delayDuration={150}>
       <div className="h-screen flex flex-col bg-background overflow-hidden">
@@ -5271,7 +5301,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-muted-foreground">View:</span>
                   <div className="inline-flex rounded-md border bg-card p-0.5">
-                    {(["count", "drawing"] as const).map((m) => (
+                    {(["count", "drawing", "instances", "plans"] as const).map((m) => (
                       <Button
                         key={m}
                         type="button"
@@ -5298,13 +5328,35 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                           }
                         }}
                       >
-                        {m === "count" ? "Count" : "Drawing"}
+                        {m === "count" ? "Count" : m === "drawing" ? "Drawing" : m === "instances" ? "Instances" : "Plans"}
                       </Button>
                     ))}
                   </div>
                 </div>
               )}
-              {pageInfoRows.length === 0 ? (
+              {showMode === "instances" ? (
+                <InstancesGridView
+                  projectId={projectId!}
+                  loading={instancesViewData.loading}
+                  rows={instancesViewData.expanded}
+                  entries={instancesViewData.overviewEntries}
+                  entryKeyForRow={instancesViewData.entryKeyForRow}
+                  levelNames={instancesViewData.levelNames}
+                  spaceList={instancesViewData.spaceList}
+                  spaceGroups={instancesViewData.spaceGroups}
+                  spaceShortLabel={instancesViewData.spaceShortLabel}
+                  fileNameById={instancesViewData.fileNameById}
+                  pageCountByFileId={instancesViewPageCounts}
+                  pageLevelsByKey={instancesViewPageLevels}
+                  canEdit={canManage && !processingLock}
+                  onOpenDrawing={(fileId, page) => {
+                    const row = pageInfoRows.find((r) => r.id === fileId);
+                    if (row) setActivePageView({ file: row, page });
+                  }}
+                />
+              ) : showMode === "plans" ? (
+                <div className="rounded-lg border bg-card p-10" />
+              ) : pageInfoRows.length === 0 ? (
                 <div className="text-sm text-muted-foreground text-center py-6 space-y-3">
                   <div>{pageInfoLoading ? "Loading…" : "No files in this request."}</div>
                   {!pageInfoLoading && (
