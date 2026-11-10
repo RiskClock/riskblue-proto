@@ -7504,7 +7504,7 @@ function useInstanceReportData({ open, requestId, fileGroups, optionByName, page
         nx: Number(inst.nx) || 0,
         ny: Number(inst.ny) || 0,
         pipeDiameter: diameter,
-        pipeType        pipeType,
+        pipeType,
         sourceIds: [inst.id as string],
       };
       if (pairs.length === 0) {
