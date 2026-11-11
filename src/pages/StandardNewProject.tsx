@@ -61,8 +61,8 @@ export default function StandardNewProject() {
   const handleSave = async () => {
     if (!user || !complete || lock.current) return;
     lock.current = true; setSaving(true); setSaveError(null);
-    const files = drawingsOn ? drawings : [];
-    const picks = drawingsOn ? cloudPicks : [];
+    const files = drawingsBlocked ? [] : drawings;
+    const picks = drawingsBlocked ? [] : cloudPicks;
     const scopeCols = scope === "custom" ? scopeColumns(custom, controls) : null;
     try {
       await saveDeveloperProject(supabase, {
