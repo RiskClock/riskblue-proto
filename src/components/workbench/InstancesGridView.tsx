@@ -490,6 +490,7 @@ export function InstancesGridView(props: Props) {
       ref={containerRef}
       tabIndex={0}
       onKeyDown={onKeyDown}
+      onScroll={() => popupPos && setPopupPos(null)}
       className="relative max-h-[calc(100vh-220px)] overflow-auto rounded-lg border bg-card outline-none select-none"
     >
       <table ref={tableRef} className="w-max min-w-full border-separate border-spacing-0 text-sm">
@@ -592,7 +593,8 @@ export function InstancesGridView(props: Props) {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
+        </div>,
+        document.body,
       )}
 
       <Dialog open={createOpen} onOpenChange={(o) => !saving && setCreateOpen(o)}>
