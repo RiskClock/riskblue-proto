@@ -362,6 +362,7 @@ Deno.serve(async (req) => {
             );
           }
           userId = created.user.id;
+          isNewAccount = true;
           email = ident.email;
         }
         const { error: linkErr } = await admin.from("user_external_identities").insert({
@@ -375,7 +376,7 @@ Deno.serve(async (req) => {
 
       const { data: link, error: linkError } = await admin.auth.admin.generateLink({ type: "magiclink", email });
       if (linkError || !link.properties?.hashed_token) return fail("Could not sign you in.");
-      return Response.redirect(`${origin}/auth/external#token_hash=${encodeURIComponent(link.properties.hashed_token)}`, 302);
+      return Response.redirect(`${origin}/auth/external${isNewAccount ? "?new=1" : ""}#token_hash=${encodeURIComponent(link.properties.hashed_token)}`, 302);
     }
 
     return json({ error: "Unknown action" }, 400);
