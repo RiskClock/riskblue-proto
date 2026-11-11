@@ -81,7 +81,7 @@ export default function StandardNewProject() {
         workbenchStatus: picks.length ? "importing_drawings" : files.length ? "processing" : "waiting_drawings",
       });
       if (picks.length) await queueCloudImports(ids.current.projectId, user.id, picks);
-      toast({ title: drawingsOn ? "Project submitted for analysis" : "Project created", description: drawingsOn ? "RiskBlue will review your drawings and start the analysis. No credits were charged." : "Add drawings whenever they are ready. No credits were charged." });
+      toast({ title: drawingsOn ? "Project submitted for analysis" : "Project created", description: drawingsOn ? "RiskBlue will review your drawings and start the analysis." : "Add drawings whenever they are ready." });
       navigate(tenantPath("/projects"));
     } catch (error) {
       setSaveError(`Saving did not finish. Please retry. ${(error as any)?.message || ""}`);

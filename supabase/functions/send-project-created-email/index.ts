@@ -46,7 +46,7 @@ serve(async (req) => {
 
     const { data: project } = await admin
       .from("projects")
-      .select("id, name, user_id, created_at, selected_awp_class_names, selected_other_classes, selected_awp_subtypes, protection_phase, project_data")
+      .select("id, name, user_id, created_at, selected_awp_class_names, selected_other_classes, selected_awp_subtypes, protection_phase, project_data, address_1")
       .eq("id", projectId)
       .single();
 
@@ -204,6 +204,26 @@ serve(async (req) => {
     const subtypesHtml = "";
 
 
+    const pd = ((project as any).project_data || {}) as Record<string, any>;
+    const LABELS: Record<string, Record<string, string>> = {
+      drawing_status: { none: "No drawings yet", standard: "Standard drawings without water mitigation markup", limited: "Drawings with limited water mitigation markup", full: "Drawings fully marked up with complete mitigation controls" },
+      mitigation_scope: { as_drawn: "As-Drawn", mech_elec: "Mechanical & Electrical Rooms", supply_booster: "Main Supply & Booster Pumps", whole_building: "Whole Building", custom: "Custom Scope", not_sure: "Not sure" },
+      protection_timing: { construction: "During construction for builder's risk insurance requirements", completion: "At substantial completion for permanent building operations", both: "Both during construction and permanent handover", not_sure: "Not sure" },
+    };
+    const intakeRows: [string, string][] = [];
+    const addr = (project as any).address_1;
+    if (addr) intakeRows.push(["Address", String(addr)]);
+    if (pd.intake_type) intakeRows.push(["Intake type", pd.intake_type === "standard" ? "Standard" : String(pd.intake_type)]);
+    for (const [k, label] of [["drawing_status", "Drawing status"], ["mitigation_scope", "Mitigation scope"], ["protection_timing", "Protection timing"]] as const) {
+      if (pd[k]) intakeRows.push([label, LABELS[k][pd[k]] ?? String(pd[k])]);
+    }
+    if (pd.has_preferred_vendor === true) intakeRows.push(["Preferred vendor", pd.preferred_vendor ? String(pd.preferred_vendor) : "Yes"]);
+    else if (pd.has_preferred_vendor === false) intakeRows.push(["Preferred vendor", "No"]);
+    for (const [k, label] of [["budget", "Budget"], ["risk_tolerance", "Risk tolerance"], ["extraction_scope", "Extraction scope"], ["ownership_intent", "Ownership intent"]] as const) {
+      if (pd[k] != null && pd[k] !== "") intakeRows.push([label, String(pd[k])]);
+    }
+    const intakeHtml = intakeRows.map(([l, v]) => `<p><strong>${escapeHtml(l)}:</strong> ${escapeHtml(v)}</p>`).join("");
+
     const subject = `New project created: ${project.name}`;
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 560px; padding: 20px;">
@@ -212,6 +232,7 @@ serve(async (req) => {
         <p><strong>Created by:</strong> ${escapeHtml(creatorName)} &lt;${escapeHtml(creatorEmail)}&gt;</p>
         <p><strong>Project ID:</strong> ${project.id}</p>
         <p><strong>Created at:</strong> ${new Date(project.created_at).toISOString()}</p>
+        ${intakeHtml}
         <p><strong>Protection Phase:</strong> ${(() => {
           const pp = Array.isArray((project as any).protection_phase) ? (project as any).protection_phase as string[] : [];
           return pp.length ? pp.map((p) => escapeHtml(p.charAt(0).toUpperCase() + p.slice(1))).join(", ") : "Not specified";
