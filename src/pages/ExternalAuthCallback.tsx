@@ -16,6 +16,7 @@ const ExternalAuthCallback = () => {
     ran.current = true;
     const hash = new URLSearchParams(window.location.hash.slice(1));
     const tokenHash = hash.get("token_hash");
+    const isNew = new URLSearchParams(window.location.search).get("new") === "1";
     const pending = new URLSearchParams(window.location.search).get("confirm_procore");
     window.history.replaceState(null, "", window.location.pathname);
     if (pending) {
@@ -39,7 +40,7 @@ const ExternalAuthCallback = () => {
       if (error) {
         navigate(`/auth?external_error=${encodeURIComponent("Sign-in link expired. Please try again.")}`, { replace: true });
       } else {
-        navigate("/projects", { replace: true });
+        navigate(isNew ? "/developer/new-project" : "/projects", { replace: true });
       }
     });
   }, [navigate]);

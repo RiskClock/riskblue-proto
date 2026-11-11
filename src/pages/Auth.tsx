@@ -33,6 +33,8 @@ const Auth = () => {
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [signUpEmail, setSignUpEmail] = useState("");
+  const [signUpPassword, setSignUpPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,11 +45,6 @@ const Auth = () => {
   
   // Request access modal state
   const [showRequestModal, setShowRequestModal] = useState(false);
-  const [requestForm, setRequestForm] = useState({
-    fullName: '',
-    workEmail: '',
-    companyName: ''
-  });
   const [requestSubmitted, setRequestSubmitted] = useState(false);
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
   
@@ -169,44 +166,24 @@ const Auth = () => {
     }
   };
 
-  const handleRequestAccess = async (e: React.FormEvent) => {
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmittingRequest(true);
-    
     try {
-      // Track submit request click
-      if (window.heap) {
-        window.heap.track('access_request_submitted', {
-          company: requestForm.companyName
-        });
-      }
-      
-      const { error } = await supabase
-        .from('access_requests')
-        .insert({
-          full_name: requestForm.fullName,
-          work_email: requestForm.workEmail,
-          company_name: requestForm.companyName
-        });
-      
-      if (error) throw error;
-
-      // Send email notification (fire-and-forget, don't block UI)
-      supabase.functions.invoke('notify-access-request', {
-        body: {
-          fullName: requestForm.fullName,
-          workEmail: requestForm.workEmail,
-          companyName: requestForm.companyName
-        }
-      }).catch(err => console.error('Failed to send notification:', err));
-
-      setRequestSubmitted(true);
-    } catch (error: unknown) {
-      toast({
-        title: "Error",
-        description: "Failed to submit request. Please try again.",
-        variant: "destructive",
+      const redirect = `${window.location.origin}/developer/new-project`;
+      const { data, error } = await supabase.auth.signUp({
+        email: signUpEmail.trim(),
+        password: signUpPassword,
+        options: { emailRedirectTo: redirect, data: { signup_method: "email_signup" } },
       });
+      if (error) throw error;
+      if (data.session) {
+        navigate("/developer/new-project", { replace: true });
+      } else {
+        setRequestSubmitted(true);
+      }
+    } catch (error: unknown) {
+      toast({ title: "Could not sign up", description: (error as any)?.message || "Please try again.", variant: "destructive" });
     } finally {
       setIsSubmittingRequest(false);
     }
@@ -359,7 +336,7 @@ const Auth = () => {
               onClick={() => setShowRequestModal(true)}
               className="text-sm text-primary hover:underline font-medium"
             >
-              Request Access
+              Sign Up
             </button>
           </div>
 
@@ -384,7 +361,7 @@ const Auth = () => {
                 }}
               >
                 <img src={PROVIDER_LOGOS[id]} alt="" aria-hidden="true" className="h-5 w-auto max-w-[32px] object-contain mr-2" />
-                Continue with {label}
+                Continue with {label} Account
               </Button>
             ))}
           </div>
@@ -408,51 +385,31 @@ const Auth = () => {
         setShowRequestModal(open);
         if (!open) {
           setRequestSubmitted(false);
-          setRequestForm({ fullName: '', workEmail: '', companyName: '' });
+          setSignUpEmail(''); setSignUpPassword('');
         }
       }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Request Access</DialogTitle>
+            <DialogTitle>Sign Up</DialogTitle>
           </DialogHeader>
           
           {!requestSubmitted ? (
-            <form onSubmit={handleRequestAccess} className="space-y-4">
+            <form onSubmit={handleSignUp} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="fullName">Full name</Label>
-                <Input 
-                  id="fullName" 
-                  required 
-                  value={requestForm.fullName} 
-                  onChange={(e) => setRequestForm({...requestForm, fullName: e.target.value})} 
-                />
+                <Label htmlFor="signUpEmail">Email</Label>
+                <Input id="signUpEmail" type="email" required autoComplete="email" value={signUpEmail} onChange={(e) => setSignUpEmail(e.target.value)} placeholder="you@example.com" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="workEmail">Work email</Label>
-                <Input 
-                  id="workEmail" 
-                  type="email" 
-                  required 
-                  value={requestForm.workEmail}
-                  onChange={(e) => setRequestForm({...requestForm, workEmail: e.target.value})} 
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="companyName">Company name</Label>
-                <Input 
-                  id="companyName" 
-                  required 
-                  value={requestForm.companyName}
-                  onChange={(e) => setRequestForm({...requestForm, companyName: e.target.value})} 
-                />
+                <Label htmlFor="signUpPassword">Password</Label>
+                <Input id="signUpPassword" type="password" required minLength={8} autoComplete="new-password" value={signUpPassword} onChange={(e) => setSignUpPassword(e.target.value)} placeholder="At least 8 characters" />
               </div>
               <Button type="submit" className="w-full" disabled={isSubmittingRequest}>
-                {isSubmittingRequest ? "Submitting..." : "Submit Request"}
+                {isSubmittingRequest ? "Signing up..." : "Sign Up"}
               </Button>
             </form>
           ) : (
             <p className="text-muted-foreground py-4">
-              Thanks - our team will review your request and follow up shortly.
+              Check your email to confirm your account. The link takes you straight to your new project.
             </p>
           )}
         </DialogContent>
