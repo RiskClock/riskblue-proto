@@ -16,7 +16,7 @@ export async function saveDeveloperProject(client: SupabaseClient<Database>, inp
     name: input.name.trim(), address_1: input.address.trim(), location: input.address.trim(),
     city: input.city, state: input.region, workbench_status: workbenchStatus,
     protection_phase: input.protectionPhase ?? [],
-    ...(input.extraColumns || {}),
+    ...((input.extraColumns || {}) as {}),
   };
   const { error: projectError } = input.isUpdate
     ? await client.from("projects").update(shared).eq("id", input.projectId)
