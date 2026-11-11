@@ -14,12 +14,12 @@ test("singular units", () => {
   expect(processingCountdownLabel(created, t((22 * 60 + 59) * 60000))).toBe("Processing: 1hr 1min remaining");
 });
 test("creation toast mentions the 24 hour turnaround", () => {
-  expect(projectTurnaroundCopy("analysis")).toContain("within 24 hours");
-  expect(projectTurnaroundCopy("awaiting_drawings")).toContain("24 hours");
-  expect(projectTurnaroundCopy("saved")).toContain("within 24 hours");
+  expect(projectTurnaroundCopy("analysis")).toBe("RiskBlue will review your drawings and start the analysis. Results are usually ready within 24 hours.");
+  expect(projectTurnaroundCopy("awaiting_drawings")).toBe("Add drawings whenever they are ready. Analysis usually takes about 24 hours once drawings are added.");
+  expect(projectTurnaroundCopy("saved")).toBe("Your project and attachments have been saved. RiskBlue will review it within 24 hours.");
 });
 test("creation toast never mentions credits", () => {
-  for (const s of ["analysis", "awaiting_drawings", "saved"] as const) {
-    expect(projectTurnaroundCopy(s).toLowerCase()).not.toContain("credit");
-  }
+  const mentionsCredit = (["analysis", "awaiting_drawings", "saved"] as const)
+    .some((s) => projectTurnaroundCopy(s).toLowerCase().includes("credit"));
+  expect(mentionsCredit).toBe(false);
 });
