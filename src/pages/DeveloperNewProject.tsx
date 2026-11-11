@@ -11,6 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { snapTolerance, developerProjectDetails, EXTRACTION_SCOPES, OWNERSHIP_INTENTS, isOwnershipIntent, restoreDeveloperChoices, developerScopeDetails } from "@/lib/developerIntake";
 import { saveDeveloperProject } from "@/lib/saveDeveloperProject";
+import { projectTurnaroundCopy } from "@/lib/projectStatusCountdown";
 import { ArrowLeft, Loader2, ImagePlus, Upload, FileText, X, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -89,7 +90,7 @@ export default function DeveloperNewProject() {
         setCloudPicks([]);
       }
       if (isEdit) saveIds.current.requestId = crypto.randomUUID();
-      toast({ title: isEdit ? "Changes saved" : "Project created", description: "Your project and attachments have been saved." });
+      toast({ title: isEdit ? "Changes saved" : "Project created", description: isEdit ? "Your project and attachments have been saved." : projectTurnaroundCopy("saved") });
       navigate(tenantPath("/projects"));
     } catch (error) {
       setSaveError(`Saving did not finish. Please retry to complete the same project. ${(error as any)?.message || "Please try again."}`);
