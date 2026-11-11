@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, test as it, expect } from "bun:test";
 import { submitLabel, hasDrawings, intakeComplete, shouldGreetWithIntake, protectionPhaseFor } from "./standardIntake";
 
 const base = { name: "Tower", drawingStatus: "standard", scope: "as_drawn", timing: "both", vendorChoice: "", vendorName: "", customScopeCount: 0 };
