@@ -78,6 +78,13 @@
       "when": 1794259056701,
       "tag": "0010_tenant_products_control_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794423910943,
+      "tag": "0011_scope_product_images_storage",
+      "breakpoints": true
     }
   ]
 }
