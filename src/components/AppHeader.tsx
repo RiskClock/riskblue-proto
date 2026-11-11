@@ -22,6 +22,7 @@ import { useUpdateAvailable } from "@/hooks/useVersionCheck";
 import { preloadRoute, preloadRoutes, type RouteKey } from "@/lib/routePreload";
 
 
+import { useAccountType } from "@/hooks/useAccountType";
 import { useCredits } from "@/hooks/useCredits";
 import { BuyCreditsModal } from "@/components/BuyCreditsModal";
 import { ChangePasswordModal } from "@/components/ChangePasswordModal";
@@ -64,7 +65,10 @@ export const AppHeader = ({ leftContent, title, actions, infoTitle, infoContent 
 
   // Inside a company workspace credits come from the shared tenant pool and are
   // gated by the view_credits / buy_credits permission flags.
-  const showCredits = tenantId ? hasPermission("view_credits") : true;
+  const { accountType } = useAccountType();
+  const noCompany = !tenantId && !myTenants.some((t) => t.isMember);
+  const creditFreeAccount = noCompany && (accountType === "standard" || accountType === "developer");
+  const showCredits = creditFreeAccount ? false : tenantId ? hasPermission("view_credits") : true;
   const canBuyCredits = tenantId ? hasPermission("buy_credits") : true;
   const displayedCredits = tenantId ? (tenant?.credits_balance ?? 0) : credits;
 
