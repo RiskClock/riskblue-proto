@@ -1,4 +1,4 @@
-type Account = { id: string; email?: string; email_confirmed_at?: string };
+type Account = { id: string; email?: string; email_confirmed_at?: string; user_metadata?: Record<string, unknown> };
 type Identity = { email: string | null; emailVerified: boolean };
 
 /** Provider claims come only from the authenticated userinfo response, never client input. */
@@ -9,7 +9,9 @@ export async function findVerifiedProviderAccount(
 ): Promise<Account | null> {
   if (!["autodesk", "procore"].includes(provider) || identity.emailVerified !== true || !identity.email) return null;
   const match = await findEmailAccount(identity.email, listUsers);
-  return match?.email_confirmed_at ? match : null;
+  // Self sign-ups are auto-confirmed without proving email ownership, so they never auto-link.
+  if (!match?.email_confirmed_at || match.user_metadata?.signup_method === "email_signup") return null;
+  return match;
 }
 
 /** Lookup is not authorization; unverified matches must complete email confirmation. */
