@@ -287,6 +287,25 @@ export function InstancesGridView(props: Props) {
     }
   };
 
+  // Selecting a building cell covers its spaces; resolve to unique space cells so nothing is counted twice.
+  const groupOfSpace = useMemo(() => {
+    const m = new Map<string, string>();
+    groups?.forEach((g) => g.spaces.forEach((sp) => m.set(sp, g.key)));
+    return m;
+  }, [groups]);
+  const effectiveCells = useMemo(() => {
+    const out = new Set<string>();
+    for (const id of selection) {
+      const i = id.lastIndexOf("|");
+      const rk = id.slice(0, i), ek = id.slice(i + 1);
+      if (rk.startsWith("group:")) {
+        const g = groups?.find((x) => `group:${x.key}` === rk);
+        g?.spaces.forEach((sp) => out.add(`space:${sp}|${ek}`));
+      } else out.add(id);
+    }
+    return out;
+  }, [selection, groups]);
+
   const selectedIds = useMemo(() => {
     const ids = new Set<string>();
     for (const id of selection) {
@@ -297,12 +316,12 @@ export function InstancesGridView(props: Props) {
   }, [selection, cellsByRow]);
   const selectedCount = useMemo(() => {
     let n = 0;
-    for (const id of selection) {
+    for (const id of effectiveCells) {
       const i = id.lastIndexOf("|");
       n += cellsByRow.get(id.slice(0, i))?.get(id.slice(i + 1))?.count ?? 0;
     }
     return n;
-  }, [selection, cellsByRow]);
+  }, [effectiveCells, cellsByRow]);
 
   const plansWithSelection = useMemo(
     () => drawingPlans.plans.filter((p) => p.included_instance_ids.some((id) => selectedIds.has(id))),
@@ -424,7 +443,8 @@ export function InstancesGridView(props: Props) {
     const count = cell?.count ?? 0;
     const bars = plansForCell(cell);
     const selectable = rowIdx !== null;
-    const isSel = selectable && selection.has(cellId(rowKey, entry.key));
+    const g = rowKey.startsWith("space:") ? groupOfSpace.get(rowKey.slice(6)) : undefined;
+    const isSel = selectable && (selection.has(cellId(rowKey, entry.key)) || (!!g && selection.has(cellId(`group:${g}`, entry.key))));
     return (
       <td
         key={entry.key}
