@@ -25,6 +25,7 @@ import { bidsReceived, hasReceivedBids, DEFAULT_VENDOR_IDS } from "@/lib/develop
 import { extractionScopeLabel, ownershipIntentLabel } from "@/lib/developerIntake";
 import { DeveloperWelcomeSteps } from "@/components/developer/DeveloperWelcomeSteps";
 import { developerListStatus } from "@/lib/developerProgress";
+import { processingCountdownLabel } from "@/lib/projectStatusCountdown";
 
 const PROJECT_STATUS_LABEL: Record<string, string> = { waiting_drawings: "Waiting for Drawings", processing: "Processing", processed: "Processed", receiving_bids: "Receiving Bids", ...IMPORT_PROJECT_STATUS_LABEL };
 const PROTECTION_LABEL: Record<string, string> = { high: "Essential", medium: "Balanced", low: "Comprehensive" };
@@ -80,6 +81,8 @@ const Projects = () => {
   const [userProjectRoles, setUserProjectRoles] = useState<Map<string, string>>(new Map());
   const isDeveloper = accountType === "developer";
   const isStandard = accountType === "standard";
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => { const i = setInterval(() => setNowTick(Date.now()), 60000); return () => clearInterval(i); }, []);
   const columnOptions = [
     { value: "status", label: "Status" }, { value: "created_by", label: "Created By" },
     { value: "created_on", label: "Created On" }, ...(isStandard ? [] : [{ value: "credits", label: "Credit Cost" }]),
@@ -351,7 +354,7 @@ const Projects = () => {
                         const pd = projectData.get(project.id);
                         const receivingBids = isDeveloper && !!pd && hasReceivedBids(project.id, Array.isArray(pd.selected_vendor_ids) ? pd.selected_vendor_ids : DEFAULT_VENDOR_IDS);
                         const displayStatus = isDeveloper ? developerListStatus(s, receivingBids) : s;
-                        const label = PROJECT_STATUS_LABEL[displayStatus] || "Processing";
+                        const label = displayStatus === "processing" ? processingCountdownLabel(project.created_at, nowTick) : PROJECT_STATUS_LABEL[displayStatus] || "Processing";
                         return (
                           <Badge variant="outline" className={cls}>
                             {label}
