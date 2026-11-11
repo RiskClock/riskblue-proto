@@ -309,6 +309,7 @@ Deno.serve(async (req) => {
 
       // ----- Login mode -----
       let userId = existing?.user_id as string | undefined;
+      let isNewAccount = false;
       let email: string | null = null;
       if (userId) {
         const { data } = await admin.auth.admin.getUserById(userId);
