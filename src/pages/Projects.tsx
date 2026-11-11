@@ -270,7 +270,7 @@ const Projects = () => {
 
       <main className="container mx-auto px-6 py-8 flex-1 overflow-auto">
         <div className="mb-8">
-          {showWelcome && (
+          {(showWelcome || (!loading && projects.length === 0)) && (
             <div className="bg-muted/50 p-6 rounded-lg mb-6 relative">
               <Button variant="ghost" size="icon"
                 onClick={handleDismissWelcome}
