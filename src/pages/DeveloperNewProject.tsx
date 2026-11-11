@@ -89,7 +89,7 @@ export default function DeveloperNewProject() {
         setCloudPicks([]);
       }
       if (isEdit) saveIds.current.requestId = crypto.randomUUID();
-      toast({ title: isEdit ? "Changes saved" : "Project created", description: "Your project and attachments have been saved. No credits were charged." });
+      toast({ title: isEdit ? "Changes saved" : "Project created", description: "Your project and attachments have been saved." });
       navigate(tenantPath("/projects"));
     } catch (error) {
       setSaveError(`Saving did not finish. Please retry to complete the same project. ${(error as any)?.message || "Please try again."}`);
