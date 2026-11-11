@@ -79,12 +79,13 @@ const Projects = () => {
   const [hasMore, setHasMore] = useState(false);
   const [userProjectRoles, setUserProjectRoles] = useState<Map<string, string>>(new Map());
   const isDeveloper = accountType === "developer";
+  const isStandard = accountType === "standard";
   const columnOptions = [
     { value: "status", label: "Status" }, { value: "created_by", label: "Created By" },
-    { value: "created_on", label: "Created On" }, { value: "credits", label: "Credit Cost" },
+    { value: "created_on", label: "Created On" }, ...(isStandard ? [] : [{ value: "credits", label: "Credit Cost" }]),
     ...(isDeveloper ? [{ value: "protection", label: "Target Protection Level" }, { value: "extraction", label: "Extraction Scope" }, { value: "ownership", label: "Ownership Intent" }, { value: "bids", label: "Bids Received" }] : []),
   ];
-  const columnsKey = `projects_columns_${user?.id}_${isDeveloper ? "dev" : "std"}`;
+  const columnsKey = `projects_columns_${user?.id}_${isDeveloper ? "dev" : isStandard ? "standard_v2" : "std"}`;
   const [columns, setColumns] = useState<ColumnPreferences<string> | null>(null);
   useEffect(() => {
     if (!user) return;
@@ -97,7 +98,7 @@ const Projects = () => {
   const ids = columnOptions.map(c => c.value);
   const columnPrefs: ColumnPreferences<string> = {
     order: ["name", ...Array.from(new Set([...(columns?.order || []).filter(id => ids.includes(id)), ...ids]))],
-    visible: { ...Object.fromEntries(ids.map(id => [id, !isDeveloper || id !== "credits"])), ...columns?.visible, name: true },
+    visible: { ...Object.fromEntries(ids.map(id => [id, isStandard ? id !== "created_by" : (!isDeveloper || id !== "credits")])), ...columns?.visible, name: true },
   };
   const orderedColumns = columnPrefs.order.filter(id => id !== "name" && columnPrefs.visible[id]);
   const updateColumns = (next: ColumnPreferences<string>) => { setColumns(next); localStorage.setItem(columnsKey, JSON.stringify(next)); };
