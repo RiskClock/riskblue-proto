@@ -45,11 +45,6 @@ const Auth = () => {
   
   // Request access modal state
   const [showRequestModal, setShowRequestModal] = useState(false);
-  const [requestForm, setRequestForm] = useState({
-    fullName: '',
-    workEmail: '',
-    companyName: ''
-  });
   const [requestSubmitted, setRequestSubmitted] = useState(false);
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
   
