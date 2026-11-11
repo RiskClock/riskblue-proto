@@ -131,7 +131,7 @@ export default function StandardNewProject() {
           </Section>
           <Section title="Project address (optional)">
             <Input value={address} aria-label="Project address" onChange={(e) => setAddress(e.target.value)} placeholder="Street, city, region"
-              className="h-auto rounded-none border-0 border-b border-border bg-transparent px-0 pb-4 pt-0 font-serif text-2xl md:text-3xl shadow-none focus-visible:border-foreground focus-visible:ring-0" />
+              className="h-auto rounded-none border-0 border-b border-border bg-transparent px-0 pb-4 pt-0 text-base md:text-base shadow-none focus-visible:border-foreground focus-visible:ring-0" />
           </Section>
           <Section title="What is the status of your project mechanical drawings?">
             {radio(DRAWING_STATUSES, drawingStatus, setDrawingStatus, "Drawing status")}
