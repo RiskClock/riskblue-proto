@@ -277,7 +277,7 @@ export function InstancesGridView(props: Props) {
     window.addEventListener("mouseup", up);
     return () => window.removeEventListener("mouseup", up);
   }, []);
-  useEffect(() => { if (selection.size > 0 && !drag.current && cellGesture.current === false && popupOpenRef.current) placePopup(); }, [selection]);
+  useEffect(() => { if (selection.size > 0 && !drag.current) placePopup(); }, [selection]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") { setSelection(new Set()); anchor.current = null; }
