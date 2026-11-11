@@ -16,6 +16,7 @@ import { CloudProviderButton, CloudProviderLogo } from "@/components/cloud/Cloud
 import { CLOUD_PROVIDER_LABEL, mergeSelection, queueCloudImports, removeCloudFile, type CloudProvider, type CloudSelection } from "@/lib/cloudImport";
 import { ArrowLeft, Loader2, ImagePlus, Upload, FileText, X, ScanSearch, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DeveloperProjectStepper } from "@/components/developer/DeveloperProjectStepper";
 
 const DRAWING_RE = /\.(pdf|png|jpe?g|dwg|dxf)$/i;
 
@@ -46,6 +47,7 @@ export default function StandardNewProject() {
   const drawingInput = useRef<HTMLInputElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const drawingsOn = hasDrawings(drawingStatus);
+  const drawingsBlocked = drawingStatus === "none";
 
   useEffect(() => {
     if (!projectImage) { setImageUrl(null); return; }
@@ -86,13 +88,14 @@ export default function StandardNewProject() {
     } finally { lock.current = false; setSaving(false); }
   };
 
-  const radio = (items: readonly { key: string; label: string; body?: string }[], value: string, onChange: (v: string) => void, label: string) => (
+  const radio = (items: readonly { key: string; label: string; body?: string }[], value: string, onChange: (v: string) => void, label: string, after?: Record<string, React.ReactNode>) => (
     <RadioGroup aria-label={label} value={value} onValueChange={onChange} className="gap-5">
       {items.map((i) => (
-        <label key={i.key} className="flex cursor-pointer items-start gap-3 text-base">
+        <div key={i.key} className="space-y-5"><label className="flex cursor-pointer items-start gap-3 text-base">
           <RadioGroupItem value={i.key} aria-label={i.label} className="mt-1 shrink-0" />
           <span><span className="font-medium">{i.label}</span>{i.body && <span className="mt-1 block leading-relaxed text-muted-foreground">{i.body}</span>}</span>
         </label>
+        {after?.[i.key]}</div>
       ))}
     </RadioGroup>
   );
@@ -101,6 +104,7 @@ export default function StandardNewProject() {
     <div className="developer-intake min-h-screen bg-background">
       <AppHeader leftContent={<Button variant="ghost" onClick={() => navigate(tenantPath("/projects"))} className="hidden text-base sm:inline-flex"><ArrowLeft /> Projects</Button>} />
       <main className="pb-32">
+        <DeveloperProjectStepper isExisting={false} vendorCount={0} />
         <header className="relative isolate mb-16 overflow-hidden">
           {imageUrl && <img src={imageUrl} alt="Project backdrop" className="absolute inset-0 -z-10 h-full w-full scale-[1.02] object-cover blur-[2px]" />}
           <div className="relative mx-auto max-w-5xl px-6 py-24 sm:px-8 sm:py-20">
@@ -127,18 +131,17 @@ export default function StandardNewProject() {
           </Section>
           <Section title="Project address (optional)">
             <Input value={address} aria-label="Project address" onChange={(e) => setAddress(e.target.value)} placeholder="Street, city, region"
-              className="h-auto rounded-none border-0 border-b border-border bg-transparent px-0 pb-3 pt-0 text-lg shadow-none focus-visible:border-foreground focus-visible:ring-0" />
+              className="h-auto rounded-none border-0 border-b border-border bg-transparent px-0 pb-4 pt-0 font-serif text-2xl md:text-3xl shadow-none focus-visible:border-foreground focus-visible:ring-0" />
           </Section>
           <Section title="What is the status of your project mechanical drawings?">
             {radio(DRAWING_STATUSES, drawingStatus, setDrawingStatus, "Drawing status")}
           </Section>
           <Section title="What water mitigation scope would you like RiskBlue to develop?">
-            {radio(MITIGATION_SCOPES, scope, setScope, "Water mitigation scope")}
-            {scope === "custom" && <div className="mt-6"><ScopePicker value={custom} onChange={setCustom} /></div>}
+            {radio(MITIGATION_SCOPES, scope, setScope, "Water mitigation scope", { custom: scope === "custom" && <div className="pl-7"><ScopePicker value={custom} onChange={setCustom} /></div> })}
           </Section>
           <Section title="Drawings & Documents">
-            <div className={cn(!drawingsOn && "pointer-events-none opacity-50")} aria-disabled={!drawingsOn}>
-              {!drawingsOn && <p className="mb-4 text-base text-muted-foreground">Available once you tell us you have drawings.</p>}
+            <div className={cn(drawingsBlocked && "pointer-events-none opacity-50")} aria-disabled={drawingsBlocked}>
+              {drawingsBlocked && <p className="mb-4 text-base text-muted-foreground">Not needed while there are no drawings yet.</p>}
               <p className="mb-6 text-base leading-relaxed text-muted-foreground">🔒 Confidential &amp; Secure: Your drawings are never shared. RiskBlue securely processes these files to extract a list of risk areas.</p>
               <input ref={drawingInput} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.dwg,.dxf" aria-label="Upload drawings" className="hidden" onChange={(e) => {
                 const sel = Array.from(e.target.files ?? []);
@@ -147,10 +150,10 @@ export default function StandardNewProject() {
                 setDrawings((cur) => [...cur, ...sel.filter((f) => DRAWING_RE.test(f.name) && !cur.some((c) => c.name === f.name && c.size === f.size))]);
                 e.target.value = "";
               }} />
-              <Button variant="outline" disabled={!drawingsOn} className="h-14 w-full justify-start border-dashed px-5 text-base" onClick={() => drawingInput.current?.click()}><Upload /> Upload from computer</Button>
+              <Button variant="outline" disabled={drawingsBlocked} className="h-14 w-full justify-start border-dashed px-5 text-base" onClick={() => drawingInput.current?.click()}><Upload /> Upload from computer</Button>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <CloudProviderButton provider="forma" label="Import from Forma" disabled={!drawingsOn} className="h-14 justify-start px-5 text-base" onClick={() => setPickerProvider("forma")} />
-                <CloudProviderButton provider="procore" label="Import from Procore" disabled={!drawingsOn} className="h-14 justify-start px-5 text-base" onClick={() => setPickerProvider("procore")} />
+                <CloudProviderButton provider="forma" label="Import from Autodesk Forma" disabled={drawingsBlocked} className="h-14 justify-start px-5 text-base" onClick={() => setPickerProvider("forma")} />
+                <CloudProviderButton provider="procore" label="Import from Procore" disabled={drawingsBlocked} className="h-14 justify-start px-5 text-base" onClick={() => setPickerProvider("procore")} />
               </div>
               {pickerProvider && <CloudDrawingPicker provider={pickerProvider} open onOpenChange={(o) => !o && setPickerProvider(null)} onConfirm={(sel) => setCloudPicks((cur) => mergeSelection(cur, sel))} />}
               {(cloudPicks.length > 0 || drawings.length > 0) && <ul className="mt-4 divide-y divide-border">
@@ -195,7 +198,7 @@ export default function StandardNewProject() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mx-auto grid max-w-5xl gap-6 px-6 sm:px-8 md:grid-cols-[240px_minmax(0,1fr)]">
-      <p className="text-base font-medium text-foreground">{title}</p>
+      <p className="text-base font-medium text-foreground">{title.endsWith(" (optional)") ? <>{title.slice(0, -11)}<span className="block font-normal text-muted-foreground">(optional)</span></> : title}</p>
       <div className="min-w-0">{children}</div>
     </section>
   );
