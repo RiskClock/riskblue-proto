@@ -339,6 +339,7 @@ export function InstancesGridView(props: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [planName, setPlanName] = useState("");
   const [planDesc, setPlanDesc] = useState("");
+  const [planColor, setPlanColor] = useState(() => randomPlanColor());
   const [saving, setSaving] = useState(false);
 
   const baseOf = (p: DrawingPlan) => {
@@ -361,7 +362,7 @@ export function InstancesGridView(props: Props) {
     run(async () => {
       const { data } = await supabase.auth.getUser();
       await drawingPlans.createPlan(
-        { name: planName.trim(), description: planDesc.trim(), baseQuantities: {}, color: randomPlanColor(), includedInstanceIds: Array.from(selectedIds) },
+        { name: planName.trim(), description: planDesc.trim(), baseQuantities: {}, color: planColor, includedInstanceIds: Array.from(selectedIds) },
         data?.user?.id ?? null,
       );
       setCreateOpen(false);
@@ -448,11 +449,11 @@ export function InstancesGridView(props: Props) {
     return (
       <td
         key={entry.key}
-        className={`border-b border-l px-2 py-1.5 text-right tabular-nums ${selectable ? "cursor-cell" : ""} ${isSel ? "bg-primary/15 outline outline-1 -outline-offset-1 outline-primary" : ""} ${count === 0 ? "text-muted-foreground" : ""}`}
+        className={`border-b border-l px-2 py-1.5 text-center align-top tabular-nums ${selectable ? "cursor-cell" : ""} ${isSel ? "bg-primary/15 outline outline-1 -outline-offset-1 outline-primary" : ""} ${count === 0 ? "text-muted-foreground" : ""}`}
         onMouseDown={selectable ? (e) => onCellDown(e, rowIdx!, colIdx) : undefined}
         onMouseEnter={selectable ? (e) => onCellEnter(e, rowIdx!, colIdx) : undefined}
       >
-        <span className="inline-flex items-center justify-end gap-1.5">
+        <span className="inline-flex h-5 items-center justify-center gap-1.5 leading-5">
           {bars.length > 0 && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -529,7 +530,7 @@ export function InstancesGridView(props: Props) {
             <Fragment key={vr.key}>
               <tr className={vr.kind === "group" ? "bg-muted/20" : ""}>
                 <td
-                  className={`${stickyFirst} ${vr.kind === "group" ? "cursor-pointer pl-6 font-medium hover:bg-muted" : groups ? "pl-14" : "pl-8"}`}
+                  className={`${stickyFirst} align-top ${vr.kind === "group" ? "cursor-pointer pl-6 font-medium hover:bg-muted" : groups ? "pl-14" : "pl-8"}`}
                   onClick={vr.kind === "group" ? () => setOpenGroups((prev) => toggleCell(prev, vr.groupKey!)) : undefined}
                 >
                   <span className="inline-flex items-center gap-1">
@@ -553,7 +554,7 @@ export function InstancesGridView(props: Props) {
           onMouseDown={(e) => e.stopPropagation()}
         >
           <span className="px-2 py-1 text-xs text-muted-foreground whitespace-nowrap">{selectedCount} instances</span>
-          <Button size="sm" variant="ghost" className="h-7" disabled={saving || selectedIds.size === 0} onClick={() => setCreateOpen(true)}>
+          <Button size="sm" variant="ghost" className="h-7" disabled={saving || selectedIds.size === 0} onClick={() => { setPlanColor(randomPlanColor()); setCreateOpen(true); }}>
             Create a Plan
           </Button>
           <DropdownMenu>
@@ -593,7 +594,10 @@ export function InstancesGridView(props: Props) {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Create a Plan</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <Input value={planName} onChange={(e) => setPlanName(e.target.value)} placeholder="Plan name" autoFocus />
+            <div className="flex gap-2">
+              <Input value={planName} onChange={(e) => setPlanName(e.target.value)} placeholder="Plan name" autoFocus />
+              <input type="color" value={planColor} onChange={(e) => setPlanColor(e.target.value)} className="h-10 w-12 shrink-0 rounded border p-1" aria-label="Plan color" />
+            </div>
             <Textarea value={planDesc} onChange={(e) => setPlanDesc(e.target.value)} placeholder="Description" className="min-h-20" />
             <p className="text-xs text-muted-foreground">{selectedCount} instances will be added.</p>
           </div>
