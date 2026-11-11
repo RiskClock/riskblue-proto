@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { signInSchema } from "@/lib/validation";
 import { getUserFriendlyError } from "@/lib/errorHandling";
+import { APP_VERSION } from "@/lib/appVersion";
 import riskBlueLogo from "@/assets/riskblue-logo.jpg";
 import { EXTERNAL_PROVIDERS, startExternalAuth, type ExternalProvider } from "@/lib/externalAuth";
 import { PROVIDER_LOGOS } from "@/lib/providerLogos";
@@ -170,7 +171,7 @@ const Auth = () => {
     e.preventDefault();
     setIsSubmittingRequest(true);
     try {
-      const redirect = `${window.location.origin}/developer/new-project`;
+      const redirect = `${window.location.origin}/projects`;
       const { data, error } = await supabase.auth.signUp({
         email: signUpEmail.trim(),
         password: signUpPassword,
@@ -178,7 +179,7 @@ const Auth = () => {
       });
       if (error) throw error;
       if (data.session) {
-        navigate("/developer/new-project", { replace: true });
+        navigate("/projects", { replace: true });
       } else {
         setRequestSubmitted(true);
       }
@@ -273,7 +274,8 @@ const Auth = () => {
   }
 
   return (
-    <div className="min-h-screen flex">
+    <div className="relative min-h-screen flex">
+      <span className="pointer-events-none absolute bottom-2 right-3 z-10 text-[10px] text-muted-foreground">v{APP_VERSION}</span>
       <div className="flex-1 flex items-center justify-center bg-background p-8">
         <div className="w-full max-w-md space-y-8">
           <div className="text-center">

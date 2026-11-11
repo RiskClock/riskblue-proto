@@ -40,7 +40,7 @@ const ExternalAuthCallback = () => {
       if (error) {
         navigate(`/auth?external_error=${encodeURIComponent("Sign-in link expired. Please try again.")}`, { replace: true });
       } else {
-        navigate(isNew ? "/developer/new-project" : "/projects", { replace: true });
+        navigate("/projects", { replace: true });
       }
     });
   }, [navigate]);
