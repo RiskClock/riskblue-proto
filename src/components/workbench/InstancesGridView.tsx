@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { createPortal } from "react-dom";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -205,8 +206,9 @@ export function InstancesGridView(props: Props) {
     const box = containerRef.current;
     if (!el || !box) return;
     const r = el.getBoundingClientRect();
-    const b = box.getBoundingClientRect();
-    setPopupPos({ x: r.right - b.left + box.scrollLeft + 6, y: r.top - b.top + box.scrollTop });
+    const x = Math.max(8, Math.min(r.right + 6, window.innerWidth - 220));
+    const y = Math.max(8, Math.min(r.top, window.innerHeight - 240));
+    setPopupPos({ x, y });
   };
 
   // Drop selections for rows that were collapsed away.
@@ -453,18 +455,21 @@ export function InstancesGridView(props: Props) {
         onMouseDown={selectable ? (e) => onCellDown(e, rowIdx!, colIdx) : undefined}
         onMouseEnter={selectable ? (e) => onCellEnter(e, rowIdx!, colIdx) : undefined}
       >
-        <span className="inline-flex h-5 items-center justify-center gap-1.5 leading-5">
-          {bars.length > 0 && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex gap-0.5">
-                  {bars.map((p) => <span key={p.id} className="h-4 w-1 rounded-sm" style={{ backgroundColor: p.color || "hsl(var(--primary))" }} />)}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>{bars.map((p) => p.name).join(", ")}</TooltipContent>
-            </Tooltip>
-          )}
-          {count}
+        <span className="grid h-5 grid-cols-[1fr_4ch_1fr] items-center leading-5">
+          <span className="flex justify-end pr-2.5">
+            {bars.length > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex gap-0.5">
+                    {bars.map((p) => <span key={p.id} className="h-4 w-1 rounded-sm" style={{ backgroundColor: p.color || "hsl(var(--primary))" }} />)}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{bars.map((p) => p.name).join(", ")}</TooltipContent>
+              </Tooltip>
+            )}
+          </span>
+          <span className="text-center">{count}</span>
+          <span />
         </span>
       </td>
     );
@@ -492,7 +497,7 @@ export function InstancesGridView(props: Props) {
           <tr>
             <th className={`${stickyFirst} bg-muted font-medium text-muted-foreground`}>Class</th>
             {entries.map((e) => (
-              <th key={e.key} className="border-b border-l px-2 py-2 text-right font-medium whitespace-nowrap">
+              <th key={e.key} className="border-b border-l px-2 py-2 text-center font-medium whitespace-nowrap">
                 <Tooltip>
                   <TooltipTrigger asChild><span className="cursor-default">{e.displayPrefix}</span></TooltipTrigger>
                   <TooltipContent>{e.displayName}</TooltipContent>
@@ -506,8 +511,8 @@ export function InstancesGridView(props: Props) {
           <tr>
             <td className={`${stickyFirst} font-medium`}>{companyName ? `${companyName} Product` : "Product"}</td>
             {entries.map((e) => (
-              <td key={e.key} className="border-b border-l px-1 py-1 text-right">
-                <DeviceButton row={deviceRowFor(e)} devices={devices} />
+              <td key={e.key} className="border-b border-l px-1 py-1 text-center">
+                <div className="flex justify-center"><DeviceButton row={deviceRowFor(e)} devices={devices} /></div>
               </td>
             ))}
             <td className="border-b border-l" />
@@ -546,10 +551,10 @@ export function InstancesGridView(props: Props) {
         </tbody>
       </table>
 
-      {popupPos && selection.size > 0 && canEdit && (
+      {popupPos && selection.size > 0 && canEdit && createPortal(
         <div
           ref={popupRef}
-          className="absolute z-30 flex w-max flex-col items-stretch gap-0.5 rounded-md border bg-popover p-1 shadow-md [&_button]:justify-start"
+          className="fixed z-50 flex w-max flex-col items-stretch gap-0.5 rounded-md border bg-popover p-1 shadow-md [&_button]:justify-start"
           style={{ left: popupPos.x, top: popupPos.y }}
           onMouseDown={(e) => e.stopPropagation()}
         >
