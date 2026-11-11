@@ -154,6 +154,24 @@ export function InstancesGridView(props: Props) {
     [drawingsBySpace, fileNameById],
   );
 
+  const drawingLabel = useCallback((d: { fileId: string; page: number }) => {
+    const name = (fileNameById.get(d.fileId) || "Drawing").replace(/\.pdf$/i, "");
+    return (pageCountByFileId.get(d.fileId) ?? 1) > 1 ? `${name} p.${d.page}` : name;
+  }, [fileNameById, pageCountByFileId]);
+  // Fixed Drawings column width: fits the longest label across every space, so expanding rows never resizes it.
+  const drawingsColWidth = useMemo(() => {
+    const ctx = document.createElement("canvas").getContext("2d");
+    const font = getComputedStyle(document.body).fontFamily || "sans-serif";
+    if (ctx) ctx.font = `12px ${font}`;
+    let max = 0;
+    drawingsBySpace.forEach((m) => m.forEach((d) => {
+      const label = drawingLabel(d);
+      max = Math.max(max, ctx ? ctx.measureText(label).width : label.length * 7);
+    }));
+    // label + button padding/border + cell padding
+    return Math.max(120, Math.ceil(max) + 16 + 24 + 4);
+  }, [drawingsBySpace, drawingLabel]);
+
   // Collapsible sections: everything collapsed by default.
   const [sectionOpen, setSectionOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
@@ -179,6 +197,8 @@ export function InstancesGridView(props: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [popupPos, setPopupPos] = useState<{ x: number; y: number } | null>(null);
   const lastCellEl = useRef<HTMLElement | null>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
 
   const placePopup = () => {
     const el = lastCellEl.current;
@@ -199,8 +219,26 @@ export function InstancesGridView(props: Props) {
   }, [rowKeys]);
   useEffect(() => { if (selection.size === 0) setPopupPos(null); }, [selection]);
 
+  const cellGesture = useRef(false);
+  const popupOpenRef = useRef(false);
+  popupOpenRef.current = !!popupPos;
+  // Outside click: first closes the options pop-up, the next one clears the selection.
+  useEffect(() => {
+    const down = (e: MouseEvent) => {
+      const t = e.target as Element | null;
+      if (!t || tableRef.current?.contains(t) || popupRef.current?.contains(t)) return;
+      if (t.closest?.('[role="menu"],[role="dialog"],[role="alertdialog"],[data-radix-popper-content-wrapper]')) return;
+      if (popupOpenRef.current) { setPopupPos(null); return; }
+      setSelection((prev) => (prev.size ? new Set() : prev));
+      anchor.current = null;
+    };
+    document.addEventListener("mousedown", down);
+    return () => document.removeEventListener("mousedown", down);
+  }, []);
+
   const onCellDown = (e: React.MouseEvent<HTMLElement>, row: number, col: number) => {
     if (e.button !== 0) return;
+    cellGesture.current = true;
     e.preventDefault();
     containerRef.current?.focus();
     lastCellEl.current = e.currentTarget;
@@ -231,9 +269,9 @@ export function InstancesGridView(props: Props) {
   };
   useEffect(() => {
     const up = () => {
-      if (drag.current) {
-        drag.current = null;
-      }
+      if (!cellGesture.current) return;
+      cellGesture.current = false;
+      drag.current = null;
       placePopup();
     };
     window.addEventListener("mouseup", up);
@@ -362,16 +400,14 @@ export function InstancesGridView(props: Props) {
     const list = drawingsFor(spaces);
     if (list.length === 0) return <span className="text-muted-foreground">None</span>;
     return (
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-col items-start gap-1">
         {list.map((d) => {
-          const name = (fileNameById.get(d.fileId) || "Drawing").replace(/\.pdf$/i, "");
-          const multi = (pageCountByFileId.get(d.fileId) ?? 1) > 1;
-          const label = multi ? `${name} p.${d.page}` : name;
+          const label = drawingLabel(d);
           return (
             <button
               key={`${d.fileId}:${d.page}`}
               type="button"
-              className="max-w-[220px] truncate rounded border bg-background px-1.5 py-0.5 text-xs text-primary hover:bg-muted"
+              className="whitespace-nowrap rounded border bg-background px-1.5 py-0.5 text-xs text-primary hover:bg-muted"
               title={label}
               onClick={(ev) => { ev.stopPropagation(); onOpenDrawing(d.fileId, d.page); }}
             >
@@ -430,7 +466,7 @@ export function InstancesGridView(props: Props) {
       onKeyDown={onKeyDown}
       className="relative max-h-[calc(100vh-220px)] overflow-auto rounded-lg border bg-card outline-none select-none"
     >
-      <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
+      <table ref={tableRef} className="w-max min-w-full border-separate border-spacing-0 text-sm">
         <thead className="sticky top-0 z-20 bg-muted">
           <tr>
             <th className={`${stickyFirst} bg-muted font-medium text-muted-foreground`}>Class</th>
@@ -442,7 +478,7 @@ export function InstancesGridView(props: Props) {
                 </Tooltip>
               </th>
             ))}
-            <th className="border-b border-l px-3 py-2 text-left font-medium">Drawings</th>
+            <th className="border-b border-l px-3 py-2 text-left font-medium" style={{ width: drawingsColWidth, minWidth: drawingsColWidth }}>Drawings</th>
           </tr>
         </thead>
         <tbody>
@@ -482,7 +518,7 @@ export function InstancesGridView(props: Props) {
                   </span>
                 </td>
                 {entries.map((e, ci) => renderCountCell(vr.key, ri, e, ci))}
-                <td className="border-b border-l px-3 py-1.5 min-w-[220px]">{renderDrawings(vr.spaces)}</td>
+                <td className="border-b border-l px-3 py-1.5 align-top" style={{ width: drawingsColWidth, minWidth: drawingsColWidth }}>{renderDrawings(vr.spaces)}</td>
               </tr>
             </Fragment>
           ))}
@@ -491,11 +527,12 @@ export function InstancesGridView(props: Props) {
 
       {popupPos && selection.size > 0 && canEdit && (
         <div
-          className="absolute z-30 flex items-center gap-1 rounded-md border bg-popover p-1 shadow-md"
+          ref={popupRef}
+          className="absolute z-30 flex w-max flex-col items-stretch gap-0.5 rounded-md border bg-popover p-1 shadow-md [&_button]:justify-start"
           style={{ left: popupPos.x, top: popupPos.y }}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <span className="px-2 text-xs text-muted-foreground whitespace-nowrap">{selectedCount} instances</span>
+          <span className="px-2 py-1 text-xs text-muted-foreground whitespace-nowrap">{selectedCount} instances</span>
           <Button size="sm" variant="ghost" className="h-7" disabled={saving || selectedIds.size === 0} onClick={() => setCreateOpen(true)}>
             Create a Plan
           </Button>
