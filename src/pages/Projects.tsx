@@ -16,7 +16,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CreateProjectModal } from "@/components/CreateProjectModal";
 import { useAccountType } from "@/hooks/useAccountType";
-import { useTenant } from "@/contexts/TenantContext";
+import { useTenant, useMyTenants } from "@/contexts/TenantContext";
+import { shouldGreetWithIntake } from "@/lib/standardIntake";
 import { useIsSystemAdmin, useStaffUserIds } from "@/hooks/useIsSystemAdmin";
 import { useBetaAccess } from "@/hooks/useBetaAccess";
 import { ColumnEditDropdown, type ColumnPreferences } from "@/components/common/ColumnEditDropdown";
@@ -182,8 +183,26 @@ const Projects = () => {
       navigate(tenantPath("/developer/new-project"));
       return;
     }
+    if (accountType === "standard") {
+      navigate(tenantPath("/new-project"));
+      return;
+    }
     setShowCreateModal(true);
   };
+
+  const { data: myTenants, isLoading: tenantsLoading } = useMyTenants();
+  useEffect(() => {
+    if (loading || tenantsLoading || !accountType || !user) return;
+    const key = `riskblue_intake_greeted_${user.id}`;
+    const greet = shouldGreetWithIntake({
+      accountType, isInternal: isInternalUser, projectCount: projects.length,
+      hasTenant: !!tenantId || (myTenants || []).some((t) => t.isMember),
+      alreadyGreeted: sessionStorage.getItem(key) === "true",
+    });
+    if (!greet) return;
+    sessionStorage.setItem(key, "true");
+    navigate(accountType === "developer" ? "/developer/new-project" : "/new-project", { replace: true });
+  }, [loading, tenantsLoading, accountType, user, projects.length, tenantId, myTenants, isInternalUser, navigate]);
 
   const handleDeleteProject = async (projectId: string, e: React.MouseEvent) => {
     e.stopPropagation();

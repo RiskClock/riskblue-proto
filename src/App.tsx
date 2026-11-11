@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import DeveloperNewProject from "./pages/DeveloperNewProject";
+import StandardNewProject from "./pages/StandardNewProject";
 import { Toaster } from "@/components/ui/toaster"; 
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -92,6 +93,7 @@ const App = () => (
             <Route path="/account" element={<ProtectedRoute><AccountSettings /></ProtectedRoute>} />
             <Route path="/projects" element={<ProtectedRoute><RootRedirect fallback={<Projects />} /></ProtectedRoute>} />
             <Route path="/developer/new-project" element={<ProtectedRoute><DeveloperNewProject /></ProtectedRoute>} />
+            <Route path="/new-project" element={<ProtectedRoute><StandardNewProject /></ProtectedRoute>} />
             <Route path="/developer/project/:id" element={<ProtectedRoute><DeveloperNewProject /></ProtectedRoute>} />
             <Route path="/project/:id" element={<ProtectedRoute><ProjectWizard /></ProtectedRoute>} />
             
@@ -117,6 +119,7 @@ const App = () => (
               <Route path="controls" element={<Controls />} />
               <Route path="project/:id" element={<ProjectWizard />} />
               <Route path="developer/new-project" element={<DeveloperNewProject />} />
+              <Route path="new-project" element={<StandardNewProject />} />
               <Route path="developer/project/:id" element={<DeveloperNewProject />} />
               <Route path="workbench/project/:projectId" element={<WorkbenchProjectDetail />} />
               <Route path="project/:projectId/mitigation-plan" element={<WaterMitigationPlan />} />
