@@ -4,6 +4,19 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Check, Building2, Loader2 } from "lucide-react";
 import { useMyTenants, useTenant } from "@/contexts/TenantContext";
+import { useQuery } from "@tanstack/react-query";
+import { fetchCompanyLogoUrl } from "@/lib/brandLogo";
+
+const CompanyLogo = ({ name }: { name: string }) => {
+  const { data: url } = useQuery({
+    queryKey: ["company-logo", (name || "").toLowerCase()],
+    queryFn: () => fetchCompanyLogoUrl(name),
+    enabled: !!name,
+    staleTime: 60_000,
+  });
+  if (!url) return <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />;
+  return <img src={url} alt={`${name} logo`} className="h-5 w-12 shrink-0 object-contain object-left" />;
+};
 
 interface SwitchCompanyModalProps {
   open: boolean;
@@ -48,7 +61,7 @@ export const SwitchCompanyModal = ({ open, onOpenChange }: SwitchCompanyModalPro
               className="w-full justify-start gap-2 h-auto py-2.5"
               onClick={() => handleSelect(t.id)}
             >
-              <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <CompanyLogo name={t.name} />
               <span className="truncate flex-1 text-left">{t.name}</span>
               <Badge variant="secondary" className="capitalize">{t.role}</Badge>
               {t.id === tenantId && <Check className="h-4 w-4 text-primary shrink-0" />}
