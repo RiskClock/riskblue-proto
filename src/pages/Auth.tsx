@@ -48,6 +48,9 @@ const Auth = () => {
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [requestSubmitted, setRequestSubmitted] = useState(false);
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
+  const [isSignUpMode, setIsSignUpMode] = useState(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("signup"),
+  );
   
   const { signIn, user, loading } = useAuth();
   const navigate = useNavigate();
@@ -280,9 +283,43 @@ const Auth = () => {
         <div className="w-full max-w-md space-y-8">
           <div className="text-center">
             <img src={riskBlueLogo} alt="RiskBlue" className="h-12 mx-auto mb-8" />
-            <h1 className="text-4xl font-bold font-serif text-foreground">Log In</h1>
+            <h1 className="text-4xl font-bold font-serif text-foreground">{isSignUpMode ? "Sign Up" : "Log In"}</h1>
           </div>
 
+          {isSignUpMode ? (
+            <>
+              {!requestSubmitted ? (
+                <form onSubmit={handleSignUp} className="space-y-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="inlineSignUpEmail">Email</Label>
+                    <Input id="inlineSignUpEmail" type="email" required autoComplete="email" value={signUpEmail} onChange={(e) => setSignUpEmail(e.target.value)} placeholder="you@example.com" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="inlineSignUpPassword">Password</Label>
+                    <Input id="inlineSignUpPassword" type="password" required minLength={8} autoComplete="new-password" value={signUpPassword} onChange={(e) => setSignUpPassword(e.target.value)} placeholder="At least 8 characters" />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={isSubmittingRequest}>
+                    {isSubmittingRequest ? "Signing up..." : "Sign Up"}
+                  </Button>
+                </form>
+              ) : (
+                <p className="text-muted-foreground text-center">
+                  Check your email to confirm your account. The link takes you straight to your new project.
+                </p>
+              )}
+              <div className="mt-8 text-center space-y-2">
+                <p className="text-sm font-medium text-foreground">Already have an account?</p>
+                <button
+                  type="button"
+                  onClick={() => { setIsSignUpMode(false); setRequestSubmitted(false); }}
+                  className="text-sm text-primary hover:underline font-medium"
+                >
+                  Log In
+                </button>
+              </div>
+            </>
+          ) : (
+          <>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -341,6 +378,8 @@ const Auth = () => {
               Sign Up
             </button>
           </div>
+          </>
+          )}
 
           <Separator className="my-8" />
 
