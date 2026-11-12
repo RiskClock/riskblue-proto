@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { PlanEditorProduct } from "@/components/wizard/PlanEditorModal";
 import { isSubtypeSplitClass } from "@/lib/awpSubtypeLabels";
+import { controlNeedsPipeDiameter } from "@/lib/controlPipeDiameter";
 
 export interface DrawingPlan {
   id: string;
@@ -34,7 +35,7 @@ export function assignmentKeyFor(
   pipeType: string,
   pipeDiameter: string,
 ): string {
-  if (!isSubtypeSplitClass(className)) return catalogId;
+  if (!isSubtypeSplitClass(className) && !controlNeedsPipeDiameter(className)) return catalogId;
   return `${catalogId}::${pipeType || "(untyped)"}::${pipeDiameter || "(no size)"}`;
 }
 
