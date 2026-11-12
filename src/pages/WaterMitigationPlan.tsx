@@ -372,7 +372,7 @@ export default function WaterMitigationPlan() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("projects")
-        .select("id, name, tenant_id, project_data, currency_code, risk_device_assignments")
+        .select("id, name, tenant_id, project_data, currency_code, risk_device_assignments, selected_awp_class_names, selected_other_classes")
         .eq("id", projectId!)
         .single();
       if (error) throw error;
@@ -543,6 +543,34 @@ export default function WaterMitigationPlan() {
         sheets: sheetsRes.data || [],
         instances,
       };
+    },
+    enabled: !!projectId && canEdit,
+  });
+
+  // Threat Report parity: same visible classes (Workbench column prefs) and
+  // same project class aliases / prefixes for naming.
+  const { data: columnPrefs } = useQuery({
+    queryKey: ["workbench-column-prefs", projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("workbench_column_preferences")
+        .select("awp_class_names")
+        .eq("id", projectId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data ? ((data.awp_class_names as string[]) || []) : null;
+    },
+    enabled: !!projectId && canEdit,
+  });
+  const { data: classAliases = [] } = useQuery({
+    queryKey: ["wmp-class-aliases", projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("project_class_aliases" as any)
+        .select("awp_class_name, alias, alias_prefix")
+        .eq("project_id", projectId!);
+      if (error) throw error;
+      return (data || []) as any[];
     },
     enabled: !!projectId && canEdit,
   });
@@ -749,6 +777,31 @@ export default function WaterMitigationPlan() {
     return m;
   }, [drawing]);
 
+  const aliasByClass = useMemo(() => {
+    const m = new Map<string, { alias: string | null; alias_prefix: string | null }>();
+    (classAliases as any[]).forEach((r) => m.set(r.awp_class_name, { alias: r.alias || null, alias_prefix: r.alias_prefix || null }));
+    return m;
+  }, [classAliases]);
+  const prefixByName = useMemo(() => {
+    const m = new Map<string, string>();
+    if (!catalog) return m;
+    [...(catalog.critical_assets || []), ...(catalog.water_systems || [])].forEach((e: any) => {
+      if (e?.name && e?.id_prefix) m.set(e.name.toLowerCase().trim(), e.id_prefix);
+    });
+    return m;
+  }, [catalog]);
+  // Classes the Threat Report shows: saved Workbench columns, or the project's
+  // original canonical selection when columns were never customized.
+  const visibleClassSet = useMemo(() => {
+    if (columnPrefs) return new Set(columnPrefs);
+    const p: any = project || {};
+    const known = new Set<string>();
+    if (catalog) [...catalog.critical_assets, ...catalog.water_systems, ...catalog.processes].forEach((e: any) => e?.name && known.add(e.name));
+    const all = [...((p.selected_awp_class_names as string[]) || []), ...((p.selected_other_classes as string[]) || [])];
+    // Matches Workbench defaults: custom (non-canonical) names are excluded.
+    return new Set(all.filter((n) => known.has(n)));
+  }, [columnPrefs, project, catalog]);
+
   const detectionRows: DetectionRow[] = useMemo(() => {
     if (!drawing) return [];
     const byName = new Map<string, string>();
@@ -814,12 +867,17 @@ export default function WaterMitigationPlan() {
       const splitSubtype = !!catalogId && (isSubtypeSplitClass(d.awp_class_name || "") || controlNeedsPipeDiameter(d.awp_class_name));
       const typeKey = pipeType || "(untyped)";
       const diameterKey = pipeDiameter || "(no size)";
+      const className = d.awp_class_name || "";
+      const aliasRow = aliasByClass.get(className);
+      const baseName = aliasRow?.alias || className;
+      const basePrefix = aliasRow?.alias_prefix || prefixByName.get(className.toLowerCase().trim()) || className.slice(0, 3).toUpperCase();
+      const typeToken = pipeType ? `-${subtypeAbbr(className, pipeType) || pipeType}` : "";
       const subtypeCode = splitSubtype
-        ? `${subtypeAbbr(d.awp_class_name, pipeType) || pipeType}${pipeDiameter ? ` ${pipeDiameter}` : ""}`.trim() || null
-        : null;
+        ? `${basePrefix}${typeToken}${pipeDiameter ? ` ${pipeDiameter}` : ""}`.replace(/\s+/g, " ").trim()
+        : basePrefix;
       const subtypeName = splitSubtype
-        ? `${d.awp_class_name}${pipeType ? ` ${expandSubtypeLabelWithSuffix(d.awp_class_name, pipeType)}` : ""}${pipeDiameter ? ` ${pipeDiameter}` : ""}`.replace(/\s+/g, " ").trim()
-        : null;
+        ? `${baseName}${pipeType ? ` ${expandSubtypeLabelWithSuffix(className, pipeType)}` : ""}${pipeDiameter ? ` ${pipeDiameter}` : ""}`.replace(/\s+/g, " ").trim()
+        : baseName;
       const base = {
         id: d.id,
         name: d.awp_class_name,
@@ -848,7 +906,7 @@ export default function WaterMitigationPlan() {
       });
       return rows;
     });
-  }, [drawing, sheetPlans, catalog, controls]);
+  }, [drawing, sheetPlans, catalog, controls, aliasByClass, prefixByName]);
 
   // Every space in the spatial model, in model order, then any extra spaces
   // that only appear on detections, with the unassigned bucket last.
@@ -1217,6 +1275,7 @@ export default function WaterMitigationPlan() {
     const detected = new Map<string, { catalogId: string; count: number; code: string | null; name: string | null; pipeSizeMm: number | null }>();
     detectionRows.forEach((row) => {
       if (!row.catalogId || !row.assignmentId) return;
+      if (visibleClassSet.size > 0 && !visibleClassSet.has(row.name)) return;
       const current = detected.get(row.assignmentId);
       detected.set(row.assignmentId, {
         catalogId: row.catalogId,
@@ -1270,7 +1329,7 @@ export default function WaterMitigationPlan() {
         matches.forEach(([assignmentId, value]) => rows.push({
           id: assignmentId,
           name: value.name || entry.name,
-          code: value.code ? `${entry.id_prefix || entry.name}-${value.code}` : entry.id_prefix || entry.name,
+          code: value.code || entry.id_prefix || entry.name,
           kind: key === "critical_assets" ? "Asset" : "Water System",
           count: value.count,
           pipeSizeMm: value.pipeSizeMm,
@@ -1284,7 +1343,7 @@ export default function WaterMitigationPlan() {
         .forEach(([assignmentId, value]) => rows.push({
           id: assignmentId,
           name: value.name || control.name,
-          code: value.code ? `${control.name}-${value.code}` : control.name,
+          code: value.code || control.name,
           kind: "Control",
           count: value.count,
           pipeSizeMm: value.pipeSizeMm,
@@ -1292,7 +1351,7 @@ export default function WaterMitigationPlan() {
         }));
     });
     return rows.sort((a, b) => a.name.localeCompare(b.name));
-  }, [catalog, controls, detectionRows, items, products]);
+  }, [catalog, controls, detectionRows, items, products, visibleClassSet]);
 
   const editorSourcePlans = useMemo(() => {
     const currentId = planEditor?.plan?.id;
