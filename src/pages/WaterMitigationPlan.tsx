@@ -797,9 +797,9 @@ export default function WaterMitigationPlan() {
     const p: any = project || {};
     const known = new Set<string>();
     if (catalog) [...catalog.critical_assets, ...catalog.water_systems, ...catalog.processes].forEach((e: any) => e?.name && known.add(e.name));
-    const custom = new Set(((p.selected_other_classes as string[]) || []).filter((n) => !known.has(n)));
     const all = [...((p.selected_awp_class_names as string[]) || []), ...((p.selected_other_classes as string[]) || [])];
-    return new Set(all.filter((n) => !custom.has(n) && known.has(n) || !custom.has(n) && !((p.selected_awp_class_names || []) as string[]).includes(n) ? true : !custom.has(n)));
+    // Matches Workbench defaults: custom (non-canonical) names are excluded.
+    return new Set(all.filter((n) => known.has(n)));
   }, [columnPrefs, project, catalog]);
 
   const detectionRows: DetectionRow[] = useMemo(() => {
