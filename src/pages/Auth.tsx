@@ -283,7 +283,7 @@ const Auth = () => {
         <div className="w-full max-w-md space-y-8">
           <div className="text-center">
             <img src={riskBlueLogo} alt="RiskBlue" className="h-12 mx-auto mb-8" />
-            <h1 className="text-4xl font-bold font-serif text-foreground">{isSignUpMode ? "Sign Up" : "Log In"}</h1>
+            <h1 className="text-4xl font-bold font-serif text-foreground">{isSignUpMode ? "Start Your Project" : "Log In"}</h1>
           </div>
 
           {isSignUpMode ? (
