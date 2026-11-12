@@ -671,6 +671,7 @@ export default function WaterMitigationPlan() {
             ...((p.critical_asset_ids as string[]) || []),
             ...((p.water_system_ids as string[]) || []),
             ...((p.process_ids as string[]) || []),
+            ...((p.mitigation_control_ids as string[]) || []),
           ]
         : null;
       row.autoAdd = !!p.applied_in_any_plan;
@@ -939,6 +940,8 @@ export default function WaterMitigationPlan() {
     const protectedByControl = new Map<string, Set<string>>();
     controlRows.forEach((row) => {
       const set = new Set<string>();
+      // A product always protects detections of its own control type.
+      if (row.controlId) set.add(row.controlId);
       if (row.scopeIds) {
         row.scopeIds.forEach((id) => set.add(id));
       } else {
