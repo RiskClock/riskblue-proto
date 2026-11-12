@@ -777,6 +777,31 @@ export default function WaterMitigationPlan() {
     return m;
   }, [drawing]);
 
+  const aliasByClass = useMemo(() => {
+    const m = new Map<string, { alias: string | null; alias_prefix: string | null }>();
+    (classAliases as any[]).forEach((r) => m.set(r.awp_class_name, { alias: r.alias || null, alias_prefix: r.alias_prefix || null }));
+    return m;
+  }, [classAliases]);
+  const prefixByName = useMemo(() => {
+    const m = new Map<string, string>();
+    if (!catalog) return m;
+    [...(catalog.critical_assets || []), ...(catalog.water_systems || [])].forEach((e: any) => {
+      if (e?.name && e?.id_prefix) m.set(e.name.toLowerCase().trim(), e.id_prefix);
+    });
+    return m;
+  }, [catalog]);
+  // Classes the Threat Report shows: saved Workbench columns, or the project's
+  // original canonical selection when columns were never customized.
+  const visibleClassSet = useMemo(() => {
+    if (columnPrefs) return new Set(columnPrefs);
+    const p: any = project || {};
+    const known = new Set<string>();
+    if (catalog) [...catalog.critical_assets, ...catalog.water_systems, ...catalog.processes].forEach((e: any) => e?.name && known.add(e.name));
+    const custom = new Set(((p.selected_other_classes as string[]) || []).filter((n) => !known.has(n)));
+    const all = [...((p.selected_awp_class_names as string[]) || []), ...((p.selected_other_classes as string[]) || [])];
+    return new Set(all.filter((n) => !custom.has(n) && known.has(n) || !custom.has(n) && !((p.selected_awp_class_names || []) as string[]).includes(n) ? true : !custom.has(n)));
+  }, [columnPrefs, project, catalog]);
+
   const detectionRows: DetectionRow[] = useMemo(() => {
     if (!drawing) return [];
     const byName = new Map<string, string>();
