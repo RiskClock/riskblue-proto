@@ -56,6 +56,7 @@ import { ControlInstancesModal } from "@/components/wizard/ControlInstancesModal
 import { AskWadePanel } from "@/components/workbench/AskWadePanel";
 import type { DocumentSourceDescriptor } from "@/components/viewer";
 import { PlanEditorModal, type PlanEditorClass } from "@/components/wizard/PlanEditorModal";
+import { controlNeedsPipeDiameter } from "@/lib/controlPipeDiameter";
 import { expandSubtypeLabelWithSuffix, isSubtypeSplitClass, subtypeAbbr } from "@/lib/awpSubtypeLabels";
 import {
   parseSurveyFloorPlans,
@@ -760,8 +761,27 @@ export default function WaterMitigationPlan() {
       const key = (c.name || "").toLowerCase().trim();
       if (!byName.has(key)) byName.set(key, c.id);
     });
-    return (drawing.instances as any[]).map((d) => {
+    // Typical unit/detail plans repeat on every level row that references
+    // them (same rule as the Threat Report): unit label -> level -> count.
+    const unitRefToLevelCounts = new Map<string, Map<string, number>>();
+    sheetPlans.forEach(({ plans, overrides }) => {
+      plans.forEach((p) => {
+        if (p.type !== "level_floor_plan" && p.type !== "schematic_level_row") return;
+        const ovr = overrides?.[p.plan_id] || {};
+        const units: string[] = Array.isArray(ovr.units) ? ovr.units : p.referenced_unit_ids || [];
+        const floors = planSpaceLabels(p, overrides);
+        units.forEach((ref) => {
+          const k = (ref || "").trim().toLowerCase();
+          if (!k) return;
+          const inner = unitRefToLevelCounts.get(k) || new Map<string, number>();
+          floors.forEach((lvl) => { if (lvl) inner.set(lvl, (inner.get(lvl) || 0) + 1); });
+          unitRefToLevelCounts.set(k, inner);
+        });
+      });
+    });
+    return (drawing.instances as any[]).flatMap((d) => {
       let space = UNASSIGNED;
+      let unitLevels: Array<{ level: string; count: number }> = [];
       const entry = d.sheet_id ? sheetPlans.get(d.sheet_id) : undefined;
       if (entry && entry.plans.length > 0) {
         const withGeom = entry.plans.filter(
@@ -780,22 +800,27 @@ export default function WaterMitigationPlan() {
         if (chosen) {
           const labels = planSpaceLabels(chosen, entry.overrides);
           if (labels.length > 0) space = labels[0];
+          if (chosen.type === "unit_floor_plan" || chosen.type === "typical_detail_block") {
+            const label = (getEffectiveLabel(chosen, entry.overrides) || chosen.reference_id || "").trim().toLowerCase();
+            const counts = label ? unitRefToLevelCounts.get(label) : null;
+            if (counts) unitLevels = [...counts.entries()].map(([level, count]) => ({ level, count }));
+          }
         }
       }
       const catalogId = byName.get((d.awp_class_name || "").toLowerCase().trim()) ?? null;
       const metadata = d.metadata && typeof d.metadata === "object" ? d.metadata as Record<string, unknown> : {};
       const pipeType = typeof metadata.pipe_type === "string" ? metadata.pipe_type.trim() : "";
       const pipeDiameter = typeof metadata.pipe_diameter === "string" ? metadata.pipe_diameter.trim() : "";
-      const splitSubtype = !!catalogId && isSubtypeSplitClass(d.awp_class_name || "");
+      const splitSubtype = !!catalogId && (isSubtypeSplitClass(d.awp_class_name || "") || controlNeedsPipeDiameter(d.awp_class_name));
       const typeKey = pipeType || "(untyped)";
       const diameterKey = pipeDiameter || "(no size)";
       const subtypeCode = splitSubtype
-        ? `${subtypeAbbr(d.awp_class_name, pipeType) || pipeType || "?"}${pipeDiameter ? ` ${pipeDiameter}` : ""}`
+        ? `${subtypeAbbr(d.awp_class_name, pipeType) || pipeType}${pipeDiameter ? ` ${pipeDiameter}` : ""}`.trim() || null
         : null;
       const subtypeName = splitSubtype
         ? `${d.awp_class_name}${pipeType ? ` ${expandSubtypeLabelWithSuffix(d.awp_class_name, pipeType)}` : ""}${pipeDiameter ? ` ${pipeDiameter}` : ""}`.replace(/\s+/g, " ").trim()
         : null;
-      return {
+      const base = {
         id: d.id,
         name: d.awp_class_name,
         space,
@@ -813,6 +838,15 @@ export default function WaterMitigationPlan() {
         subtypeName,
         pipeSizeMm: parsePipeSizeMm(pipeDiameter),
       };
+      if (unitLevels.length === 0) return [base];
+      // One row per (level, occurrence), matching Threat Report counts.
+      const rows: DetectionRow[] = [];
+      unitLevels.forEach(({ level, count }) => {
+        for (let i = 0; i < Math.max(1, count); i++) {
+          rows.push({ ...base, id: `${d.id}@${level}#${i}`, space: level });
+        }
+      });
+      return rows;
     });
   }, [drawing, sheetPlans, catalog, controls]);
 
@@ -1067,7 +1101,8 @@ export default function WaterMitigationPlan() {
   /** Instances a plan actually covers (drawing plans list them explicitly). */
   const planCoversInstance = (plan: Plan, instanceId: string, controlId: string) => {
     if (isDrawingPlan(plan)) {
-      return plan.included_instance_ids.includes(instanceId) && !excludedFor(plan, controlId).has(instanceId);
+      const included = plan.included_instance_ids.includes(instanceId) || plan.included_instance_ids.includes(instanceId.split("@")[0]);
+      return included && !excludedFor(plan, controlId).has(instanceId);
     }
     return !excludedFor(plan, controlId).has(instanceId);
   };
@@ -1413,7 +1448,7 @@ export default function WaterMitigationPlan() {
     const next: Record<string, string[]> = { ...(plan.excluded_instances || {}) };
     let nextIncluded = plan.included_instance_ids || [];
     let turningOff: boolean;
-    if (isDrawingPlan(plan) && !nextIncluded.includes(instanceId)) {
+    if (isDrawingPlan(plan) && !nextIncluded.includes(instanceId) && !nextIncluded.includes(instanceId.split("@")[0])) {
       // Adding a location outside the drawing plan: include it for this control
       // only, keeping every other control excluded there.
       turningOff = false;
