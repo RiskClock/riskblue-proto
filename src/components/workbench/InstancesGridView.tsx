@@ -510,7 +510,7 @@ export function InstancesGridView(props: Props) {
         </thead>
         <tbody>
           <tr>
-            <td className={`${stickyFirst} font-medium`}>{companyName ? `${companyName} Product` : "Product"}</td>
+            <td className={`${stickyFirst} font-medium`}>Default Product</td>
             {entries.map((e) => (
               <td key={e.key} className="border-b border-l px-1 py-1 text-center">
                 <div className="flex justify-center"><DeviceButton row={deviceRowFor(e)} devices={devices} /></div>
