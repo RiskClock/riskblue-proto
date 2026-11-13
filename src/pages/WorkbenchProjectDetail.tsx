@@ -5314,20 +5314,6 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                           if (m === showMode) return;
                           setActivePageView(null);
                           setShowMode(m);
-                          if (m === "drawing") {
-                            const first = pageInfoRows.find((r) => (r.page_count ?? 0) > 0) ?? pageInfoRows[0];
-                            if (first) {
-                              if ((first.page_count ?? 0) > 1) {
-                                setPageInfoExpanded((prev) => {
-                                  if (prev.has(first.id)) return prev;
-                                  const next = new Set(prev);
-                                  next.add(first.id);
-                                  return next;
-                                });
-                              }
-                              setActivePageView({ file: first, page: 1 });
-                            }
-                          }
                         }}
                       >
                         {m === "count" ? "Drawings" : (
