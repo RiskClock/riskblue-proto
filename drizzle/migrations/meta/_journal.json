@@ -92,6 +92,13 @@
       "when": 1794508896870,
       "tag": "0012_tighten_permissive_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794580528858,
+      "tag": "0013_instances_column_order",
+      "breakpoints": true
     }
   ]
 }

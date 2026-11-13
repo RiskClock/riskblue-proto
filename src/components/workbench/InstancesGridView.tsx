@@ -1,7 +1,9 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronRight, GripVertical, Loader2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { orderInstanceEntries, moveEntryKey } from "@/lib/instanceColumnOrder";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +58,8 @@ interface Props {
   /** "fileName::page" -> levels shown on that page. */
   pageLevelsByKey: Map<string, string[]>;
   canEdit: boolean;
+  /** Count tab column order (class names), used as the default order. */
+  classOrder: string[];
   onOpenDrawing: (fileId: string, page: number) => void;
 }
 
@@ -65,7 +69,7 @@ type VisibleRow = { key: string; label: string; kind: "group" | "space"; spaces:
 const UNASSIGNED = "__unassigned__";
 
 export function InstancesGridView(props: Props) {
-  const { projectId, loading, rows, entries, entryKeyForRow, levelNames, spaceList, spaceGroups, spaceShortLabel, fileNameById, pageCountByFileId, pageLevelsByKey, canEdit, onOpenDrawing } = props;
+  const { projectId, loading, rows, entries: rawEntries, classOrder, entryKeyForRow, levelNames, spaceList, spaceGroups, spaceShortLabel, fileNameById, pageCountByFileId, pageLevelsByKey, canEdit, onOpenDrawing } = props;
   const { toast } = useToast();
   const drawingPlans = useDrawingPlans(projectId, true);
 
@@ -80,6 +84,27 @@ export function InstancesGridView(props: Props) {
     },
   });
 
+  const queryClient = useQueryClient();
+  const { data: savedOrder } = useQuery({
+    queryKey: ["instances-column-order", projectId],
+    queryFn: async () => {
+      const { data } = await supabase.from("projects").select("instances_column_order").eq("id", projectId).maybeSingle();
+      return ((data as any)?.instances_column_order as string[]) || [];
+    },
+  });
+  const entries = useMemo(
+    () => orderInstanceEntries(rawEntries, classOrder, savedOrder || []),
+    [rawEntries, classOrder, savedOrder],
+  );
+  const saveOrder = async (keys: string[]) => {
+    queryClient.setQueryData(["instances-column-order", projectId], keys);
+    const { error } = await supabase.from("projects").update({ instances_column_order: keys } as any).eq("id", projectId);
+    if (error) {
+      toast({ title: "Could not save column order", description: getUserFriendlyError(error), variant: "destructive" });
+      queryClient.invalidateQueries({ queryKey: ["instances-column-order", projectId] });
+    }
+  };
+  const [dragKey, setDragKey] = useState<string | null>(null);
   const entryKeys = useMemo(() => entries.map((e) => e.key), [entries]);
   const entrySet = useMemo(() => new Set(entryKeys), [entryKeys]);
   const spaceOf = useCallback(
@@ -399,6 +424,7 @@ export function InstancesGridView(props: Props) {
     },
     canEdit,
     mapped: (cls) => !!drawingPlans.catalogFor(cls),
+    allProducts: Array.from(drawingPlans.productsById.values()),
     save: async (cls, type, diam, ids) => {
       const entry = drawingPlans.catalogFor(cls);
       if (!entry) return;
@@ -498,11 +524,34 @@ export function InstancesGridView(props: Props) {
           <tr>
             <th className={`${stickyFirst} bg-muted font-medium text-muted-foreground`}>Class</th>
             {entries.map((e) => (
-              <th key={e.key} className="border-b border-l px-2 py-2 text-center font-medium whitespace-nowrap">
-                <Tooltip>
-                  <TooltipTrigger asChild><span className="cursor-default">{e.displayPrefix}</span></TooltipTrigger>
-                  <TooltipContent>{e.displayName}</TooltipContent>
-                </Tooltip>
+              <th
+                key={e.key}
+                draggable={canEdit}
+                onDragStart={(ev) => { setDragKey(e.key); ev.dataTransfer.effectAllowed = "move"; }}
+                onDragOver={(ev) => { if (dragKey && dragKey !== e.key) ev.preventDefault(); }}
+                onDrop={(ev) => { ev.preventDefault(); if (dragKey && dragKey !== e.key) void saveOrder(moveEntryKey(entryKeys, dragKey, e.key)); setDragKey(null); }}
+                onDragEnd={() => setDragKey(null)}
+                className={`group border-b border-l px-2 py-2 text-center font-medium whitespace-nowrap ${dragKey === e.key ? "opacity-50" : ""}`}
+              >
+                <span className="inline-flex items-center gap-1">
+                  {canEdit && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button type="button" aria-label={`Move ${e.displayName}`} className="cursor-grab rounded text-muted-foreground opacity-30 transition-opacity group-hover:opacity-80 hover:bg-background">
+                          <GripVertical className="h-3.5 w-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        <DropdownMenuItem onSelect={() => void saveOrder([e.key, ...entryKeys.filter((k) => k !== e.key)])}>Move to Leftmost</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => void saveOrder([...entryKeys.filter((k) => k !== e.key), e.key])}>Move to Rightmost</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                  <Tooltip>
+                    <TooltipTrigger asChild><span className="cursor-default">{e.displayPrefix}</span></TooltipTrigger>
+                    <TooltipContent>{e.displayName}</TooltipContent>
+                  </Tooltip>
+                </span>
               </th>
             ))}
             <th className="border-b border-l px-3 py-2 text-left font-medium" style={{ width: drawingsColWidth, minWidth: drawingsColWidth }}>Drawings</th>

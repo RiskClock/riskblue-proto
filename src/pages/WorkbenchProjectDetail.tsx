@@ -5349,6 +5349,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                   pageCountByFileId={instancesViewPageCounts}
                   pageLevelsByKey={instancesViewPageLevels}
                   canEdit={canManage && !processingLock}
+                  classOrder={enabledCols}
                   onOpenDrawing={(fileId, page) => {
                     const row = pageInfoRows.find((r) => r.id === fileId);
                     if (row) setActivePageView({ file: row, page });
