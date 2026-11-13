@@ -505,6 +505,7 @@ export default function WorkbenchProjectDetail() {
     }
   });
   const [activePageView, setActivePageView] = useState<{ file: PageInfoRow; page: number } | null>(null);
+  const [spaceDrawings, setSpaceDrawings] = useState<{ title: string; items: { fileId: string; page: number; label: string }[] } | null>(null);
   const [showModeRaw, setShowMode] = useState<"count" | "drawing" | "instances" | "plans">("count");
   // Drawing, Instances and Plans views are restricted to system admins.
   const showMode: "count" | "drawing" | "instances" | "plans" = isSystemAdmin ? showModeRaw : "count";
@@ -4361,8 +4362,8 @@ const isChildPlanType = (t: string) =>
     grouped["Controls"] = (manageControls || []).filter((c) => isIntakeControlCategory(c.category)).map((c) => ({ id: c.id, name: c.name, idPrefix: null }));
   }
 
-  const stickyHeadFirst = "sticky left-0 z-30 bg-card min-w-[260px] max-w-[420px] w-[420px] border-r";
-  const stickyCellFirstBase = "sticky left-0 z-10 border-r transition-colors max-w-[420px] w-[420px]";
+  const stickyHeadFirst = "sticky left-0 z-30 bg-card min-w-[260px] w-[1%] whitespace-nowrap border-r";
+  const stickyCellFirstBase = "sticky left-0 z-10 border-r transition-colors w-[1%] whitespace-nowrap";
 
   // Derive the currently-active phase from DB (authoritative) with `running`
   // as a short-lived optimistic fallback while the row hasn't updated yet.
@@ -5302,7 +5303,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-muted-foreground">View:</span>
                   <div className="inline-flex rounded-md border bg-card p-0.5">
-                    {(["count", "drawing", "instances", "plans"] as const).map((m) => (
+                    {(["count", "instances", "plans"] as const).map((m) => (
                       <Button
                         key={m}
                         type="button"
@@ -5313,25 +5314,11 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                           if (m === showMode) return;
                           setActivePageView(null);
                           setShowMode(m);
-                          if (m === "drawing") {
-                            const first = pageInfoRows.find((r) => (r.page_count ?? 0) > 0) ?? pageInfoRows[0];
-                            if (first) {
-                              if ((first.page_count ?? 0) > 1) {
-                                setPageInfoExpanded((prev) => {
-                                  if (prev.has(first.id)) return prev;
-                                  const next = new Set(prev);
-                                  next.add(first.id);
-                                  return next;
-                                });
-                              }
-                              setActivePageView({ file: first, page: 1 });
-                            }
-                          }
                         }}
                       >
-                        {m === "count" ? "Count" : m === "drawing" ? "Drawing" : m === "instances" ? "Instances" : (
+                        {m === "count" ? "Drawings" : (
                           <span className="flex items-center gap-1.5">
-                            Plans
+                            {m === "instances" ? "Risk Locations" : "Plans"}
                             <span className="rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-primary">Beta</span>
                           </span>
                         )}
@@ -5358,7 +5345,15 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                   classOrder={enabledCols}
                   onOpenDrawing={(fileId, page) => {
                     const row = pageInfoRows.find((r) => r.id === fileId);
-                    if (row) setActivePageView({ file: row, page });
+                    if (row) { setSpaceDrawings(null); setActivePageView({ file: row, page }); }
+                  }}
+                  onOpenSpaceDrawings={(title, list) => {
+                    const items = list
+                      .map((d) => ({ ...d, row: pageInfoRows.find((r) => r.id === d.fileId) }))
+                      .filter((d) => !!d.row);
+                    if (items.length === 0) return;
+                    setSpaceDrawings({ title, items: items.map((d) => ({ fileId: d.fileId, page: d.page, label: d.label })) });
+                    setActivePageView({ file: items[0].row!, page: items[0].page });
                   }}
                 />
               ) : showMode === "plans" ? (
@@ -5573,9 +5568,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                                     <span className="inline-block w-3.5 shrink-0" />
                                   )}
                                    <span
-                                     className={`font-medium truncate max-w-full ${
-                                       singlePage ? "min-w-[160px]" : "min-w-0"
-                                     }`}
+                                     className="font-medium whitespace-nowrap"
                                      title={row.name}
                                    >
                                      {row.name}
@@ -5934,9 +5927,35 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
             isOpen={!!activePageView}
             embedTarget={showMode === "drawing" ? drawingHost : null}
             reloadKey={viewerReloadKey}
-            onClose={() => setActivePageView(null)}
+            onClose={() => { setActivePageView(null); setSpaceDrawings(null); }}
             fileId={activePageView.file.id}
             fileName={`${activePageView.file.name} | Page ${activePageView.page}`}
+            titleNode={spaceDrawings ? (
+              spaceDrawings.items.length === 1 ? (
+                <span>{spaceDrawings.title} <span className="font-normal text-muted-foreground">({spaceDrawings.items[0].label})</span></span>
+              ) : spaceDrawings.title
+            ) : undefined}
+            leftPanel={spaceDrawings && spaceDrawings.items.length > 1 ? (
+              <div className="w-56 shrink-0 overflow-auto border rounded-md p-1 flex flex-col gap-0.5">
+                {spaceDrawings.items.map((d) => {
+                  const active = d.fileId === activePageView.file.id && d.page === activePageView.page;
+                  return (
+                    <button
+                      key={`${d.fileId}:${d.page}`}
+                      type="button"
+                      title={d.label}
+                      className={`text-left text-xs rounded px-2 py-1.5 break-words ${active ? "bg-secondary font-medium" : "hover:bg-muted"}`}
+                      onClick={() => {
+                        const row = pageInfoRows.find((r) => r.id === d.fileId);
+                        if (row && !active) setActivePageView({ file: row, page: d.page });
+                      }}
+                    >
+                      {d.label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : undefined}
             mimeType={activePageView.file.mime_type || "application/pdf"}
             accessToken=""
             detections={[]}

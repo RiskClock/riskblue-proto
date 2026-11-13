@@ -355,6 +355,10 @@ interface FileViewerModalProps {
   onToggleWadeEmbedded?: () => void;
   wadeEmbedded?: boolean;
   wadePanel?: React.ReactNode;
+  /** Optional panel rendered left of the drawing (e.g. a space's drawing list). */
+  leftPanel?: React.ReactNode;
+  /** Optional rich title replacing fileName in the header. */
+  titleNode?: React.ReactNode;
   /** Open the saved prompt for a Risk Radar class. */
   onViewRiskRadarPrompt?: (className: string) => void;
   /** Internal users get the annotation label visibility toggle. */
@@ -428,6 +432,8 @@ export const FileViewerModal = ({
   onToggleWadeEmbedded,
   wadeEmbedded,
   wadePanel,
+  leftPanel,
+  titleNode,
   onViewRiskRadarPrompt,
   isInternal = false,
 }: FileViewerModalProps) => {
@@ -2140,7 +2146,7 @@ export const FileViewerModal = ({
       >
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="truncate flex items-center gap-2 min-w-0">
-            <span className="truncate">{fileName}</span>
+            <span className="truncate">{titleNode ?? fileName}</span>
 <Button
               type="button"
               size="sm"
@@ -2161,6 +2167,7 @@ export const FileViewerModal = ({
         </DialogHeader>
 
         <div className="flex flex-1 gap-4 overflow-hidden min-h-0">
+          {leftPanel}
           <div
             ref={viewerContainerRef}
             className="flex-1 border rounded-lg overflow-hidden bg-muted/30 min-h-0 relative"

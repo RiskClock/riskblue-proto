@@ -61,6 +61,7 @@ interface Props {
   /** Count tab column order (class names), used as the default order. */
   classOrder: string[];
   onOpenDrawing: (fileId: string, page: number) => void;
+  onOpenSpaceDrawings?: (title: string, drawings: { fileId: string; page: number; label: string }[]) => void;
 }
 
 type Cell = { count: number; ids: Set<string> };
@@ -69,7 +70,7 @@ type VisibleRow = { key: string; label: string; kind: "group" | "space"; spaces:
 const UNASSIGNED = "__unassigned__";
 
 export function InstancesGridView(props: Props) {
-  const { projectId, loading, rows, entries: rawEntries, classOrder, entryKeyForRow, levelNames, spaceList, spaceGroups, spaceShortLabel, fileNameById, pageCountByFileId, pageLevelsByKey, canEdit, onOpenDrawing } = props;
+  const { projectId, loading, rows, entries: rawEntries, classOrder, entryKeyForRow, levelNames, spaceList, spaceGroups, spaceShortLabel, fileNameById, pageCountByFileId, pageLevelsByKey, canEdit, onOpenDrawing, onOpenSpaceDrawings } = props;
   const { toast } = useToast();
   const drawingPlans = useDrawingPlans(projectId, true);
 
@@ -554,7 +555,6 @@ export function InstancesGridView(props: Props) {
                 </span>
               </th>
             ))}
-            <th className="border-b border-l px-3 py-2 text-left font-medium" style={{ width: drawingsColWidth, minWidth: drawingsColWidth }}>Drawings</th>
           </tr>
         </thead>
         <tbody>
@@ -565,12 +565,10 @@ export function InstancesGridView(props: Props) {
                 <div className="flex justify-center"><DeviceButton row={deviceRowFor(e)} devices={devices} /></div>
               </td>
             ))}
-            <td className="border-b border-l" />
           </tr>
           <tr className="bg-muted/40">
             <td className={`${stickyFirst} bg-muted font-semibold`}>Total</td>
             {entries.map((e, ci) => renderCountCell("__total__", null, e, ci))}
-            <td className="border-b border-l" />
           </tr>
           <tr className="cursor-pointer hover:bg-muted/40" onClick={() => setSectionOpen((v) => !v)}>
             <td className={`${stickyFirst} font-medium`}>
@@ -579,7 +577,7 @@ export function InstancesGridView(props: Props) {
                 {sectionLabel}
               </span>
             </td>
-            <td className="border-b" colSpan={entries.length + 1} />
+            <td className="border-b" colSpan={entries.length} />
           </tr>
           {visibleRows.map((vr, ri) => (
             <Fragment key={vr.key}>
@@ -590,11 +588,24 @@ export function InstancesGridView(props: Props) {
                 >
                   <span className="inline-flex items-center gap-1">
                     {vr.kind === "group" && (openGroups.has(vr.groupKey!) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />)}
-                    {vr.kind === "group" ? `${vr.label} (${vr.spaces.length})` : vr.label}
+                    {(() => {
+                      const text = vr.kind === "group" ? `${vr.label} (${vr.spaces.length})` : vr.label;
+                      const list = drawingsFor(vr.spaces);
+                      if (!onOpenSpaceDrawings || list.length === 0) return text;
+                      return (
+                        <button
+                          type="button"
+                          className="text-left text-primary hover:underline underline-offset-2"
+                          title="Open drawings"
+                          onClick={(ev) => { ev.stopPropagation(); onOpenSpaceDrawings(vr.label, list.map((d) => ({ ...d, label: drawingLabel(d) }))); }}
+                        >
+                          {text}
+                        </button>
+                      );
+                    })()}
                   </span>
                 </td>
                 {entries.map((e, ci) => renderCountCell(vr.key, ri, e, ci))}
-                <td className="border-b border-l px-3 py-1.5 align-top" style={{ width: drawingsColWidth, minWidth: drawingsColWidth }}>{renderDrawings(vr.spaces)}</td>
               </tr>
             </Fragment>
           ))}
