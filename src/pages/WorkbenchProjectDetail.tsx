@@ -4362,8 +4362,8 @@ const isChildPlanType = (t: string) =>
     grouped["Controls"] = (manageControls || []).filter((c) => isIntakeControlCategory(c.category)).map((c) => ({ id: c.id, name: c.name, idPrefix: null }));
   }
 
-  const stickyHeadFirst = "sticky left-0 z-30 bg-card min-w-[260px] max-w-[420px] w-[420px] border-r";
-  const stickyCellFirstBase = "sticky left-0 z-10 border-r transition-colors max-w-[420px] w-[420px]";
+  const stickyHeadFirst = "sticky left-0 z-30 bg-card min-w-[260px] w-[1%] whitespace-nowrap border-r";
+  const stickyCellFirstBase = "sticky left-0 z-10 border-r transition-colors w-[1%] whitespace-nowrap";
 
   // Derive the currently-active phase from DB (authoritative) with `running`
   // as a short-lived optimistic fallback while the row hasn't updated yet.
@@ -5568,9 +5568,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                                     <span className="inline-block w-3.5 shrink-0" />
                                   )}
                                    <span
-                                     className={`font-medium truncate max-w-full ${
-                                       singlePage ? "min-w-[160px]" : "min-w-0"
-                                     }`}
+                                     className="font-medium whitespace-nowrap"
                                      title={row.name}
                                    >
                                      {row.name}
