@@ -3086,6 +3086,8 @@ export interface DevicesApi {
   save: (cls: string, type: string, diam: string, ids: string[]) => Promise<void>;
   canEdit: boolean;
   mapped: (cls: string) => boolean;
+  /** Optional: every company product, offered below mapped ones without changing catalog mapping. */
+  allProducts?: PlanEditorProduct[];
 }
 
 interface DetectionsPanelProps {
@@ -3263,6 +3265,10 @@ export const DeviceButton = ({ row, devices }: { row: { cls: { name: string }; t
   const pipeMm = parsePipeSizeMm(row.diam);
   const suggested = filtered.filter((p) => isSizeMatch(p, pipeMm));
   const others = filtered.filter((p) => !isSizeMatch(p, pipeMm));
+  const choiceIds = new Set(choices.map((p) => p.id));
+  const extra = (devices.allProducts || []).filter((p) =>
+    !choiceIds.has(p.id) && `${p.code || ""} ${p.name} ${p.controlName || ""}`.toLowerCase().includes(q),
+  );
   const toggle = (id: string) => {
     const next = selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id];
     void devices.save(row.cls.name, row.type, row.diam, next);
@@ -3329,7 +3335,14 @@ export const DeviceButton = ({ row, devices }: { row: { cls: { name: string }; t
             </>
           )}
           {others.map((p) => <ProductPickerOption key={p.id} product={p} checked={selected.includes(p.id)} onToggle={() => toggle(p.id)} />)}
-          {filtered.length === 0 && <div className="px-3 py-4 text-sm text-muted-foreground">No mapped products.</div>}
+          {extra.length > 0 && (
+            <>
+              {filtered.length > 0 && <div className="my-1 border-t" />}
+              <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{filtered.length > 0 ? "Other products" : "All products"}</div>
+              {extra.map((p) => <ProductPickerOption key={p.id} product={p} checked={selected.includes(p.id)} onToggle={() => toggle(p.id)} />)}
+            </>
+          )}
+          {filtered.length === 0 && extra.length === 0 && <div className="px-3 py-4 text-sm text-muted-foreground">{devices.allProducts ? "No products found." : "No mapped products."}</div>}
         </div>
       </PopoverContent>
     </Popover>
