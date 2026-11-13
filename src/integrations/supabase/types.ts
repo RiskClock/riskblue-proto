@@ -2300,6 +2300,7 @@ export type Database = {
           filesearch_store_id: string | null
           has_builders_risk_policy: boolean | null
           id: string
+          instances_column_order: string[]
           location: string | null
           name: string
           project_data: Json | null
@@ -2347,6 +2348,7 @@ export type Database = {
           filesearch_store_id?: string | null
           has_builders_risk_policy?: boolean | null
           id?: string
+          instances_column_order?: string[]
           location?: string | null
           name: string
           project_data?: Json | null
@@ -2394,6 +2396,7 @@ export type Database = {
           filesearch_store_id?: string | null
           has_builders_risk_policy?: boolean | null
           id?: string
+          instances_column_order?: string[]
           location?: string | null
           name?: string
           project_data?: Json | null

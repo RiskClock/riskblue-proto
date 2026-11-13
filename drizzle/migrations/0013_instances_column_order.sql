@@ -1,0 +1,1 @@
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS instances_column_order text[] NOT NULL DEFAULT '{}'::text[];
