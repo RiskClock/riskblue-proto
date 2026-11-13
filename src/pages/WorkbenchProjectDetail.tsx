@@ -91,6 +91,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { FileViewerModal } from "@/components/wizard/FileViewerModal";
 import { InstancesGridView } from "@/components/workbench/InstancesGridView";
+import WaterMitigationPlan from "@/pages/WaterMitigationPlan";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -5328,7 +5329,12 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                           }
                         }}
                       >
-                        {m === "count" ? "Count" : m === "drawing" ? "Drawing" : m === "instances" ? "Instances" : "Plans"}
+                        {m === "count" ? "Count" : m === "drawing" ? "Drawing" : m === "instances" ? "Instances" : (
+                          <span className="flex items-center gap-1.5">
+                            Plans
+                            <span className="rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-primary">Beta</span>
+                          </span>
+                        )}
                       </Button>
                     ))}
                   </div>
@@ -5356,7 +5362,7 @@ Only use class names listed in classes. Never invent coordinates outside 0 to 1.
                   }}
                 />
               ) : showMode === "plans" ? (
-                <div className="rounded-lg border bg-card p-10" />
+                <WaterMitigationPlan projectId={projectId!} embedded />
               ) : pageInfoRows.length === 0 ? (
                 <div className="text-sm text-muted-foreground text-center py-6 space-y-3">
                   <div>{pageInfoLoading ? "Loading…" : "No files in this request."}</div>

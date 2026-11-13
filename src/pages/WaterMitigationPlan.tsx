@@ -358,8 +358,9 @@ function planSpaceLabels(fp: ParsedFloorPlan, overrides: Record<string, any> | n
   return label ? [label] : [];
 }
 
-export default function WaterMitigationPlan() {
-  const { projectId } = useParams<{ projectId: string }>();
+export default function WaterMitigationPlan({ projectId: projectIdProp, embedded = false }: { projectId?: string; embedded?: boolean } = {}) {
+  const params = useParams<{ projectId: string }>();
+  const projectId = projectIdProp ?? params.projectId;
   const navigate = useNavigate();
   const { user } = useAuth();
   const { tenantId, tenant, tenantPath } = useTenant();
@@ -2331,8 +2332,8 @@ actions and posts its own recap.`;
   }
 
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
-      <AppHeader
+    <div className={embedded ? "flex flex-col min-h-[70vh]" : "h-screen flex flex-col bg-background overflow-hidden"}>
+      {!embedded && <AppHeader
         title={
           <div className="flex items-center gap-1.5 min-w-0">
             <Button
@@ -2347,14 +2348,16 @@ actions and posts its own recap.`;
             <span className="truncate">{project?.name || "Project"}</span>
           </div>
         }
-      />
+      />}
 
-      <main className="container mx-auto px-6 py-8 flex-1 min-h-0 flex flex-col overflow-hidden">
+      <main className={embedded ? "flex-1 min-h-0 flex flex-col" : "container mx-auto px-6 py-8 flex-1 min-h-0 flex flex-col overflow-hidden"}>
         <div className="flex items-center justify-between gap-2 pb-3 shrink-0">
+          {embedded ? <div /> : (
           <h1 className="text-lg font-semibold truncate flex items-center gap-2">
             Plan Builder
             <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">Beta</span>
           </h1>
+          )}
           <div className="flex items-center gap-2 shrink-0">
             <ToggleGroup
               type="single"
